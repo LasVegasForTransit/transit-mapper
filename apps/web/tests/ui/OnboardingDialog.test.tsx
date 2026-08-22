@@ -31,11 +31,23 @@ interface MockPreviewMapProps {
   description: string;
 }
 
-vi.mock('../../src/ui/onboarding/OnboardingPreviewMap', () => ({
-  OnboardingPreviewMap: ({ scene, description }: MockPreviewMapProps) => (
-    <div role="img" aria-label={description} data-scene={scene} />
-  ),
-}));
+vi.mock('../../src/ui/onboarding/OnboardingPreviewMap', async () => {
+  const { useState } = await import('react');
+  let nextInstance = 0;
+  return {
+    OnboardingPreviewMap: ({ scene, description }: MockPreviewMapProps) => {
+      const [instance] = useState(() => ++nextInstance);
+      return (
+        <div
+          role="img"
+          aria-label={description}
+          data-preview-instance={instance}
+          data-scene={scene}
+        />
+      );
+    },
+  };
+});
 
 let container: HTMLDivElement;
 let root: Root;
@@ -120,6 +132,9 @@ describe('OnboardingDialog', () => {
     expect(container.querySelector('[data-scene="welcome"]')).not.toBeNull();
     expect(container.textContent).not.toContain('Open beta');
     expect(container.querySelector('.onboarding-note')).toBeNull();
+    const previewInstance = container
+      .querySelector('[data-preview-instance]')
+      ?.getAttribute('data-preview-instance');
     expect(
       [...container.querySelectorAll('button')].some((button) => button.textContent === 'Back'),
     ).toBe(false);
@@ -128,6 +143,9 @@ describe('OnboardingDialog', () => {
     expectSelectedStep(2);
     expect(container.textContent).toContain('Draw a line. TransitMapper finds the path.');
     expect(container.querySelector('[data-scene="draw"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-preview-instance]')?.getAttribute('data-preview-instance'),
+    ).toBe(previewInstance);
     clickButton('Back');
 
     expectSelectedStep(1);

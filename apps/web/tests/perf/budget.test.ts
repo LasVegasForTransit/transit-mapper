@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { evaluatePerfBudgets } from '../../src/perf/budget';
-import { createPerfReport, createUnavailablePerfReport } from '../../src/perf/report';
+import {
+  createPartialPerfReport,
+  createPerfReport,
+  createUnavailablePerfReport,
+} from '../../src/perf/report';
 import { PERF_PROTOCOL, PERF_SCENARIOS } from '../../src/perf/scenarios';
 import type {
   CreatePerfReportOptions,
@@ -394,5 +398,24 @@ describe('performance budgets', () => {
 
     expect(result.status).toBe('unavailable');
     expect(result.violations).toEqual([]);
+  });
+
+  it('does not evaluate a partial report as passing', () => {
+    const partial = createPartialPerfReport({
+      generatedAt: '2026-08-20T12:00:00.000Z',
+      protocol: PERF_PROTOCOL,
+      scenarios: [PERF_SCENARIOS.small],
+      samples: [],
+      reason: 'The public first-session phase failed.',
+      phases: [{ phase: 'first-session', status: 'failed', reason: 'share failed' }],
+    });
+    const result = evaluatePerfBudgets({
+      report: partial,
+      scenarios: [PERF_SCENARIOS.small],
+      maxRegressionRatio: 0.1,
+    });
+
+    expect(result.status).toBe('fail');
+    expect(result.notices).toEqual(['The public first-session phase failed.']);
   });
 });

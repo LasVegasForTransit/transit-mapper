@@ -6,7 +6,10 @@
  * them. Changing the standard means editing this file, not the phase.
  */
 
-export const REQUIRED_STATUS_CHECKS = [{ context: 'Validate' }] as const;
+export const REQUIRED_STATUS_CHECKS = [
+  { context: 'Validate' },
+  { context: 'RTC responsiveness (desktop)' },
+] as const;
 
 /** Rules on the default branch, as a GitHub repository ruleset. */
 export const BRANCH_RULESET = {
@@ -48,9 +51,10 @@ export const BRANCH_RULESET = {
       type: 'required_status_checks',
       parameters: {
         strict_required_status_checks_policy: true,
-        // The job name in .github/workflows/ci.yml. A ruleset naming a check
-        // that never reports blocks every pull request permanently, so this
-        // string and that job name are one fact in two places.
+        // The terminal RTC job in .github/workflows/performance.yml. A
+        // ruleset naming a check that never reports blocks every pull request
+        // permanently, so this string and that job name are one fact in two
+        // places.
         required_status_checks: REQUIRED_STATUS_CHECKS,
       },
     },

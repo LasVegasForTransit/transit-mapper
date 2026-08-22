@@ -4,11 +4,12 @@ import {
   createPerfProtocol,
   PERF_FIRST_SESSION_BYTE_BUDGETS,
   PERF_MAX_REGRESSION_RATIO,
-  PERF_SCENARIO_LIST,
 } from '../../perf.config';
 import { evaluatePerfBudgets } from '../../src/perf/budget';
-import { createPerfReport, createUnavailablePerfReport } from '../../src/perf/report';
+import { createPerfReport } from '../../src/perf/report';
 import type {
+  PerfAuditPhase,
+  PerfAuditPhaseResult,
   PerfBundleEntry,
   PerfCalibration,
   PerfFirstSessionSample,
@@ -19,7 +20,6 @@ import type {
 } from '../../src/perf/types';
 import {
   checkedBaselinePath,
-  chromeUnavailableReason,
   copyBuildReports,
   freezeCheckedBaseline,
   readBaseline,
@@ -29,6 +29,14 @@ import {
 } from './artifacts';
 import { runCalibration } from './browser';
 import type { PerfCliOptions } from './cli';
+import { selectedAuditScenarios, validateAuditOptions } from './audit-options';
+import {
+  completeMeasuredAudit,
+  prepareAuditOrReportUnavailable,
+  writePartialAudit,
+  writeUnavailableAudit,
+  type AuditJourneyResults,
+} from './audit-reporting';
 import { verifyCacheEvictedOfflineReload } from './offline';
 import { runFirstSessionMatrix } from './first-session-matrix';
 import { createPlaywrightFirstSessionSurfaceRunner } from './playwright-first-session';
@@ -42,58 +50,9 @@ import {
 } from './process';
 import { runScenario } from './scenarioRuns';
 import { runSoak } from './soak';
-
-function validateMatrixOptions(options: PerfCliOptions): void {
-  if ((options.record || options.freezeBaseline) && options.scenarioId) {
-    throw new Error('--record and --freeze-baseline require the full scenario matrix.');
-  }
-}
-
-function validateSmokeOptions(options: PerfCliOptions): void {
-  const incompatible =
-    options.record || options.freezeBaseline || options.soak || options.requireBaseline;
-  if (options.smoke && incompatible) {
-    throw new Error(
-      '--smoke cannot be combined with --record, --freeze-baseline, --soak, or --require-baseline.',
-    );
-  }
-  if (options.smoke && options.baselinePath) {
-    throw new Error('--smoke is functional evidence and cannot be compared with --baseline.');
-  }
-}
-
-function validateSoakOptions(options: PerfCliOptions): void {
-  const incompatible = options.record || options.freezeBaseline || options.scenarioId;
-  if (options.soak && incompatible) {
-    throw new Error('--soak cannot be combined with --record, --freeze-baseline, or --scenario.');
-  }
-  if (!options.soak && options.soakDurationMs !== 10 * 60 * 1_000) {
-    throw new Error('--soak-duration requires --soak.');
-  }
-  if (options.soak && options.profile !== 'desktop') {
-    throw new Error('--soak uses the desktop RTC protocol; omit --profile mobile.');
-  }
-}
-
-function validateFreezeOptions(options: PerfCliOptions): void {
-  const incompatible = options.baselinePath !== undefined || options.requireBaseline;
-  if (options.freezeBaseline && incompatible) {
-    throw new Error('--freeze-baseline cannot compare with or require an existing baseline.');
-  }
-}
-
-function validateOptions(options: PerfCliOptions): void {
-  validateMatrixOptions(options);
-  validateSmokeOptions(options);
-  validateSoakOptions(options);
-  validateFreezeOptions(options);
-}
-
-function selectedScenarios(options: PerfCliOptions): PerfScenario[] {
-  return options.scenarioId
-    ? PERF_SCENARIO_LIST.filter((scenario) => scenario.id === options.scenarioId)
-    : PERF_SCENARIO_LIST;
-}
+import { executePerformancePhases, requestedPerformancePhases } from './phase-execution';
+import { onboardingJourneyViolations } from './onboarding-journey';
+import { capturePlaywrightOnboardingJourney } from './playwright-onboarding';
 
 interface InstrumentedJourneyOptions {
   browser: Browser;
@@ -106,10 +65,6 @@ interface InstrumentedJourneyOptions {
 interface InstrumentedJourneyResults {
   calibration: PerfCalibration;
   samples: PerfSample[];
-}
-
-interface AuditJourneyResults extends InstrumentedJourneyResults {
-  firstSessions: PerfFirstSessionSample[];
 }
 
 async function runInstrumentedJourneys(
@@ -166,6 +121,8 @@ interface WriteAuditOptions {
   bundles: PerfBundleEntry[];
   baseline: PerfReport | undefined;
   results: AuditJourneyResults;
+  phases: PerfAuditPhaseResult[];
+  requestedPhases: readonly PerfAuditPhase[];
 }
 
 async function writeMeasuredAudit(options: WriteAuditOptions): Promise<void> {
@@ -177,13 +134,17 @@ async function writeMeasuredAudit(options: WriteAuditOptions): Promise<void> {
     bundles: options.bundles,
     calibration: options.results.calibration,
     firstSessions: options.results.firstSessions,
+    phases: options.phases,
+    onboarding: options.results.onboarding,
   });
   const evaluation = evaluatePerfBudgets({
     report,
     baseline: options.baseline,
     scenarios: options.scenarios,
     maxRegressionRatio: PERF_MAX_REGRESSION_RATIO,
-    firstSessionBudgets: PERF_FIRST_SESSION_BYTE_BUDGETS,
+    firstSessionBudgets: options.requestedPhases.includes('first-session')
+      ? PERF_FIRST_SESSION_BYTE_BUDGETS
+      : [],
     requireBaseline: options.cli.requireBaseline,
     enforceNumericBudgets: !options.cli.smoke,
   });
@@ -199,27 +160,157 @@ async function writeMeasuredAudit(options: WriteAuditOptions): Promise<void> {
   if (evaluation.status !== 'pass') process.exitCode = 1;
 }
 
-export async function runPerformanceAudit(options: PerfCliOptions): Promise<void> {
-  validateOptions(options);
+class PerformancePreviewSession {
+  current: RunningPreview | undefined;
+
+  async use(kind: 'instrumented' | 'public'): Promise<RunningPreview> {
+    await stopPreview(this.current);
+    this.current = await startPreview(kind);
+    return this.current;
+  }
+
+  async stop(): Promise<void> {
+    await stopPreview(this.current);
+    this.current = undefined;
+  }
+}
+
+interface RunAuditPhasesOptions {
+  browser: Browser;
+  protocol: PerfProtocol;
+  scenarios: PerfScenario[];
+  cli: PerfCliOptions;
+  debuggingPort: number;
+  previews: PerformancePreviewSession;
+  results: AuditJourneyResults;
+}
+
+async function runAuditPhase(options: RunAuditPhasesOptions, phase: PerfAuditPhase): Promise<void> {
+  if (phase === 'instrumented') {
+    const instrumented = await runInstrumentedJourneys({
+      browser: options.browser,
+      protocol: options.protocol,
+      preview: await options.previews.use('instrumented'),
+      scenarios: options.scenarios,
+      cli: options.cli,
+    });
+    options.results.calibration = instrumented.calibration;
+    options.results.samples.push(...instrumented.samples);
+    return;
+  }
+  const publicPreview = await options.previews.use('public');
+  if (phase === 'first-session') {
+    options.results.firstSessions.push(
+      ...(await runPublicFirstSessions({
+        browser: options.browser,
+        protocol: options.protocol,
+        preview: publicPreview,
+        debuggingPort: options.debuggingPort,
+      })),
+    );
+    return;
+  }
+  options.results.onboarding = await capturePlaywrightOnboardingJourney({
+    browser: options.browser,
+    protocol: options.protocol,
+    previewUrl: publicPreview.url,
+  });
+  const violations = onboardingJourneyViolations(options.results.onboarding);
+  if (violations.length > 0) throw new Error(violations.join(' '));
+}
+
+interface AuditPlan {
+  protocol: PerfProtocol;
+  requestedPhases: PerfAuditPhase[];
+  scenarios: PerfScenario[];
+}
+
+interface PreparedAuditArtifacts {
+  bundles: PerfBundleEntry[];
+  baseline: PerfReport | undefined;
+}
+
+function createAuditPlan(options: PerfCliOptions): AuditPlan {
+  validateAuditOptions(options);
   const protocol = createPerfProtocol(options.profile, options.smoke ? 'smoke' : 'audit');
-  const scenarios = selectedScenarios(options);
+  const requestedPhases = requestedPerformancePhases(options);
+  const scenarios = requestedPhases.includes('instrumented') ? selectedAuditScenarios(options) : [];
+  return { protocol, requestedPhases, scenarios };
+}
+
+async function prepareAuditArtifacts(options: PerfCliOptions): Promise<PreparedAuditArtifacts> {
   await mkdir(options.outputDirectory, { recursive: true });
   if (!options.skipBuild) await buildPerformanceApp();
   else await assertPerformanceArtifactOutputs();
   await copyBuildReports(options.outputDirectory);
-  const bundles = await readBundleEntries();
-  const baseline = await readBaseline(options.baselinePath ?? checkedBaselinePath(options.profile));
+  return {
+    bundles: await readBundleEntries(),
+    baseline: await readBaseline(options.baselinePath ?? checkedBaselinePath(options.profile)),
+  };
+}
 
-  let preview: RunningPreview | undefined;
-  let browser: Browser | undefined;
-  let calibration: PerfCalibration | undefined;
+export function auditBrowserArguments(debuggingPort: number): string[] {
+  return [
+    // The audit drives a visible editor surface. Chromium otherwise applies
+    // its background-tab timer policy to a headless or occluded window and
+    // turns the 1.5-second fallback deadline into a minute-long timeout.
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    chromeDebuggingArgument(debuggingPort),
+  ];
+}
+
+async function launchAuditBrowser(
+  protocol: PerfProtocol,
+  headless: boolean,
+): Promise<{
+  browser: Browser;
+  debuggingPort: number;
+}> {
+  const debuggingPort = await allocateChromeDebuggingPort();
+  const browser = await chromium.launch({
+    channel: protocol.browserChannel,
+    headless,
+    args: auditBrowserArguments(debuggingPort),
+  });
+  return { browser, debuggingPort };
+}
+
+async function launchOrReportUnavailable(
+  options: PerfCliOptions,
+  plan: AuditPlan,
+  bundles: PerfBundleEntry[],
+): Promise<Awaited<ReturnType<typeof launchAuditBrowser>> | undefined> {
+  const { protocol, requestedPhases, scenarios } = plan;
   try {
-    const debuggingPort = await allocateChromeDebuggingPort();
-    browser = await chromium.launch({
-      channel: protocol.browserChannel,
-      headless: false,
-      args: [chromeDebuggingArgument(debuggingPort)],
+    return await launchAuditBrowser(protocol, options.headless);
+  } catch (error) {
+    await writeUnavailableAudit({
+      cli: options,
+      protocol,
+      scenarios,
+      requestedPhases,
+      bundles,
+      error,
     });
+    return undefined;
+  }
+}
+
+async function runLaunchedAudit(
+  options: PerfCliOptions,
+  plan: AuditPlan,
+  prepared: PreparedAuditArtifacts,
+  launched: Awaited<ReturnType<typeof launchAuditBrowser>>,
+): Promise<void> {
+  const { protocol, requestedPhases, scenarios } = plan;
+  const { bundles, baseline } = prepared;
+  let preview: RunningPreview | undefined;
+  const browser = launched.browser;
+  const previews = new PerformancePreviewSession();
+  const results: AuditJourneyResults = { samples: [], firstSessions: [] };
+  try {
     if (options.soak) {
       preview = await startPreview('instrumented');
       const soak = await runSoak(
@@ -232,52 +323,67 @@ export async function runPerformanceAudit(options: PerfCliOptions): Promise<void
       if (soak.status !== 'pass') process.exitCode = 1;
       return;
     }
-
-    preview = await startPreview('instrumented');
-    const instrumented = await runInstrumentedJourneys({
+    const phaseOptions = {
       browser,
       protocol,
-      preview,
       scenarios,
       cli: options,
-    });
-    calibration = instrumented.calibration;
-    await stopPreview(preview);
-    preview = await startPreview('public');
-    const firstSessions = await runPublicFirstSessions({
-      browser,
-      protocol,
-      preview,
-      debuggingPort,
-    });
-    await writeMeasuredAudit({
-      cli: options,
-      protocol,
-      scenarios,
-      bundles,
-      baseline,
-      results: {
-        calibration: instrumented.calibration,
-        firstSessions,
-        samples: instrumented.samples,
+      debuggingPort: launched.debuggingPort,
+      previews,
+      results,
+    };
+    const execution = await executePerformancePhases(requestedPhases, (phase) =>
+      runAuditPhase(phaseOptions, phase),
+    );
+    if (execution.error !== undefined) {
+      await writePartialAudit({
+        cli: options,
+        protocol,
+        scenarios,
+        bundles,
+        results,
+        phases: execution.phases,
+        error: execution.error,
+      });
+      return;
+    }
+    await completeMeasuredAudit({
+      writeMeasured: () =>
+        writeMeasuredAudit({
+          cli: options,
+          protocol,
+          scenarios,
+          bundles,
+          baseline,
+          results: { ...results },
+          phases: execution.phases,
+          requestedPhases,
+        }),
+      partial: {
+        cli: options,
+        protocol,
+        scenarios,
+        bundles,
+        results,
+        phases: execution.phases,
       },
     });
-  } catch (error) {
-    const reason = chromeUnavailableReason(error);
-    const report = createUnavailablePerfReport({
-      generatedAt: new Date().toISOString(),
-      protocol,
-      scenarios,
-      reason,
-      bundles,
-      calibration,
-    });
-    const reportPath = await writeReport(options.outputDirectory, report);
-    console.error(`performance unavailable: ${reason}`);
-    console.error(`performance report: ${reportPath}`);
-    process.exitCode = 2;
   } finally {
-    await browser?.close();
+    await browser.close();
     await stopPreview(preview);
+    await previews.stop();
   }
+}
+
+export async function runPerformanceAudit(options: PerfCliOptions): Promise<void> {
+  const plan = createAuditPlan(options);
+  const prepared = await prepareAuditOrReportUnavailable({
+    cli: options,
+    ...plan,
+    prepare: () => prepareAuditArtifacts(options),
+  });
+  if (!prepared) return;
+  const launched = await launchOrReportUnavailable(options, plan, prepared.bundles);
+  if (!launched) return;
+  await runLaunchedAudit(options, plan, prepared, launched);
 }

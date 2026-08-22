@@ -156,8 +156,6 @@ export function App() {
   // the other, which is what the pair of booleans this replaced could do.
   const [bootstrap, setBootstrap] = useState<BootstrapOutcome>({ kind: 'ok' });
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
-  const [mapStartupStyleSettled, setMapStartupStyleSettled] = useState(false);
-  const markMapStartupStyleSettled = useCallback(() => setMapStartupStyleSettled(true), []);
   // Something that already happened and is worth reading once: a stored system
   // that wouldn't parse, a dialog that failed to load. Held as a cause rather
   // than as the sentence for it, so the wording stays a render-time decision.
@@ -173,10 +171,6 @@ export function App() {
 
   // Bootstrap: shared link → read-only load; otherwise local autosave or fresh.
   useEffect(() => {
-    // Installing an agency-scale document can occupy the main thread long
-    // enough to starve the remote-style deadline. Wait until either the remote
-    // map produced a usable frame or the local fallback style finished loading.
-    if (!mapStartupStyleSettled) return;
     const path = window.location.pathname;
     if (path.startsWith(SHARE_PREFIX)) {
       const controller = new AbortController();
@@ -262,16 +256,7 @@ export function App() {
     return () => {
       disposed = true;
     };
-  }, [
-    store,
-    report,
-    openDialog,
-    openNewSystemLocation,
-    bootstrapAttempt,
-    mapStartupStyleSettled,
-    setSystem,
-    setTool,
-  ]);
+  }, [store, report, openDialog, openNewSystemLocation, bootstrapAttempt, setSystem, setTool]);
 
   // A wait nobody noticed does not need announcing, and a message that flashes
   // for 40ms on every single load is worse than silence. Only a wait somebody
@@ -434,7 +419,7 @@ export function App() {
           the document's id changes — see MapCanvas's system subscription. */}
       <StagedMapCanvas
         onBasemapUnavailable={() => setNotice('basemap-unavailable')}
-        onStartupStyleSettled={markMapStartupStyleSettled}
+        vehiclePaintingSuspended={activeDialog === 'onboarding'}
       />
       {/* Outside the chrome, like the banner above: right-clicking still has
           to offer its actions when the UI is hidden, since hiding the panels

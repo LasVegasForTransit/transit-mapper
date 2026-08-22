@@ -38,6 +38,38 @@ const context: ScenePublicationContext = {
 };
 
 describe('renderer source publication', () => {
+  it('starts the first source bank without waiting for a frame from an empty map', async () => {
+    const host = new PublicationHost();
+    const prepare = vi.fn();
+    const layers = {
+      prepare,
+      activate: vi.fn(),
+      finishActivation: vi.fn(),
+      finishStaging: vi.fn(),
+      restore: vi.fn(),
+    } as unknown as SourceBankLayerController;
+    const publication = new RendererSourcePublication({
+      host,
+      layers,
+      banks: { activeBank: () => null } as never,
+      recovery: {
+        requestRecovery: vi.fn(),
+        handleSourceError: vi.fn(),
+        whenSettled: () => Promise.resolve(),
+      } as never,
+    });
+    const prewarm = publication.hooks({}).beforeSourceMutation?.(context);
+    let settled = false;
+    void prewarm?.then(() => {
+      settled = true;
+    });
+
+    await Promise.resolve();
+
+    expect(prepare).toHaveBeenCalledWith('b', new Set(['tm-ways']));
+    expect(settled).toBe(true);
+  });
+
   it('waits only for incoming sources that can produce visible geometry', async () => {
     const host = new PublicationHost();
     const prepare = vi.fn();

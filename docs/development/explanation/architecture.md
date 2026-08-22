@@ -358,8 +358,9 @@ flowchart LR
 `LiveMapRenderer` owns one `DocumentProjector`, one accepted scene store, and
 the two physical banks. It alone advances the accepted revision. Dependency
 and viewport indexes restrict work to the affected visible closure; a camera
-still inside the accepted envelope performs no projection. Work stays private
-and side-effect free until publication and yields between bounded units.
+still inside the accepted envelope performs no projection or source upload.
+Work stays private and side-effect free until publication and yields between
+bounded units.
 
 Render preparation runs once in four-entity units. Over-budget units keep their
 deterministic results and yield. Exceptions, cancellation, stale generations,
@@ -540,12 +541,11 @@ flowchart TD
   cron --> w
 ```
 
-There is one environment. Conventional commits on the default branch update a
-generated release pull request. Merging that pull request runs the checks,
-creates and attests one deployment archive, applies pending database
-migrations from it, deploys its exact Worker and static assets, and smoke-tests
-the result. GitHub records the release and production deployment; the About
-dialog exposes their version, revision, and provenance links to the viewer.
+There is one environment. Default-branch commits update a generated release
+pull request. Merging it runs the checks, attests one archive, applies its
+migrations, deploys its Worker and assets, checks the live fingerprint and
+routes, then runs RTC and onboarding in headless Chrome. GitHub records the
+release and deployment; About shows their version, revision, and provenance.
 
 | Element           | Detail                                                                                |
 | ----------------- | ------------------------------------------------------------------------------------- |

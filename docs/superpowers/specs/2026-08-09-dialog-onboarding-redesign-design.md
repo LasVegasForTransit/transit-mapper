@@ -245,10 +245,13 @@ query, clipping, normalization, and deterministic ordering. Its committed JSON
 output is adapted by `las-vegas-context.ts`, which exposes typed LineStrings,
 real-place labels, bounds, and attribution without mutating the snapshot.
 
-`apps/web/src/ui/onboarding/OnboardingPreviewMap.tsx` owns MapLibre setup,
-production feature projection, framing, markers, and scene timing. Pure helpers
-that turn elapsed time into a drawing extent, cursor position, simulated time,
-or settled state stay outside React effects so ordinary Vitest can prove them.
+`apps/web/src/ui/onboarding/OnboardingPreviewMap.tsx` mounts one map controller
+for the dialog lifetime and forwards slide changes to it. The controller uses
+the committed Las Vegas context and local style directly. It replaces source
+data and feature state without replacing the canvas or WebGL context. Pure
+helpers that turn elapsed time into a drawing extent, cursor position,
+simulated time, or settled state stay outside React effects so ordinary Vitest
+can prove them.
 
 Shared kebab-case components under `apps/web/src/ui/inspector/` own the Schedule
 fields and service-load presentation used by both the live Service inspector and
@@ -259,8 +262,11 @@ presentation, and plain failure copy; it does not invent a separate onboarding
 control language or read editor state.
 
 `apps/web/src/ui/onboarding/OnboardingDialog.tsx` remains the carousel
-orchestrator. It chooses the current slide, supplies the scene to the preview,
-and owns navigation semantics. It does not gain map or simulation logic.
+orchestrator. It chooses the current slide, supplies the scene to the stable
+preview, and owns navigation semantics. It does not gain map or simulation
+logic. `App` tells the editor map when onboarding covers it, so the hidden
+editor vehicle host suspends source writes without moving dialog state into
+the editor store.
 
 The data flow is one-way:
 

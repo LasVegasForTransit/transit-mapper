@@ -35,11 +35,7 @@ export function OnboardingDialog({ onClose, onComplete }: OnboardingDialogProps)
         <div className="onboarding-explanation">
           <p className="onboarding-copy">{slide.body}</p>
         </div>
-        <OnboardingPreviewMap
-          key={slide.scene}
-          scene={slide.scene}
-          description={slide.visualDescription}
-        />
+        <OnboardingPreviewMap scene={slide.scene} description={slide.visualDescription} />
       </div>
     </Modal>
   );

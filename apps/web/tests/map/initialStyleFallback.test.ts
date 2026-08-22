@@ -46,8 +46,8 @@ afterEach(() => {
 });
 
 describe('initial map style fallback', () => {
-  it('gives the remote basemap eight seconds to produce its first usable frame', () => {
-    expect(INITIAL_STYLE_FALLBACK_TIMEOUT_MS).toBe(8_000);
+  it('falls back early enough to leave time inside the first-map budget', () => {
+    expect(INITIAL_STYLE_FALLBACK_TIMEOUT_MS).toBeLessThan(3_500 / 2);
   });
 
   it('switches to the local blank style once when the remote style errors', () => {
@@ -85,7 +85,7 @@ describe('initial map style fallback', () => {
     expect(map.setStyle).toHaveBeenCalledWith(localBlankStyleForScheme('light'), { diff: false });
   });
 
-  it('switches once to the local style when the startup deadline expires', () => {
+  it('reports a failure only when the basemap is genuinely unreachable', async () => {
     vi.useFakeTimers();
     const map = new FakeStyleMap();
     const fallback = vi.fn();
@@ -93,15 +93,78 @@ describe('initial map style fallback', () => {
       scheme: 'light',
       timeoutMs: 250,
       onFallback: fallback,
+      probeBasemap: () => Promise.resolve(false),
     });
 
     vi.advanceTimersByTime(250);
 
-    expect(fallback).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(fallback).toHaveBeenCalledTimes(1));
     expect(map.setStyle).toHaveBeenCalledTimes(1);
     expect(map.setStyle).toHaveBeenCalledWith(localBlankStyleForScheme('light'), {
       diff: false,
     });
+  });
+
+  it('keeps the grid after a reachable basemap times out', async () => {
+    vi.useFakeTimers();
+    const timedOut = new FakeStyleMap();
+    const fallback = vi.fn();
+    const onLocalStyleSelected = vi.fn();
+    attachInitialStyleFallback(timedOut as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      onFallback: fallback,
+      onLocalStyleSelected,
+      probeBasemap: () => Promise.resolve(true),
+    });
+
+    vi.advanceTimersByTime(250);
+    expect(timedOut.setStyle).toHaveBeenCalledWith(localBlankStyleForScheme('light'), {
+      diff: false,
+    });
+    await vi.waitFor(() => expect(timedOut.setStyle).toHaveBeenCalledTimes(1));
+    expect(fallback).not.toHaveBeenCalled();
+    expect(onLocalStyleSelected).toHaveBeenCalledOnce();
+    expect(timedOut.setStyle).toHaveBeenLastCalledWith(localBlankStyleForScheme('light'), {
+      diff: false,
+    });
+  });
+
+  it('does not replace the initially local grid when a reachable probe finishes late', async () => {
+    vi.useFakeTimers();
+    const map = new FakeStyleMap();
+    let resolveProbe!: (reachable: boolean) => void;
+    const probe = new Promise<boolean>((resolve) => {
+      resolveProbe = resolve;
+    });
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      startsWithLocalStyle: true,
+      onFallback: vi.fn(),
+      probeBasemap: () => probe,
+    });
+
+    vi.advanceTimersByTime(250);
+    resolveProbe(true);
+    await Promise.resolve();
+
+    expect(map.setStyle).not.toHaveBeenCalled();
+  });
+
+  it('does not replace the initially local grid when a reachable probe finishes immediately', async () => {
+    const map = new FakeStyleMap();
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      startsWithLocalStyle: true,
+      onFallback: vi.fn(),
+      probeBasemap: () => Promise.resolve(true),
+    });
+
+    await Promise.resolve();
+
+    expect(map.setStyle).not.toHaveBeenCalled();
   });
 
   it('does not replace a map that produced its first usable frame', () => {
@@ -136,7 +199,7 @@ describe('initial map style fallback', () => {
     expect(onSettled).toHaveBeenCalledOnce();
   });
 
-  it('settles startup when the local fallback style becomes usable', () => {
+  it('settles startup as soon as it selects the local fallback style', () => {
     vi.useFakeTimers();
     const map = new FakeStyleMap();
     const onSettled = vi.fn();
@@ -148,14 +211,34 @@ describe('initial map style fallback', () => {
     });
 
     vi.advanceTimersByTime(250);
-    expect(onSettled).not.toHaveBeenCalled();
+    expect(onSettled).toHaveBeenCalledOnce();
 
     map.commitLocalStyle();
 
     expect(onSettled).toHaveBeenCalledOnce();
   });
 
-  it('does not settle on a late event from the abandoned remote style', () => {
+  it('releases document startup before MapLibre replaces the stalled style', () => {
+    vi.useFakeTimers();
+    const map = new FakeStyleMap();
+    const onSettled = vi.fn();
+    map.setStyle.mockImplementation(() => {
+      expect(onSettled).toHaveBeenCalledOnce();
+      return map;
+    });
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'dark',
+      timeoutMs: 250,
+      onFallback: vi.fn(),
+      onSettled,
+    });
+
+    vi.advanceTimersByTime(250);
+
+    expect(map.setStyle).toHaveBeenCalledOnce();
+  });
+
+  it('does not settle twice for a late event from the abandoned remote style', () => {
     vi.useFakeTimers();
     const map = new FakeStyleMap();
     const onSettled = vi.fn();
@@ -168,8 +251,9 @@ describe('initial map style fallback', () => {
 
     vi.advanceTimersByTime(250);
     map.emit('style.load');
+    map.emit('load');
 
-    expect(onSettled).not.toHaveBeenCalled();
+    expect(onSettled).toHaveBeenCalledOnce();
 
     map.commitLocalStyle();
 
@@ -193,5 +277,47 @@ describe('initial map style fallback', () => {
     expect(map.setStyle).toHaveBeenLastCalledWith(localBlankStyleForScheme('light'), {
       diff: false,
     });
+  });
+
+  it('ignores a pending reachability probe after disposal', async () => {
+    vi.useFakeTimers();
+    const map = new FakeStyleMap();
+    const fallback = vi.fn();
+    let resolveProbe!: (reachable: boolean) => void;
+    const probe = new Promise<boolean>((resolve) => {
+      resolveProbe = resolve;
+    });
+    const detach = attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      onFallback: fallback,
+      probeBasemap: () => probe,
+    });
+
+    vi.advanceTimersByTime(250);
+    detach();
+    resolveProbe(false);
+    await Promise.resolve();
+    map.emit('error');
+
+    expect(fallback).not.toHaveBeenCalled();
+    expect(map.setStyle).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets an expired fallback timer before the replacement style loads', () => {
+    vi.useFakeTimers();
+    const map = new FakeStyleMap();
+    const clearTimer = vi.spyOn(globalThis, 'clearTimeout');
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      onFallback: vi.fn(),
+    });
+
+    vi.advanceTimersByTime(250);
+    clearTimer.mockClear();
+    map.emit('style.load');
+
+    expect(clearTimer).not.toHaveBeenCalled();
   });
 });

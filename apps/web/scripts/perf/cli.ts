@@ -15,7 +15,10 @@ export interface PerfCliOptions {
   scenarioId?: PerfScenario['id'];
   soak: boolean;
   soakDurationMs: number;
+  headless: boolean;
   help: boolean;
+  firstSession: boolean;
+  onboarding: boolean;
 }
 
 export function perfUsage(): string {
@@ -28,9 +31,12 @@ export function perfUsage(): string {
     '  --require-baseline     Require a baseline even in an otherwise exempt mode',
     '  --profile <name>        desktop (default) or mobile',
     '  --scenario <id>         Run one scenario for local diagnosis',
+    '  --first-session         Run public editor, share, and embed checks',
+    '  --onboarding            Run the onboarding slide-change smoke',
     '  --smoke                 Run one functional sample without numeric timing gates',
     '  --soak                  Run the ten-minute RTC leak gate',
     '  --soak-duration <ms>    Shorter local soak smoke (default 600000)',
+    '  --headless              Run Chrome without opening a desktop window',
     '  --skip-build           Reuse the current dist/ output',
     '  --record               Retain one Chrome trace per measured run',
     '  --freeze-baseline      Create the immutable checked baseline explicitly',
@@ -56,7 +62,10 @@ interface MutablePerfCliOptions {
   scenarioId?: PerfScenario['id'];
   soak: boolean;
   soakDurationMs: number;
+  headless: boolean;
   help: boolean;
+  firstSession: boolean;
+  onboarding: boolean;
 }
 
 type FlagHandler = (options: MutablePerfCliOptions) => void;
@@ -68,7 +77,10 @@ const FLAG_HANDLERS: Readonly<Partial<Record<string, FlagHandler>>> = {
   '--skip-build': (options) => (options.skipBuild = true),
   '--smoke': (options) => (options.smoke = true),
   '--soak': (options) => (options.soak = true),
+  '--headless': (options) => (options.headless = true),
   '--help': (options) => (options.help = true),
+  '--first-session': (options) => (options.firstSession = true),
+  '--onboarding': (options) => (options.onboarding = true),
 };
 
 function applyFlag(options: MutablePerfCliOptions, argument: string): boolean {
@@ -118,7 +130,10 @@ function initialOptions(): MutablePerfCliOptions {
     profile: 'desktop',
     soak: false,
     soakDurationMs: 10 * 60 * 1_000,
+    headless: false,
     help: false,
+    firstSession: false,
+    onboarding: false,
   };
 }
 
@@ -142,13 +157,20 @@ export function parsePerfCliOptions(args: string[]): PerfCliOptions {
     outputDirectory: resolve(APP_ROOT, options.output ?? defaultOutput),
     baselinePath: options.baseline ? resolve(APP_ROOT, options.baseline) : undefined,
     requireBaseline:
-      options.requireBaseline || (!options.freezeBaseline && !options.smoke && !options.soak),
+      options.requireBaseline ||
+      (!options.freezeBaseline &&
+        !options.smoke &&
+        !options.soak &&
+        !(options.onboarding && !options.firstSession && !options.scenarioId)),
     skipBuild: options.skipBuild,
     smoke: options.smoke,
     profile: options.profile,
     scenarioId: options.scenarioId,
     soak: options.soak,
     soakDurationMs: options.soakDurationMs,
+    headless: options.headless,
     help: options.help,
+    firstSession: options.firstSession,
+    onboarding: options.onboarding,
   };
 }

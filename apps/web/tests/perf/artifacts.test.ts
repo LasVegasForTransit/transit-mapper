@@ -165,6 +165,26 @@ describe('the checked performance baseline', () => {
     await expect(readBaseline(path)).resolves.toEqual(frozen);
   });
 
+  it('accepts an older schema-v3 baseline without phase records', async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), 'tm-perf-baseline-compatible-'));
+    const path = resolve(directory, 'baseline.json');
+    const frozen = report('2026-08-13T00:00:00.000Z');
+    delete frozen.phases;
+    await writeFrozenFixture(path, frozen);
+
+    await expect(readBaseline(path)).resolves.toEqual(frozen);
+  });
+
+  it('rejects a malformed phase record in new baseline evidence', async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), 'tm-perf-baseline-phases-'));
+    const path = resolve(directory, 'baseline.json');
+    const frozen = report('2026-08-13T00:00:00.000Z');
+    frozen.phases = [{ phase: 'instrumented', status: 'pending' as 'passed' }];
+    await writeFrozenFixture(path, frozen);
+
+    await expect(readBaseline(path)).rejects.toThrow('phases[0].status');
+  });
+
   it('rejects an obsolete report schema instead of comparing unlike contracts', async () => {
     const directory = await mkdtemp(resolve(tmpdir(), 'tm-perf-baseline-version-'));
     const path = resolve(directory, 'baseline.json');

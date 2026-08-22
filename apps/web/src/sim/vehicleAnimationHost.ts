@@ -17,28 +17,15 @@ import { resolvePatternGeometry } from './patternGeometry';
 import { nextActiveServiceMs, ScheduleResolver } from './serviceSchedule';
 import type { SimClock } from './simClock';
 import type { VehicleAnimationStore } from './vehicle-animation-store';
+import type { VehicleGate } from './vehicle-animation-gate';
+import { noteClampedFleet } from './vehicle-fleet-cap';
 
 export type { VehicleAnimationStore } from './vehicle-animation-store';
-
-/** Presentation state that controls whether and how vehicles are drawn. */
-export interface VehicleGate {
-  /** Whether this service's vehicles should render under the mode filter. */
-  isVisible: (service: Service) => boolean;
-  /** Network draws dots, Infrastructure draws footprints, Diagram draws none. */
-  viewMode: () => 'network' | 'infrastructure' | 'diagram';
-  /** A pinned schedule period, or undefined to follow the simulated clock. */
-  pinnedPeriod: () => string | undefined;
-  /** True while map geometry or the camera is being manipulated directly.
-   * The host keeps painting against the last settled system until release. */
-  isDirectManipulationActive: () => boolean;
-  /** Notify the host when any gate value changes. */
-  subscribe: (listener: () => void) => () => void;
-}
+export type { VehicleGate } from './vehicle-animation-gate';
 
 const MAX_VEHICLES_PER_PATTERN = 12;
 const VEHICLE_UPDATE_INTERVAL_MS = 1000 / 30;
 const MAX_TICK_ADVANCE_MS = 250;
-const clampedFleetsReported = new Set<string>();
 
 interface VehicleProps {
   color: string;
@@ -59,18 +46,6 @@ interface RenderInputs {
 }
 
 /**
- * A cap controls rendering cost, not service planning. Report it once in
- * development so a sparse-looking line cannot be mistaken for wrong headway.
- */
-function noteClampedFleet(patternId: string, serviceName: string, fleet: number): void {
-  if (!import.meta.env.DEV || clampedFleetsReported.has(patternId)) return;
-  clampedFleetsReported.add(patternId);
-  console.info(
-    `[sim] ${serviceName}: running ${fleet} vehicles, drawing ${MAX_VEHICLES_PER_PATTERN}. Headway and spacing are unaffected; the map shows gaps.`,
-  );
-}
-
-/**
  * Attach the MapLibre host for the pure motion kernel in packages/core.
  *
  * The host advances simulated time, resolves visible runs, and writes pooled
@@ -88,7 +63,7 @@ export function attachVehicleAnimation(
   let detached = false;
   let paintPausedFrame = false;
   let advancingClock = false;
-  let idle = false;
+  let idle = gate.isPaintingSuspended();
   let lastUpdate = -Infinity;
   let lastRealNow = performance.now();
   let previousClockSettings = clock.settings();
@@ -144,7 +119,13 @@ export function attachVehicleAnimation(
 
   const scheduleFrame = (allowPaused = false) => {
     if (allowPaused) paintPausedFrame = true;
-    if (detached || frame !== null || (clock.settings().paused && !allowPaused)) return;
+    if (
+      detached ||
+      gate.isPaintingSuspended() ||
+      frame !== null ||
+      (clock.settings().paused && !allowPaused)
+    )
+      return;
     if (idleWakeTimer !== null) {
       clearTimeout(idleWakeTimer);
       idleWakeTimer = null;
@@ -188,7 +169,10 @@ export function attachVehicleAnimation(
     const paused = clock.settings().paused;
     const canPaintPaused = paintPausedFrame;
     paintPausedFrame = false;
-    if (detached || (paused && !canPaintPaused)) return;
+    if (detached || gate.isPaintingSuspended() || (paused && !canPaintPaused)) {
+      idle = gate.isPaintingSuspended();
+      return;
+    }
 
     const wokeFromIdle = idle;
     idle = false;
@@ -326,7 +310,7 @@ export function attachVehicleAnimation(
       // many of those runs are drawn.
       const shown = Math.min(plan.fleet, MAX_VEHICLES_PER_PATTERN);
       if (shown < plan.fleet)
-        noteClampedFleet(pattern.id, serviceDisplayLabel(system, service.id), plan.fleet);
+        noteClampedFleet(pattern.id, serviceDisplayLabel(system, service.id), plan.fleet, shown);
 
       for (let i = 0; i < shown; i++) {
         const { distMeters, run } = runStateAt(simMs, geometry.timetables, plan, i, profile);
@@ -439,6 +423,11 @@ export function attachVehicleAnimation(
       manipulationSystem = null;
     }
     manipulationWasActive = manipulationIsActive;
+    if (gate.isPaintingSuspended()) {
+      idle = true;
+      cancelScheduled();
+      return;
+    }
     wake(true);
   });
 

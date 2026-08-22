@@ -70,6 +70,10 @@ export class RendererSourcePublication {
       beforeSourceMutation: async (context) => {
         if (!this.isInactiveBank(context)) return;
         this.options.layers.prepare(context.bank, this.clearedLogicalSourceIds(context));
+        // The initial scene has no active bank to preserve. Waiting for a
+        // render of its empty, fully hidden staging bank can deadlock MapLibre
+        // before the first GeoJSON mutation schedules a real frame.
+        if (!this.options.banks.activeBank()) return;
         await this.waitForPaint();
       },
       onSourceMutationStart: (sourceIds, context) => {

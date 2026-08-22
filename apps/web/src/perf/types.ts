@@ -244,7 +244,27 @@ export interface PerfScenarioSummary {
   };
 }
 
-type PerfReportStatus = 'ok' | 'unavailable';
+type PerfReportStatus = 'ok' | 'partial' | 'unavailable';
+
+export type PerfAuditPhase = 'instrumented' | 'first-session' | 'onboarding';
+export type PerfAuditPhaseStatus = 'passed' | 'failed' | 'unavailable';
+
+export interface PerfAuditPhaseResult {
+  phase: PerfAuditPhase;
+  status: PerfAuditPhaseStatus;
+  reason?: string;
+}
+
+export interface PerfOnboardingSample {
+  slideCount: number;
+  trustedClickCount: number;
+  previewCanvasCount: number;
+  webGlContextCount: number;
+  mapReconstructionCount: number;
+  remoteStyleRequests: string[];
+  slideLongTasksMs: number[];
+  maximumSlideLongTaskMs: number;
+}
 
 export interface PerfCalibration {
   benchmark: 'integer-mix-v1';
@@ -300,6 +320,7 @@ export interface PerfReport {
   generatedAt: string;
   status: PerfReportStatus;
   unavailableReason?: string;
+  failureReason?: string;
   protocol: PerfProtocol;
   calibration?: PerfCalibration;
   provenance?: PerfReportProvenance;
@@ -307,6 +328,10 @@ export interface PerfReport {
   firstSessions: PerfFirstSessionSample[];
   samples: PerfSample[];
   scenarios: PerfScenarioSummary[];
+  /** Optional so existing checked schema-v3 baselines remain readable. New
+   * executable audits always list every phase they requested. */
+  phases?: PerfAuditPhaseResult[];
+  onboarding?: PerfOnboardingSample;
   /** Filled by the executable runner after report construction. */
   evaluation?: PerfBudgetEvaluation;
 }
@@ -320,6 +345,12 @@ export interface CreatePerfReportOptions {
   calibration?: PerfCalibration;
   provenance?: PerfReportProvenance;
   firstSessions?: PerfFirstSessionSample[];
+  phases?: PerfAuditPhaseResult[];
+  onboarding?: PerfOnboardingSample;
+}
+
+export interface CreatePartialPerfReportOptions extends CreatePerfReportOptions {
+  reason: string;
 }
 
 export interface CreateUnavailablePerfReportOptions {
@@ -329,6 +360,7 @@ export interface CreateUnavailablePerfReportOptions {
   reason: string;
   bundles?: PerfBundleEntry[];
   calibration?: PerfCalibration;
+  phases?: PerfAuditPhaseResult[];
 }
 
 type PerfBudgetViolationKind =

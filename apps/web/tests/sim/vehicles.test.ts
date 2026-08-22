@@ -145,14 +145,13 @@ function createGate(
   let pinnedPeriod = options.pinnedPeriod;
   let directManipulationActive = options.directManipulationActive ?? false;
   const listeners = new Set<() => void>();
-  const invalidate = () => {
-    for (const listener of listeners) listener();
-  };
+  const invalidate = () => listeners.forEach((listener) => listener());
   return {
     isVisible: () => visible,
     viewMode: () => viewMode,
     pinnedPeriod: () => pinnedPeriod,
     isDirectManipulationActive: () => directManipulationActive,
+    isPaintingSuspended: () => false,
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => {

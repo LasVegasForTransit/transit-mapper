@@ -108,15 +108,20 @@ import {
   attachInitialStyleFallback,
   INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
 } from './initialStyleFallback';
-import { attachInitialMapReady, shouldProjectInitialDocument } from './initial-map-ready';
+import {
+  attachInitialMapReady,
+  shouldProjectInitialDocument,
+  shouldScheduleInitialReadyDocument,
+} from './initial-map-ready';
 import { initLiveCamera, setLiveCamera } from '../camera/liveCamera';
 import { attachPerfHarness } from '../perf';
 import { markFirstSystemMapPaint, systemPaintReady } from '../perf/mapPaintMark';
 import { createRendererStatsCollector } from '../perf/renderer-stats';
 import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
+import { createVehicleAnimationGateController } from '../sim/vehicle-animation-gate';
 import { clearArmedTerminusForViewChange } from './viewEditorState';
-import { initialEditorStyleForScheme, layerSpecsForScheme } from './mapTheme';
+import { layerSpecsForScheme, localBlankStyleForScheme } from './mapTheme';
 import { createStyleSwitchController, type StyleSwitchController } from './styleSwitchController';
 import { attachMapStyleRecovery, recoverMapStyleState } from './styleRecovery';
 import { createMapStyleFeatureDataRecovery } from './styleRecovery';
@@ -213,7 +218,8 @@ export interface MapCanvasProps {
    *  the backdrop is blank, and a user who isn't told assumes the app broke
    *  rather than that a third-party tile host is down. */
   onBasemapUnavailable?: () => void;
-  onStartupStyleSettled?: () => void;
+  /** Stops editor vehicle source writes while onboarding owns the visible map. */
+  vehiclePaintingSuspended?: boolean;
 }
 
 interface MapErrorLike {
@@ -272,7 +278,10 @@ function framePadding(el: HTMLElement, margin: number): PaddingOptions {
   };
 }
 
-export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCanvasProps) {
+export function MapCanvas({
+  onBasemapUnavailable,
+  vehiclePaintingSuspended = false,
+}: MapCanvasProps) {
   const colorScheme = useSystemColorScheme();
   const initialColorSchemeRef = useRef(colorScheme);
   const styleSwitchControllerRef = useRef<StyleSwitchController | null>(null);
@@ -298,6 +307,7 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
     refreshPointerIntentRef.current?.();
   }, [contextMenuAt, terminusConnectionChoice]);
   const { viewMode, setViewMode, visibleModes, visibleWayTypes, showLandmarks } = useView();
+  const viewRef = useRef<ViewOptions>({ viewMode, visibleModes, visibleWayTypes });
   useEffect(() => {
     clearActionAnchor();
     clearArmedTerminusForViewChange(store);
@@ -345,9 +355,6 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
   // the map down and rebuild it every time App re-renders with a fresh arrow.
   const basemapFailureRef = useRef(onBasemapUnavailable);
   basemapFailureRef.current = onBasemapUnavailable;
-  const startupStyleSettledRef = useRef(onStartupStyleSettled);
-  startupStyleSettledRef.current = onStartupStyleSettled;
-
   // Same reasoning as basemapFailureRef: the keymap needs to run these, but
   // naming them in the map effect's deps would tear down and rebuild the
   // entire map if their identity ever changed.
@@ -358,20 +365,17 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
     stepSpeed: (direction) => simCommandsRef.current.stepSpeed(direction),
   }).current;
 
-  // Read live by the animation loop each tick, for the same reason.
-  const pinnedPeriodRef = useRef<string | undefined>(pinnedPeriod);
-  pinnedPeriodRef.current = pinnedPeriod;
-  const vehicleGateListenersRef = useRef(new Set<() => void>());
+  const vehicleGateController = useRef(
+    createVehicleAnimationGateController(() => viewRef.current),
+  ).current;
+  vehicleGateController.update(pinnedPeriod, vehiclePaintingSuspended);
 
   useEffect(() => {
-    // Pinned periods are React presentation state, so the imperative vehicle
-    // host cannot observe this change through the editor store. Publish it
-    // explicitly; an inactive host has no polling timer to discover it later.
-    for (const listener of vehicleGateListenersRef.current) listener();
-  }, [pinnedPeriod]);
+    // The imperative vehicle host does not poll React state while it is idle.
+    vehicleGateController.notify();
+  }, [pinnedPeriod, vehiclePaintingSuspended, vehicleGateController]);
 
   const coarsePointer = useCoarsePointer();
-  const viewRef = useRef<ViewOptions>({ viewMode, visibleModes, visibleWayTypes });
   const showLandmarksRef = useRef(showLandmarks);
   showLandmarksRef.current = showLandmarks;
   // The map layer takes tolerances, not a device: which profile applies is
@@ -390,7 +394,7 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
     viewRef.current = next;
     refreshPointerIntentRef.current?.();
     if (update.notifyVehicles) {
-      for (const listener of vehicleGateListenersRef.current) listener();
+      vehicleGateController.notify();
     }
     if (update.reproject) schedulePushDataRef.current?.();
     const map = getMap();
@@ -403,7 +407,7 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
       container: containerRef.current,
     });
     map.triggerRepaint();
-  }, [viewMode, visibleModes, visibleWayTypes, store]);
+  }, [viewMode, visibleModes, visibleWayTypes, store, vehicleGateController]);
 
   // Landmarks are a pure layer-visibility toggle. buildFeatures never reads
   // showLandmarks, so this deliberately does NOT live in the effect above:
@@ -432,7 +436,7 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: initialEditorStyleForScheme(initialColorScheme),
+      style: localBlankStyleForScheme(initialColorScheme),
       center: initial.viewport.center,
       zoom: initial.viewport.zoom,
       // No preserveDrawingBuffer: PNG export renders on a dedicated offscreen
@@ -477,14 +481,16 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
       console.error('[transitmapper]', event.error ?? event);
     };
     map.on('error', onMapError);
+    const initialStyleOwnership = { localOnly: false };
     const detachInitialStyleFallback = attachInitialStyleFallback(map, {
       scheme: initialColorScheme,
       timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
-      onFallback: () => {
+      startsWithLocalStyle: true,
+      onLocalStyleSelected: () => {
+        initialStyleOwnership.localOnly = true;
         styleSwitchControllerRef.current?.lockToLocal(initialColorScheme);
-        basemapFailureRef.current?.();
       },
-      onSettled: () => startupStyleSettledRef.current?.(),
+      onFallback: () => basemapFailureRef.current?.(),
     });
 
     let detachInteractions: (() => void) | null = null;
@@ -817,9 +823,7 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
       renderer,
       readSelection: () => store.getState().selection,
     });
-    const notifyVehicleGate = () => {
-      for (const listener of vehicleGateListenersRef.current) listener();
-    };
+    const notifyVehicleGate = () => vehicleGateController.notify();
     const beginDirectManipulation = () => {
       if (directManipulationActive) return;
       directManipulationActive = true;
@@ -1609,6 +1613,9 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
       },
       onUnavailable: () => basemapFailureRef.current?.(),
     });
+    if (initialStyleOwnership.localOnly) {
+      styleSwitchControllerRef.current.lockToLocal(initialColorScheme);
+    }
 
     attachInitialMapReady(map, () => {
       // MapLibre's compact attribution starts expanded once (its own default
@@ -1723,18 +1730,8 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
           );
         },
       });
-      detachVehicles = attachVehicleAnimation(map, store, simClock, {
-        isVisible: (service) => viewRef.current.visibleModes.has(service.modeId),
-        viewMode: () => viewRef.current.viewMode,
-        pinnedPeriod: () => pinnedPeriodRef.current,
-        isDirectManipulationActive: () => directManipulationActive,
-        subscribe: (listener) => {
-          vehicleGateListenersRef.current.add(listener);
-          return () => {
-            vehicleGateListenersRef.current.delete(listener);
-          };
-        },
-      });
+      const vehicleGate = vehicleGateController.createGate(() => directManipulationActive);
+      detachVehicles = attachVehicleAnimation(map, store, simClock, vehicleGate);
       if (PERF_HARNESS_BUILD) {
         detachPerf = attachPerfHarness(map, {
           stopSnapshot: (stopId) => {
@@ -1921,6 +1918,18 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
         }
       }
     });
+    // The local style can finish while IndexedDB delivers the saved document.
+    // If that ready transition lands between editor setup and subscription,
+    // the subscription cannot replay it. The queue coalesces same-frame
+    // startup requests, so this cannot produce a second preparation attempt.
+    if (
+      shouldScheduleInitialReadyDocument(
+        store.getState().documentStatus,
+        renderer.hasAcceptedScene(),
+      )
+    ) {
+      schedulePushData('all');
+    }
 
     // A leading refresh prepares adjacent tiers; bounded trailing work commits
     // the exact viewport without projecting on every raw camera event.
@@ -2012,6 +2021,7 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
     setViewMode,
     simClock,
     simCommands,
+    vehicleGateController,
   ]);
 
   useEffect(() => {
