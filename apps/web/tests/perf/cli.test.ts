@@ -7,6 +7,13 @@ describe('performance CLI', () => {
 
     expect(options.smoke).toBe(true);
     expect(options.scenarioId).toBe('rtc');
+    expect(options.headless).toBe(false);
+  });
+
+  it('uses a headless browser for an explicitly requested local diagnostic run', () => {
+    const options = parsePerfCliOptions(['--smoke', '--scenario', 'rtc', '--headless']);
+
+    expect(options.headless).toBe(true);
   });
 
   it('selects the public first-session phase independently', () => {

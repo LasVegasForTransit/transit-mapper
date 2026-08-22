@@ -20,11 +20,14 @@ export const INITIAL_STYLE_FALLBACK_TIMEOUT_MS = 1_500;
 export interface InitialStyleFallbackOptions {
   scheme: ColorScheme;
   timeoutMs: number;
+  /** MapCanvas begins on the local style so a stalled remote fetch cannot
+   * prevent the first source-ready transition. */
+  startsWithLocalStyle?: boolean;
   /** The basemap is genuinely unreachable, not merely slower than the budget. */
   onFallback: () => void;
   /** The local style now owns this map session, regardless of reachability. */
   onLocalStyleSelected?: () => void;
-  /** The remote frame or the replacement local style is ready for editor data. */
+  /** The remote frame is ready, or the local fallback owns startup. */
   onSettled?: () => void;
   /** Overridable so a test can resolve or reject without a network. */
   probeBasemap?: (styleUrl: string) => Promise<boolean>;
@@ -46,6 +49,7 @@ export function attachInitialStyleFallback(
 ): () => void {
   let settled = false;
   let fallbackRequested = false;
+  let remoteStyleRequested = false;
   let detached = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const probe = options.probeBasemap ?? basemapIsReachable;
@@ -61,7 +65,13 @@ export function attachInitialStyleFallback(
     // cleanup cannot cancel an unrelated renderer task with the same handle.
     clearTimer();
     options.onLocalStyleSelected?.();
-    map.setStyle(localBlankStyleForScheme(options.scheme), { diff: false });
+    // MapLibre can retain the abandoned style request until its transport
+    // times out. Mark the fallback before replacing it so no later remote
+    // event can reclaim this map session.
+    settle();
+    if (!options.startsWithLocalStyle || remoteStyleRequested) {
+      map.setStyle(localBlankStyleForScheme(options.scheme), { diff: false });
+    }
   };
   const fallback = () => {
     if (settled || fallbackRequested) return;
@@ -95,9 +105,19 @@ export function attachInitialStyleFallback(
     options.onSettled?.();
   };
   const onMapLoad = () => {
+    if (options.startsWithLocalStyle) return;
     if (!fallbackRequested || map.getLayer(LOCAL_BACKGROUND_LAYER_ID)) settle();
   };
   const onStyleLoad = () => {
+    if (
+      options.startsWithLocalStyle &&
+      remoteStyleRequested &&
+      !fallbackRequested &&
+      !map.getLayer(LOCAL_BACKGROUND_LAYER_ID)
+    ) {
+      settle();
+      return;
+    }
     // MapLibre can deliver a queued style.load from the abandoned remote
     // style after setStyle() has requested the fallback. That event does not
     // make the replacement safe to mutate. Wait until the committed style
@@ -114,6 +134,18 @@ export function attachInitialStyleFallback(
   map.on('style.load', onStyleLoad);
   map.on('error', onInitialError);
   timer = setTimeout(deadlineElapsed, options.timeoutMs);
+  if (options.startsWithLocalStyle) {
+    const styleUrl = basemapStyleForScheme(options.scheme);
+    void probe(styleUrl).then((reachable) => {
+      if (detached || fallbackRequested) return;
+      if (!reachable) {
+        fallback();
+        return;
+      }
+      remoteStyleRequested = true;
+      map.setStyle(styleUrl, { diff: false });
+    });
+  }
 
   return () => {
     detached = true;
