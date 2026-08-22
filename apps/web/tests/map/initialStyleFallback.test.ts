@@ -152,6 +152,21 @@ describe('initial map style fallback', () => {
     expect(map.setStyle).not.toHaveBeenCalled();
   });
 
+  it('does not replace the initially local grid when a reachable probe finishes immediately', async () => {
+    const map = new FakeStyleMap();
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      startsWithLocalStyle: true,
+      onFallback: vi.fn(),
+      probeBasemap: () => Promise.resolve(true),
+    });
+
+    await Promise.resolve();
+
+    expect(map.setStyle).not.toHaveBeenCalled();
+  });
+
   it('does not replace a map that produced its first usable frame', () => {
     vi.useFakeTimers();
     const loaded = new FakeStyleMap();

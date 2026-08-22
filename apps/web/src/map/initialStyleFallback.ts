@@ -27,7 +27,7 @@ export interface InitialStyleFallbackOptions {
   onFallback: () => void;
   /** The local style now owns this map session, regardless of reachability. */
   onLocalStyleSelected?: () => void;
-  /** The remote frame is ready, or the local fallback owns startup. */
+  /** The initial style policy has settled on its session owner. */
   onSettled?: () => void;
   /** Overridable so a test can resolve or reject without a network. */
   probeBasemap?: (styleUrl: string) => Promise<boolean>;
@@ -46,7 +46,6 @@ interface InitialStyleEventHandlerOptions {
   map: MLMap;
   startsWithLocalStyle: boolean | undefined;
   isFallbackRequested: () => boolean;
-  isRemoteStyleRequested: () => boolean;
   settle: () => void;
   fallback: () => void;
 }
@@ -59,15 +58,6 @@ function createInitialStyleEventHandlers(options: InitialStyleEventHandlerOption
     }
   };
   const onStyleLoad = () => {
-    if (
-      options.startsWithLocalStyle &&
-      options.isRemoteStyleRequested() &&
-      !options.isFallbackRequested() &&
-      !options.map.getLayer(LOCAL_BACKGROUND_LAYER_ID)
-    ) {
-      options.settle();
-      return;
-    }
     if (options.isFallbackRequested() && options.map.getLayer(LOCAL_BACKGROUND_LAYER_ID)) {
       options.settle();
     }
@@ -83,7 +73,6 @@ export function attachInitialStyleFallback(
 ): () => void {
   let settled = false;
   let fallbackRequested = false;
-  let remoteStyleRequested = false;
   let detached = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const probe = options.probeBasemap ?? basemapIsReachable;
@@ -103,7 +92,7 @@ export function attachInitialStyleFallback(
     // times out. Mark the fallback before replacing it so no later remote
     // event can reclaim this map session.
     settle();
-    if (!options.startsWithLocalStyle || remoteStyleRequested) {
+    if (!options.startsWithLocalStyle) {
       map.setStyle(localBlankStyleForScheme(options.scheme), { diff: false });
     }
   };
@@ -142,7 +131,6 @@ export function attachInitialStyleFallback(
     map,
     startsWithLocalStyle: options.startsWithLocalStyle,
     isFallbackRequested: () => fallbackRequested,
-    isRemoteStyleRequested: () => remoteStyleRequested,
     settle,
     fallback,
   });
@@ -161,10 +149,10 @@ export function attachInitialStyleFallback(
       if (detached || fallbackRequested) return;
       if (!reachable) {
         fallback();
-        return;
       }
-      remoteStyleRequested = true;
-      map.setStyle(styleUrl, { diff: false });
+      // The probe determines whether the existing failure banner is honest.
+      // Replacing the local style here tears down the first scene while its
+      // renderer is still preparing, which can leave an empty map forever.
     });
   }
 
