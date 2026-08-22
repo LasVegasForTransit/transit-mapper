@@ -53,9 +53,10 @@ describe('initial map readiness', () => {
   });
 
   it('requests the ready document when map setup finishes before subscription starts', () => {
-    expect(shouldScheduleInitialReadyDocument('ready', false)).toBe(true);
-    expect(shouldScheduleInitialReadyDocument('loading', false)).toBe(false);
-    expect(shouldScheduleInitialReadyDocument('ready', true)).toBe(false);
+    expect(shouldScheduleInitialReadyDocument('ready', false, false)).toBe(true);
+    expect(shouldScheduleInitialReadyDocument('loading', false, false)).toBe(false);
+    expect(shouldScheduleInitialReadyDocument('ready', true, false)).toBe(false);
+    expect(shouldScheduleInitialReadyDocument('ready', false, true)).toBe(false);
   });
 
   it('starts the editor when the fallback style becomes usable', () => {

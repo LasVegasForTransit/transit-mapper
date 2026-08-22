@@ -771,6 +771,7 @@ export function MapCanvas({
     let stopProjectionAbort: AbortController | null = null;
     let pushDataRaf: number | null = null;
     let scheduledPushLease: RendererWorkLease | null = null;
+    const initialScene = { queued: false };
     let sourceFailureRetryCount = 0;
     const sourceUploadQueue = createSourceUploadQueue();
     let refreshCommittedInteractionPreviews = () => {};
@@ -933,6 +934,7 @@ export function MapCanvas({
       transition?: SourceUploadTransition,
       deferUntilCurrentSettles = false,
     ) => {
+      if (request === 'all') initialScene.queued = true;
       liveRenderer?.cancelBackgroundPreparation();
       sourceUploadQueue.add(request, transition);
       scheduledPushLease ??= renderWorkSettlement.begin();
@@ -1926,6 +1928,7 @@ export function MapCanvas({
       shouldScheduleInitialReadyDocument(
         store.getState().documentStatus,
         renderer.hasAcceptedScene(),
+        initialScene.queued,
       )
     ) {
       schedulePushData('all');

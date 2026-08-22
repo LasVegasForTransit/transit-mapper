@@ -13,12 +13,13 @@ export function shouldProjectInitialDocument(documentStatus: DocumentStatus): bo
 
 /** Map setup and document bootstrap run independently. When setup installs its
  * subscription after the ready transition, it must still request the one
- * initial scene that has not reached a renderer bank. */
+ * initial scene that has not reached a renderer bank or its work queue. */
 export function shouldScheduleInitialReadyDocument(
   documentStatus: DocumentStatus,
   hasRenderedSystem: boolean,
+  hasQueuedPublication: boolean,
 ): boolean {
-  return documentStatus === 'ready' && !hasRenderedSystem;
+  return documentStatus === 'ready' && !hasRenderedSystem && !hasQueuedPublication;
 }
 
 /**
