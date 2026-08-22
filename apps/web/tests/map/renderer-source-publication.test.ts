@@ -40,8 +40,9 @@ const context: ScenePublicationContext = {
 describe('renderer source publication', () => {
   it('starts the first source bank without waiting for a frame from an empty map', async () => {
     const host = new PublicationHost();
+    const prepare = vi.fn();
     const layers = {
-      prepare: vi.fn(),
+      prepare,
       activate: vi.fn(),
       finishActivation: vi.fn(),
       finishStaging: vi.fn(),
@@ -65,7 +66,7 @@ describe('renderer source publication', () => {
 
     await Promise.resolve();
 
-    expect(layers.prepare).toHaveBeenCalledWith('b', new Set(['tm-ways']));
+    expect(prepare).toHaveBeenCalledWith('b', new Set(['tm-ways']));
     expect(settled).toBe(true);
   });
 
