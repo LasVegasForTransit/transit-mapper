@@ -771,7 +771,6 @@ export function MapCanvas({
     let stopProjectionAbort: AbortController | null = null;
     let pushDataRaf: number | null = null;
     let scheduledPushLease: RendererWorkLease | null = null;
-    const initialScene = { queued: false };
     let sourceFailureRetryCount = 0;
     const sourceUploadQueue = createSourceUploadQueue();
     let refreshCommittedInteractionPreviews = () => {};
@@ -934,9 +933,6 @@ export function MapCanvas({
       transition?: SourceUploadTransition,
       deferUntilCurrentSettles = false,
     ) => {
-      if (request === 'all' && store.getState().documentStatus === 'ready') {
-        initialScene.queued = true;
-      }
       liveRenderer?.cancelBackgroundPreparation();
       sourceUploadQueue.add(request, transition);
       scheduledPushLease ??= renderWorkSettlement.begin();
@@ -1924,13 +1920,12 @@ export function MapCanvas({
     });
     // The local style can finish while IndexedDB delivers the saved document.
     // If that ready transition lands between editor setup and subscription,
-    // the subscription cannot replay it. The queue coalesces this with a
-    // request made during setup, so it preserves one accepted first scene.
+    // the subscription cannot replay it. The queue coalesces same-frame
+    // startup requests, so this cannot produce a second preparation attempt.
     if (
       shouldScheduleInitialReadyDocument(
         store.getState().documentStatus,
         renderer.hasAcceptedScene(),
-        initialScene.queued,
       )
     ) {
       schedulePushData('all');
