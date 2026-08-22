@@ -42,6 +42,40 @@ async function basemapIsReachable(styleUrl: string): Promise<boolean> {
   }
 }
 
+interface InitialStyleEventHandlerOptions {
+  map: MLMap;
+  startsWithLocalStyle: boolean | undefined;
+  isFallbackRequested: () => boolean;
+  isRemoteStyleRequested: () => boolean;
+  settle: () => void;
+  fallback: () => void;
+}
+
+function createInitialStyleEventHandlers(options: InitialStyleEventHandlerOptions) {
+  const onMapLoad = () => {
+    if (options.startsWithLocalStyle) return;
+    if (!options.isFallbackRequested() || options.map.getLayer(LOCAL_BACKGROUND_LAYER_ID)) {
+      options.settle();
+    }
+  };
+  const onStyleLoad = () => {
+    if (
+      options.startsWithLocalStyle &&
+      options.isRemoteStyleRequested() &&
+      !options.isFallbackRequested() &&
+      !options.map.getLayer(LOCAL_BACKGROUND_LAYER_ID)
+    ) {
+      options.settle();
+      return;
+    }
+    if (options.isFallbackRequested() && options.map.getLayer(LOCAL_BACKGROUND_LAYER_ID)) {
+      options.settle();
+    }
+  };
+
+  return { onInitialError: options.fallback, onMapLoad, onStyleLoad };
+}
+
 /** Replace a failed initial remote style with the local blank canvas. */
 export function attachInitialStyleFallback(
   map: MLMap,
@@ -104,27 +138,14 @@ export function attachInitialStyleFallback(
     clearTimer();
     options.onSettled?.();
   };
-  const onMapLoad = () => {
-    if (options.startsWithLocalStyle) return;
-    if (!fallbackRequested || map.getLayer(LOCAL_BACKGROUND_LAYER_ID)) settle();
-  };
-  const onStyleLoad = () => {
-    if (
-      options.startsWithLocalStyle &&
-      remoteStyleRequested &&
-      !fallbackRequested &&
-      !map.getLayer(LOCAL_BACKGROUND_LAYER_ID)
-    ) {
-      settle();
-      return;
-    }
-    // MapLibre can deliver a queued style.load from the abandoned remote
-    // style after setStyle() has requested the fallback. That event does not
-    // make the replacement safe to mutate. Wait until the committed style
-    // contains the local layer that only our fallback defines.
-    if (fallbackRequested && map.getLayer(LOCAL_BACKGROUND_LAYER_ID)) settle();
-  };
-  const onInitialError = () => fallback();
+  const { onInitialError, onMapLoad, onStyleLoad } = createInitialStyleEventHandlers({
+    map,
+    startsWithLocalStyle: options.startsWithLocalStyle,
+    isFallbackRequested: () => fallbackRequested,
+    isRemoteStyleRequested: () => remoteStyleRequested,
+    settle,
+    fallback,
+  });
 
   // A style.load event proves only that the style JSON parsed. The map's load
   // event is the first point at which its initial sources and tiles have
