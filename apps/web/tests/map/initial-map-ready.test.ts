@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   attachInitialMapReady,
+  shouldScheduleInitialReadyDocument,
   shouldProjectInitialDocument,
 } from '../../src/map/initial-map-ready';
 
@@ -49,6 +50,12 @@ describe('initial map readiness', () => {
   it('does not project the placeholder while document bootstrap is still loading', () => {
     expect(shouldProjectInitialDocument('loading')).toBe(false);
     expect(shouldProjectInitialDocument('ready')).toBe(true);
+  });
+
+  it('requests the ready document when map setup finishes before subscription starts', () => {
+    expect(shouldScheduleInitialReadyDocument('ready', false)).toBe(true);
+    expect(shouldScheduleInitialReadyDocument('loading', false)).toBe(false);
+    expect(shouldScheduleInitialReadyDocument('ready', true)).toBe(false);
   });
 
   it('starts the editor when the fallback style becomes usable', () => {
