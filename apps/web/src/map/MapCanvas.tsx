@@ -1016,6 +1016,9 @@ export function MapCanvas({
             lease?.complete();
           },
           (error: unknown) => {
+            traceStartup(
+              `projection-failed:${error instanceof Error ? error.message : String(error)}`,
+            );
             if (sourceFailureRetryCount < 2) {
               sourceFailureRetryCount += 1;
               retryFailedSourceBatch(batch, lease);
