@@ -770,6 +770,7 @@ export function MapCanvas({
     let fullAfterGesture = false;
     let stopProjectionAbort: AbortController | null = null;
     let pushDataRaf: number | null = null;
+    let pushDataFallbackTimer: number | null = null;
     let scheduledPushLease: RendererWorkLease | null = null;
     let sourceFailureRetryCount = 0;
     const sourceUploadQueue = createSourceUploadQueue();
@@ -964,8 +965,13 @@ export function MapCanvas({
         return;
       }
       if (pushDataRaf !== null) return;
-      pushDataRaf = requestAnimationFrame(() => {
+      const flushQueuedPushData = () => {
+        if (pushDataRaf === null) return;
         pushDataRaf = null;
+        if (pushDataFallbackTimer !== null) {
+          window.clearTimeout(pushDataFallbackTimer);
+          pushDataFallbackTimer = null;
+        }
         const lease = scheduledPushLease;
         scheduledPushLease = null;
         const batch = sourceUploadQueue.takeBatch();
@@ -985,7 +991,16 @@ export function MapCanvas({
             lease?.fail(error);
           },
         );
-      });
+      };
+      pushDataRaf = requestAnimationFrame(flushQueuedPushData);
+      // Chrome can defer the first animation frame of a newly-created
+      // performance context. The queue already coalesces source work, so a
+      // short timer may flush that same batch without creating a second scene.
+      pushDataFallbackTimer = window.setTimeout(() => {
+        if (pushDataRaf === null) return;
+        cancelAnimationFrame(pushDataRaf);
+        flushQueuedPushData();
+      }, 50);
     };
 
     function retryFailedSourceBatch(
@@ -1973,6 +1988,7 @@ export function MapCanvas({
       map.off('mousemove', onHoverMove);
       map.off('mouseout', onHoverOut);
       if (pushDataRaf !== null) cancelAnimationFrame(pushDataRaf);
+      if (pushDataFallbackTimer !== null) window.clearTimeout(pushDataFallbackTimer);
       if (selectionRaf !== null) cancelAnimationFrame(selectionRaf);
       editorProjectionAbort?.abort();
       stopProjectionAbort?.abort();
