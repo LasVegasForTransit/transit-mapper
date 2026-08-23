@@ -113,6 +113,25 @@ describe('frame fallback scheduler', () => {
     expect(observed).toEqual([100]);
   });
 
+  it('returns to an animation frame periodically so paint cannot be starved', () => {
+    const harness = createHarness();
+    const observed: number[] = [];
+
+    harness.scheduler.scheduleFrame((time) => observed.push(time));
+    const [fallback] = harness.timeoutHandles();
+    harness.runFallback(fallback);
+
+    for (let index = 0; index < 16; index += 1) {
+      harness.scheduler.scheduleFrame((time) => observed.push(time));
+      const [task] = harness.taskHandles();
+      harness.runTask(task);
+    }
+    harness.scheduler.scheduleFrame((time) => observed.push(time));
+
+    expect(harness.taskHandles()).toEqual([]);
+    expect(harness.frameHandles()).toHaveLength(1);
+  });
+
   it('cancels both pending callbacks', () => {
     const harness = createHarness();
     const observed: number[] = [];

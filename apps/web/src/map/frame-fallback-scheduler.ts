@@ -28,8 +28,10 @@ export function createFrameFallbackScheduler(
   options: FrameFallbackSchedulerOptions,
 ): FrameFallbackScheduler {
   const timeoutMs = options.timeoutMs ?? 50;
+  const tasksBeforePaint = 16;
   const canScheduleTasks = Boolean(options.scheduleTask && options.cancelTask);
   let nextHandle = 0;
+  let taskCount = 0;
   let useTasks = false;
   const pending = new Map<number, PendingFrame>();
 
@@ -68,14 +70,19 @@ export function createFrameFallbackScheduler(
     };
     pending.set(handle, scheduled);
 
-    if (useTasks && options.scheduleTask) {
+    if (useTasks && options.scheduleTask && taskCount < tasksBeforePaint) {
+      taskCount += 1;
       scheduled.taskHandle = options.scheduleTask(() => flush(options.now()));
       return handle;
     }
 
+    taskCount = 0;
     scheduled.frameHandle = options.requestAnimationFrame(flush);
     scheduled.timeoutHandle = options.setTimeout(() => {
-      if (canScheduleTasks) useTasks = true;
+      if (canScheduleTasks) {
+        useTasks = true;
+        taskCount = 0;
+      }
       flush(options.now());
     }, timeoutMs);
     return handle;
