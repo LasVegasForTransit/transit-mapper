@@ -1,9 +1,8 @@
 /**
  * Describes one bounded attempt to turn a scene draft into source mutations.
  *
- * The publication coordinator may retry with smaller draft batches, but every
- * attempt owns isolated draft and source-preparation state. This module keeps
- * that mechanical scheduling state out of the accepted-scene lifecycle.
+ * Every attempt owns isolated draft and source-preparation state. This module
+ * keeps that mechanical scheduling state out of the accepted-scene lifecycle.
  */
 import type {
   CooperativeRenderJobUnit,
@@ -19,7 +18,6 @@ import type {
 
 export interface ScenePublicationAttempt<Update> {
   readonly batchSize: number;
-  readonly tolerateBudgetOverrun: boolean;
   plan: SceneDraftPlan | null;
   planUnitIndex: number;
   sourceCommit: PreparedScenePublication<Update> | null;
@@ -38,11 +36,9 @@ export interface ScenePublicationAttempt<Update> {
 
 export function createScenePublicationAttempt<Update>(
   batchSize: number,
-  tolerateBudgetOverrun: boolean,
 ): ScenePublicationAttempt<Update> {
   return {
     batchSize,
-    tolerateBudgetOverrun,
     plan: null,
     planUnitIndex: 0,
     sourceCommit: null,
@@ -155,12 +151,13 @@ function sourcePreparationUnit<Update>(
   };
 }
 
-/** Private draft work is only allowed to yield on the final minimal retry. */
+/** A completed private draft unit is immutable staged work. Its elapsed time
+ * is scheduling evidence, not a reason to discard the draft and rebuild it. */
 function toleratePrivateUnit(
   attempt: ScenePublicationAttempt<unknown>,
   unit: CooperativeRenderJobUnit<void>,
 ): CooperativeRenderJobUnit<void> {
-  if (attempt.tolerateBudgetOverrun) attempt.overBudgetYieldUnitIds.add(unit.id);
+  attempt.overBudgetYieldUnitIds.add(unit.id);
   return unit;
 }
 
