@@ -1841,6 +1841,7 @@ export function MapCanvas({
               activeHitLayerId: liveRenderer.activeLayerId(LYR_SERVICES_HIT),
               selectedFeatureStateSourceIds: editorFeatureState.selectedSourceIds(),
               diagnostics: rendererSnapshot.diagnostics,
+              scheduler: rendererSnapshot.scheduler,
             };
           },
           rendererSettled: async () => {

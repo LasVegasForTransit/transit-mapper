@@ -13,6 +13,7 @@ import { attachPaintedFrameCapture } from './paintedFrameCapture';
 import { attachRendererCaptureHarness } from './renderer-capture-harness';
 import type { RendererStatsSnapshot } from './renderer-stats';
 import type { SourceBankDiagnostics } from '../map/source-bank';
+import type { CooperativeRenderJobSchedulerStats } from '../map/cooperative-render-job-scheduler';
 import { MAP_THEMES } from '../map/mapThemePalette';
 
 /** Runtime A/B toggles, flipped from the devtools console to attribute cost —
@@ -52,6 +53,7 @@ export interface PerfRenderSourceBankSnapshot {
   activeHitLayerId: string | null;
   selectedFeatureStateSourceIds: readonly string[];
   diagnostics: SourceBankDiagnostics;
+  scheduler?: CooperativeRenderJobSchedulerStats;
 }
 
 export interface PerfHarnessOptions {
