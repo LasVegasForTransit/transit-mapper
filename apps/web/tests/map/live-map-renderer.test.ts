@@ -142,6 +142,22 @@ async function advanceUntil(
 }
 
 describe('live map renderer', () => {
+  it('exposes scheduler progress with the live renderer snapshot', () => {
+    const host = new TestRendererHost();
+    const renderer = createLiveMapRenderer({
+      host,
+      layerSpecs: [],
+      featureProjectionWorker: unusedProjectionWorker,
+    });
+
+    expect(renderer.snapshot().scheduler).toMatchObject({
+      submittedJobCount: 0,
+      sliceCount: 0,
+      yieldCount: 0,
+    });
+    renderer.dispose();
+  });
+
   it('keeps the accepted revision authoritative until the replacement paints', async () => {
     const host = new TestRendererHost();
     const renderer = createLiveMapRenderer({

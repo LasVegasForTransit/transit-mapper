@@ -129,6 +129,7 @@ export interface LiveMapRendererSnapshot {
   readonly publicationInProgress: boolean;
   readonly recoveryVersion: number;
   readonly diagnostics: SourceBankDiagnostics;
+  readonly scheduler: CooperativeRenderJobSchedulerStats;
 }
 
 /** One concrete runtime object rather than a collection of public pipeline
@@ -404,6 +405,7 @@ export class LiveMapRenderer {
       publicationInProgress: this.publicationInProgress(),
       recoveryVersion: this.recovery.version(),
       diagnostics: this.banks.snapshot(),
+      scheduler: this.scheduler.snapshot(),
     };
   }
 
