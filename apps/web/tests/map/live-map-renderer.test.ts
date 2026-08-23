@@ -158,6 +158,33 @@ describe('live map renderer', () => {
     renderer.dispose();
   });
 
+  it('reports a failed owned scheduler job to the renderer error boundary', async () => {
+    const host = new TestRendererHost();
+    let time = 0;
+    host.now = () => {
+      time += 3;
+      return time;
+    };
+    const errors: unknown[] = [];
+    const renderer = createLiveMapRenderer({
+      host,
+      layerSpecs: [],
+      featureProjectionWorker: unusedProjectionWorker,
+      onError: (error) => errors.push(error),
+    });
+
+    const submission = renderer.publishScene({
+      revision: 'first',
+      features: emptySystemFeatures(),
+      sourceIds: [SRC_WAYS],
+    });
+    await host.advance();
+
+    expect(errors).toHaveLength(1);
+    void submission.settled.catch(() => {});
+    renderer.dispose();
+  });
+
   it('keeps the accepted revision authoritative until the replacement paints', async () => {
     const host = new TestRendererHost();
     const renderer = createLiveMapRenderer({

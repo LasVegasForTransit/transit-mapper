@@ -158,6 +158,7 @@ export class LiveMapRenderer {
         now: () => options.host.now(),
         scheduleFrame: (callback) => options.host.scheduleFrame(callback),
         cancelFrame: (handle) => options.host.cancelFrame(handle),
+        onError: (error) => this.reportError(error),
       });
     this.ownsScheduler = options.scheduler === undefined;
     this.banks = createSourceBankController();
