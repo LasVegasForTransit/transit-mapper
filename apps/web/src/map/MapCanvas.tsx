@@ -923,6 +923,10 @@ export function MapCanvas({
           lastRenderedSystemId = system.id;
           if (viewRef.current.viewMode === 'diagram') setBasemapVisible(map, false);
           if (sourceIds.includes(SRC_STATIONS)) initialSystemDataUploaded = true;
+          // The bank flip can settle between MapLibre render callbacks. Request
+          // one after this accepted scene so the startup mark proves the
+          // published bank reached the canvas rather than merely its sources.
+          map.triggerRepaint();
           recordFullProjection(projectionCounts, update.sourceUploadCount);
           recordSceneUpdate(update);
           scheduleSelectionUpdate();
@@ -1836,13 +1840,21 @@ export function MapCanvas({
     const ro = new ResizeObserver(() => map.resize());
     ro.observe(containerRef.current);
 
-    const scheduleSystemRender = (
-      state: EditorState,
-      previous: EditorState,
-      documentChanged: boolean,
-      initialDocumentReady: boolean,
-      changedSources: readonly SystemFeatureSourceId[],
-    ) => {
+    interface SystemRenderUpdate {
+      state: EditorState;
+      previous: EditorState;
+      documentChanged: boolean;
+      initialDocumentReady: boolean;
+      changedSources: readonly SystemFeatureSourceId[];
+    }
+
+    const scheduleSystemRender = ({
+      state,
+      previous,
+      documentChanged,
+      initialDocumentReady,
+      changedSources,
+    }: SystemRenderUpdate) => {
       if (
         !initialDocumentReady &&
         changedSources.length === 0 &&
@@ -1896,7 +1908,13 @@ export function MapCanvas({
         forceAll: documentChanged,
       });
       const editorSystemRefresh = editorSourcesNeedSystemRefresh(changedSources, documentChanged);
-      scheduleSystemRender(state, previous, documentChanged, initialDocumentReady, changedSources);
+      scheduleSystemRender({
+        state,
+        previous,
+        documentChanged,
+        initialDocumentReady,
+        changedSources,
+      });
       if (
         map.getSource(activeRenderSourceId(SRC_SERVICES)) &&
         (selectionUpdate.updateEditorSources ||
