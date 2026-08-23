@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createCooperativeRenderJobScheduler } from '../../src/map/cooperative-render-job-scheduler';
+import {
+  createCooperativeRenderJobScheduler,
+  type CooperativeRenderJobSchedulerStats,
+} from '../../src/map/cooperative-render-job-scheduler';
 import { publishSceneDraft } from '../../src/map/scene-publication';
 import {
   flushScenePublication as flushUntilSettled,
@@ -189,7 +192,7 @@ describe('scene publication', () => {
     expect(events).toEqual(['commit', 'recover']);
   });
 
-  it('retries the same ordinary batch and can cancel that active retry', async () => {
+  it('can cancel a continued over-budget draft without restarting it', async () => {
     const clock = new FrameClock();
     const scheduler = createCooperativeRenderJobScheduler({
       now: clock.now,
@@ -231,13 +234,13 @@ describe('scene publication', () => {
     await Promise.resolve();
     expect(batchSizes).toEqual([4]);
     clock.flush();
-    expect(batchSizes).toEqual([4, 4]);
+    expect(batchSizes).toEqual([4]);
     expect(handle.cancel()).toBe(true);
     await expect(handle.settled).resolves.toBeUndefined();
     expect(controller.publishDraftSynchronously).not.toHaveBeenCalled();
   });
 
-  it('commits a transient same-size retry without halving', async () => {
+  it('commits a completed private overrun without restarting its plan', async () => {
     const clock = new FrameClock();
     const scheduler = createCooperativeRenderJobScheduler({
       now: clock.now,
@@ -277,11 +280,11 @@ describe('scene publication', () => {
     await flushUntilSettled(clock, handle.settled);
 
     await expect(handle.settled).resolves.toBeUndefined();
-    expect(batchSizes).toEqual([4, 4]);
+    expect(batchSizes).toEqual([4]);
     expect(publishDraftSynchronously).toHaveBeenCalledOnce();
   });
 
-  it('retries one fresh singleton plan after a transient budget failure', async () => {
+  it('records one scheduling attempt for a completed singleton overrun', async () => {
     const clock = new FrameClock();
     const scheduler = createCooperativeRenderJobScheduler({
       now: clock.now,
@@ -290,6 +293,7 @@ describe('scene publication', () => {
     });
     const batchSizes: number[] = [];
     const recordScheduling = vi.fn();
+    const runSingleton = vi.fn();
     let attempt = 0;
     const publishDraftSynchronously = vi.fn();
     const handle = publishSceneDraft({
@@ -305,6 +309,7 @@ describe('scene publication', () => {
                   ? {
                       id: `singleton:${attempt}`,
                       run: () => {
+                        runSingleton();
                         clock.nowMs += attempt === 1 ? 3 : 1;
                       },
                     }
@@ -327,8 +332,18 @@ describe('scene publication', () => {
     clock.flush();
     clock.flush();
     await expect(handle.settled).resolves.toBeUndefined();
-    expect(batchSizes).toEqual([1, 1]);
-    expect(recordScheduling).toHaveBeenCalledTimes(2);
+    expect(batchSizes).toEqual([1]);
+    expect(recordScheduling).toHaveBeenCalledOnce();
+    expect(recordScheduling).toHaveBeenCalledWith(
+      expect.objectContaining({
+        committedJobCount: 1,
+        failedJobCount: 0,
+        maxUnitDurationMs: 3,
+      }),
+    );
+    const [scheduling] = recordScheduling.mock.calls[0] as [CooperativeRenderJobSchedulerStats];
+    expect(scheduling.yieldCount).toBeGreaterThan(0);
+    expect(runSingleton).toHaveBeenCalledOnce();
     expect(publishDraftSynchronously).toHaveBeenCalledOnce();
   });
 });

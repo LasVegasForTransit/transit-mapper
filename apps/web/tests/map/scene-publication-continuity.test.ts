@@ -9,7 +9,7 @@ import {
 } from '../support/scene-publication.test';
 
 describe('scene publication continuity', () => {
-  it('refines each batch once and preserves continuity after a minimal singleton overrun', async () => {
+  it('keeps one draft plan after a completed singleton overrun', async () => {
     const clock = new ScenePublicationFrameClock();
     const scheduler = createCooperativeRenderJobScheduler({
       now: clock.now,
@@ -50,8 +50,8 @@ describe('scene publication continuity', () => {
     await flushScenePublication(clock, handle.settled);
 
     await expect(handle.settled).resolves.toBeUndefined();
-    expect(batchSizes).toEqual([8, 8, 4, 4, 2, 2, 1, 1, 1]);
-    expect(recordScheduling).toHaveBeenCalledTimes(9);
+    expect(batchSizes).toEqual([8]);
+    expect(recordScheduling).toHaveBeenCalledOnce();
     expect(recordScheduling).toHaveBeenLastCalledWith(
       expect.objectContaining({
         committedJobCount: 1,

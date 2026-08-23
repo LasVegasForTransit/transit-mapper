@@ -160,11 +160,6 @@ describe('live map renderer', () => {
 
   it('reports a failed owned scheduler job to the renderer error boundary', async () => {
     const host = new TestRendererHost();
-    let time = 0;
-    host.now = () => {
-      time += 3;
-      return time;
-    };
     const errors: unknown[] = [];
     const renderer = createLiveMapRenderer({
       host,
@@ -172,12 +167,30 @@ describe('live map renderer', () => {
       featureProjectionWorker: unusedProjectionWorker,
       onError: (error) => errors.push(error),
     });
+    const invalidFeatures = emptySystemFeatures();
+    invalidFeatures.ways = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [0, 0],
+              [1, 1],
+            ],
+          },
+        },
+      ],
+    };
 
     const submission = renderer.publishScene({
       revision: 'first',
-      features: emptySystemFeatures(),
+      features: invalidFeatures,
       sourceIds: [SRC_WAYS],
     });
+    await host.advance();
     await host.advance();
 
     expect(errors).toHaveLength(1);

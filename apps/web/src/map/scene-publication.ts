@@ -7,7 +7,6 @@
  * previously accepted scene authoritative.
  */
 import {
-  CooperativeRenderUnitBudgetError,
   type CooperativeRenderJobHandle,
   type CooperativeRenderJobScheduler,
   type CooperativeRenderJobSchedulerStats,
@@ -41,11 +40,9 @@ const latestSubmissionByScheduler = new WeakMap<CooperativeRenderJobScheduler, o
 
 class ScenePublicationPipeline<Update> {
   private readonly ownership = {};
-  private readonly retriedBatchSizes = new Set<number>();
   private logicalGeneration = 0;
   private currentJob: CooperativeRenderJobHandle | null = null;
   private currentAttempt: ScenePublicationAttempt<Update> | null = null;
-  private minimalContinuityAttemptUsed = false;
   private finished = false;
   private resolveSettlement: () => void = () => {};
   private rejectSettlement: (error: unknown) => void = () => {};
@@ -71,16 +68,16 @@ class ScenePublicationPipeline<Update> {
     return latestSubmissionByScheduler.get(this.options.scheduler) === this.ownership;
   }
 
-  private scheduleAttempt(batchSize: number, tolerateBudgetOverrun = false): void {
+  private scheduleAttempt(batchSize: number): void {
     if (!this.ownsGeneration()) return;
-    const attempt = createScenePublicationAttempt<Update>(batchSize, tolerateBudgetOverrun);
+    const attempt = createScenePublicationAttempt<Update>(batchSize);
     const scheduled = this.options.scheduler.submit({
       units: scenePublicationUnits(this.options, attempt),
       // MapLibre source calls have already changed renderer-owned state by
       // the time their elapsed duration is known. Treat them as an explicit
       // external boundary: record and yield after an overrun, but never turn
-      // a completed user action into a failed transaction. Private planning
-      // remains strict until the final, structurally-minimal retry.
+      // completed staged work into a failed transaction. Exceptions and
+      // cancellations still settle through the ordinary failure path.
       overBudgetUnitPolicy: 'yield' as const,
       overBudgetYieldUnitIds: attempt.overBudgetYieldUnitIds,
       commit: () => this.commitAttempt(attempt),
@@ -159,7 +156,6 @@ class ScenePublicationPipeline<Update> {
       this.finishAfterPaint(attempt);
       return;
     }
-    if (this.retryBudgetFailure(attempt, settlement)) return;
     if (settlement.status === 'failed') {
       this.finish(settlement.error);
       return;
@@ -220,36 +216,6 @@ class ScenePublicationPipeline<Update> {
         this.finish(error);
       },
     );
-  }
-
-  private retryBudgetFailure(
-    attempt: ScenePublicationAttempt<Update>,
-    settlement: CooperativeRenderJobSettlement,
-  ): boolean {
-    if (
-      settlement.status !== 'failed' ||
-      !(settlement.error instanceof CooperativeRenderUnitBudgetError) ||
-      attempt.sourceCommit?.mutationStarted() === true
-    ) {
-      return false;
-    }
-    if (!this.retriedBatchSizes.has(attempt.batchSize)) {
-      this.retriedBatchSizes.add(attempt.batchSize);
-      this.scheduleAttempt(attempt.batchSize);
-      return true;
-    }
-    if (attempt.batchSize > 1) {
-      this.scheduleAttempt(Math.max(1, Math.floor(attempt.batchSize / 2)));
-      return true;
-    }
-    if (this.minimalContinuityAttemptUsed) return false;
-    this.minimalContinuityAttemptUsed = true;
-    // A batch-one unit is already structurally indivisible. Its elapsed time
-    // still reaches scheduler/perf maxima, but a GC/JIT pause must not turn
-    // renderer timing into a correctness gate that leaves a valid city blank.
-    // The tolerant attempt yields immediately after any observed overrun.
-    this.scheduleAttempt(1, true);
-    return true;
   }
 
   private cancel(): boolean {
