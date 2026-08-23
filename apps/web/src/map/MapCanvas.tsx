@@ -164,6 +164,7 @@ import type { SourceBankSettlementHost } from './source-bank-settlement';
 import { createLiveMapRenderer, type LiveMapRenderer } from './live-map-renderer';
 import { createDiagramLayoutWorker } from './diagram-layout-worker';
 import { createFeatureProjectionWorker } from './feature-projection-worker';
+import { createFrameFallbackScheduler } from './frame-fallback-scheduler';
 import {
   createEditorFeatureState,
   type EditorFeatureState,
@@ -749,6 +750,13 @@ export function MapCanvas({
     const projectionCounts = createProjectionOperationCounts();
     const sourceProjectionAccounting = createSourceFeatureProjectionAccounting();
     const rendererStats = createRendererStatsCollector();
+    const rendererFrames = createFrameFallbackScheduler({
+      requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
+      cancelAnimationFrame: (handle) => window.cancelAnimationFrame(handle),
+      setTimeout: (callback, delayMs) => window.setTimeout(callback, delayMs),
+      clearTimeout: (handle) => window.clearTimeout(handle),
+      now: () => performance.now(),
+    });
     const sourcePaintHost: SourceBankSettlementHost = {
       triggerRepaint: () => map.triggerRepaint(),
       isSourceLoaded: (sourceId) =>
@@ -816,8 +824,8 @@ export function MapCanvas({
           map.setPaintProperty(layerId, property, value),
         ensureOverlay,
         now: () => performance.now(),
-        scheduleFrame: (callback) => requestAnimationFrame(callback),
-        cancelFrame: (handle) => cancelAnimationFrame(handle),
+        scheduleFrame: (callback) => rendererFrames.scheduleFrame(callback),
+        cancelFrame: (handle) => rendererFrames.cancelFrame(handle),
       },
       synchronizeInteractionState: (targets) => applySelectionState(targets),
       refreshInteractionPreviews: () => refreshCommittedInteractionPreviews(),
@@ -945,6 +953,7 @@ export function MapCanvas({
       request: SourceUploadRequest = 'all',
       transition?: SourceUploadTransition,
       deferUntilCurrentSettles = false,
+      replaceActiveProjection = false,
     ) => {
       traceStartup(
         `schedule:${request === 'all' ? 'all' : request.length}:${store.getState().documentStatus}`,
@@ -965,10 +974,20 @@ export function MapCanvas({
         }
         return;
       }
-      // Model edits revoke stale geometry immediately. Camera requests retain
-      // the current wide-guard scene and queue one latest successor instead,
-      // so a continuous move stream cannot starve every generation.
-      if (!deferUntilCurrentSettles) renderer.cancelProjectionAndRequeue();
+      // Only a document switch revokes private preparation. Map setup, camera
+      // refreshes, and edits often repeat the current request while its first
+      // bank is still building. Canceling those requests discarded valid work
+      // and delayed the first painted scene by seconds.
+      if (renderer.hasActiveProjection()) {
+        if (replaceActiveProjection) {
+          renderer.cancelProjectionAndRequeue();
+        } else {
+          renderer.afterCurrentProjectionSettles(() => {
+            schedulePushData([], undefined, true);
+          });
+          return;
+        }
+      }
       if (gestureActive) {
         fullAfterGesture = true;
         return;
@@ -1884,7 +1903,12 @@ export function MapCanvas({
         });
         return;
       }
-      schedulePushData(initialDocumentReady ? 'all' : changedSources, systemTransition);
+      schedulePushData(
+        initialDocumentReady ? 'all' : changedSources,
+        systemTransition,
+        false,
+        documentChanged,
+      );
     };
 
     const syncRendererFromStore = (state: EditorState, previous: EditorState) => {
@@ -2048,6 +2072,7 @@ export function MapCanvas({
       if (initialPaintListener) map.off('render', initialPaintListener);
       presentationRefresh.dispose();
       liveRenderer?.dispose();
+      rendererFrames.dispose();
       diagramLayout.dispose();
       featureProjection.dispose();
       liveRenderer = null;

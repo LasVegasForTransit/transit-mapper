@@ -172,16 +172,19 @@ function addServices(context: ColdPlanContext): void {
   context.builder.runtime.operations.domainEntityVisits += services.length;
   context.builder.runtime.operations.dependencyEntityVisits += services.length;
   context.builder.addUnitRange(
-    services.length,
+    Math.ceil(services.length / context.chunkSize),
     'dependency',
     'service-dependencies-and-bundle',
-    () => 1,
+    (index) => Math.min(context.chunkSize, services.length - index * context.chunkSize),
     (index) => {
-      const service = services[index];
-      context.domain.servicesById.set(service.id, service);
-      context.domain.modeIds.add(service.modeId);
-      addPreparedServices(context.dependency, [service]);
-      addPreparedServiceBundle(context.bundles, service);
+      const start = index * context.chunkSize;
+      const batch = services.slice(start, start + context.chunkSize);
+      for (const service of batch) {
+        context.domain.servicesById.set(service.id, service);
+        context.domain.modeIds.add(service.modeId);
+        addPreparedServices(context.dependency, [service]);
+        addPreparedServiceBundle(context.bundles, service);
+      }
     },
   );
 }
@@ -197,38 +200,37 @@ function addStops(context: ColdPlanContext): void {
     context.builder.runtime.operations.viewportEntityBuilds += stops.length;
     context.builder.runtime.operations.viewportSegmentQueries += stops.length * 2;
   }
-  let candidateIds: readonly string[] = [];
   context.builder.runtime.operations.domainEntityVisits += stops.length;
   context.builder.runtime.operations.dependencyEntityVisits += stops.length;
   context.builder.addUnitRange(
-    stops.length * 2,
+    Math.ceil(stops.length / context.chunkSize),
     'dependency',
     'stop-proximity',
-    () => 1,
+    (index) => Math.min(context.chunkSize, stops.length - index * context.chunkSize),
     (index) => {
-      const stopIndex = Math.floor(index / 2);
-      const stop = stops[stopIndex];
-      if (index % 2 === 0) {
-        candidateIds = nearWayCandidateIds(context, stop);
-        return;
-      }
-      const wayIds = exactNearWayIds(context, stop, candidateIds);
-      addDomainBatch(context.domain.stopsById, context.domain.stopRank, [stop], stopIndex);
-      addPreparedStopWayIds(context.dependency, stop, wayIds);
-      if (stopViewport) {
-        const entry = stopViewportEntry(stop);
-        appendColdViewportGeometry(stopViewport, entry);
-        recordColdViewportEntryMetadata({
-          draft: context.viewport,
-          category: 'stop',
-          ownerId: stop.id,
-          entry,
-          generation: context.generation,
-          presentation: context.options.presentation,
-          candidateEnvelope: context.options.candidateEnvelope,
-          cold: stopViewport,
-        });
-        indexColdPreparedViewportEntry(stopViewport, stopIndex);
+      const start = index * context.chunkSize;
+      const batch = stops.slice(start, start + context.chunkSize);
+      for (const [offset, stop] of batch.entries()) {
+        const stopIndex = start + offset;
+        const candidateIds = nearWayCandidateIds(context, stop);
+        const wayIds = exactNearWayIds(context, stop, candidateIds);
+        addDomainBatch(context.domain.stopsById, context.domain.stopRank, [stop], stopIndex);
+        addPreparedStopWayIds(context.dependency, stop, wayIds);
+        if (stopViewport) {
+          const entry = stopViewportEntry(stop);
+          appendColdViewportGeometry(stopViewport, entry);
+          recordColdViewportEntryMetadata({
+            draft: context.viewport,
+            category: 'stop',
+            ownerId: stop.id,
+            entry,
+            generation: context.generation,
+            presentation: context.options.presentation,
+            candidateEnvelope: context.options.candidateEnvelope,
+            cold: stopViewport,
+          });
+          indexColdPreparedViewportEntry(stopViewport, stopIndex);
+        }
       }
     },
   );
