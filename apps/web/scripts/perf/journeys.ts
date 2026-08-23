@@ -712,6 +712,7 @@ export async function waitForScenarioReady(
         marks: performance.getEntriesByName(markName, 'mark').map((entry) => entry.startTime),
         overlay: (window as PerfPageWindow).__perfOverlaySnapshot?.() ?? null,
         projectionCounts: (window as PerfPageWindow).__mapProjectionCounts?.() ?? null,
+        startupTrace: (window as PerfPageWindow).__mapStartupTrace?.() ?? [],
         // Counters alone cannot distinguish "the renderer never ran" from
         // "it ran and never committed". This failure was misread as a
         // scale problem twice for exactly that reason: the bank diagnostics

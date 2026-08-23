@@ -92,6 +92,7 @@ export interface PerfPageWindow extends Window {
   };
   __rendererStats?: () => RendererStatsSnapshot;
   __perfProductionPersistence?: BrowserProductionPersistenceState;
+  __mapStartupTrace?: () => readonly string[];
 }
 
 export interface DirectJourneyMeasurements {

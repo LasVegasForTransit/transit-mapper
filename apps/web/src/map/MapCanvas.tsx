@@ -472,6 +472,12 @@ export function MapCanvas({
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
     setMap(map);
+    const startupTrace: string[] = [];
+    const traceStartup = (event: string) => {
+      if (!PERF_HARNESS_BUILD) return;
+      startupTrace.push(event);
+    };
+    if (PERF_HARNESS_BUILD) window.__mapStartupTrace = () => [...startupTrace];
 
     // Report initial OpenFreeMap failures; overlay recovery can mask a style that never loaded.
     let activeMapScheme = initialColorScheme;
@@ -877,6 +883,7 @@ export function MapCanvas({
       requestedSources: readonly SystemFeatureSourceId[],
       transition: SourceUploadTransition | null = null,
     ): Promise<void> => {
+      traceStartup(`push:${requestedSources.length}`);
       if (gestureActive) {
         sourceUploadQueue.add(requestedSources, transition ?? undefined);
         fullAfterGesture = true;
@@ -934,6 +941,9 @@ export function MapCanvas({
       transition?: SourceUploadTransition,
       deferUntilCurrentSettles = false,
     ) => {
+      traceStartup(
+        `schedule:${request === 'all' ? 'all' : request.length}:${store.getState().documentStatus}`,
+      );
       liveRenderer?.cancelBackgroundPreparation();
       sourceUploadQueue.add(request, transition);
       scheduledPushLease ??= renderWorkSettlement.begin();
@@ -967,6 +977,7 @@ export function MapCanvas({
       if (pushDataRaf !== null) return;
       const flushQueuedPushData = () => {
         if (pushDataRaf === null) return;
+        traceStartup('flush');
         pushDataRaf = null;
         if (pushDataFallbackTimer !== null) {
           window.clearTimeout(pushDataFallbackTimer);
@@ -1633,6 +1644,7 @@ export function MapCanvas({
     }
 
     attachInitialMapReady(map, () => {
+      traceStartup(`map-ready:${store.getState().documentStatus}`);
       // MapLibre's compact attribution starts expanded once (its own default
       // "first impression" behavior, applied asynchronously as style/source
       // data loads — too late to undo right after addControl) and only
@@ -1842,6 +1854,7 @@ export function MapCanvas({
         prev.documentStatus !== 'ready' &&
         s.documentStatus === 'ready' &&
         lastRenderedSystemId === null;
+      if (initialDocumentReady) traceStartup('document-ready');
       const selectionUpdate = planSelectionRenderUpdate(prev, s);
       if (documentChanged && !gestureActive) {
         stopSettlement.invalidate();
@@ -2014,6 +2027,7 @@ export function MapCanvas({
       clearGesturePreview();
       gestureMask.restore();
       if (PERF_HARNESS_BUILD) delete window.__mapProjectionCounts;
+      if (PERF_HARNESS_BUILD) delete window.__mapStartupTrace;
       schedulePushDataRef.current = null;
       applyRendererVisibilityRef.current = null;
       setMap(null);

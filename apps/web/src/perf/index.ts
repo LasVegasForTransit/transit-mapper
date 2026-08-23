@@ -80,6 +80,7 @@ declare global {
     __perfStopPaintedFrameCapture?: () => number[];
     __rendererStats?: () => RendererStatsSnapshot;
     __perfRenderSourceBankSnapshot?: () => PerfRenderSourceBankSnapshot;
+    __mapStartupTrace?: () => readonly string[];
     __perfRenderedFeaturesAt?: (
       coordinate: [number, number],
     ) => readonly RendererPerfRenderedFeature[];
