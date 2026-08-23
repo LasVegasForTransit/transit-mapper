@@ -155,6 +155,11 @@ export class LiveMapRenderer {
     this.scheduler =
       options.scheduler ??
       createCooperativeRenderJobScheduler({
+        // Four-entity scene units can legally take just under 4 ms. An 8 ms
+        // slice preserves that reserve while allowing a second ready unit in
+        // the same frame instead of stretching cold startup across hundreds
+        // of virtual-display animation frames.
+        budgetMs: 8,
         now: () => options.host.now(),
         scheduleFrame: (callback) => options.host.scheduleFrame(callback),
         cancelFrame: (handle) => options.host.cancelFrame(handle),
