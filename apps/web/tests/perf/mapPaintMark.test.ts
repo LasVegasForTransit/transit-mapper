@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FIRST_SYSTEM_MAP_PAINT_MARK,
+  acceptedSystemScenePaintReady,
   systemInteractiveReady,
   markFirstSystemMapPaint,
   systemPaintReady,
@@ -70,6 +71,25 @@ describe('first system map paint mark', () => {
         systemDataMatchesDocument: true,
         representativeSourceExists: true,
         representativeSourceLoaded: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts the source-publication paint barrier as first-paint evidence', () => {
+    expect(
+      acceptedSystemScenePaintReady({
+        documentReady: true,
+        systemDataUploaded: true,
+        systemDataMatchesDocument: true,
+        acceptedScenePainted: false,
+      }),
+    ).toBe(false);
+    expect(
+      acceptedSystemScenePaintReady({
+        documentReady: true,
+        systemDataUploaded: true,
+        systemDataMatchesDocument: true,
+        acceptedScenePainted: true,
       }),
     ).toBe(true);
   });
