@@ -70,9 +70,17 @@ export function createFrameFallbackScheduler(
     };
     pending.set(handle, scheduled);
 
-    if (useTasks && options.scheduleTask && taskCount < tasksBeforePaint) {
-      taskCount += 1;
-      scheduled.taskHandle = options.scheduleTask(() => flush(options.now()));
+    if (useTasks) {
+      if (options.scheduleTask && taskCount < tasksBeforePaint) {
+        taskCount += 1;
+        scheduled.taskHandle = options.scheduleTask(() => flush(options.now()));
+        return handle;
+      }
+      // A real animation frame is the only reliable way to let MapLibre paint
+      // between task batches. Do not attach the short fallback timer here: it
+      // could fire first and cancel the very frame that releases the renderer.
+      taskCount = 0;
+      scheduled.frameHandle = options.requestAnimationFrame(flush);
       return handle;
     }
 

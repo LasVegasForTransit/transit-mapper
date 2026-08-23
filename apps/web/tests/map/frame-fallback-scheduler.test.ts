@@ -130,6 +130,7 @@ describe('frame fallback scheduler', () => {
 
     expect(harness.taskHandles()).toEqual([]);
     expect(harness.frameHandles()).toHaveLength(1);
+    expect(harness.timeoutHandles()).toEqual([]);
   });
 
   it('cancels both pending callbacks', () => {
