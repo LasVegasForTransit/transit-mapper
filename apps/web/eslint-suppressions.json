@@ -108,16 +108,13 @@
   },
   "src/map/MapCanvas.tsx": {
     "complexity": {
-      "count": 2
+      "count": 1
     },
     "max-lines": {
       "count": 1
     },
     "max-lines-per-function": {
       "count": 4
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 2
     }
   },
   "src/map/export/exportLayerSetup.ts": {
