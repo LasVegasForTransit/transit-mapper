@@ -19,6 +19,7 @@ interface PendingFrame {
   frameHandle: number | null;
   timeoutHandle: number | null;
   taskHandle: number | null;
+  paintHandle: number | null;
 }
 
 /** Animation frames keep renderer work aligned with paint. When one fails to
@@ -35,7 +36,7 @@ export function createFrameFallbackScheduler(
   let useTasks = false;
   const pending = new Map<number, PendingFrame>();
 
-  const cancelPending = (scheduled: PendingFrame): void => {
+  const cancelPending = (scheduled: PendingFrame, cancelPaint = true): void => {
     if (scheduled.frameHandle !== null) {
       options.cancelAnimationFrame(scheduled.frameHandle);
     }
@@ -44,6 +45,9 @@ export function createFrameFallbackScheduler(
     }
     if (scheduled.taskHandle !== null && options.cancelTask) {
       options.cancelTask(scheduled.taskHandle);
+    }
+    if (cancelPaint && scheduled.paintHandle !== null) {
+      options.cancelAnimationFrame(scheduled.paintHandle);
     }
   };
 
@@ -60,13 +64,14 @@ export function createFrameFallbackScheduler(
       const scheduled = pending.get(handle);
       if (!scheduled) return;
       pending.delete(handle);
-      cancelPending(scheduled);
+      cancelPending(scheduled, false);
       callback(time);
     };
     const scheduled: PendingFrame = {
       frameHandle: null,
       timeoutHandle: null,
       taskHandle: null,
+      paintHandle: null,
     };
     pending.set(handle, scheduled);
 
@@ -77,10 +82,14 @@ export function createFrameFallbackScheduler(
         return handle;
       }
       // A real animation frame is the only reliable way to let MapLibre paint
-      // between task batches. Do not attach the short fallback timer here: it
-      // could fire first and cancel the very frame that releases the renderer.
+      // between task batches. Keep the task itself moving, but queue a no-op
+      // frame so the browser gets a paint opportunity without making a
+      // throttled rAF the renderer's next unit deadline.
       taskCount = 0;
-      scheduled.frameHandle = options.requestAnimationFrame(flush);
+      scheduled.paintHandle = options.requestAnimationFrame(() => {
+        scheduled.paintHandle = null;
+      });
+      scheduled.taskHandle = options.scheduleTask?.(() => flush(options.now())) ?? null;
       return handle;
     }
 

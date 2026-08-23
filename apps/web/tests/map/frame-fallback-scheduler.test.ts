@@ -128,7 +128,7 @@ describe('frame fallback scheduler', () => {
     }
     harness.scheduler.scheduleFrame((time) => observed.push(time));
 
-    expect(harness.taskHandles()).toEqual([]);
+    expect(harness.taskHandles()).toHaveLength(1);
     expect(harness.frameHandles()).toHaveLength(1);
     expect(harness.timeoutHandles()).toEqual([]);
   });
