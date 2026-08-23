@@ -10,6 +10,7 @@ function createHarness() {
   let now = 100;
   const frames = new Map<number, ScheduledCallback>();
   const timeouts = new Map<number, () => void>();
+  const tasks = new Map<number, () => void>();
   const scheduler = createFrameFallbackScheduler({
     requestAnimationFrame: (callback) => {
       const handle = ++nextHandle;
@@ -23,6 +24,12 @@ function createHarness() {
       return handle;
     },
     clearTimeout: (handle) => timeouts.delete(handle),
+    scheduleTask: (callback) => {
+      const handle = ++nextHandle;
+      tasks.set(handle, callback);
+      return handle;
+    },
+    cancelTask: (handle) => tasks.delete(handle),
     now: () => now,
   });
   return {
@@ -33,8 +40,12 @@ function createHarness() {
     runFallback(handle: number) {
       timeouts.get(handle)?.();
     },
+    runTask(handle: number) {
+      tasks.get(handle)?.();
+    },
     frameHandles: () => [...frames.keys()],
     timeoutHandles: () => [...timeouts.keys()],
+    taskHandles: () => [...tasks.keys()],
     setNow(value: number) {
       now = value;
     },
@@ -65,6 +76,41 @@ describe('frame fallback scheduler', () => {
 
     expect(observed).toEqual([151]);
     expect(harness.frameHandles()).toEqual([]);
+  });
+
+  it('uses a task after a missed frame keeps future work from waiting for another frame', () => {
+    const harness = createHarness();
+    const observed: number[] = [];
+
+    harness.scheduler.scheduleFrame((time) => observed.push(time));
+    const [fallback] = harness.timeoutHandles();
+    harness.setNow(151);
+    harness.runFallback(fallback);
+
+    harness.scheduler.scheduleFrame((time) => observed.push(time));
+
+    expect(harness.frameHandles()).toEqual([]);
+    expect(harness.timeoutHandles()).toEqual([]);
+    const [task] = harness.taskHandles();
+    harness.setNow(152);
+    harness.runTask(task);
+
+    expect(observed).toEqual([151, 152]);
+  });
+
+  it('cancels a task queued after a missed frame', () => {
+    const harness = createHarness();
+    const observed: number[] = [];
+
+    harness.scheduler.scheduleFrame((time) => observed.push(time));
+    const [fallback] = harness.timeoutHandles();
+    harness.runFallback(fallback);
+
+    const handle = harness.scheduler.scheduleFrame((time) => observed.push(time));
+    harness.scheduler.cancelFrame(handle);
+
+    expect(harness.taskHandles()).toEqual([]);
+    expect(observed).toEqual([100]);
   });
 
   it('cancels both pending callbacks', () => {

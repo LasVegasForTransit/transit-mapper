@@ -754,11 +754,30 @@ export function MapCanvas({
     const projectionCounts = createProjectionOperationCounts();
     const sourceProjectionAccounting = createSourceFeatureProjectionAccounting();
     const rendererStats = createRendererStatsCollector();
+    const rendererTasks = new Map<number, () => void>();
+    const rendererTaskChannel = new MessageChannel();
+    let nextRendererTaskHandle = 0;
+    rendererTaskChannel.port1.onmessage = (event: MessageEvent<number>) => {
+      const callback = rendererTasks.get(event.data);
+      if (!callback) return;
+      rendererTasks.delete(event.data);
+      callback();
+    };
     const rendererFrames = createFrameFallbackScheduler({
       requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
       cancelAnimationFrame: (handle) => window.cancelAnimationFrame(handle),
       setTimeout: (callback, delayMs) => window.setTimeout(callback, delayMs),
       clearTimeout: (handle) => window.clearTimeout(handle),
+      // Virtual displays can throttle animation frames for seconds. Once the
+      // fallback detects that state, regular tasks keep bounded preparation
+      // slices moving without treating them as new MapLibre paint work.
+      scheduleTask: (callback) => {
+        const handle = ++nextRendererTaskHandle;
+        rendererTasks.set(handle, callback);
+        rendererTaskChannel.port2.postMessage(handle);
+        return handle;
+      },
+      cancelTask: (handle) => rendererTasks.delete(handle),
       now: () => performance.now(),
     });
     const sourcePaintHost: SourceBankSettlementHost = {
@@ -2101,6 +2120,9 @@ export function MapCanvas({
       presentationRefresh.dispose();
       liveRenderer?.dispose();
       rendererFrames.dispose();
+      rendererTasks.clear();
+      rendererTaskChannel.port1.close();
+      rendererTaskChannel.port2.close();
       diagramLayout.dispose();
       featureProjection.dispose();
       liveRenderer = null;
