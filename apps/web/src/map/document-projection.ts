@@ -84,6 +84,10 @@ export class DocumentProjector {
   private readonly invalidation = createPreparedLiveInvalidationTracker();
   private readonly ownership;
   private lastAcceptedPreparation: RenderPreparedSnapshot | null = null;
+  private initialProjection: {
+    readonly system: TransitSystem;
+    readonly settled: Promise<void>;
+  } | null = null;
   private preparationRevision = 0;
 
   constructor(private readonly options: DocumentProjectorOptions) {
@@ -93,6 +97,14 @@ export class DocumentProjector {
   }
 
   project(request: DocumentProjectionRequest): Promise<void> {
+    const initial = this.initialProjection;
+    if (
+      this.lastAcceptedPreparation === null &&
+      initial?.system === request.projection.system &&
+      this.ownership.current()
+    ) {
+      return initial.settled;
+    }
     if (request.projection.view.viewMode === 'diagram') this.ownership.cancelAndRequeue();
     const countTransaction = this.options.accounting.begin();
     const measurement = createRendererProjectionMeasurement({
@@ -138,7 +150,7 @@ export class DocumentProjector {
       sourceIds: request.requestedSourceIds,
       transition: request.transition,
     });
-    return submission.settled
+    const settled = submission.settled
       .then(() => {
         if (!accepted) return;
         countTransaction.accept();
@@ -148,6 +160,19 @@ export class DocumentProjector {
         countTransaction.discard();
         this.ownership.clear(submission);
       });
+    if (this.lastAcceptedPreparation === null) {
+      const initialProjection = { system: request.projection.system, settled };
+      this.initialProjection = initialProjection;
+      void settled.then(
+        () => {
+          if (this.initialProjection === initialProjection) this.initialProjection = null;
+        },
+        () => {
+          if (this.initialProjection === initialProjection) this.initialProjection = null;
+        },
+      );
+    }
+    return settled;
   }
 
   accept(prepared: RenderPreparedSnapshot): void {

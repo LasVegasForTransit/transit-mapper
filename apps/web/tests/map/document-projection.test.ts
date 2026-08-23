@@ -5,6 +5,7 @@ import { createSourceFeatureProjectionAccounting } from '../../src/map/committed
 import { createCooperativeRenderJobScheduler } from '../../src/map/cooperative-render-job-scheduler';
 import {
   DocumentProjector,
+  type DocumentProjectionRequest,
   type DocumentProjectorOptions,
 } from '../../src/map/document-projection';
 import { SRC_WAYS } from '../../src/map/layers';
@@ -42,6 +43,76 @@ class ProjectionClock {
 }
 
 describe('document projection', () => {
+  it('joins duplicate initial requests before they replace preparation', async () => {
+    const clock = new ProjectionClock();
+    const scheduler = createCooperativeRenderJobScheduler({
+      now: clock.now,
+      scheduleFrame: clock.scheduleFrame,
+      cancelFrame: clock.cancelFrame,
+    });
+    const project = vi.fn(() => Promise.resolve({ features: emptySystemFeatures(), counts: null }));
+    const publish = vi.fn((_prepared, request: DocumentProjectionRequest) => ({
+      generation: 1,
+      settled: Promise.resolve(),
+      cancel: () => false,
+      scene: renderScene(request.revision, []),
+    }));
+    const projector = new DocumentProjector({
+      scheduler,
+      accounting: createSourceFeatureProjectionAccounting(),
+      stats: createRendererStatsCollector(),
+      instrumentationEnabled: false,
+      featureProjectionWorker: { project, dispose: () => {} },
+      now: clock.now,
+      publish,
+      requeue: vi.fn(),
+    });
+    const system = aSystem({
+      ways: [
+        aRoad('visible', [
+          [-115.181, 36.14],
+          [-115.179, 36.14],
+        ]),
+      ],
+    });
+    const request: DocumentProjectionRequest = {
+      revision: 'initial-scene',
+      transition: null,
+      requestedSourceIds: [SRC_WAYS],
+      intent: 'reset',
+      projection: {
+        system,
+        selection: null,
+        handleWayIds: [],
+        view: {
+          viewMode: 'infrastructure',
+          visibleModes: new Set(['bus']),
+          visibleWayTypes: new Set(['road']),
+          presentation: renderPresentationForViewport({
+            center: [-115.18, 36.14],
+            zoom: 18,
+            width: 1_440,
+            height: 900,
+          }),
+        },
+      },
+    };
+
+    const first = projector.project(request);
+    const second = projector.project({ ...request, revision: 'repeated-initial-scene' });
+
+    expect(second).toBe(first);
+    for (let step = 0; step < 200; step += 1) {
+      clock.flushFrame();
+      await Promise.resolve();
+    }
+    await first;
+    expect(project).toHaveBeenCalledOnce();
+    expect(publish).toHaveBeenCalledOnce();
+    projector.dispose();
+    scheduler.dispose();
+  });
+
   it('hands geographic features to the worker before source publication', async () => {
     const clock = new ProjectionClock();
     const scheduler = createCooperativeRenderJobScheduler({

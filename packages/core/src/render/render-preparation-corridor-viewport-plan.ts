@@ -65,18 +65,22 @@ function addGeometry(
   const cold = context.coldViewport.get('corridor');
   if (!cold) return;
   context.builder.addUnitRange(
-    ways.length,
+    Math.ceil(ways.length / context.chunkSize),
     'viewport-build',
     'geometry:corridor',
-    () => 1,
+    (index) => Math.min(context.chunkSize, ways.length - index * context.chunkSize),
     (index) => {
-      const entry = corridorViewportEntry(ways[index]);
-      appendColdViewportGeometry(cold, entry);
-      const segmentCount = Math.max(1, (entry.paths[0]?.length ?? 1) - 1);
-      if (segmentCount > CORRIDOR_POINT_CHUNK_SIZE) {
-        work.totalChunks += Math.ceil(segmentCount / CORRIDOR_POINT_CHUNK_SIZE);
-        work.entryIndices.push(index);
-        work.chunkEnds.push(work.totalChunks);
+      const start = index * context.chunkSize;
+      const batch = ways.slice(start, start + context.chunkSize);
+      for (const [offset, way] of batch.entries()) {
+        const entry = corridorViewportEntry(way);
+        appendColdViewportGeometry(cold, entry);
+        const segmentCount = Math.max(1, (entry.paths[0]?.length ?? 1) - 1);
+        if (segmentCount > CORRIDOR_POINT_CHUNK_SIZE) {
+          work.totalChunks += Math.ceil(segmentCount / CORRIDOR_POINT_CHUNK_SIZE);
+          work.entryIndices.push(start + offset);
+          work.chunkEnds.push(work.totalChunks);
+        }
       }
     },
   );
@@ -94,43 +98,48 @@ function addMetadata(context: ColdPlanContext, ways: readonly Way[]): void {
   const cold = context.coldViewport.get('corridor');
   if (!cold) return;
   context.builder.addUnitRange(
-    ways.length,
+    Math.ceil(ways.length / context.chunkSize),
     'viewport-build',
     'metadata:corridor',
-    (index) => Math.min(CORRIDOR_POINT_CHUNK_SIZE, ways[index].points.length),
+    (index) => Math.min(context.chunkSize, ways.length - index * context.chunkSize),
     (index) => {
-      const entry = cold.grid.entries[index];
-      recordColdViewportEntryIdentity({
-        draft: context.viewport,
-        category: 'corridor',
-        ownerId: ways[index].id,
-        entry,
-        generation: context.generation,
-        cold,
-      });
-      const segmentCount = Math.max(1, (entry.paths[0]?.length ?? 1) - 1);
-      if (segmentCount > CORRIDOR_POINT_CHUNK_SIZE) return;
-      const visible = viewportSpatialEntryPathRangeIntersectsNormalizedBounds({
-        entry,
-        pathIndex: 0,
-        segmentStart: 0,
-        segmentEnd: segmentCount,
-        bounds: coldPreparedViewportCandidateBounds(
+      const start = index * context.chunkSize;
+      const batch = ways.slice(start, start + context.chunkSize);
+      for (const [offset, way] of batch.entries()) {
+        const entryIndex = start + offset;
+        const entry = cold.grid.entries[entryIndex];
+        recordColdViewportEntryIdentity({
+          draft: context.viewport,
+          category: 'corridor',
+          ownerId: way.id,
+          entry,
+          generation: context.generation,
           cold,
-          context.options.presentation,
-          context.options.candidateEnvelope,
-        ),
-      });
-      if (visible) {
-        recordColdViewportEntryCandidate(context.viewport, 'corridor', entry, context.generation);
+        });
+        const segmentCount = Math.max(1, (entry.paths[0]?.length ?? 1) - 1);
+        if (segmentCount > CORRIDOR_POINT_CHUNK_SIZE) continue;
+        const visible = viewportSpatialEntryPathRangeIntersectsNormalizedBounds({
+          entry,
+          pathIndex: 0,
+          segmentStart: 0,
+          segmentEnd: segmentCount,
+          bounds: coldPreparedViewportCandidateBounds(
+            cold,
+            context.options.presentation,
+            context.options.candidateEnvelope,
+          ),
+        });
+        if (visible) {
+          recordColdViewportEntryCandidate(context.viewport, 'corridor', entry, context.generation);
+        }
+        indexViewportSpatialEntryPathRange({
+          draft: cold.grid,
+          entryIndex,
+          pathIndex: 0,
+          segmentStart: 0,
+          segmentEnd: segmentCount,
+        });
       }
-      indexViewportSpatialEntryPathRange({
-        draft: cold.grid,
-        entryIndex: index,
-        pathIndex: 0,
-        segmentStart: 0,
-        segmentEnd: segmentCount,
-      });
     },
   );
 }

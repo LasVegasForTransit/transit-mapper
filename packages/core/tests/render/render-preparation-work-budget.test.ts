@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RenderPresentation } from '../../src/render/render-presentation';
 import { createRenderPreparationCoordinator } from '../../src/render/render-preparation';
 import { corridorViewportEntry } from '../../src/render/viewport-index-entries';
-import { aRoad, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
 
 const PRESENTATION: RenderPresentation = {
   bounds: { southwest: [-116, 35], northeast: [-114, 37] },
@@ -26,6 +26,15 @@ function detailedSystem(wayCount: number, pointsPerWay: number) {
   );
   return aSystem({
     ways,
+    services: Array.from({ length: 5 }, (_, index) =>
+      aService(`service-${index}`, [
+        aPattern(
+          `pattern-${index}`,
+          ways,
+          ways.map((way) => way.id),
+        ),
+      ]),
+    ),
     stops: ways.map((way, index) => ({
       id: `stop-${index}`,
       name: `Stop ${index}`,
@@ -60,6 +69,19 @@ describe('renderer preparation work budgeting', () => {
     expect(plan.units.some(({ id }) => id.includes('way-handle'))).toBe(false);
     expect(plan.units.some(({ id }) => id.includes('physical-handle'))).toBe(false);
     expect(plan.units.some(({ id }) => id.includes('service-terminus'))).toBe(false);
+    // Cold preparation uses the caller's four-entity batch size for every
+    // entity collection. Leaving corridor and stop work one entity at a time
+    // turns a large document into thousands of scheduler hand-offs.
+    for (const [label, count] of [
+      ['geometry:corridor', 32],
+      ['metadata:corridor', 32],
+      ['service-dependencies-and-bundle', 2],
+      ['stop-proximity', 32],
+    ] as const) {
+      const units = plan.units.filter((unit) => unit.label === label);
+      expect(units.length).toBe(count);
+      expect(units.every(({ operationCount }) => operationCount <= 4)).toBe(true);
+    }
     expect(
       plan.units.some(
         ({ id, operationCount }) => id.includes('stop-proximity') && operationCount > 4,
