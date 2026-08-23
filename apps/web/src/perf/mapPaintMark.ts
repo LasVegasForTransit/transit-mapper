@@ -11,6 +11,16 @@ export interface SystemPaintReadiness {
   representativeSourceLoaded: boolean;
 }
 
+/** Source publication resolves only after MapLibre paints the activated bank.
+ * That barrier remains valid when MapLibre no longer reports the same source
+ * as loading after the bank flip. */
+export interface AcceptedSystemScenePaintReadiness {
+  documentReady: boolean;
+  systemDataUploaded: boolean;
+  systemDataMatchesDocument: boolean;
+  acceptedScenePainted: boolean;
+}
+
 export interface SystemInteractionReadiness {
   documentCommitted: boolean;
   interactionsAttached: boolean;
@@ -26,6 +36,17 @@ export function systemPaintReady(readiness: SystemPaintReadiness): boolean {
     readiness.systemDataMatchesDocument &&
     readiness.representativeSourceExists &&
     readiness.representativeSourceLoaded
+  );
+}
+
+export function acceptedSystemScenePaintReady(
+  readiness: AcceptedSystemScenePaintReadiness,
+): boolean {
+  return (
+    readiness.documentReady &&
+    readiness.systemDataUploaded &&
+    readiness.systemDataMatchesDocument &&
+    readiness.acceptedScenePainted
   );
 }
 

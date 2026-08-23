@@ -116,7 +116,11 @@ import {
 } from './initial-map-ready';
 import { initLiveCamera, setLiveCamera } from '../camera/liveCamera';
 import { attachPerfHarness } from '../perf';
-import { markFirstSystemMapPaint, systemPaintReady } from '../perf/mapPaintMark';
+import {
+  acceptedSystemScenePaintReady,
+  markFirstSystemMapPaint,
+  systemPaintReady,
+} from '../perf/mapPaintMark';
 import { createRendererStatsCollector } from '../perf/renderer-stats';
 import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
@@ -933,7 +937,24 @@ export function MapCanvas({
           pendingStyleHeal = false;
           lastRenderedSystemId = system.id;
           if (viewRef.current.viewMode === 'diagram') setBasemapVisible(map, false);
-          if (sourceIds.includes(SRC_STATIONS)) initialSystemDataUploaded = true;
+          if (sourceIds.includes(SRC_STATIONS)) {
+            initialSystemDataUploaded = true;
+            if (
+              PERF_HARNESS_BUILD &&
+              acceptedSystemScenePaintReady({
+                documentReady: store.getState().documentStatus === 'ready',
+                systemDataUploaded: initialSystemDataUploaded,
+                systemDataMatchesDocument: lastRenderedSystemId === store.getState().system.id,
+                // RendererSourcePublication resolves its accepted callback only
+                // after the activated bank's MapLibre paint barrier completes.
+                acceptedScenePainted: true,
+              })
+            ) {
+              if (initialPaintListener) map.off('render', initialPaintListener);
+              initialPaintListener = null;
+              markFirstSystemMapPaint();
+            }
+          }
           // The bank flip can settle between MapLibre render callbacks. Request
           // one after this accepted scene so the startup mark proves the
           // published bank reached the canvas rather than merely its sources.
