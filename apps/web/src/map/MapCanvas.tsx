@@ -7,6 +7,7 @@ import maplibregl, {
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEditorStore } from '../editor/EditorProvider';
+import type { EditorState } from '../editor/store';
 import type { SimCommands } from '../editor/keymap';
 import { useSim, useSimClock } from '../ui/SimProvider';
 import { useContextMenu, useUi } from '../ui/UiProvider';
@@ -1208,6 +1209,122 @@ export function MapCanvas({
       applyGestureProjectionResult(gestureProjection.project(baseline));
     };
 
+    const settleStopGestureDiff = (
+      pendingBatch: SourceUploadBatch,
+      affected: ReturnType<GestureProjectionController['affected']>,
+      stopIds: readonly string[],
+    ) => {
+      const { system, selection, activePatternId, armedTerminus } = store.getState();
+      const countTransaction = sourceProjectionAccounting.begin();
+      stopProjectionAbort?.abort();
+      const abort = new AbortController();
+      stopProjectionAbort = abort;
+      gesturePreview.retainActiveStops(affected.stopIds);
+      gestureSettlement.releaseIfReady();
+      void featureProjection
+        .project(
+          {
+            system,
+            selection,
+            handleWayIds: handleWayIds(),
+            view: liveRenderView(),
+            sourceIds: [SRC_STATIONS],
+            stopIds,
+            physicalHandleStationId: physicalHandleStationId(),
+            physicalHandleGroupId: physicalHandleGroupId(),
+            activePatternId,
+            armedTerminus,
+            selectionOwnedConnectors: false,
+          },
+          abort.signal,
+        )
+        .then(({ features: projected, counts }) => {
+          if (abort.signal.aborted || stopProjectionAbort !== abort) return;
+          if (counts) mergeSourceFeatureProjectionCounts(countTransaction.counts, counts);
+          const expectedIds = new Set(stopIds);
+          const features = projected.stops.features;
+          const complete =
+            features.length === expectedIds.size &&
+            features.every(
+              (feature) =>
+                typeof feature.properties?.id === 'string' &&
+                expectedIds.has(feature.properties.id),
+            );
+          const source = map.getSource<GeoJSONSource>(activeRenderSourceId(SRC_STATIONS));
+          if (!source || !complete) {
+            countTransaction.discard();
+            stopSettlement.beginFull({
+              mutate: () =>
+                schedulePushData(pendingBatch.sourceIds, pendingBatch.transition ?? undefined),
+            });
+            return;
+          }
+          gesturePreview.retainCommitted(stopIds, features);
+          stopSettlement.beginDiff({
+            mutate: () => {
+              try {
+                const update = renderer.updateEditorScene({
+                  revision: `${system.id}:${++renderSceneRevision}`,
+                  features: projected,
+                  sourceIds: [SRC_STATIONS],
+                  replacementDomainsBySource: new Map([
+                    [SRC_STATIONS, stopIds.map((stopId) => renderDomainIdentity('stop', stopId))],
+                  ]),
+                });
+                recordAcceptedSceneUpdate(update);
+                countTransaction.accept();
+              } catch (error) {
+                countTransaction.discard();
+                throw error;
+              }
+            },
+            fallback: () => {
+              countTransaction.discard();
+              schedulePushData(pendingBatch.sourceIds, pendingBatch.transition ?? undefined);
+            },
+          });
+        })
+        .catch((error: unknown) => {
+          countTransaction.discard();
+          if (abort.signal.aborted) return;
+          console.error('[transitmapper] stop feature projection failed.', error);
+          stopSettlement.beginFull({
+            mutate: () =>
+              schedulePushData(pendingBatch.sourceIds, pendingBatch.transition ?? undefined),
+          });
+        });
+    };
+
+    const settleFullGestureProjection = (
+      affected: ReturnType<GestureProjectionController['affected']>,
+      finish: ReturnType<GestureProjectionController['finish']>,
+      pendingBatch: SourceUploadBatch,
+      preserveStopPreview: boolean,
+    ) => {
+      const pendingSources = pendingBatch.sourceIds;
+      const refreshRequest = pendingSources.length > 0 ? pendingSources : 'all';
+      const transition =
+        pendingSources.length > 0 ? (pendingBatch.transition ?? undefined) : undefined;
+      if (finish.hadPreview && gestureNeedsCommittedPaint(affected)) {
+        gestureSettlement.begin({ mutate: () => schedulePushData(refreshRequest, transition) });
+        return;
+      }
+      const refreshesStops = pendingSources.length === 0 || pendingSources.includes(SRC_STATIONS);
+      if (preserveStopPreview) gesturePreview.retainActiveStops(affected.stopIds);
+      else gesturePreview.clearActive();
+      gestureSettlement.releaseIfReady();
+
+      if (refreshesStops && (preserveStopPreview || stopSettlement.ownsPreview())) {
+        stopSettlement.beginFull({ mutate: () => schedulePushData(refreshRequest, transition) });
+        return;
+      }
+      if (!stopSettlement.ownsPreview()) {
+        stopSettlement.invalidate();
+        gesturePreview.releaseStops();
+      }
+      schedulePushData(refreshRequest, transition);
+    };
+
     const settleGestureProjection = () => {
       const affected = gestureProjection?.affected() ?? {
         wayIds: [],
@@ -1241,132 +1358,11 @@ export function MapCanvas({
           projectionAborted: gestureProjectionAborted,
         });
         if (stopPlan.kind === 'diff') {
-          const { system, selection, activePatternId, armedTerminus } = store.getState();
-          const countTransaction = sourceProjectionAccounting.begin();
-          stopProjectionAbort?.abort();
-          const abort = new AbortController();
-          stopProjectionAbort = abort;
-          gesturePreview.retainActiveStops(affected.stopIds);
-          gestureSettlement.releaseIfReady();
-          void featureProjection
-            .project(
-              {
-                system,
-                selection,
-                handleWayIds: handleWayIds(),
-                view: liveRenderView(),
-                sourceIds: [SRC_STATIONS],
-                stopIds: stopPlan.stopIds,
-                physicalHandleStationId: physicalHandleStationId(),
-                physicalHandleGroupId: physicalHandleGroupId(),
-                activePatternId,
-                armedTerminus,
-                selectionOwnedConnectors: false,
-              },
-              abort.signal,
-            )
-            .then(({ features: projected, counts }) => {
-              if (abort.signal.aborted || stopProjectionAbort !== abort) return;
-              if (counts) mergeSourceFeatureProjectionCounts(countTransaction.counts, counts);
-              const expectedIds = new Set(stopPlan.stopIds);
-              const features = projected.stops.features;
-              const complete =
-                features.length === expectedIds.size &&
-                features.every(
-                  (feature) =>
-                    typeof feature.properties?.id === 'string' &&
-                    expectedIds.has(feature.properties.id),
-                );
-              const source = map.getSource<GeoJSONSource>(activeRenderSourceId(SRC_STATIONS));
-              if (!source || !complete) {
-                countTransaction.discard();
-                stopSettlement.beginFull({
-                  mutate: () =>
-                    schedulePushData(pendingSources, pendingBatch.transition ?? undefined),
-                });
-                return;
-              }
-              gesturePreview.retainCommitted(stopPlan.stopIds, features);
-              stopSettlement.beginDiff({
-                mutate: () => {
-                  try {
-                    const update = renderer.updateEditorScene({
-                      revision: `${system.id}:${++renderSceneRevision}`,
-                      features: projected,
-                      sourceIds: [SRC_STATIONS],
-                      replacementDomainsBySource: new Map([
-                        [
-                          SRC_STATIONS,
-                          stopPlan.stopIds.map((stopId) => renderDomainIdentity('stop', stopId)),
-                        ],
-                      ]),
-                    });
-                    recordAcceptedSceneUpdate(update);
-                    countTransaction.accept();
-                  } catch (error) {
-                    countTransaction.discard();
-                    throw error;
-                  }
-                },
-                fallback: () => {
-                  countTransaction.discard();
-                  schedulePushData(pendingSources, pendingBatch.transition ?? undefined);
-                },
-              });
-            })
-            .catch((error: unknown) => {
-              countTransaction.discard();
-              if (abort.signal.aborted) return;
-              console.error('[transitmapper] stop feature projection failed.', error);
-              stopSettlement.beginFull({
-                mutate: () =>
-                  schedulePushData(pendingSources, pendingBatch.transition ?? undefined),
-              });
-            });
+          settleStopGestureDiff(pendingBatch, affected, stopPlan.stopIds);
           return;
         }
-
-        // Gesture store commits already contributed their exact dependency
-        // union. Fall back to all only for a canceled/aborted path that did not
-        // expose a classifiable system change.
-        const refreshRequest = pendingSources.length > 0 ? pendingSources : 'all';
-        if (finish.hadPreview && gestureNeedsCommittedPaint(affected)) {
-          // Keep the lightweight projection and its settled-layer mask in
-          // place until the complete renderer generation and its source/layout
-          // work have reached a later MapLibre rendered frame.
-          gestureSettlement.begin({
-            mutate: () =>
-              schedulePushData(
-                refreshRequest,
-                pendingSources.length > 0 ? (pendingBatch.transition ?? undefined) : undefined,
-              ),
-          });
-          return;
-        }
-        const refreshesStops = pendingSources.length === 0 || pendingSources.includes(SRC_STATIONS);
-        const preserveStopPreview = stopPlan.preserveStopPreview;
-        if (preserveStopPreview) gesturePreview.retainActiveStops(affected.stopIds);
-        else gesturePreview.clearActive();
-        gestureSettlement.releaseIfReady();
-
-        if (refreshesStops && (preserveStopPreview || stopSettlement.ownsPreview())) {
-          stopSettlement.beginFull({
-            mutate: () =>
-              schedulePushData(
-                refreshRequest,
-                pendingSources.length > 0 ? (pendingBatch.transition ?? undefined) : undefined,
-              ),
-          });
-          return;
-        }
-        if (!stopSettlement.ownsPreview()) {
-          stopSettlement.invalidate();
-          gesturePreview.releaseStops();
-        }
-        schedulePushData(
-          refreshRequest,
-          pendingSources.length > 0 ? (pendingBatch.transition ?? undefined) : undefined,
-        );
+        settleFullGestureProjection(affected, finish, pendingBatch, stopPlan.preserveStopPreview);
+        return;
       } else if (gestureSettlement.ownsPreview()) {
         // The older barrier may have completed during this gesture. Do not
         // clear the newer active projection unless that generation is ready;
@@ -1840,60 +1836,67 @@ export function MapCanvas({
     const ro = new ResizeObserver(() => map.resize());
     ro.observe(containerRef.current);
 
-    const unsub = store.subscribe((s, prev) => {
-      const wasDrawing = prev.activeWayId !== null || prev.routeDraft !== null;
-      const drawing = s.activeWayId !== null || s.routeDraft !== null;
-      if (wasDrawing && !drawing) void styleSwitchControllerRef.current?.flush();
+    const scheduleSystemRender = (
+      state: EditorState,
+      previous: EditorState,
+      documentChanged: boolean,
+      initialDocumentReady: boolean,
+      changedSources: readonly SystemFeatureSourceId[],
+    ) => {
+      if (
+        !initialDocumentReady &&
+        changedSources.length === 0 &&
+        !(gestureActive && documentChanged)
+      ) {
+        return;
+      }
+      const systemTransition = { previous: previous.system, next: state.system };
+      if (gestureActive) {
+        // A document switch must abort the baseline-bound gesture even in
+        // the degenerate case where the new document reuses the same arrays.
+        sourceUploadQueue.add(documentChanged ? 'all' : changedSources, systemTransition);
+        if (!gestureProjectionAborted && gestureProjection) {
+          applyGestureProjectionResult(gestureProjection.project(state.system));
+        } else {
+          fullAfterGesture = true;
+        }
+        return;
+      }
+      // The first document can arrive after MapLibre created the empty editor
+      // shell but before either bank has published. The renderer owns first-bank
+      // creation, so it must receive that request without an active source.
+      if (changedSources.includes(SRC_STATIONS) && stopSettlement.ownsPreview()) {
+        gesturePreview.syncStops(state.system);
+        stopSettlement.beginFull({
+          mutate: () => schedulePushData(changedSources, systemTransition),
+        });
+        return;
+      }
+      schedulePushData(initialDocumentReady ? 'all' : changedSources, systemTransition);
+    };
 
+    const syncRendererFromStore = (state: EditorState, previous: EditorState) => {
       // Plan from the exact TransitSystem fields whose references changed.
       // Renaming the system, moving the camera, or picking a palette color
       // produces an empty plan; topology edits conservatively include every
       // derived collection they can influence.
-      const documentChanged = prev.system.id !== s.system.id;
+      const documentChanged = previous.system.id !== state.system.id;
       const initialDocumentReady =
-        prev.documentStatus !== 'ready' &&
-        s.documentStatus === 'ready' &&
+        previous.documentStatus !== 'ready' &&
+        state.documentStatus === 'ready' &&
         lastRenderedSystemId === null;
       if (initialDocumentReady) traceStartup('document-ready');
-      const selectionUpdate = planSelectionRenderUpdate(prev, s);
+      const selectionUpdate = planSelectionRenderUpdate(previous, state);
       if (documentChanged && !gestureActive) {
         stopSettlement.invalidate();
         gestureSettlement.invalidate();
         gesturePreview.clear();
       }
-      const changedSources = sourceUploadsForSystemChange(prev.system, s.system, {
+      const changedSources = sourceUploadsForSystemChange(previous.system, state.system, {
         forceAll: documentChanged,
       });
       const editorSystemRefresh = editorSourcesNeedSystemRefresh(changedSources, documentChanged);
-      const systemTransition = { previous: prev.system, next: s.system };
-      if (initialDocumentReady || changedSources.length > 0 || (gestureActive && documentChanged)) {
-        if (gestureActive) {
-          // A document switch must abort the baseline-bound gesture even in
-          // the degenerate case where the new document reuses the same arrays.
-          sourceUploadQueue.add(documentChanged ? 'all' : changedSources, systemTransition);
-          if (!gestureProjectionAborted && gestureProjection)
-            applyGestureProjectionResult(gestureProjection.project(s.system));
-          else fullAfterGesture = true;
-        } else {
-          // The first document can arrive after MapLibre created the empty
-          // editor shell but before either bank has published. Do not wait for
-          // an active source in that case: the renderer owns first-bank
-          // creation, and skipping this request leaves the warm reload on the
-          // shell's empty scene forever.
-          if (changedSources.includes(SRC_STATIONS) && stopSettlement.ownsPreview()) {
-            // Undo, delete, and Inspector edits can supersede an in-flight
-            // station diff. Keep the newest geometry truthful in the scratch
-            // source and replace the old paint barrier before scheduling the
-            // complete station collection.
-            gesturePreview.syncStops(s.system);
-            stopSettlement.beginFull({
-              mutate: () => schedulePushData(changedSources, systemTransition),
-            });
-          } else {
-            schedulePushData(initialDocumentReady ? 'all' : changedSources, systemTransition);
-          }
-        }
-      }
+      scheduleSystemRender(state, previous, documentChanged, initialDocumentReady, changedSources);
       if (
         map.getSource(activeRenderSourceId(SRC_SERVICES)) &&
         (selectionUpdate.updateEditorSources ||
@@ -1902,16 +1905,19 @@ export function MapCanvas({
       ) {
         scheduleSelectionUpdate();
       }
+    };
+
+    const syncRouteDraftPreview = (state: EditorState, previous: EditorState) => {
       // Route drafting (Network view snap-to-streets drawing): show the
       // committed legs as the standard dashed draw preview.
-      if (s.routeDraft !== prev.routeDraft) {
+      if (state.routeDraft !== previous.routeDraft) {
         // One feature per SPAN rather than one for the whole route, so a
         // stretch the router had to run against traffic can say so. Under
         // `preferLegal` the draft is given the line rather than a refusal —
         // which is only half an answer if nothing shows what is wrong with it.
-        const spans = s.routeDraft?.spans ?? [];
+        const spans = state.routeDraft?.spans ?? [];
         const features = spans
-          .map((span) => ({ span, path: routePath(s.system, [span]) }))
+          .map((span) => ({ span, path: routePath(state.system, [span]) }))
           .filter(({ path }) => path.length >= 2)
           .map(({ span, path }) => ({
             type: 'Feature' as const,
@@ -1922,20 +1928,26 @@ export function MapCanvas({
           .getSource<GeoJSONSource>(SRC_PREVIEW)
           ?.setData(features.length > 0 ? { type: 'FeatureCollection', features } : emptyFC);
       }
-      if (s.system.id !== lastSystemId) {
-        lastSystemId = s.system.id;
+    };
+
+    const syncSystemCamera = (state: EditorState) => {
+      if (state.system.id !== lastSystemId) {
+        lastSystemId = state.system.id;
         cameraRenderPreload.reset();
         committedCameraCoverage = null;
-        map.jumpTo({ center: s.system.viewport.center, zoom: s.system.viewport.zoom });
+        map.jumpTo({ center: state.system.viewport.center, zoom: state.system.viewport.zoom });
         // The newly-loaded system's saved camera becomes the live camera.
-        initLiveCamera(s.system.viewport);
+        initLiveCamera(state.system.viewport);
       }
+    };
+
+    const syncSelectionFocus = (state: EditorState, previous: EditorState) => {
       // Chrome-driven selection (Objects list, keyboard nav, Inspector jump
       // links, Issues) asks for this via selectAndFocus bumping the token —
       // a direct map click already shows the user where the thing is and
       // never touches this. The selection command group owns the token.
-      if (s.cameraFocusToken !== prev.cameraFocusToken) {
-        const focus = selectionFocus(s.system, s.selection);
+      if (state.cameraFocusToken !== previous.cameraFocusToken) {
+        const focus = selectionFocus(state.system, state.selection);
         if (focus) {
           if (focus.needsInfrastructureView) setViewMode('infrastructure');
           map.fitBounds(focus.bounds, {
@@ -1945,6 +1957,16 @@ export function MapCanvas({
           });
         }
       }
+    };
+
+    const unsub = store.subscribe((state, previous) => {
+      const wasDrawing = previous.activeWayId !== null || previous.routeDraft !== null;
+      const drawing = state.activeWayId !== null || state.routeDraft !== null;
+      if (wasDrawing && !drawing) void styleSwitchControllerRef.current?.flush();
+      syncRendererFromStore(state, previous);
+      syncRouteDraftPreview(state, previous);
+      syncSystemCamera(state);
+      syncSelectionFocus(state, previous);
     });
     // The local style can finish while IndexedDB delivers the saved document.
     // If that ready transition lands between editor setup and subscription,
