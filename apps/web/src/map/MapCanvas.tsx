@@ -831,7 +831,10 @@ export function MapCanvas({
       refreshInteractionPreviews: () => refreshCommittedInteractionPreviews(),
       onInactiveBankReady: () => handleInactiveBankReady(),
       onRecoveryUpdate: (update) => handleRecoveredScene(update),
-      onError: (error) => console.error('[transitmapper] live renderer', error),
+      onError: (error) => {
+        traceStartup(`renderer-error:${error instanceof Error ? error.message : String(error)}`);
+        console.error('[transitmapper] live renderer', error);
+      },
     });
     liveRenderer = renderer;
     editorFeatureState = createEditorFeatureState({
