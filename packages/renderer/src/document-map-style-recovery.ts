@@ -18,6 +18,7 @@ export interface DocumentMapStyleRecoveryOptions {
   hasQueuedProjection(): boolean;
   scheduleQueuedProjection(): void;
   scheduleProjection(): void;
+  restoreAfterStyle(): void;
   reportError(error: unknown): void;
 }
 
@@ -96,6 +97,7 @@ class DocumentMapStyleRecoveryController implements DocumentMapStyleRecovery {
   private recoverAcceptedStyle = (): void => {
     if (!this.acceptsWork()) return;
     try {
+      this.options.restoreAfterStyle();
       this.options.renderer.requestRecovery();
     } catch (error) {
       this.pending = false;

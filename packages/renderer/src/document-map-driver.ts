@@ -598,6 +598,14 @@ class DocumentMapDriver implements MapDriver {
       hasQueuedProjection: () => sourceQueue.hasPending(),
       scheduleQueuedProjection,
       scheduleProjection,
+      restoreAfterStyle: () => {
+        if (!acceptsWork()) return;
+        try {
+          extension?.restoreAfterStyle?.();
+        } catch (error) {
+          reportSafely(attachOptions, error);
+        }
+      },
       reportError: (error) => reportSafely(attachOptions, error),
     });
     const onStyleLoad = () => styleRecovery?.handleStyleLoad();

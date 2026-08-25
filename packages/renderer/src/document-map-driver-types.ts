@@ -65,6 +65,7 @@ export interface DocumentMapSession {
 export interface DocumentMapSessionAttachment {
   synchronizeInteractionState?(targets?: SceneTargetResolver): void;
   refreshInteractionPreviews?(): void;
+  restoreAfterStyle?(): void;
   dispose(): void;
 }
 

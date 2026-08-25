@@ -885,6 +885,52 @@ describe('document map driver', () => {
     attachment.dispose();
   });
 
+  it('restores extension style state before the recovered scene requests its first paint', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem()));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const events: string[] = [];
+    const refreshInteractionPreviews = vi.fn();
+    const restoreAfterStyle = vi.fn(() => events.push('restore'));
+    vi.spyOn(map, 'triggerRepaint').mockImplementation(() => events.push('paint'));
+    let session: DocumentMapSession | null = null;
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, createProjectionWorker(), {
+        attachSession: (attached) => {
+          session = attached;
+          return { dispose() {}, refreshInteractionPreviews, restoreAfterStyle };
+        },
+      }),
+    );
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+    await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
+    expect(restoreAfterStyle).not.toHaveBeenCalled();
+    refreshInteractionPreviews.mockClear();
+    const renderer = requireSession(session).renderer;
+    const requestRecovery = renderer.requestRecovery.bind(renderer);
+    vi.spyOn(renderer, 'requestRecovery').mockImplementation(() => {
+      events.push('recovery');
+      requestRecovery();
+    });
+    events.length = 0;
+    const recoveryVersion = renderer.recoveryVersion();
+
+    map.replaceStyle();
+    await advanceUntil(
+      clock,
+      map,
+      () => requireSession(session).renderer.recoveryVersion() > recoveryVersion + 1,
+    );
+
+    expect(restoreAfterStyle).toHaveBeenCalledOnce();
+    const restoreIndex = events.indexOf('restore');
+    const recoveryIndex = events.indexOf('recovery');
+    expect(restoreIndex).toBeLessThan(recoveryIndex);
+    expect(events.slice(recoveryIndex + 1)).toContain('paint');
+    expect(refreshInteractionPreviews).not.toHaveBeenCalled();
+    attachment.dispose();
+  });
+
   it('retries retained-scene recovery when a style changes during an active projection', async () => {
     const initial = createReadySystem();
     const source = new TestDocumentSource(readySnapshot(initial));
