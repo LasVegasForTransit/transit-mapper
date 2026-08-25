@@ -16,6 +16,12 @@ const adapterPaths = [
   'apps/web/src/editor/editor-selection.ts',
   'apps/web/src/editor/document-map.ts',
 ];
+const attachmentPaths = [
+  'apps/web/src/editor/editor-map-attachment.ts',
+  'apps/web/src/editor/editor-map-gesture.ts',
+  'apps/web/src/editor/editor-map-projection.ts',
+  'apps/web/src/editor/editor-map-view.ts',
+];
 
 function runDependencyCruiser(paths: readonly string[], outputType = 'err-long') {
   return spawnSync(
@@ -56,6 +62,28 @@ describe('the editor document map dependency boundary', () => {
           source.includes('/react/') ||
           source.endsWith('/EditorProvider.tsx') ||
           source.endsWith('/ViewProvider.tsx'),
+      );
+
+    expect(forbidden).toEqual([]);
+  });
+
+  it('keeps the editor map attachment outside application lifecycle graphs', () => {
+    const result = runDependencyCruiser(attachmentPaths, 'json');
+    if (result.error) throw result.error;
+    expect(result.status, result.stderr).toBe(0);
+    const report = JSON.parse(result.stdout) as DependencyCruiserReport;
+    const forbidden = report.modules
+      .map((module) => module.source)
+      .filter(
+        (source) =>
+          source.endsWith('/react') ||
+          source.includes('/react/') ||
+          source.endsWith('/App.tsx') ||
+          source.endsWith('/EditorProvider.tsx') ||
+          source.endsWith('/ViewProvider.tsx') ||
+          source.includes('/src/import/') ||
+          source.includes('/src/pwa/') ||
+          source.includes('/src/storage/'),
       );
 
     expect(forbidden).toEqual([]);
