@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   attachInitialMapReady,
+  publishAcceptedMapStartup,
   shouldScheduleInitialReadyDocument,
   shouldProjectInitialDocument,
 } from '../../src/map/initial-map-ready';
@@ -56,6 +57,23 @@ describe('initial map readiness', () => {
     expect(shouldScheduleInitialReadyDocument('ready', false)).toBe(true);
     expect(shouldScheduleInitialReadyDocument('loading', false)).toBe(false);
     expect(shouldScheduleInitialReadyDocument('ready', true)).toBe(false);
+  });
+
+  it('releases the deferred base style when an accepted scene settles', () => {
+    const contentCommitted = vi.fn();
+    const interactive = vi.fn();
+    const flushTheme = vi.fn();
+
+    publishAcceptedMapStartup({
+      hasAcceptedScene: true,
+      interactionsAttached: true,
+      milestones: { contentCommitted, interactive },
+      flushTheme,
+    });
+
+    expect(contentCommitted).toHaveBeenCalledOnce();
+    expect(interactive).toHaveBeenCalledOnce();
+    expect(flushTheme).toHaveBeenCalledOnce();
   });
 
   it('starts the editor when the fallback style becomes usable', () => {

@@ -131,6 +131,17 @@ export default {
       to: { path: '^apps/' },
     },
     {
+      name: 'map-package-dependencies-are-an-allowlist',
+      severity: 'error',
+      comment:
+        'The map package owns browser-only MapLibre lifecycle and portable View state. React, ' +
+        'transit documents, renderers, editor hosts, and application policy stay outside it.',
+      from: { path: '^packages/map/src/' },
+      to: {
+        pathNot: '^(packages/map/|packages/views/|node_modules/maplibre-gl/)',
+      },
+    },
+    {
       name: 'workspace-has-no-application-semantics',
       severity: 'error',
       comment:

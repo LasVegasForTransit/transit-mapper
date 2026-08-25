@@ -1,1 +1,6 @@
+export * from './base-style-controller';
+export * from './map-driver';
+export * from './map-runtime';
+export * from './selection-controller';
+export * from './startup-milestones';
 export * from './map-view-store';

@@ -1,5 +1,6 @@
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { createBaseStyleController, INITIAL_STYLE_FALLBACK_TIMEOUT_MS } from '@transitmapper/map';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
 import { buildFeatures, type ViewOptions } from '@transitmapper/core/render/buildFeatures';
@@ -20,9 +21,9 @@ import {
   subscribeSystemColorScheme,
   type ColorScheme,
 } from '../theme/color-scheme';
-import { basemapStyleForScheme } from '../map/mapTheme';
+import { basemapStyleForScheme, localBlankStyleForScheme } from '../map/mapTheme';
 import { renderPresentationForFittedMap } from '../map/static-render-features';
-import { createStyleSwitchController } from '../map/styleSwitchController';
+import { carryDocumentStyle } from '../map/document-style-carry';
 import type { EmbedMapRuntimeOptions } from './embed-bootstrap';
 
 const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
@@ -220,16 +221,20 @@ export async function startEmbedMap(options: EmbedMapRuntimeOptions): Promise<vo
     updateEmbedLabels(options.id, system);
     await drawSystem({ map, features, scheme: initialScheme, runtime: options });
     let activeScheme = initialScheme;
-    const styleSwitcher = createStyleSwitchController({
+    const styleSwitcher = createBaseStyleController({
       map,
-      initialScheme,
+      initialTheme: initialScheme,
+      local: localBlankStyleForScheme,
+      remoteUrl: basemapStyleForScheme,
+      carry: (previous, next, scheme) =>
+        carryDocumentStyle(previous, next, embedLayerSpecsForScheme(scheme)),
+      timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
       isInteractionActive: () => false,
-      layerSpecs: embedLayerSpecsForScheme,
-      recover: (scheme, fullRebuild) => {
+      recoverDocumentLayers: (scheme, fullRebuild) => {
         activeScheme = scheme;
         if (!fullRebuild) restoreEmbedOverlay(map, features, scheme);
       },
-      onUnavailable: (_scheme, error) => console.error('[transitmapper embed]', error),
+      onUnavailable: (error) => console.error('[transitmapper embed]', error),
     });
     const onStyleLoad = () => restoreEmbedOverlay(map, features, activeScheme);
     map.on('style.load', onStyleLoad);

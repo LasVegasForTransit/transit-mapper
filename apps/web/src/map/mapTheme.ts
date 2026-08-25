@@ -26,7 +26,7 @@ export function layerSpecsForScheme(scheme: ColorScheme) {
 }
 
 const BROWSER_FREE_RENDERER_ORIGIN = 'http://127.0.0.1:4173';
-export const LOCAL_BACKGROUND_LAYER_ID = 'transitmapper-local-background';
+const LOCAL_BACKGROUND_LAYER_ID = 'transitmapper-local-background';
 
 function localGlyphsUrl(): string {
   const runtime: { readonly location?: { readonly origin?: string } } = globalThis;

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import maplibregl, {
+import {
   type GeoJSONSource,
   type Map as MLMap,
+  type MapMouseEvent,
   type MapSourceDataEvent,
   type PaddingOptions,
 } from 'maplibre-gl';
@@ -13,7 +14,7 @@ import { useSim, useSimClock } from '../ui/SimProvider';
 import { useContextMenu, useUi } from '../ui/UiProvider';
 import { useMapViewStore, useView } from '../ui/ViewProvider';
 import { initializeDocumentCamera } from '../editor/document-view-adapter';
-import { useSystemColorScheme } from '../theme/systemColorScheme';
+import { useSystemColorScheme, type ColorScheme } from '../theme/systemColorScheme';
 import { attachInteractions, type TerminusConnectionChoice } from './interactions';
 import { PointerBadge } from './PointerBadge';
 import { useCoarsePointer } from '../device/capabilities';
@@ -106,11 +107,13 @@ import { renderPresentationFromMap } from './render-presentation';
 import { landmarksFeatureCollection } from './landmarks';
 import { getMap, setMap } from './mapRef';
 import {
-  attachInitialStyleFallback,
+  createMapRuntime,
   INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
-} from './initialStyleFallback';
+  type MapRuntime,
+} from '@transitmapper/map';
 import {
   attachInitialMapReady,
+  publishAcceptedMapStartup,
   shouldProjectInitialDocument,
   shouldScheduleInitialReadyDocument,
 } from './initial-map-ready';
@@ -125,8 +128,8 @@ import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
 import { createVehicleAnimationGateController } from '../sim/vehicle-animation-gate';
 import { clearArmedTerminusForViewChange } from './viewEditorState';
-import { layerSpecsForScheme, localBlankStyleForScheme } from './mapTheme';
-import { createStyleSwitchController, type StyleSwitchController } from './styleSwitchController';
+import { basemapStyleForScheme, layerSpecsForScheme, localBlankStyleForScheme } from './mapTheme';
+import { carryDocumentStyle, editorDocumentLayersForScheme } from './document-style-carry';
 import { attachMapStyleRecovery, recoverMapStyleState } from './styleRecovery';
 import { createMapStyleFeatureDataRecovery } from './styleRecovery';
 import {
@@ -289,7 +292,7 @@ export function MapCanvas({
 }: MapCanvasProps) {
   const colorScheme = useSystemColorScheme();
   const initialColorSchemeRef = useRef(colorScheme);
-  const styleSwitchControllerRef = useRef<StyleSwitchController | null>(null);
+  const mapRuntimeRef = useRef<MapRuntime<ColorScheme> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [pointerBadge, setPointerBadge] = useState<{
     intent: PointerIntent | null;
@@ -434,49 +437,55 @@ export function MapCanvas({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const container = containerRef.current;
     const initialColorScheme = initialColorSchemeRef.current;
     const initial = store.getState().system;
     // The map View owns the live camera. The document keeps only the last
     // serialized camera so a pure pan never becomes a content edit.
     initializeDocumentCamera(mapViewStore, initial.viewport);
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: localBlankStyleForScheme(initialColorScheme),
-      center: initial.viewport.center,
-      zoom: initial.viewport.zoom,
-      // No preserveDrawingBuffer: PNG export renders on a dedicated offscreen
-      // map (map/export/exportRenderer.ts), so the live map no longer pays the
-      // always-on per-frame drawing-buffer copy that reading its canvas required.
-      fadeDuration: 0, // no trailing label/icon fade animation after a pan/zoom — snappier, one fewer post-move repaint pass
-      refreshExpiredTiles: false, // the basemap is static within a session; don't re-fetch/re-tessellate expired tiles
-      // SimCity-style: the primary press belongs to the active tool, never to
-      // the camera. On a mouse that means pan is right-drag or space-drag; by
-      // finger it means two fingers (see interactions.ts's touch adapter, which
-      // owns that gesture). Leaving dragPan off is what reserves the one-finger
-      // drag for the tool — MapLibre's own DragPanHandler would otherwise claim
-      // it, and there is no supported way to enable its touch half alone.
-      dragPan: false,
-      dragRotate: false, // right-drag pans, never rotates
-      doubleClickZoom: false, // double-click (and double-tap) finishes a line instead
-      keyboard: false, // we own the keymap (see keymap.ts)
-      boxZoom: false, // Shift+drag is our marquee-select gesture, not MapLibre's native box-zoom
-      // Pinch-to-zoom is MapLibre's, and the only camera gesture it still owns.
-      touchZoomRotate: true,
-      touchPitch: false, // a two-finger drag pans; it must never tilt the map instead
-      attributionControl: false, // replaced below with a compact (collapsed-to-an-"i") one
+    let activeMapScheme = initialColorScheme;
+    let liveRenderer: LiveMapRenderer | null = null;
+    let recoverDocumentLayers = (_scheme: ColorScheme, _fullRebuild: boolean) => {};
+    let styleInteractionActive = () => false;
+    let handleRuntimeResize = () => {};
+    const runtime = createMapRuntime<ColorScheme>({
+      container,
+      viewStore: mapViewStore,
+      initialTheme: initialColorScheme,
+      style: {
+        local: localBlankStyleForScheme,
+        remoteUrl: basemapStyleForScheme,
+        carry: (previous, next, scheme) =>
+          carryDocumentStyle(previous, next, editorDocumentLayersForScheme(scheme)),
+        recoverDocumentLayers: (scheme, fullRebuild) => recoverDocumentLayers(scheme, fullRebuild),
+        timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
+        isInteractionActive: () => styleInteractionActive(),
+        onBaseStyleUnavailable: () => basemapFailureRef.current?.(),
+      },
+      interaction: {
+        // The editor reserves the primary pointer for its active tool. A
+        // reader host can pass ordinary MapLibre interaction options instead.
+        dragPan: false,
+        dragRotate: false,
+        doubleClickZoom: false,
+        keyboard: false,
+        boxZoom: false,
+        touchZoomRotate: true,
+        touchPitch: false,
+        disableTouchRotation: true,
+      },
+      controls: {
+        navigation: { position: 'bottom-right', showCompass: false },
+        attribution: { position: 'bottom-right', compact: true },
+      },
+      mapOptions: { fadeDuration: 0, refreshExpiredTiles: false },
+      padding: chromePadding,
+      reportError: (error) => console.error('[transitmapper] map runtime', error),
+      onResize: () => handleRuntimeResize(),
     });
-    // Before anything frames anything. Every camera operation from here —
-    // fitBounds, flyTo, the initial frame — then keeps inside the band the
-    // chrome leaves visible, rather than centring on a canvas whose top and
-    // bottom are behind opaque bars.
-    map.setPadding(chromePadding(containerRef.current), { duration: 0 });
-
-    // Rotation would leave a reader unable to get back to north, and every
-    // projection in this app assumes an unrotated camera (see render/project).
-    map.touchZoomRotate.disableRotation();
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+    const map = runtime.map;
+    mapRuntimeRef.current = runtime;
     setMap(map);
     const startupTrace: string[] = [];
     const traceStartup = (event: string) => {
@@ -486,24 +495,11 @@ export function MapCanvas({
     if (PERF_HARNESS_BUILD) window.__mapStartupTrace = () => [...startupTrace];
 
     // Report initial OpenFreeMap failures; overlay recovery can mask a style that never loaded.
-    let activeMapScheme = initialColorScheme;
-    let liveRenderer: LiveMapRenderer | null = null;
     const onMapError = (event: MapErrorLike) => {
       if (liveRenderer?.handleSourceError(event)) return;
       console.error('[transitmapper]', event.error ?? event);
     };
     map.on('error', onMapError);
-    const initialStyleOwnership = { localOnly: false };
-    const detachInitialStyleFallback = attachInitialStyleFallback(map, {
-      scheme: initialColorScheme,
-      timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
-      startsWithLocalStyle: true,
-      onLocalStyleSelected: () => {
-        initialStyleOwnership.localOnly = true;
-        styleSwitchControllerRef.current?.lockToLocal(initialColorScheme);
-      },
-      onFallback: () => basemapFailureRef.current?.(),
-    });
 
     let detachInteractions: (() => void) | null = null;
     let detachVehicles: (() => void) | null = null;
@@ -711,7 +707,7 @@ export function MapCanvas({
       LYR_FACILITIES,
       LYR_JUNCTIONS,
     ];
-    let pendingHover: maplibregl.MapMouseEvent | null = null;
+    let pendingHover: MapMouseEvent | null = null;
     let hoverRaf: number | null = null;
     const flushHover = () => {
       hoverRaf = null;
@@ -736,7 +732,7 @@ export function MapCanvas({
           : null,
       );
     };
-    const onHoverMove = (e: maplibregl.MapMouseEvent) => {
+    const onHoverMove = (e: MapMouseEvent) => {
       pendingHover = e;
       hoverRaf ??= requestAnimationFrame(flushHover);
     };
@@ -875,7 +871,7 @@ export function MapCanvas({
       if (!directManipulationActive) return;
       directManipulationActive = false;
       notifyVehicleGate();
-      void styleSwitchControllerRef.current?.flush();
+      void mapRuntimeRef.current?.flushTheme();
     };
 
     if (PERF_HARNESS_BUILD) {
@@ -914,6 +910,18 @@ export function MapCanvas({
       };
     };
 
+    const publishStartupMilestones = () => {
+      traceStartup(
+        `milestones:${renderer.hasAcceptedScene() ? 'accepted' : 'empty'}:${styleInteractionActive() ? 'busy' : 'idle'}`,
+      );
+      publishAcceptedMapStartup({
+        hasAcceptedScene: renderer.hasAcceptedScene(),
+        interactionsAttached: detachInteractions !== null,
+        milestones: runtime.milestones,
+        flushTheme: () => void runtime.flushTheme(),
+      });
+    };
+
     const pushData = (
       requestedSources: readonly SystemFeatureSourceId[],
       transition: SourceUploadTransition | null = null,
@@ -929,60 +937,65 @@ export function MapCanvas({
       const cameraPreload = cameraRenderPreload.prepare(presentation, performance.now());
       const view = renderViewForPresentation(presentation);
       const upload = rendererUploadPlan(requestedSources, system.id);
-      if (!upload || upload.sourceIds.length === 0) return Promise.resolve();
-      return renderer.projectDocument({
-        revision: `${system.id}:${++renderSceneRevision}`,
-        transition,
-        requestedSourceIds: upload.sourceIds,
-        intent: upload.intent,
-        candidateEnvelope: cameraPreload.candidateEnvelope,
-        projection: {
-          system,
-          selection,
-          handleWayIds: handleWayIds(),
-          view,
-          physicalHandleStationId: physicalHandleStationId(),
-          physicalHandleGroupId: physicalHandleGroupId(),
-          activePatternId,
-          armedTerminus,
-          selectionOwnedConnectors: false,
-        },
-        onAccepted: ({ update, sourceIds, settlementLatencyMs }) => {
-          cameraRenderPreload.accept(cameraPreload.token, settlementLatencyMs);
-          committedCameraCoverage = {
-            presentation,
-            candidateEnvelope: cameraPreload.candidateEnvelope,
-          };
-          pendingStyleHeal = false;
-          lastRenderedSystemId = system.id;
-          if (viewRef.current.viewMode === 'diagram') setBasemapVisible(map, false);
-          if (sourceIds.includes(SRC_STATIONS)) {
-            initialSystemDataUploaded = true;
-            if (
-              PERF_HARNESS_BUILD &&
-              acceptedSystemScenePaintReady({
-                documentReady: store.getState().documentStatus === 'ready',
-                systemDataUploaded: initialSystemDataUploaded,
-                systemDataMatchesDocument: lastRenderedSystemId === store.getState().system.id,
-                // RendererSourcePublication resolves its accepted callback only
-                // after the activated bank's MapLibre paint barrier completes.
-                acceptedScenePainted: true,
-              })
-            ) {
-              if (initialPaintListener) map.off('render', initialPaintListener);
-              initialPaintListener = null;
-              markFirstSystemMapPaint();
+      if (!upload || upload.sourceIds.length === 0) {
+        publishStartupMilestones();
+        return Promise.resolve();
+      }
+      return renderer
+        .projectDocument({
+          revision: `${system.id}:${++renderSceneRevision}`,
+          transition,
+          requestedSourceIds: upload.sourceIds,
+          intent: upload.intent,
+          candidateEnvelope: cameraPreload.candidateEnvelope,
+          projection: {
+            system,
+            selection,
+            handleWayIds: handleWayIds(),
+            view,
+            physicalHandleStationId: physicalHandleStationId(),
+            physicalHandleGroupId: physicalHandleGroupId(),
+            activePatternId,
+            armedTerminus,
+            selectionOwnedConnectors: false,
+          },
+          onAccepted: ({ update, sourceIds, settlementLatencyMs }) => {
+            cameraRenderPreload.accept(cameraPreload.token, settlementLatencyMs);
+            committedCameraCoverage = {
+              presentation,
+              candidateEnvelope: cameraPreload.candidateEnvelope,
+            };
+            pendingStyleHeal = false;
+            lastRenderedSystemId = system.id;
+            if (viewRef.current.viewMode === 'diagram') setBasemapVisible(map, false);
+            if (sourceIds.includes(SRC_STATIONS)) {
+              initialSystemDataUploaded = true;
+              if (
+                PERF_HARNESS_BUILD &&
+                acceptedSystemScenePaintReady({
+                  documentReady: store.getState().documentStatus === 'ready',
+                  systemDataUploaded: initialSystemDataUploaded,
+                  systemDataMatchesDocument: lastRenderedSystemId === store.getState().system.id,
+                  // RendererSourcePublication resolves its accepted callback only
+                  // after the activated bank's MapLibre paint barrier completes.
+                  acceptedScenePainted: true,
+                })
+              ) {
+                if (initialPaintListener) map.off('render', initialPaintListener);
+                initialPaintListener = null;
+                markFirstSystemMapPaint();
+              }
             }
-          }
-          // The bank flip can settle between MapLibre render callbacks. Request
-          // one after this accepted scene so the startup mark proves the
-          // published bank reached the canvas rather than merely its sources.
-          map.triggerRepaint();
-          recordFullProjection(projectionCounts, update.sourceUploadCount);
-          recordSceneUpdate(update);
-          scheduleSelectionUpdate();
-        },
-      });
+            // The bank flip can settle between MapLibre render callbacks. Request
+            // one after this accepted scene so the startup mark proves the
+            // published bank reached the canvas rather than merely its sources.
+            map.triggerRepaint();
+            recordFullProjection(projectionCounts, update.sourceUploadCount);
+            recordSceneUpdate(update);
+            scheduleSelectionUpdate();
+          },
+        })
+        .then(() => publishStartupMilestones());
     };
 
     // Coalesce rebuilds to at most one per animation frame. A bulk import
@@ -1142,7 +1155,7 @@ export function MapCanvas({
       // covers the full-setData fallback without exposing an unselected frame.
       applySelectionState();
       gesturePreview.releaseStops();
-      void styleSwitchControllerRef.current?.flush();
+      void mapRuntimeRef.current?.flushTheme();
     };
 
     const finishGestureSettlementVisuals = () => {
@@ -1151,7 +1164,7 @@ export function MapCanvas({
       // the selected entity cannot flash unselected during the handoff.
       applySelectionState();
       gesturePreview.clearActive();
-      void styleSwitchControllerRef.current?.flush();
+      void mapRuntimeRef.current?.flushTheme();
     };
 
     const sourceSettlementHost: SourceMutationSettlementHost = {
@@ -1458,7 +1471,7 @@ export function MapCanvas({
       } finally {
         // A queued system-theme change may proceed only after either the live
         // gesture or its committed-paint handoff has released map ownership.
-        void styleSwitchControllerRef.current?.flush();
+        void mapRuntimeRef.current?.flushTheme();
       }
     };
 
@@ -1675,38 +1688,27 @@ export function MapCanvas({
     // container. Re-reading on resize therefore covers crossing the layout
     // boundary and turning a phone sideways, without a second source of truth
     // for either.
-    const onResize = () => {
-      const el = containerRef.current;
-      if (el) map.setPadding(chromePadding(el), { duration: 0 });
+    handleRuntimeResize = () => {
       cameraRenderPreload.observe(renderPresentationNow(), performance.now());
       presentationRefresh.request();
     };
-    map.on('resize', onResize);
-    styleSwitchControllerRef.current = createStyleSwitchController({
-      map,
-      initialScheme: initialColorScheme,
-      isInteractionActive: () => {
-        const state = store.getState();
-        return (
-          gestureActive ||
-          directManipulationActive ||
-          (liveRenderer?.publicationInProgress() ?? false) ||
-          gestureSettlement.blocksStyleSwitch() ||
-          stopSettlement.ownsPreview() ||
-          state.activeWayId !== null ||
-          state.routeDraft !== null
-        );
-      },
-      recover: (scheme, fullRebuild) => {
-        activeMapScheme = scheme;
-        if (fullRebuild) pendingStyleHeal = true;
-        else recoverMapStyle();
-      },
-      onUnavailable: () => basemapFailureRef.current?.(),
-    });
-    if (initialStyleOwnership.localOnly) {
-      styleSwitchControllerRef.current.lockToLocal(initialColorScheme);
-    }
+    styleInteractionActive = () => {
+      const state = store.getState();
+      return (
+        gestureActive ||
+        directManipulationActive ||
+        (liveRenderer?.publicationInProgress() ?? false) ||
+        gestureSettlement.blocksStyleSwitch() ||
+        stopSettlement.ownsPreview() ||
+        state.activeWayId !== null ||
+        state.routeDraft !== null
+      );
+    };
+    recoverDocumentLayers = (scheme, fullRebuild) => {
+      activeMapScheme = scheme;
+      if (fullRebuild) pendingStyleHeal = true;
+      else recoverMapStyle();
+    };
 
     attachInitialMapReady(map, () => {
       traceStartup(`map-ready:${store.getState().documentStatus}`);
@@ -1822,6 +1824,7 @@ export function MapCanvas({
           );
         },
       });
+      publishStartupMilestones();
       const vehicleGate = vehicleGateController.createGate(() => directManipulationActive);
       detachVehicles = attachVehicleAnimation(map, store, simClock, vehicleGate);
       if (PERF_HARNESS_BUILD) {
@@ -1902,9 +1905,6 @@ export function MapCanvas({
       map.resize();
       return true;
     });
-
-    const ro = new ResizeObserver(() => map.resize());
-    ro.observe(containerRef.current);
 
     interface SystemRenderUpdate {
       state: EditorState;
@@ -2024,7 +2024,6 @@ export function MapCanvas({
         lastSystemId = state.system.id;
         cameraRenderPreload.reset();
         committedCameraCoverage = null;
-        map.jumpTo({ center: state.system.viewport.center, zoom: state.system.viewport.zoom });
         // The newly loaded document seeds this workspace's camera.
         initializeDocumentCamera(mapViewStore, state.system.viewport);
       }
@@ -2051,7 +2050,7 @@ export function MapCanvas({
     const unsub = store.subscribe((state, previous) => {
       const wasDrawing = previous.activeWayId !== null || previous.routeDraft !== null;
       const drawing = state.activeWayId !== null || state.routeDraft !== null;
-      if (wasDrawing && !drawing) void styleSwitchControllerRef.current?.flush();
+      if (wasDrawing && !drawing) void mapRuntimeRef.current?.flushTheme();
       syncRendererFromStore(state, previous);
       syncRouteDraftPreview(state, previous);
       syncSystemCamera(state);
@@ -2088,16 +2087,9 @@ export function MapCanvas({
     map.on('move', onMove);
 
     const onMoveEnd = () => {
-      const c = map.getCenter();
       cameraRenderPreload.observe(renderPresentationNow(), performance.now());
-      // Record the move on the map View store, not the domain store. A pure
-      // pan/zoom must not mint a new `system` reference: that used to fire the
-      // subscription below → full-system buildFeatures + 13 setData + selector
-      // fan-out + autosave, once per coalesced drag frame (panBy(duration:0)
-      // fires moveend per mousemove). Camera persistence is handled separately
-      // and debounced (storage/persistenceCoordinator.ts).
-      mapViewStore.setCamera({ center: [c.lng, c.lat], zoom: map.getZoom() });
-      // moveend fires per mouse-move from panBy(duration:0), so coalesce it.
+      // The map runtime publishes the camera. The editor only coalesces the
+      // document renderer refresh that follows the completed movement.
       presentationRefresh.request();
     };
     map.on('moveend', onMoveEnd);
@@ -2105,7 +2097,6 @@ export function MapCanvas({
     return () => {
       stopSettlement.dispose();
       gestureSettlement.dispose();
-      ro.disconnect();
       unsub();
       pendingHover = null;
       if (hoverRaf !== null) cancelAnimationFrame(hoverRaf);
@@ -2134,9 +2125,6 @@ export function MapCanvas({
       detachVehicles?.();
       detachPerf?.();
       detachSimDev?.();
-      detachInitialStyleFallback();
-      styleSwitchControllerRef.current?.dispose();
-      styleSwitchControllerRef.current = null;
       detachStyleRecovery();
       map.off('error', onMapError);
       clearGesturePreview();
@@ -2146,14 +2134,14 @@ export function MapCanvas({
       schedulePushDataRef.current = null;
       applyRendererVisibilityRef.current = null;
       setMap(null);
-      map.remove();
+      if (mapRuntimeRef.current === runtime) mapRuntimeRef.current = null;
+      runtime.dispose();
     };
     // ViewProvider binds setViewMode to one MapViewStore instance, so its
-    // identity stays stable while camera and filter snapshots change. That
-    // matters because this cleanup calls map.remove(); a changing action would
-    // rebuild MapLibre. SimProvider likewise holds one clock instance, and
-    // simCommands is a ref-held facade that reads live handlers. The effect
-    // closes over each dependency listed here.
+    // identity stays stable while camera and filter snapshots change. The map
+    // runtime owns one MapLibre instance for this effect. SimProvider likewise
+    // holds one clock instance, and simCommands is a ref-held facade that reads
+    // live handlers. The effect closes over each dependency listed here.
   }, [
     store,
     mapViewStore,
@@ -2168,7 +2156,7 @@ export function MapCanvas({
   ]);
 
   useEffect(() => {
-    void styleSwitchControllerRef.current?.request(colorScheme);
+    void mapRuntimeRef.current?.requestTheme(colorScheme);
   }, [colorScheme]);
 
   return (

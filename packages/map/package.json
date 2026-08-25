@@ -24,6 +24,7 @@
     "vitest": "catalog:"
   },
   "dependencies": {
-    "@transitmapper/views": "workspace:*"
+    "@transitmapper/views": "workspace:*",
+    "maplibre-gl": "catalog:"
   }
 }

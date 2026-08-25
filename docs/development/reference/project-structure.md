@@ -59,10 +59,11 @@ parsing. It imports no React, MapLibre, DOM, editor, or Worker framework code.
 
 ### Map
 
-`packages/map` owns instance-scoped presentation state without React or
-transit-document dependencies. `MapViewStore` publishes immutable snapshots
-and preserves unchanged sub-object identity. It depends only on `views` until
-the MapLibre runtime moves.
+`packages/map` owns map state and the browser-only MapLibre lifecycle.
+`MapViewStore` publishes immutable snapshots. `MapRuntime` manages the map,
+controls, resize, camera sync, styles, and disposal. Hosts provide interactions,
+document-layer carry, recovery, and errors. The package depends only on `views`
+and MapLibre.
 
 ### Workspace
 
@@ -266,11 +267,10 @@ editing manages physical passenger-place geometry.
 
 #### Map rendering
 
-`apps/web/src/map` owns MapLibre runtime setup, pointer interaction, editor
-overlays, theme-resolved layer specs, and exports. It delegates committed
-document projection and source publication to `packages/renderer`.
-`MapCanvas.tsx` translates browser and editor events into calls on one
-`LiveMapRenderer` from that package.
+`packages/map` owns the MapLibre lifecycle. `apps/web/src/map` provides editor
+interaction, overlays, theme layers, and exports. `packages/renderer` projects
+committed documents and publishes sources. `MapCanvas.tsx` adapts one
+`MapRuntime` to one `LiveMapRenderer`.
 
 | Modules                                              | Responsibility                                                                |
 | ---------------------------------------------------- | ----------------------------------------------------------------------------- |

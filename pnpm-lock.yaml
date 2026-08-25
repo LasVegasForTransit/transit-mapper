@@ -384,6 +384,9 @@ importers:
       '@transitmapper/views':
         specifier: workspace:*
         version: link:../views
+      maplibre-gl:
+        specifier: 'catalog:'
+        version: 4.7.1
     devDependencies:
       '@transitmapper/tsconfig':
         specifier: workspace:*

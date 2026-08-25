@@ -192,20 +192,6 @@
       "count": 3
     }
   },
-  "src/map/styleSwitchController.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    },
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 1
-    }
-  },
   "src/map/touch-gestures.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 11
@@ -549,11 +535,6 @@
   "tests/map/sourceMutationSettlement.test.ts": {
     "@typescript-eslint/unbound-method": {
       "count": 1
-    }
-  },
-  "tests/map/styleSwitchController.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 4
     }
   },
   "tests/network/cancelableFlight.test.ts": {

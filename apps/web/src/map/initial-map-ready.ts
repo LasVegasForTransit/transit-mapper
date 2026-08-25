@@ -1,4 +1,5 @@
 import type { DocumentStatus } from '../editor/store/state';
+import type { MapStartupMilestones } from '@transitmapper/map';
 
 export interface InitialMapReadyMap {
   isStyleLoaded(): unknown;
@@ -20,6 +21,23 @@ export function shouldScheduleInitialReadyDocument(
   hasRenderedSystem: boolean,
 ): boolean {
   return documentStatus === 'ready' && !hasRenderedSystem;
+}
+
+interface PublishAcceptedMapStartupOptions {
+  hasAcceptedScene: boolean;
+  interactionsAttached: boolean;
+  milestones: MapStartupMilestones;
+  flushTheme(): void;
+}
+
+/** An accepted scene can settle through an empty follow-up batch. Publish the
+ * startup state from both paths so a style request deferred during renderer
+ * publication does not remain queued until the next editor gesture. */
+export function publishAcceptedMapStartup(options: PublishAcceptedMapStartupOptions): void {
+  if (!options.hasAcceptedScene) return;
+  options.milestones.contentCommitted();
+  if (options.interactionsAttached) options.milestones.interactive();
+  options.flushTheme();
 }
 
 /**
