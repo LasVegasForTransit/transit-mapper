@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { aSystem } from '@transitmapper/core/testing/fixtures';
-import { createDocumentMapSource } from '../../src/editor/document-map-source';
+import {
+  createDocumentMapSource,
+  type EditorDocumentMapHold,
+} from '../../src/editor/document-map-source';
+import type { DocumentMapSnapshot } from '@transitmapper/renderer/driver';
 import { createEditorStore } from '../../src/editor/store';
 
 describe('the editor document map source', () => {
@@ -66,5 +70,91 @@ describe('the editor document map source', () => {
     releaseSecond();
     releaseSecond();
     expect(releaseStore).toHaveBeenCalledTimes(2);
+  });
+
+  it('holds intermediate gesture snapshots and publishes the latest document once', () => {
+    const store = createEditorStore();
+    const source = createDocumentMapSource(store);
+    const listener = vi.fn();
+    source.subscribe(listener);
+    const hold = source.hold();
+
+    store.commands.document.setSystem(aSystem({ id: 'gesture-one' }));
+    store.commands.document.setSystem(aSystem({ id: 'gesture-two' }));
+
+    expect(source.getSnapshot().system.id).toBe('gesture-two');
+    expect(listener).not.toHaveBeenCalled();
+
+    hold.release();
+    hold.release();
+
+    expect(listener).toHaveBeenCalledOnce();
+    const published = listener.mock.lastCall?.[0] as DocumentMapSnapshot;
+    expect(published.system.id).toBe('gesture-two');
+  });
+
+  it('waits for every overlapping gesture hold before publishing', () => {
+    const store = createEditorStore();
+    const source = createDocumentMapSource(store);
+    const listener = vi.fn();
+    source.subscribe(listener);
+    const first = source.hold();
+    const second = source.hold();
+
+    store.commands.document.setSystem(aSystem({ id: 'overlap' }));
+    first.release();
+
+    expect(listener).not.toHaveBeenCalled();
+
+    second.release();
+
+    expect(listener).toHaveBeenCalledOnce();
+    const published = listener.mock.lastCall?.[0] as DocumentMapSnapshot;
+    expect(published.system.id).toBe('overlap');
+  });
+
+  it.each([
+    {
+      name: 'release then cancel',
+      finish: (first: EditorDocumentMapHold, second: EditorDocumentMapHold) => {
+        first.release();
+        second.cancel();
+      },
+    },
+    {
+      name: 'cancel then release',
+      finish: (first: EditorDocumentMapHold, second: EditorDocumentMapHold) => {
+        first.cancel();
+        second.release();
+      },
+    },
+  ])('publishes once when overlapping owners finish as $name', ({ finish }) => {
+    const store = createEditorStore();
+    const source = createDocumentMapSource(store);
+    const listener = vi.fn();
+    source.subscribe(listener);
+    const first = source.hold();
+    const second = source.hold();
+
+    store.commands.document.setSystem(aSystem({ id: 'mixed-overlap' }));
+    finish(first, second);
+
+    expect(listener).toHaveBeenCalledOnce();
+    expect((listener.mock.lastCall?.[0] as DocumentMapSnapshot).system.id).toBe('mixed-overlap');
+  });
+
+  it('cancels an aborted gesture hold without publishing stale document work', () => {
+    const store = createEditorStore();
+    const source = createDocumentMapSource(store);
+    const listener = vi.fn();
+    source.subscribe(listener);
+    const hold = source.hold();
+
+    store.commands.document.setSystem(aSystem({ id: 'replacement' }));
+    hold.cancel();
+    hold.release();
+
+    expect(source.getSnapshot().system.id).toBe('replacement');
+    expect(listener).not.toHaveBeenCalled();
   });
 });
