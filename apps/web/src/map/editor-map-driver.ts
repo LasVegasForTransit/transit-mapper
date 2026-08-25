@@ -38,6 +38,7 @@ import { editorMapSurfaceLayerSpecs } from '../editor/editor-map-layers';
 import { attachKeyboard } from '../editor/keymap';
 import { DOCUMENT_VIEW_FILTER_IDS } from '../editor/document-view-adapter';
 import { attachVehicleAnimation } from '../sim/vehicles';
+import { withVehiclePaintingSuspension } from '../sim/vehicle-painting-gate';
 import { landmarksFeatureCollection } from './landmarks';
 import { LAYER_SPECS, registerMapIcons } from './layers';
 import { claimEditorMapNavigation } from './editor-map-navigation';
@@ -243,7 +244,19 @@ export function createEditorMapDriver(ports: EditorMapDriverPorts): MapDriver {
             },
             simulation: {
               attach: (_session, store, isDirectManipulationActive) => {
-                const gate = ports.vehicleGate.createGate(isDirectManipulationActive);
+                const gate = withVehiclePaintingSuspension(
+                  ports.vehicleGate.createGate(isDirectManipulationActive),
+                  {
+                    isSuspended: () =>
+                      !session.renderer.hasAcceptedScene() ||
+                      session.renderer.hasActiveProjection() ||
+                      session.renderer.publicationInProgress(),
+                    subscribe: (listener) =>
+                      session.subscribeAcceptedScene(() => {
+                        listener();
+                      }),
+                  },
+                );
                 return attachVehicleAnimation(session.map, store, ports.simClock, gate);
               },
               notify: () => ports.vehicleGate.notify(),

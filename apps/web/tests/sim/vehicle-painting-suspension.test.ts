@@ -9,6 +9,7 @@ import { createEditorStore } from '../../src/editor/store';
 import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from '@transitmapper/renderer/layers';
 import { createSimClock } from '../../src/sim/simClock';
 import { attachVehicleAnimation } from '../../src/sim/vehicles';
+import { withVehiclePaintingSuspension } from '../../src/sim/vehicle-painting-gate';
 
 interface ScheduledWork {
   raf: Map<number, FrameRequestCallback>;
@@ -116,6 +117,48 @@ afterEach(() => {
 });
 
 describe('vehicle painting suspension', () => {
+  it('combines application and document renderer suspension', () => {
+    let applicationSuspended = false;
+    let documentSuspended = true;
+    const applicationListeners = new Set<() => void>();
+    const documentListeners = new Set<() => void>();
+    const gate = withVehiclePaintingSuspension(
+      {
+        isVisible: () => true,
+        viewMode: () => 'network',
+        pinnedPeriod: () => undefined,
+        isDirectManipulationActive: () => false,
+        isPaintingSuspended: () => applicationSuspended,
+        subscribe(listener) {
+          applicationListeners.add(listener);
+          return () => applicationListeners.delete(listener);
+        },
+      },
+      {
+        isSuspended: () => documentSuspended,
+        subscribe(listener) {
+          documentListeners.add(listener);
+          return () => documentListeners.delete(listener);
+        },
+      },
+    );
+    let notifications = 0;
+    const unsubscribe = gate.subscribe(() => notifications++);
+
+    expect(gate.isPaintingSuspended()).toBe(true);
+    documentSuspended = false;
+    for (const listener of documentListeners) listener();
+    expect(gate.isPaintingSuspended()).toBe(false);
+    applicationSuspended = true;
+    for (const listener of applicationListeners) listener();
+    expect(gate.isPaintingSuspended()).toBe(true);
+    expect(notifications).toBe(2);
+
+    unsubscribe();
+    expect(applicationListeners.size).toBe(0);
+    expect(documentListeners.size).toBe(0);
+  });
+
   it('does not write vehicle sources while the editor is covered', () => {
     const scheduled = installScheduler();
     const store = createEditorStore();
