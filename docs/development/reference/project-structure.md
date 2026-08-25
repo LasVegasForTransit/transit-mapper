@@ -272,11 +272,11 @@ interaction, overlays, theme layers, and exports. `packages/renderer` projects
 committed documents and publishes sources. `MapCanvas.tsx` adapts one
 `MapRuntime` to one `LiveMapRenderer`.
 
-| Modules                                              | Responsibility                                                                |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `render-presentation.ts`, `camera-render-preload.ts` | Describe display scale and reusable camera coverage.                          |
-| `editor-feature-state.ts`                            | Own paint-only selection, hover, halos, and route focus.                      |
-| `editor-overlays.ts`, `render-visibility.ts`         | Own small editor geometry and mode/type filters outside committed projection. |
+| Modules                                                                    | Responsibility                                                          |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `packages/renderer/src/render-presentation.ts`, `camera-render-preload.ts` | Describe display scale and reusable camera coverage.                    |
+| `packages/renderer/src/render-visibility.ts`                               | Apply reader-neutral representation, mode, and way-type visibility.     |
+| `apps/web/src/map/editor-feature-state.ts`, `editor-overlays.ts`           | Own selection paint, hover, route focus, and transient editor geometry. |
 
 The renderer package's worker protocol contains serializable document and
 presentation facts, never MapLibre objects or an editor store. Fitted

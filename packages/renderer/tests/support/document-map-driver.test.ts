@@ -56,8 +56,17 @@ export class TestDocumentMap {
   readonly sourceMutations: string[] = [];
   readonly sourceOperations: Array<{ id: string; method: 'setData' | 'updateData' }> = [];
   failNextSourceMutation = false;
+  failNextOverlaySetup = false;
+  private bounds = {
+    southwest: [-116, 35] as [number, number],
+    northeast: [-114, 37] as [number, number],
+  };
 
   addSource(id: string): void {
+    if (this.failNextOverlaySetup) {
+      this.failNextOverlaySetup = false;
+      throw new Error('Style is not done loading.');
+    }
     if (!this.sources.has(id)) this.sources.set(id, new TestGeoJsonSource(id, this));
   }
 
@@ -89,9 +98,13 @@ export class TestDocumentMap {
 
   getBounds() {
     return {
-      getSouthWest: () => ({ lng: -116, lat: 35 }),
-      getNorthEast: () => ({ lng: -114, lat: 37 }),
+      getSouthWest: () => ({ lng: this.bounds.southwest[0], lat: this.bounds.southwest[1] }),
+      getNorthEast: () => ({ lng: this.bounds.northeast[0], lat: this.bounds.northeast[1] }),
     };
+  }
+
+  setBounds(southwest: [number, number], northeast: [number, number]): void {
+    this.bounds = { southwest, northeast };
   }
 
   getZoom(): number {
@@ -142,6 +155,12 @@ export class TestDocumentMap {
     return this.sources.size;
   }
 
+  listenerCount(): number {
+    let count = 0;
+    for (const listeners of this.listeners.values()) count += listeners.size;
+    return count;
+  }
+
   replaceStyle(): void {
     this.sources.clear();
     this.layers.clear();
@@ -181,6 +200,10 @@ export class DocumentDriverClock implements DocumentMapScheduler {
 
   scheduleTask = this.scheduleFrame;
   cancelTask = this.cancelFrame;
+
+  advanceBy(durationMs: number): void {
+    this.nowMs += durationMs;
+  }
 
   flushOne(map: TestDocumentMap): void {
     const entry = this.frames.entries().next();
@@ -302,4 +325,26 @@ export async function advanceUntil(
     await Promise.resolve();
   }
   if (!predicate()) throw new Error('Document driver did not settle.');
+}
+
+export async function drainDocumentDriver(
+  clock: DocumentDriverClock,
+  map: TestDocumentMap,
+  limit = 300,
+): Promise<void> {
+  let idleTurns = 0;
+  for (let step = 0; step < limit && idleTurns < 3; step += 1) {
+    if (clock.frames.size > 0) {
+      clock.flushOne(map);
+      idleTurns = 0;
+    } else {
+      idleTurns += 1;
+    }
+    await Promise.resolve();
+    await Promise.resolve();
+    if (clock.frames.size > 0) idleTurns = 0;
+  }
+  if (clock.frames.size > 0 || idleTurns < 3) {
+    throw new Error('Document driver frame queue did not drain.');
+  }
 }

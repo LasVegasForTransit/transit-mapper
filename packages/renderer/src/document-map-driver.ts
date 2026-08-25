@@ -11,11 +11,17 @@ import type {
 } from '@transitmapper/map';
 import type { MapPresentationStateV1 } from '@transitmapper/views';
 import {
+  canReuseCommittedCameraRefresh,
   createCameraRenderPreloadController,
   createPresentationRefreshScheduler,
+  type CommittedCameraCoverage,
+  type PresentationRefreshScheduler,
 } from './camera-render-preload';
 import { createDiagramLayoutWorker, type DiagramLayoutWorkerClient } from './diagram-layout-worker';
-import { createFeatureProjectionWorker } from './feature-projection-worker';
+import {
+  createFeatureProjectionWorker,
+  type FeatureProjectionClient,
+} from './feature-projection-worker';
 import { SRC_HIT_FEATURES } from './layers/constants';
 import { createLiveMapRenderer, type LiveMapRendererHost } from './live-map-renderer';
 import { renderPresentationFromMap } from './render-presentation';
@@ -37,6 +43,10 @@ import type {
   DocumentMapSessionAttachment,
   DocumentMapSnapshot,
 } from './document-map-driver-types';
+import {
+  createDocumentMapStyleRecovery,
+  type DocumentMapStyleRecovery,
+} from './document-map-style-recovery';
 export type * from './document-map-driver-types';
 
 interface ActiveProjection {
@@ -64,6 +74,19 @@ function reportSafely(options: MapDriverAttachOptions, error: unknown): void {
   }
 }
 
+function errorFrom(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function cleanupSafely(options: MapDriverAttachOptions, cleanup: (() => void) | null): void {
+  if (!cleanup) return;
+  try {
+    cleanup();
+  } catch (error) {
+    reportSafely(options, error);
+  }
+}
+
 function presentationFromMap(map: MapLibreMap) {
   const canvas = map.getCanvas();
   const container = map.getContainer();
@@ -85,6 +108,9 @@ class DocumentMapDriver implements MapDriver {
     this.definition = options.definition;
   }
 
+  // One attachment closure owns every resource and the rollback path, so setup
+  // branches remain visible beside the cleanup that reverses them.
+  // eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- One closure keeps setup rollback atomic across every owned resource.
   attach(attachOptions: MapDriverAttachOptions): Promise<MapDriverAttachment> {
     const attachmentIsAborted = () => attachOptions.signal.aborted;
     if (attachmentIsAborted()) {
@@ -93,9 +119,28 @@ class DocumentMapDriver implements MapDriver {
     const map = attachOptions.host.map;
     const scheduler = this.options.scheduler ?? defaultScheduler();
     const ownsScheduler = this.options.scheduler === undefined;
-    const featureProjection = this.options.createFeatureProjectionWorker
-      ? this.options.createFeatureProjectionWorker()
-      : createFeatureProjectionWorker();
+    let latestSnapshot: DocumentMapSnapshot;
+    let previousView: ReturnType<DocumentMapDriverOptions['resolvePresentation']>;
+    let initialPresentation: ReturnType<typeof presentationFromMap>;
+    let initialPresentationTime: number;
+    try {
+      latestSnapshot = this.options.source.getSnapshot();
+      previousView = this.options.resolvePresentation(attachOptions.viewStore.getSnapshot());
+      initialPresentation = presentationFromMap(map);
+      initialPresentationTime = scheduler.now();
+    } catch (error) {
+      if (ownsScheduler) cleanupSafely(attachOptions, () => scheduler.dispose?.());
+      return Promise.reject(errorFrom(error));
+    }
+    let featureProjection: FeatureProjectionClient;
+    try {
+      featureProjection = this.options.createFeatureProjectionWorker
+        ? this.options.createFeatureProjectionWorker()
+        : createFeatureProjectionWorker();
+    } catch (error) {
+      if (ownsScheduler) cleanupSafely(attachOptions, () => scheduler.dispose?.());
+      return Promise.reject(errorFrom(error));
+    }
     let diagramLayout: DiagramLayoutWorkerClient | null = null;
     const createDiagram = () =>
       this.options.createDiagramLayoutWorker?.() ?? createDiagramLayoutWorker();
@@ -107,20 +152,21 @@ class DocumentMapDriver implements MapDriver {
     let acceptedSnapshot: DocumentMapSnapshot | null = null;
     let sessionAttached = false;
     let startupMilestonesPending = false;
-    let styleRecoveryPending = false;
-    let styleRecoveryContinuation: (() => void) | null = null;
-    const continueStyleRecovery = () => {
-      const continuation = styleRecoveryContinuation;
-      styleRecoveryContinuation = null;
-      continuation?.();
-    };
+    let styleRecovery: DocumentMapStyleRecovery | null = null;
+    let committedCameraCoverage: CommittedCameraCoverage | null = null;
+    let renderedSystemId: string | null = null;
+    let startupMilestonesPublished = false;
+    let unsubscribeSource: (() => void) | null = null;
+    let unsubscribeView: (() => void) | null = null;
+    let presentationRefresh: PresentationRefreshScheduler | null = null;
+    let extension: DocumentMapSessionAttachment | undefined;
+    let onAbort: (() => void) | null = null;
+    const mapListenerCleanups: Array<() => void> = [];
     const acceptsWork = () => !disposed && !attachmentIsAborted();
-    let latestSnapshot = this.options.source.getSnapshot();
-    let previousView = this.options.resolvePresentation(attachOptions.viewStore.getSnapshot());
     const acceptedListeners = new Set<(event: DocumentMapSceneAccepted) => void>();
     const sourceQueue = createSourceUploadQueue();
     const cameraPreload = createCameraRenderPreloadController();
-    cameraPreload.observe(presentationFromMap(map), scheduler.now());
+    cameraPreload.observe(initialPresentation, initialPresentationTime);
     const tierStateResolver = createRenderTierStateResolver();
 
     const logicalLayerSpecs = () => this.options.layerSpecs();
@@ -154,6 +200,7 @@ class DocumentMapDriver implements MapDriver {
         overlayReady = true;
         return true;
       } catch (error) {
+        overlayReady = false;
         if (error instanceof Error && error.message === 'Style is not done loading.') return false;
         throw error;
       }
@@ -193,26 +240,39 @@ class DocumentMapDriver implements MapDriver {
         return () => map.off('render', onRender);
       },
     };
-    const renderer = createLiveMapRenderer({
-      host: rendererHost,
-      layerSpecs: logicalLayerSpecs(),
-      featureProjectionWorker: featureProjection,
-      layoutDiagram: async (system, revision, signal) => {
-        diagramLayout ??= createDiagram();
-        return (await diagramLayout.layout(system, revision, signal)).system;
-      },
-      requeueProjection: (sourceIds, transition) =>
-        sourceQueue.add(sourceIds, transition ?? undefined),
-      onError: (error) => {
-        if (!disposed && !attachOptions.signal.aborted && !styleRecoveryPending) {
-          reportSafely(attachOptions, error);
-        }
-      },
-    });
+    let renderer: ReturnType<typeof createLiveMapRenderer>;
+    try {
+      renderer = createLiveMapRenderer({
+        host: rendererHost,
+        layerSpecs: logicalLayerSpecs(),
+        featureProjectionWorker: featureProjection,
+        layoutDiagram: async (system, revision, signal) => {
+          diagramLayout ??= createDiagram();
+          return (await diagramLayout.layout(system, revision, signal)).system;
+        },
+        requeueProjection: (sourceIds, transition) =>
+          sourceQueue.add(sourceIds, transition ?? undefined),
+        onError: (error) => {
+          if (!disposed && !attachOptions.signal.aborted && !styleRecovery?.isPending()) {
+            reportSafely(attachOptions, error);
+          }
+        },
+      });
+    } catch (error) {
+      cleanupSafely(attachOptions, () => featureProjection.dispose());
+      if (ownsScheduler) cleanupSafely(attachOptions, () => scheduler.dispose?.());
+      return Promise.reject(errorFrom(error));
+    }
     const onMapError = (event: MapEventType['error']) => {
       renderer.handleSourceError(event);
     };
-    map.on('error', onMapError);
+    try {
+      map.on('error', onMapError);
+      mapListenerCleanups.push(() => map.off('error', onMapError));
+    } catch (error) {
+      dispose();
+      return Promise.reject(errorFrom(error));
+    }
 
     const renderView = (): RenderViewOptions => ({
       ...previousView,
@@ -221,17 +281,20 @@ class DocumentMapDriver implements MapDriver {
       tierStateResolver,
     });
     const publishMilestones = () => {
+      if (startupMilestonesPublished) return;
       if (!sessionAttached) {
         startupMilestonesPending = true;
         return;
       }
       if (!acceptsWork()) return;
       startupMilestonesPending = false;
+      startupMilestonesPublished = true;
       try {
         attachOptions.milestones.contentCommitted();
       } catch (error) {
         reportSafely(attachOptions, error);
       }
+      if (!acceptsWork()) return;
       try {
         attachOptions.milestones.interactive();
       } catch (error) {
@@ -251,10 +314,20 @@ class DocumentMapDriver implements MapDriver {
     };
     const scheduleProjection = (request: DocumentMapProjectionRequest = {}) => {
       if (disposed || attachOptions.signal.aborted) return;
+      if (request.sourceIds?.length === 0) return;
       sourceQueue.add(request.sourceIds ?? 'all', request.transition);
       if (request.replaceActive && renderer.hasActiveProjection())
         renderer.cancelProjectionAndRequeue();
       scheduleQueuedProjection();
+    };
+    const discardQueuedProjection = () => {
+      if (sourceQueue.hasPending()) sourceQueue.takeBatch();
+      const pendingProjection = scheduledProjection;
+      scheduledProjection = null;
+      cleanupSafely(
+        attachOptions,
+        pendingProjection === null ? null : () => scheduler.cancelFrame(pendingProjection),
+      );
     };
     // Projection settlement has one exit path so stale results cannot publish.
     // eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- Settlement handles cancellation, replacement, and recovery in one transaction.
@@ -267,15 +340,15 @@ class DocumentMapDriver implements MapDriver {
       const snapshot = latestSnapshot;
       if (snapshot.status !== 'ready') return;
       if (!acceptedSnapshot && systemBounds(snapshot.system) === null) {
+        discardQueuedProjection();
         acceptedSnapshot = snapshot;
         publishMilestones();
         return;
       }
+      if (!sourceQueue.hasPending()) return;
       const batch = sourceQueue.takeBatch();
-      const sourceIds =
-        batch.sourceIds.length > 0
-          ? committedSystemFeatureSources(batch.sourceIds)
-          : COMMITTED_SYSTEM_FEATURE_SOURCES;
+      const sourceIds = committedSystemFeatureSources(batch.sourceIds);
+      if (sourceIds.length === 0) return;
       const identityChanged =
         acceptedSnapshot !== null && acceptedSnapshot.system.id !== snapshot.system.id;
       const generation = ++projectionGeneration;
@@ -305,6 +378,11 @@ class DocumentMapDriver implements MapDriver {
           onAccepted: ({ update, settlementLatencyMs }) => {
             if (disposed || attachOptions.signal.aborted || !isCurrentProjection()) return;
             cameraPreload.accept(preload.token, settlementLatencyMs);
+            committedCameraCoverage = {
+              presentation,
+              candidateEnvelope: preload.candidateEnvelope,
+            };
+            renderedSystemId = snapshot.system.id;
             acceptedSnapshot = snapshot;
             const event = { snapshot, update };
             for (const listener of acceptedListeners) {
@@ -321,39 +399,50 @@ class DocumentMapDriver implements MapDriver {
         if (acceptsWork() && isCurrentProjection()) {
           projectionFailed = true;
           sourceQueue.add(sourceIds, batch.transition ?? undefined);
-          if (!styleRecoveryPending) reportSafely(attachOptions, error);
+          if (!styleRecovery?.isPending()) reportSafely(attachOptions, error);
         }
       } finally {
         if (isCurrentProjection()) activeProjection = null;
-        if (projectionFailed && styleRecoveryPending) continueStyleRecovery();
+        if (projectionFailed) styleRecovery?.continueAfterProjectionFailure();
         if (latestSnapshot !== snapshot || (!projectionFailed && sourceQueue.hasPending())) {
           scheduleQueuedProjection();
         }
       }
     };
 
+    const authoritativeSystemId = (fallback: DocumentMapSnapshot) =>
+      acceptedSnapshot?.system.id ?? activeProjection?.snapshot.system.id ?? fallback.system.id;
     const onSnapshot = (snapshot: DocumentMapSnapshot) => {
       if (disposed || attachmentIsAborted()) return;
       const previous = latestSnapshot;
       latestSnapshot = snapshot;
       if (snapshot.status !== 'ready') return;
+      const identityChanged = authoritativeSystemId(previous) !== snapshot.system.id;
+      if (identityChanged) {
+        cameraPreload.reset();
+        committedCameraCoverage = null;
+        renderedSystemId = null;
+      }
       if (!acceptedSnapshot && systemBounds(snapshot.system) === null) {
+        if (activeProjection) {
+          renderer.cancelProjectionAndRequeue();
+          activeProjection = null;
+        }
+        discardQueuedProjection();
         publishMilestones();
         acceptedSnapshot = snapshot;
         return;
       }
-      sourceQueue.add(
-        sourceUploadsForSystemChange(previous.system, snapshot.system, {
-          forceAll: previous.system.id !== snapshot.system.id,
-        }),
-        { previous: previous.system, next: snapshot.system },
-      );
-      if (previous.system.id !== snapshot.system.id && renderer.hasActiveProjection()) {
+      const sourceIds = sourceUploadsForSystemChange(previous.system, snapshot.system, {
+        forceAll: acceptedSnapshot === null || identityChanged,
+      });
+      if (sourceIds.length === 0) return;
+      sourceQueue.add(sourceIds, { previous: previous.system, next: snapshot.system });
+      if (identityChanged && renderer.hasActiveProjection()) {
         renderer.cancelProjectionAndRequeue();
       }
       scheduleQueuedProjection();
     };
-    const unsubscribeSource = this.options.source.subscribe(onSnapshot);
 
     const onView = (state: MapPresentationStateV1) => {
       if (disposed || attachOptions.signal.aborted) return;
@@ -367,71 +456,76 @@ class DocumentMapDriver implements MapDriver {
         reportSafely(attachOptions, error);
       }
     };
-    const unsubscribeView = attachOptions.viewStore.subscribe(onView);
+    try {
+      unsubscribeSource = this.options.source.subscribe(onSnapshot);
+      unsubscribeView = attachOptions.viewStore.subscribe(onView);
+    } catch (error) {
+      dispose();
+      return Promise.reject(errorFrom(error));
+    }
 
-    const presentationRefresh = createPresentationRefreshScheduler({
+    const refresh = createPresentationRefreshScheduler({
       intervalMs: 80,
       now: () => scheduler.now(),
       scheduleFrame: (callback) => scheduler.scheduleFrame(callback),
       cancelFrame: (handle) => scheduler.cancelFrame(handle),
       scheduleTimer: (callback, delayMs) => scheduler.scheduleTimer(callback, delayMs),
       cancelTimer: (handle) => scheduler.cancelTimer(handle),
-      refresh: () => scheduleProjection(),
+      refresh: () => {
+        const current = presentationFromMap(map);
+        if (
+          canReuseCommittedCameraRefresh({
+            committed: committedCameraCoverage,
+            current,
+            renderedSystemId,
+            currentSystemId: latestSnapshot.system.id,
+            rendererHealthy: overlayReady && !styleRecovery?.isPending(),
+            projectionActive: activeProjection !== null || renderer.hasActiveProjection(),
+          })
+        ) {
+          return;
+        }
+        scheduleProjection();
+      },
     });
+    presentationRefresh = refresh;
     const onCamera = () => {
       cameraPreload.observe(presentationFromMap(map), scheduler.now());
-      presentationRefresh.request();
+      refresh.request();
     };
-    map.on('move', onCamera);
-    map.on('zoom', onCamera);
-    map.on('moveend', onCamera);
+    try {
+      map.on('move', onCamera);
+      mapListenerCleanups.push(() => map.off('move', onCamera));
+      map.on('zoom', onCamera);
+      mapListenerCleanups.push(() => map.off('zoom', onCamera));
+      map.on('moveend', onCamera);
+      mapListenerCleanups.push(() => map.off('moveend', onCamera));
+    } catch (error) {
+      dispose();
+      return Promise.reject(errorFrom(error));
+    }
 
-    const recoverAcceptedStyle = () => {
-      if (!acceptsWork()) return;
-      renderer.requestRecovery();
-      void renderer.whenRecoverySettled().then(
-        () => {
-          styleRecoveryPending = false;
-          if (!acceptsWork()) return;
-          renderer.restoreActiveLayers();
-          if (sourceQueue.hasPending()) scheduleQueuedProjection();
-        },
-        (error: unknown) => {
-          styleRecoveryPending = false;
-          if (acceptsWork()) reportSafely(attachOptions, error);
-        },
-      );
-    };
-    const recoverStyle = () => {
-      if (!acceptsWork()) return;
-      try {
-        if (!ensureOverlay()) return;
-        styleRecoveryPending = true;
-        if (renderer.hasAcceptedScene()) {
-          if (renderer.hasActiveProjection() || renderer.publicationInProgress()) {
-            styleRecoveryContinuation = recoverAcceptedStyle;
-            renderer.afterCurrentProjectionSettles(continueStyleRecovery);
-          } else {
-            recoverAcceptedStyle();
-          }
-        } else {
-          const scheduleInitialProjection = () => {
-            styleRecoveryPending = false;
-            scheduleProjection();
-          };
-          if (renderer.hasActiveProjection() || renderer.publicationInProgress()) {
-            styleRecoveryContinuation = scheduleInitialProjection;
-            renderer.afterCurrentProjectionSettles(continueStyleRecovery);
-          } else {
-            scheduleInitialProjection();
-          }
-        }
-      } catch (error) {
-        styleRecoveryPending = false;
-        reportSafely(attachOptions, error);
-      }
-    };
-    map.on('style.load', recoverStyle);
+    styleRecovery = createDocumentMapStyleRecovery({
+      renderer,
+      scheduler,
+      acceptsWork,
+      ensureOverlay: () => {
+        overlayReady = false;
+        return ensureOverlay();
+      },
+      hasQueuedProjection: () => sourceQueue.hasPending(),
+      scheduleQueuedProjection,
+      scheduleProjection,
+      reportError: (error) => reportSafely(attachOptions, error),
+    });
+    const onStyleLoad = () => styleRecovery?.handleStyleLoad();
+    try {
+      map.on('style.load', onStyleLoad);
+      mapListenerCleanups.push(() => map.off('style.load', onStyleLoad));
+    } catch (error) {
+      dispose();
+      return Promise.reject(errorFrom(error));
+    }
 
     try {
       if (ensureOverlay()) {
@@ -456,7 +550,6 @@ class DocumentMapDriver implements MapDriver {
         return () => acceptedListeners.delete(listener);
       },
     };
-    let extension: DocumentMapSessionAttachment | undefined;
     try {
       extension = this.options.attachSession?.(session, attachOptions.signal);
     } catch (error) {
@@ -465,35 +558,56 @@ class DocumentMapDriver implements MapDriver {
     sessionAttached = true;
     publishPendingMilestones();
 
-    const onAbort = () => dispose();
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- Each cleanup failure is isolated so later resources still release.
     function dispose() {
       if (disposed) return;
       disposed = true;
-      attachOptions.signal.removeEventListener('abort', onAbort);
-      if (scheduledProjection !== null) scheduler.cancelFrame(scheduledProjection);
+      const abortListener = onAbort;
+      onAbort = null;
+      cleanupSafely(
+        attachOptions,
+        abortListener
+          ? () => attachOptions.signal.removeEventListener('abort', abortListener)
+          : null,
+      );
+      const pendingProjection = scheduledProjection;
       scheduledProjection = null;
-      unsubscribeSource();
-      unsubscribeView();
-      map.off('move', onCamera);
-      map.off('zoom', onCamera);
-      map.off('moveend', onCamera);
-      map.off('style.load', recoverStyle);
-      map.off('error', onMapError);
-      presentationRefresh.dispose();
-      styleRecoveryContinuation = null;
+      cleanupSafely(
+        attachOptions,
+        pendingProjection === null ? null : () => scheduler.cancelFrame(pendingProjection),
+      );
+      const sourceCleanup = unsubscribeSource;
+      unsubscribeSource = null;
+      cleanupSafely(attachOptions, sourceCleanup);
+      const viewCleanup = unsubscribeView;
+      unsubscribeView = null;
+      cleanupSafely(attachOptions, viewCleanup);
+      const listenerCleanups = mapListenerCleanups.splice(0);
+      for (const cleanup of listenerCleanups) cleanupSafely(attachOptions, cleanup);
+      const refresh = presentationRefresh;
+      presentationRefresh = null;
+      cleanupSafely(attachOptions, refresh ? () => refresh.dispose() : null);
+      const recovery = styleRecovery;
+      styleRecovery = null;
+      cleanupSafely(attachOptions, recovery ? () => recovery.dispose() : null);
       acceptedListeners.clear();
-      try {
-        extension?.dispose();
-      } catch (error) {
-        reportSafely(attachOptions, error);
-      }
+      const attachedExtension = extension;
       extension = undefined;
-      renderer.dispose();
-      diagramLayout?.dispose();
-      featureProjection.dispose();
-      if (ownsScheduler) scheduler.dispose?.();
+      cleanupSafely(attachOptions, attachedExtension ? () => attachedExtension.dispose() : null);
+      cleanupSafely(attachOptions, () => renderer.dispose());
+      const layout = diagramLayout;
+      diagramLayout = null;
+      cleanupSafely(attachOptions, layout ? () => layout.dispose() : null);
+      cleanupSafely(attachOptions, () => featureProjection.dispose());
+      if (ownsScheduler) cleanupSafely(attachOptions, () => scheduler.dispose?.());
     }
-    attachOptions.signal.addEventListener('abort', onAbort, { once: true });
+    onAbort = dispose;
+    try {
+      attachOptions.signal.addEventListener('abort', onAbort, { once: true });
+    } catch (error) {
+      dispose();
+      return Promise.reject(errorFrom(error));
+    }
     if (attachmentIsAborted()) dispose();
 
     return Promise.resolve({

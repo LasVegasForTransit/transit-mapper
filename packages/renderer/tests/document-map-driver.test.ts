@@ -15,6 +15,7 @@ import {
   type DocumentMapSession,
 } from '../src/document-map-driver';
 import { LYR_WAYS_SOLID, SRC_STATIONS, SRC_WAYS } from '../src/layers/constants';
+import { COMMITTED_SYSTEM_FEATURE_SOURCES } from '../src/system-feature-sources';
 import {
   DocumentDriverClock,
   TestDocumentMap,
@@ -22,6 +23,7 @@ import {
   advanceUntil,
   createAttachOptions,
   createProjectionWorker,
+  drainDocumentDriver,
   projectedWayFeatures,
   readySnapshot,
 } from './support/document-map-driver.test';
@@ -155,6 +157,32 @@ describe('document map driver', () => {
     attachment.dispose();
   });
 
+  it('does not publish interactive when content commitment aborts the attachment', async () => {
+    const source = new TestDocumentSource(readySnapshot(aSystem({ id: 'empty' })));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    const controller = new AbortController();
+    const milestones: string[] = [];
+    const baseOptions = createAttachOptions(map, [], [], { signal: controller.signal });
+    const driver = createDocumentMapDriver(driverOptions(source, clock, worker));
+
+    const attachment = await driver.attach({
+      ...baseOptions,
+      milestones: {
+        contentCommitted: () => {
+          milestones.push('content');
+          controller.abort();
+        },
+        interactive: () => milestones.push('interactive'),
+      },
+    });
+
+    expect(milestones).toEqual(['content']);
+    expect(worker.dispose).toHaveBeenCalledOnce();
+    attachment.dispose();
+  });
+
   it('coalesces document updates and projects the latest immutable snapshot', async () => {
     const source = new TestDocumentSource({
       status: 'loading',
@@ -177,6 +205,64 @@ describe('document map driver', () => {
     expect(worker.project).toHaveBeenCalledOnce();
     expect(worker.project.mock.calls[0]?.[0].system).toBe(latest);
     expect(errors).toEqual([]);
+    attachment.dispose();
+  });
+
+  it('projects all sources when an unchanged loading snapshot becomes ready', async () => {
+    const system = createReadySystem();
+    const source = new TestDocumentSource({ status: 'loading', system });
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    const driver = createDocumentMapDriver(driverOptions(source, clock, worker));
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+
+    source.publish(readySnapshot(system));
+    await advanceUntil(clock, map, () => worker.project.mock.calls.length === 1);
+
+    expect(worker.project.mock.calls[0]?.[0].sourceIds).toEqual(
+      expect.arrayContaining([SRC_WAYS, SRC_STATIONS]),
+    );
+    attachment.dispose();
+  });
+
+  it('discards an older initial projection when the ready document is empty', async () => {
+    const initial = createReadySystem();
+    const source = new TestDocumentSource(readySnapshot(initial));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    const driver = createDocumentMapDriver(driverOptions(source, clock, worker));
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+
+    source.publish(readySnapshot(aSystem({ id: initial.id })));
+    await drainDocumentDriver(clock, map);
+
+    expect(worker.project).not.toHaveBeenCalled();
+    attachment.dispose();
+  });
+
+  it('resets camera preload when the first ready document identity is empty', async () => {
+    const source = new TestDocumentSource({
+      status: 'loading',
+      system: createReadySystem('old'),
+    });
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    const driver = createDocumentMapDriver(driverOptions(source, clock, worker));
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+    clock.advanceBy(100);
+    map.setBounds([-115, 35], [-113, 37]);
+    map.emit('move');
+
+    source.publish(readySnapshot(aSystem({ id: 'new' })));
+    source.publish(readySnapshot(createReadySystem('new')));
+    await advanceUntil(clock, map, () => worker.project.mock.calls.length === 1);
+
+    expect(worker.project.mock.calls[0]?.[0].preparedSnapshot.candidateEnvelope).toEqual({
+      bounds: { southwest: [-115, 35], northeast: [-113, 37] },
+    });
     attachment.dispose();
   });
 
@@ -209,6 +295,56 @@ describe('document map driver', () => {
 
     expect(worker.project.mock.calls[1]?.[0].sourceIds).toEqual([SRC_STATIONS]);
     expect(errors).toEqual([]);
+    attachment.dispose();
+  });
+
+  it('does not project a metadata-only document snapshot', async () => {
+    const initial = createReadySystem();
+    const source = new TestDocumentSource(readySnapshot(initial));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    let session: DocumentMapSession | null = null;
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, worker, {
+        attachSession: (attached) => {
+          session = attached;
+        },
+      }),
+    );
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+    await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
+    await drainDocumentDriver(clock, map);
+
+    source.publish(readySnapshot({ ...initial, name: 'Renamed system' }));
+    await drainDocumentDriver(clock, map);
+
+    expect(worker.project).toHaveBeenCalledOnce();
+    attachment.dispose();
+  });
+
+  it('does not project an identical document snapshot', async () => {
+    const snapshot = readySnapshot(createReadySystem());
+    const source = new TestDocumentSource(snapshot);
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    let session: DocumentMapSession | null = null;
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, worker, {
+        attachSession: (attached) => {
+          session = attached;
+        },
+      }),
+    );
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+    await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
+    await drainDocumentDriver(clock, map);
+
+    source.publish(snapshot);
+    await drainDocumentDriver(clock, map);
+
+    expect(worker.project).toHaveBeenCalledOnce();
     attachment.dispose();
   });
 
@@ -246,11 +382,69 @@ describe('document map driver', () => {
     attachment.dispose();
   });
 
+  it('retains a document identity change across a loading snapshot', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem('first')));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    let session: DocumentMapSession | null = null;
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, worker, {
+        attachSession: (attached) => {
+          session = attached;
+        },
+      }),
+    );
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+    await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
+    const replacement = createReadySystem('second');
+
+    source.publish({ status: 'loading', system: replacement });
+    source.publish(readySnapshot(replacement));
+    await advanceUntil(clock, map, () => worker.project.mock.calls.length === 2);
+
+    expect(worker.project.mock.calls[1]?.[0].sourceIds).toEqual(COMMITTED_SYSTEM_FEATURE_SOURCES);
+    attachment.dispose();
+  });
+
+  it('clears an accepted document when a loading identity becomes ready and empty', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem('first')));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker((input) =>
+      Promise.resolve({ features: projectedWayFeatures(input.system.id), counts: null }),
+    );
+    let session: DocumentMapSession | null = null;
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, worker, {
+        attachSession: (attached) => {
+          session = attached;
+        },
+      }),
+    );
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+    await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
+    const replacement = aSystem({ id: 'second' });
+
+    source.publish({ status: 'loading', system: replacement });
+    source.publish(readySnapshot(replacement));
+    await advanceUntil(
+      clock,
+      map,
+      () => session?.renderer.snapshot().acceptedRevision?.startsWith('second:') === true,
+    );
+
+    expect(worker.project.mock.calls[1]?.[0].sourceIds).toEqual(COMMITTED_SYSTEM_FEATURE_SOURCES);
+    attachment.dispose();
+  });
+
   it('updates filters and schedules representation and camera work without replacing its session', async () => {
     const source = new TestDocumentSource(readySnapshot(createReadySystem()));
     const map = new TestDocumentMap();
     const clock = new DocumentDriverClock();
-    const worker = createProjectionWorker();
+    const worker = createProjectionWorker((input) =>
+      Promise.resolve({ features: projectedWayFeatures(input.system.id), counts: null }),
+    );
     const milestones: string[] = [];
     const errors: unknown[] = [];
     const viewStore = createMapViewStore({
@@ -294,6 +488,72 @@ describe('document map driver', () => {
 
     expect(sessionCount).toBe(1);
     expect(errors).toEqual([]);
+    attachment.dispose();
+  });
+
+  it('reuses committed camera coverage until the viewport leaves its envelope', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem()));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    let session: DocumentMapSession | null = null;
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, worker, {
+        attachSession: (attached) => {
+          session = attached;
+        },
+      }),
+    );
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+    await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
+    await drainDocumentDriver(clock, map);
+
+    map.emit('move');
+    await drainDocumentDriver(clock, map);
+    expect(worker.project).toHaveBeenCalledOnce();
+
+    clock.advanceBy(100);
+    map.setBounds([-105, 30], [-103, 32]);
+    map.emit('move');
+    await advanceUntil(clock, map, () => worker.project.mock.calls.length === 2);
+
+    expect(worker.project.mock.calls[1]?.[0].sourceIds).toEqual(
+      expect.arrayContaining([SRC_WAYS, SRC_STATIONS]),
+    );
+    attachment.dispose();
+  });
+
+  it('publishes startup milestones once across later accepted scenes', async () => {
+    const initial = createReadySystem();
+    const source = new TestDocumentSource(readySnapshot(initial));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    const milestones: string[] = [];
+    const viewStore = createMapViewStore({
+      schemaVersion: 1,
+      camera: { center: [-115.18, 36.14], zoom: 10 },
+      representationId: 'network',
+      filters: { modes: ['bus'], 'way-types': ['road'] },
+    });
+    const driver = createDocumentMapDriver(driverOptions(source, clock, worker));
+    const attachment = await driver.attach(createAttachOptions(map, milestones, [], { viewStore }));
+    await advanceUntil(clock, map, () => milestones.length === 2);
+    await drainDocumentDriver(clock, map);
+
+    source.publish(readySnapshot({ ...initial, ways: [...initial.ways] }));
+    await advanceUntil(clock, map, () => worker.project.mock.calls.length === 2);
+    await drainDocumentDriver(clock, map);
+    viewStore.setRepresentationId('infrastructure');
+    await advanceUntil(clock, map, () => worker.project.mock.calls.length === 3);
+    await drainDocumentDriver(clock, map);
+    clock.advanceBy(100);
+    map.setBounds([-105, 30], [-103, 32]);
+    map.emit('move');
+    await advanceUntil(clock, map, () => worker.project.mock.calls.length === 4);
+    await drainDocumentDriver(clock, map);
+
+    expect(milestones).toEqual(['content', 'interactive']);
     attachment.dispose();
   });
 
@@ -429,7 +689,7 @@ describe('document map driver', () => {
     const attachment = await driver.attach(createAttachOptions(map, [], errors));
     await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
 
-    source.publish(readySnapshot({ ...initial, name: 'Replacement' }));
+    source.publish(readySnapshot({ ...initial, ways: [...initial.ways] }));
     await advanceUntil(clock, map, () => session?.renderer.publicationInProgress() === true);
     map.replaceStyle();
     const recoveryVersion = requireSession(session).renderer.recoveryVersion();
@@ -474,7 +734,7 @@ describe('document map driver', () => {
     const attachment = await driver.attach(createAttachOptions(map, [], errors));
     await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
 
-    source.publish(readySnapshot({ ...initial, name: 'Replacement' }));
+    source.publish(readySnapshot({ ...initial, ways: [...initial.ways] }));
     await advanceUntil(clock, map, () => worker.project.mock.calls.length === 2);
     map.replaceStyle();
     const recoveryVersion = requireSession(session).renderer.recoveryVersion();
@@ -488,6 +748,170 @@ describe('document map driver', () => {
     expect(errors).toEqual([]);
     expect(map.sourceOperations.length).toBeGreaterThan(0);
     attachment.dispose();
+  });
+
+  it('contains retained-style layer restoration failures', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem()));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    const errors: unknown[] = [];
+    let session: DocumentMapSession | null = null;
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, worker, {
+        attachSession: (attached) => {
+          session = attached;
+        },
+      }),
+    );
+    const attachment = await driver.attach(createAttachOptions(map, [], errors));
+    await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
+    vi.spyOn(requireSession(session).renderer, 'restoreActiveLayers').mockImplementation(() => {
+      throw new Error('layer restoration failed');
+    });
+
+    map.replaceStyle();
+    await advanceUntil(clock, map, () => errors.length === 1);
+
+    expect(errors[0]).toEqual(new Error('layer restoration failed'));
+    attachment.dispose();
+  });
+
+  it('retries a transient overlay setup refusal without another style load event', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem()));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    const errors: unknown[] = [];
+    let session: DocumentMapSession | null = null;
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, worker, {
+        attachSession: (attached) => {
+          session = attached;
+        },
+      }),
+    );
+    const attachment = await driver.attach(createAttachOptions(map, [], errors));
+    await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
+    await drainDocumentDriver(clock, map);
+    map.failNextOverlaySetup = true;
+    const recoveryVersion = requireSession(session).renderer.recoveryVersion();
+
+    map.replaceStyle();
+    await advanceUntil(
+      clock,
+      map,
+      () => requireSession(session).renderer.recoveryVersion() > recoveryVersion + 1,
+    );
+
+    expect(errors).toEqual([]);
+    expect(map.sourceCount()).toBeGreaterThan(0);
+    await expect(requireSession(session).renderer.whenRecoverySettled()).resolves.toBeUndefined();
+    attachment.dispose();
+  });
+
+  it('contains retained-style rescheduling failures', async () => {
+    const initial = createReadySystem();
+    const source = new TestDocumentSource(readySnapshot(initial));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    let request = 0;
+    const worker = createProjectionWorker(() => {
+      request += 1;
+      return request === 2
+        ? Promise.reject(new Error('replacement failed'))
+        : Promise.resolve({ features: projectedWayFeatures('system'), counts: null });
+    });
+    const errors: unknown[] = [];
+    let session: DocumentMapSession | null = null;
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, worker, {
+        attachSession: (attached) => {
+          session = attached;
+        },
+      }),
+    );
+    const attachment = await driver.attach(createAttachOptions(map, [], errors));
+    await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
+    source.publish(readySnapshot({ ...initial, ways: [...initial.ways] }));
+    await advanceUntil(clock, map, () => errors.length === 1);
+    const scheduleFrame = clock.scheduleFrame;
+    vi.spyOn(requireSession(session).renderer, 'restoreActiveLayers').mockImplementation(() => {
+      vi.spyOn(clock, 'scheduleFrame').mockImplementationOnce(() => {
+        throw new Error('requeue failed');
+      });
+    });
+
+    map.replaceStyle();
+    await advanceUntil(clock, map, () => errors.length === 2);
+
+    expect(errors[1]).toEqual(new Error('requeue failed'));
+    clock.scheduleFrame = scheduleFrame;
+    attachment.dispose();
+  });
+
+  it('rolls back renderer resources when the source subscription throws', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem()));
+    vi.spyOn(source, 'subscribe').mockImplementation(() => {
+      throw new Error('source subscription failed');
+    });
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    const driver = createDocumentMapDriver(driverOptions(source, clock, worker));
+
+    await expect(driver.attach(createAttachOptions(map, [], []))).rejects.toThrow(
+      'source subscription failed',
+    );
+
+    expect(map.listenerCount()).toBe(0);
+    expect(worker.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('rejects early host setup failures before it creates a projection worker', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem()));
+    const map = new TestDocumentMap();
+    vi.spyOn(map, 'getBounds').mockImplementation(() => {
+      throw new Error('map presentation failed');
+    });
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    const createWorker = vi.fn(() => worker);
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, worker, { createFeatureProjectionWorker: createWorker }),
+    );
+
+    await expect(driver.attach(createAttachOptions(map, [], []))).rejects.toThrow(
+      'map presentation failed',
+    );
+
+    expect(createWorker).not.toHaveBeenCalled();
+    expect(map.listenerCount()).toBe(0);
+  });
+
+  it('rolls back the source subscription when the view subscription throws', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem()));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    const viewStore = createMapViewStore({
+      schemaVersion: 1,
+      camera: { center: [-115.18, 36.14], zoom: 10 },
+      representationId: 'network',
+      filters: {},
+    });
+    vi.spyOn(viewStore, 'subscribe').mockImplementation(() => {
+      throw new Error('view subscription failed');
+    });
+    const driver = createDocumentMapDriver(driverOptions(source, clock, worker));
+
+    await expect(driver.attach(createAttachOptions(map, [], [], { viewStore }))).rejects.toThrow(
+      'view subscription failed',
+    );
+
+    expect(source.listenerCount()).toBe(0);
+    expect(map.listenerCount()).toBe(0);
+    expect(worker.dispose).toHaveBeenCalledOnce();
   });
 
   it('suppresses stale subscription, projection, callback, and error work after abort', async () => {
@@ -664,6 +1088,101 @@ describe('document map driver', () => {
 
     expect(order.slice(0, 2)).toEqual(['extension', 'renderer']);
     expect(extensionDispose).toHaveBeenCalledOnce();
+    expect(worker.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('contains every cleanup failure and continues in lifecycle order exactly once', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem()));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    const errors: unknown[] = [];
+    const order: string[] = [];
+    const viewStore = createMapViewStore({
+      schemaVersion: 1,
+      camera: { center: [-115.18, 36.14], zoom: 10 },
+      representationId: 'network',
+      filters: {},
+    });
+    const subscribeSource = source.subscribe;
+    vi.spyOn(source, 'subscribe').mockImplementation((listener) => {
+      const unsubscribe = subscribeSource(listener);
+      return () => {
+        unsubscribe();
+        order.push('source');
+        throw new Error('source cleanup failed');
+      };
+    });
+    const subscribeView = viewStore.subscribe.bind(viewStore);
+    vi.spyOn(viewStore, 'subscribe').mockImplementation((listener) => {
+      const unsubscribe = subscribeView(listener);
+      return () => {
+        unsubscribe();
+        order.push('view');
+        throw new Error('view cleanup failed');
+      };
+    });
+    const mapOff = map.off.bind(map);
+    vi.spyOn(map, 'off').mockImplementation((type, listener) => {
+      const result = mapOff(type, listener);
+      if (type === 'move') {
+        order.push('map');
+        throw new Error('map cleanup failed');
+      }
+      return result;
+    });
+    const cancelFrame = clock.cancelFrame;
+    vi.spyOn(clock, 'cancelFrame').mockImplementation((handle) => {
+      cancelFrame(handle);
+      order.push('scheduler');
+      throw new Error('scheduler cleanup failed');
+    });
+    worker.dispose.mockImplementation(() => {
+      order.push('worker');
+      throw new Error('worker cleanup failed');
+    });
+    let session: DocumentMapSession | null = null;
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, worker, {
+        attachSession: (attached) => {
+          session = attached;
+          return {
+            dispose: () => {
+              order.push('extension');
+              throw new Error('extension cleanup failed');
+            },
+          };
+        },
+      }),
+    );
+    const attachment = await driver.attach(createAttachOptions(map, [], errors, { viewStore }));
+    await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
+    const disposeRenderer = requireSession(session).renderer.dispose.bind(
+      requireSession(session).renderer,
+    );
+    vi.spyOn(requireSession(session).renderer, 'dispose').mockImplementation(() => {
+      disposeRenderer();
+      order.push('renderer');
+      throw new Error('renderer cleanup failed');
+    });
+    map.emit('move');
+
+    attachment.dispose();
+    attachment.dispose();
+
+    expect(order).toEqual([
+      'source',
+      'view',
+      'map',
+      'scheduler',
+      'extension',
+      'renderer',
+      'worker',
+    ]);
+    expect(errors).toHaveLength(7);
+    expect(source.listenerCount()).toBe(0);
+    expect(map.listenerCount()).toBe(0);
+    expect(clock.frames.size).toBe(0);
     expect(worker.dispose).toHaveBeenCalledOnce();
   });
 
