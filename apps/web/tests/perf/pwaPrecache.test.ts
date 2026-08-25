@@ -88,13 +88,13 @@ const offlineEditorManifest: BuildManifest = {
     file: offlineEditorOutputs.entry,
     isEntry: true,
     name: 'offline-editor',
-    imports: ['manifest-node:runtime'],
-    dynamicImports: ['manifest-node:optional-feature'],
+    dynamicImports: ['manifest-node:runtime'],
   },
   'manifest-node:runtime': {
     file: offlineEditorOutputs.runtime,
     css: [offlineEditorOutputs.runtimeStyles],
     imports: ['manifest-node:nested-runtime'],
+    dynamicImports: ['manifest-node:optional-feature'],
   },
   'manifest-node:nested-runtime': {
     file: offlineEditorOutputs.nestedRuntime,
@@ -149,7 +149,7 @@ describe('PWA precache output', () => {
     expect(offlineRuntimeFiles.some((file) => adaptive.includes(file))).toBe(false);
   });
 
-  it('precaches emitted files from the offline editor static graph', () => {
+  it('precaches the declared offline runtime and its static closure', () => {
     const precached = new Set(
       editorOfflinePrecacheFiles(offlineEditorManifest, installIcons, offlineRuntimeFiles),
     );

@@ -125,6 +125,27 @@ function entryGraph(
   return files;
 }
 
+/** The offline entry may cross one deferred boundary to the map driver so the
+ * normal editor can keep MapLibre out of its shell bundle. That declared
+ * runtime and its static imports are required offline. Feature-level dynamic
+ * imports below the driver remain adaptive. */
+function offlineEditorGraph(manifest: BuildManifest): Set<string> {
+  const key = entryKey(manifest, OFFLINE_EDITOR_ENTRY_NAME);
+  const entry = manifest[key];
+  if (!entry) throw new Error(`Vite manifest import "${key}" does not exist.`);
+  const files = entryGraph(manifest, OFFLINE_EDITOR_ENTRY_NAME, false);
+  const context = {
+    manifest,
+    files,
+    visited: new Set([key]),
+    includeDynamicImports: false,
+  };
+  for (const importedKey of entry.dynamicImports ?? []) {
+    collectManifestGraph(importedKey, context);
+  }
+  return files;
+}
+
 export function manifestInstallIconFiles(manifest: WebAppManifest): string[] {
   return [
     ...new Set((manifest.icons ?? []).map((icon) => icon.src.replace(/^\/+/, '')).filter(Boolean)),
@@ -164,7 +185,7 @@ export function editorOfflinePrecacheFiles(
   return [
     ...new Set([
       ...editorPrecacheFiles(manifest, installIcons),
-      ...entryGraph(manifest, OFFLINE_EDITOR_ENTRY_NAME, false),
+      ...offlineEditorGraph(manifest),
       ...offlineEditorWorkerFiles(outputFiles),
     ]),
   ].sort();
