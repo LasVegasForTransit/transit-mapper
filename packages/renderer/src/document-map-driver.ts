@@ -189,6 +189,8 @@ class DocumentMapDriver implements MapDriver {
     let unsubscribeView: (() => void) | null = null;
     let presentationRefresh: PresentationRefreshScheduler | null = null;
     let extension: DocumentMapSessionAttachment | undefined;
+    let sessionAttachmentAttempted = false;
+    let attachSessionAfterOverlay = () => {};
     let onAbort: (() => void) | null = null;
     const mapListenerCleanups: Array<() => void> = [];
     const acceptsWork = () => !disposed && !attachmentIsAborted();
@@ -235,6 +237,7 @@ class DocumentMapDriver implements MapDriver {
         installSurfaceLayers(map, physicalSurfaceLayerSpecs(), physicalCatalogLayerIds());
         applyVisibility();
         overlayReady = true;
+        attachSessionAfterOverlay();
         return true;
       } catch (error) {
         overlayReady = false;
@@ -376,6 +379,27 @@ class DocumentMapDriver implements MapDriver {
       if (request.replaceActive && renderer.hasActiveProjection())
         renderer.cancelProjectionAndRequeue();
       scheduleQueuedProjection();
+    };
+    const session: DocumentMapSession = {
+      map,
+      renderer,
+      getSnapshot: () => latestSnapshot,
+      scheduleProjection,
+      subscribeAcceptedScene(listener) {
+        acceptedListeners.add(listener);
+        return () => acceptedListeners.delete(listener);
+      },
+    };
+    attachSessionAfterOverlay = () => {
+      if (sessionAttachmentAttempted || !acceptsWork()) return;
+      sessionAttachmentAttempted = true;
+      try {
+        extension = this.options.attachSession?.(session, attachOptions.signal);
+      } catch (error) {
+        reportSafely(attachOptions, error);
+      }
+      sessionAttached = true;
+      publishPendingMilestones();
     };
     const discardQueuedProjection = () => {
       if (sourceQueue.hasPending()) sourceQueue.takeBatch();
@@ -597,24 +621,6 @@ class DocumentMapDriver implements MapDriver {
     } catch (error) {
       reportSafely(attachOptions, error);
     }
-
-    const session: DocumentMapSession = {
-      map,
-      renderer,
-      getSnapshot: () => latestSnapshot,
-      scheduleProjection,
-      subscribeAcceptedScene(listener) {
-        acceptedListeners.add(listener);
-        return () => acceptedListeners.delete(listener);
-      },
-    };
-    try {
-      extension = this.options.attachSession?.(session, attachOptions.signal);
-    } catch (error) {
-      reportSafely(attachOptions, error);
-    }
-    sessionAttached = true;
-    publishPendingMilestones();
 
     // eslint-disable-next-line sonarjs/cognitive-complexity -- Each cleanup failure is isolated so later resources still release.
     function dispose() {

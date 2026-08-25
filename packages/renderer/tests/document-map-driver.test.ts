@@ -262,6 +262,49 @@ describe('document map driver', () => {
     attachment.dispose();
   });
 
+  it('waits for a usable overlay before it attaches the document session', async () => {
+    const source = new TestDocumentSource(readySnapshot(aSystem({ id: 'empty' })));
+    const map = new TestDocumentMap();
+    map.failNextOverlaySetup = true;
+    const clock = new DocumentDriverClock();
+    const milestones: string[] = [];
+    const attachSession = vi.fn();
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, createProjectionWorker(), { attachSession }),
+    );
+
+    const attachment = await driver.attach(createAttachOptions(map, milestones, []));
+
+    expect(attachSession).not.toHaveBeenCalled();
+    expect(milestones).toEqual([]);
+
+    map.emit('style.load');
+    await advanceUntil(clock, map, () => milestones.length === 2);
+
+    expect(attachSession).toHaveBeenCalledOnce();
+    expect(milestones).toEqual(['content', 'interactive']);
+    attachment.dispose();
+  });
+
+  it('attaches the document session exactly once across later style loads', async () => {
+    const source = new TestDocumentSource(readySnapshot(aSystem({ id: 'empty' })));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const attachSession = vi.fn(() => ({ dispose: vi.fn() }));
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, createProjectionWorker(), { attachSession }),
+    );
+
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+    map.replaceStyle();
+    await drainDocumentDriver(clock, map);
+    map.replaceStyle();
+    await drainDocumentDriver(clock, map);
+
+    expect(attachSession).toHaveBeenCalledOnce();
+    attachment.dispose();
+  });
+
   it('does not publish interactive when content commitment aborts the attachment', async () => {
     const source = new TestDocumentSource(readySnapshot(aSystem({ id: 'empty' })));
     const map = new TestDocumentMap();
