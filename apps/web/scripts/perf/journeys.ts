@@ -66,6 +66,68 @@ interface JourneySummary {
   persistence: PerfProductionPersistenceProbe | null;
 }
 
+interface StopDragDiagnostics {
+  camera: ReturnType<NonNullable<PerfPageWindow['__perfCameraSnapshot']>> | null;
+  overlay: ReturnType<NonNullable<PerfPageWindow['__perfOverlaySnapshot']>> | null;
+  bank: ReturnType<NonNullable<PerfPageWindow['__perfRenderSourceBankSnapshot']>> | null;
+  rendered: ReturnType<NonNullable<PerfPageWindow['__perfRenderedFeaturesAt']>>;
+  stops: Record<string, ReturnType<NonNullable<PerfPageWindow['__perfStopSnapshot']>>>;
+}
+
+async function collectStopDragDiagnostics(
+  page: Page,
+  coordinate: LngLat,
+  stopIds: readonly string[] = [],
+): Promise<StopDragDiagnostics> {
+  return page.evaluate(
+    ({ at, requestedStopIds }) => {
+      const rendered = (window as PerfPageWindow).__perfRenderedFeaturesAt?.(at) ?? [];
+      const ids = new Set(requestedStopIds);
+      for (const feature of rendered) {
+        const id = feature.properties.id;
+        if (feature.properties.kind === 'stop' && typeof id === 'string') ids.add(id);
+      }
+      return {
+        camera: (window as PerfPageWindow).__perfCameraSnapshot?.() ?? null,
+        overlay: (window as PerfPageWindow).__perfOverlaySnapshot?.() ?? null,
+        bank: (window as PerfPageWindow).__perfRenderSourceBankSnapshot?.() ?? null,
+        rendered,
+        stops: Object.fromEntries(
+          [...ids].map((id) => [id, (window as PerfPageWindow).__perfStopSnapshot?.(id) ?? null]),
+        ),
+      };
+    },
+    { at: coordinate, requestedStopIds: stopIds },
+  );
+}
+
+async function throwStopDragFailure(
+  page: Page,
+  entity: EditorEntity,
+  coordinate: LngLat,
+  before: StopDragDiagnostics,
+): Promise<never> {
+  const after = await collectStopDragDiagnostics(page, coordinate, Object.keys(before.stops));
+  const cameraMoved =
+    before.camera !== null && after.camera !== null && cameraChanged(before.camera, after.camera);
+  const anotherStopMoved = Object.entries(before.stops).some(([id, prior]) => {
+    const current = after.stops[id];
+    return (
+      id !== entity.id &&
+      prior !== null &&
+      current !== null &&
+      (prior.coord[0] !== current.coord[0] || prior.coord[1] !== current.coord[1])
+    );
+  });
+  const targetRemainedRendered = after.rendered.some(
+    (feature) => feature.properties.kind === 'stop' && feature.properties.id === entity.id,
+  );
+  throw new Error(
+    'The Stop drag did not change the live model coordinate and revision: ' +
+      JSON.stringify({ targetRemainedRendered, cameraMoved, anotherStopMoved, before, after }),
+  );
+}
+
 /** Read the renderer-owned counters without walking or cloning scene geometry. */
 export function collectRendererStatsSnapshot(page: Page): Promise<RendererStatsSnapshot | null> {
   return page.evaluate(() => (window as PerfPageWindow).__rendererStats?.() ?? null);
@@ -188,6 +250,15 @@ async function canvasGeometry(page: Page): Promise<CanvasGeometry> {
   };
 }
 
+function canvasContains(canvas: CanvasGeometry, point: { x: number; y: number }): boolean {
+  return (
+    point.x >= canvas.x &&
+    point.x <= canvas.x + canvas.width &&
+    point.y >= canvas.y &&
+    point.y <= canvas.y + canvas.height
+  );
+}
+
 async function createPaintedFrameRecorder(page: Page): Promise<PaintedFrameRecorder> {
   const available = await page.evaluate(
     () =>
@@ -231,12 +302,7 @@ async function performEntityDrag(
     if (!snapshot || !project) throw new Error('The live Stop target is unavailable.');
     return { snapshot, point: project(snapshot.coord) };
   }, entity.id);
-  if (
-    before.point.x < canvas.x ||
-    before.point.x > canvas.x + canvas.width ||
-    before.point.y < canvas.y ||
-    before.point.y > canvas.y + canvas.height
-  ) {
+  if (!canvasContains(canvas, before.point)) {
     throw new Error('The deterministic Stop drag target is outside the map viewport.');
   }
 
@@ -268,14 +334,12 @@ async function performEntityDrag(
     return project(coord);
   }, before.snapshot.coord);
   const currentCanvas = await canvasGeometry(page);
-  if (
-    dragPoint.x < currentCanvas.x ||
-    dragPoint.x > currentCanvas.x + currentCanvas.width ||
-    dragPoint.y < currentCanvas.y ||
-    dragPoint.y > currentCanvas.y + currentCanvas.height
-  ) {
+  if (!canvasContains(currentCanvas, dragPoint)) {
     throw new Error('The selected Stop drag target is outside the current map viewport.');
   }
+  const diagnosticsBefore = await collectStopDragDiagnostics(page, before.snapshot.coord, [
+    entity.id,
+  ]);
 
   await resetGestureCapture(page);
   await recorder.startAction();
@@ -294,7 +358,7 @@ async function performEntityDrag(
     after !== null &&
     (after.coord[0] !== before.snapshot.coord[0] || after.coord[1] !== before.snapshot.coord[1]);
   if (!after || !coordinateChanged || after.revision === before.snapshot.revision) {
-    throw new Error('The Stop drag did not change the live model coordinate and revision.');
+    await throwStopDragFailure(page, entity, before.snapshot.coord, diagnosticsBefore);
   }
 }
 

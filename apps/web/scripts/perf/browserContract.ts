@@ -6,7 +6,11 @@ import {
 } from '../../src/storage/indexedDbLibrary';
 import type { PerfPhaseCounters, PerfProductionPersistenceProbe } from '../../src/perf/types';
 import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
-import type { RendererPerfLayerVisibility, RendererPerfRenderedFeature } from '../../src/perf';
+import type {
+  PerfRenderSourceBankSnapshot,
+  RendererPerfLayerVisibility,
+  RendererPerfRenderedFeature,
+} from '../../src/perf';
 
 /**
  * Stable storage identifiers used to seed and inspect the production path.
@@ -81,6 +85,7 @@ export interface PerfPageWindow extends Window {
   ) => { coord: LngLat; revision: number; wayCount: number } | null;
   __perfCameraSnapshot?: () => { center: LngLat; zoom: number };
   __perfOverlaySnapshot?: () => BrowserOverlaySnapshot;
+  __perfRenderSourceBankSnapshot?: () => PerfRenderSourceBankSnapshot;
   __perfRenderedFeaturesAt?: (coordinate: LngLat) => readonly RendererPerfRenderedFeature[];
   __perfRendererLayerVisibility?: () => readonly RendererPerfLayerVisibility[];
   __perfStartPaintedFrameCapture?: () => void;

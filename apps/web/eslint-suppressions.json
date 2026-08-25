@@ -39,9 +39,6 @@
     "@typescript-eslint/prefer-optional-chain": {
       "count": 1
     },
-    "complexity": {
-      "count": 1
-    },
     "max-lines": {
       "count": 1
     },
