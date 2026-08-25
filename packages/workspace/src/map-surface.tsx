@@ -17,6 +17,28 @@ export type MapSurfaceRuntimeFactory<ThemeId extends string> = (
   options: MapSurfaceRuntimeOptions<ThemeId>,
 ) => MapRuntime<ThemeId>;
 
+export type MapSurfaceAttachmentScheduler = (start: () => void) => () => void;
+
+export function scheduleMapAttachmentAfterFirstPaint(start: () => void): () => void {
+  let cancelled = false;
+  let firstFrame: number | null = requestAnimationFrame(() => {
+    firstFrame = null;
+    if (cancelled) return;
+    secondFrame = requestAnimationFrame(() => {
+      secondFrame = null;
+      if (!cancelled) start();
+    });
+  });
+  let secondFrame: number | null = null;
+  return () => {
+    cancelled = true;
+    if (firstFrame !== null) cancelAnimationFrame(firstFrame);
+    if (secondFrame !== null) cancelAnimationFrame(secondFrame);
+    firstFrame = null;
+    secondFrame = null;
+  };
+}
+
 export interface MapSurfaceProps<ThemeId extends string> {
   driver: MapDriver;
   contentIdentity: string;
@@ -24,6 +46,7 @@ export interface MapSurfaceProps<ThemeId extends string> {
   selection: SelectionController;
   theme: ThemeId;
   createRuntime: MapSurfaceRuntimeFactory<ThemeId>;
+  scheduleAttachment?: MapSurfaceAttachmentScheduler;
   className?: string;
   onRuntimeChange?: (runtime: MapRuntime<ThemeId> | null) => void;
 }
@@ -41,6 +64,7 @@ interface MapSurfaceMountOptions<ThemeId extends string> {
   selection: SelectionController;
   initialTheme: ThemeId;
   createRuntime: MapSurfaceRuntimeFactory<ThemeId>;
+  scheduleAttachment: MapSurfaceAttachmentScheduler;
   mountedRuntimeRef: { current: MountedRuntime<ThemeId> | null };
   runtimeChangeRef: { current: MapSurfaceProps<ThemeId>['onRuntimeChange'] };
 }
@@ -56,6 +80,11 @@ interface DriverAttachmentOptions<ThemeId extends string> {
   attachment: AttachmentSlot;
   isDisposed(): boolean;
 }
+
+const startAttachmentImmediately: MapSurfaceAttachmentScheduler = (start) => {
+  start();
+  return () => {};
+};
 
 function reportRuntimeError<ThemeId extends string>(
   runtime: MapRuntime<ThemeId>,
@@ -147,19 +176,34 @@ function mountMapSurfaceRuntime<ThemeId extends string>(
     themeRequestGeneration: 0,
   };
   publishRuntimeChange(runtime, options.runtimeChangeRef.current, runtime);
-  startDriverAttachment({
-    surface: options,
-    runtime,
-    signal: abortController.signal,
-    attachment,
-    isDisposed: () => disposed,
-  });
+  let attachmentStarted = false;
+  let cancelAttachmentSchedule = () => {};
+  try {
+    cancelAttachmentSchedule = options.scheduleAttachment(() => {
+      if (disposed || abortController.signal.aborted || attachmentStarted) return;
+      attachmentStarted = true;
+      startDriverAttachment({
+        surface: options,
+        runtime,
+        signal: abortController.signal,
+        attachment,
+        isDisposed: () => disposed,
+      });
+    });
+  } catch (error) {
+    reportRuntimeError(runtime, error);
+  }
 
   return () => {
     if (disposed) return;
     disposed = true;
     try {
       abortController.abort();
+    } catch (error) {
+      reportRuntimeError(runtime, error);
+    }
+    try {
+      cancelAttachmentSchedule();
     } catch (error) {
       reportRuntimeError(runtime, error);
     }
@@ -214,6 +258,7 @@ export function MapSurface<ThemeId extends string>({
   selection,
   theme,
   createRuntime,
+  scheduleAttachment = startAttachmentImmediately,
   className,
   onRuntimeChange,
 }: MapSurfaceProps<ThemeId>) {
@@ -234,10 +279,11 @@ export function MapSurface<ThemeId extends string>({
       selection,
       initialTheme: themeRef.current,
       createRuntime,
+      scheduleAttachment,
       mountedRuntimeRef,
       runtimeChangeRef: onRuntimeChangeRef,
     });
-  }, [contentIdentity, createRuntime, driver, selection, viewStore]);
+  }, [contentIdentity, createRuntime, driver, scheduleAttachment, selection, viewStore]);
 
   useEffect(() => {
     requestRuntimeTheme(mountedRuntimeRef, theme);
