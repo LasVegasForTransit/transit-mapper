@@ -1,7 +1,7 @@
 import type { PerfProfileId } from '../../src/perf/types';
 import type { RendererCaptureCase } from '../../src/perf/renderer-capture';
 import type { RendererFixtureId } from '../../src/perf/renderer-fixtures';
-import type { RendererStatsSnapshot } from '../../src/perf/renderer-stats';
+import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
 
 export interface RendererCaptureViewport {
   width: number;

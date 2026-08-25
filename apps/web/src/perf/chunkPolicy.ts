@@ -27,7 +27,7 @@ function isMapEngineModule(moduleId: string): boolean {
 function isRendererRuntimeModule(moduleId: string): boolean {
   const normalizedId = normalizedModuleId(moduleId);
   return (
-    /\/apps\/web\/src\/map\/(?:scene-(?:draft|feature|publication)|synchronous-|persistent-|resumable-feature-projection)[^/]*\.tsx?$/.test(
+    /\/packages\/renderer\/(?:src|dist)\/(?:scene-(?:draft|feature|publication)|persistent-|resumable-feature-projection)[^/]*\.[jt]sx?$/.test(
       normalizedId,
     ) ||
     /\/packages\/core\/src\/render\/(?:dependency-index|dependency-invalidation|render-preparation(?:-[^/]+)?|render-projection-scope)\.ts$/.test(

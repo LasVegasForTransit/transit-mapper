@@ -5,14 +5,14 @@ import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
 import { buildFeatures, type ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import {
-  registerMapIcons,
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
   SRC_PLATFORMS,
   SRC_SERVICES,
   SRC_STATIONS,
   SRC_WAYS,
-} from '../map/layers';
+} from '@transitmapper/renderer/layers';
+import { registerMapIcons } from '../map/layers';
 import { EMBED_SOURCE_IDS, embedLayerSpecsForScheme } from './config';
 import { markFirstSystemMapPaint } from '../perf/mapPaintMark';
 import {

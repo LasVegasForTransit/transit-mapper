@@ -2,7 +2,6 @@ import type { GeoJSONSource, Map as MLMap } from 'maplibre-gl';
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 import { landmarksFeatureCollection } from '../landmarks';
 import {
-  LIGHT_LAYER_SPECS,
   SRC_CONNECTORS,
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
@@ -19,7 +18,8 @@ import {
   SRC_STATIONS,
   SRC_WAY_LABELS,
   SRC_WAYS,
-} from '../layers';
+} from '@transitmapper/renderer/layers';
+import { LIGHT_LAYER_SPECS } from '../layers';
 const EMPTY_FEATURE_COLLECTION: GeoJSON.FeatureCollection = {
   type: 'FeatureCollection',
   features: [],
@@ -70,6 +70,6 @@ export function setExportFeatureData(map: MLMap, features: SystemFeatures): void
   };
 
   for (const [sourceId, data] of Object.entries(sourceData)) {
-    (map.getSource(sourceId) as GeoJSONSource | undefined)?.setData(data);
+    map.getSource<GeoJSONSource>(sourceId)?.setData(data);
   }
 }

@@ -60,9 +60,6 @@ const config: KnipConfig = {
     // graph. knip resolves dependencies by import, so a tool invoked by a hook
     // reads as unused.
     'lint-staged',
-    // Declared at the root so every package resolves one version through the
-    // catalog. Nothing at the root imports it, by design.
-    'vitest',
   ],
 };
 

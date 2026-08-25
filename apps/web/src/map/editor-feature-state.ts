@@ -12,7 +12,7 @@ import {
   type RenderDomainIdentity,
 } from '@transitmapper/core/render/render-identity';
 import type { Selection } from '../editor/store';
-import type { SceneFeatureTarget } from './accepted-scene-store';
+import type { SceneFeatureTarget } from '@transitmapper/renderer/runtime';
 import {
   LYR_FACILITY_SELECTED,
   LYR_JUNCTION_SELECTED,
@@ -24,9 +24,9 @@ import {
   LYR_STATION_SELECTED,
   LYR_WAY_SELECTED,
   serviceFocusOpacityExpr,
-} from './layers';
-import type { LiveMapRenderer } from './live-map-renderer';
-import { logicalRenderSourceId } from './source-bank-layers';
+} from '@transitmapper/renderer/layers';
+import type { LiveMapRenderer } from '@transitmapper/renderer/runtime';
+import { logicalRenderSourceId } from '@transitmapper/renderer/layers';
 
 export interface RenderedFeatureIdentity {
   readonly source: string;

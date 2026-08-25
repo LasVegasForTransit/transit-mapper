@@ -1,6 +1,11 @@
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap } from 'maplibre-gl';
-import { SRC_PREVIEW, SRC_SERVICES, SRC_STATIONS, SRC_VEHICLES } from '../../map/layers';
+import {
+  SRC_PREVIEW,
+  SRC_SERVICES,
+  SRC_STATIONS,
+  SRC_VEHICLES,
+} from '@transitmapper/renderer/layers';
 import { ONBOARDING_DRAW_PATH } from './fixtureSystem';
 import { onboardingDrawnServiceFeatures, pathPrefix, vehicleFeaturesAt } from './scene-geometry';
 import { onboardingSceneFrame } from './scene-timing';

@@ -18,14 +18,14 @@ import { widthPxAtZ14 } from '@transitmapper/core/render/constants';
 import { renderFeatureId, systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
 import type { RenderViewOptions, SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 import type { EditorState, Selection } from '../editor/store';
-import { SRC_CONNECTORS } from './layers/constants';
+import { SRC_CONNECTORS } from '@transitmapper/renderer/layers';
 import {
   buildFeaturesForSources,
   type SourceFeatureProjectionCounts,
-} from './sourceFeatureProjection';
-import type { MapSystemFeatureSourceId } from './system-feature-sources';
-import { EDITOR_SYSTEM_FEATURE_SOURCES } from './system-feature-sources';
-import type { FeatureProjectionClientInput } from './feature-projection-worker';
+} from '@transitmapper/renderer/projection';
+import type { MapSystemFeatureSourceId } from '@transitmapper/renderer/layers';
+import { EDITOR_SYSTEM_FEATURE_SOURCES } from '@transitmapper/renderer/layers';
+import type { FeatureProjectionClientInput } from '@transitmapper/renderer/projection';
 
 const CONNECTOR_SOURCE_ID = systemFeatureSourceId(SRC_CONNECTORS);
 

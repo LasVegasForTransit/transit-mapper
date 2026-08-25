@@ -28,7 +28,7 @@ import {
   LYR_SERVICE_SELECTED,
   serviceFocusOpacityExpr,
   tierOpacityExpr,
-} from '../../src/map/layers/constants';
+} from '@transitmapper/renderer/layers';
 import { createLayerSpecs } from '../../src/map/layers/layerSpecs';
 import { MAP_THEMES } from '../../src/map/mapThemePalette';
 

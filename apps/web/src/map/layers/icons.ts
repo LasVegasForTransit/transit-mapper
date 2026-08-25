@@ -4,7 +4,7 @@ import { facilityRender } from '@transitmapper/core/style/catalogStyle';
 import type { ColorScheme } from '../../theme/systemColorScheme';
 import { ensureIcon } from '../icons';
 import { MAP_THEMES } from '../mapTheme';
-import { HANDLE_INK } from './constants';
+import { HANDLE_INK } from '@transitmapper/renderer/layers';
 
 const CATEGORICAL_FACILITY_TYPES = new Set(['bikeDock', 'busBay', 'platform']);
 

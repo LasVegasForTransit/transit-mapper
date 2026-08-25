@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { FACILITY_TYPE_ORDER, MODES } from '@transitmapper/core/model/catalog';
 import { wayById } from '@transitmapper/core/model/geo';
 import { createEditorStore } from '../../src/editor/store';
-import { HANDLE_ICON } from '../../src/map/layers';
+import { HANDLE_ICON } from '@transitmapper/renderer/layers';
 import { buildHandles } from '@transitmapper/core/render/buildFeatures';
 import { required } from '../support/required.test';
 import { buildFeatures } from '../support/testRenderPresentation.test';

@@ -2,7 +2,7 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { BrowserContext, Page } from 'playwright-core';
 import type { PerfProfileId } from '../../src/perf/types';
 import type { RendererCaptureCase } from '../../src/perf/renderer-capture';
-import type { RendererStatsSnapshot } from '../../src/perf/renderer-stats';
+import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
 import { seedIndexedDbFixture } from '../perf/browser';
 import { waitForLoadedDocument } from '../perf/journeys';
 import { assertRendererCaptureHasSceneContent } from './capture-image-validation';

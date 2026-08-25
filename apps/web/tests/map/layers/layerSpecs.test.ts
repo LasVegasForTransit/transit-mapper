@@ -6,9 +6,9 @@ import {
   SRC_CONNECTORS,
   SRC_HIT_FEATURES,
   SRC_JUNCTION_GUIDES,
-} from '../../../src/map/layers/constants';
+} from '@transitmapper/renderer/layers';
 import { LAYER_SPECS } from '../../../src/map/layers/layerSpecs';
-import { ALL_SYSTEM_FEATURE_SOURCES } from '../../../src/map/sourceUploadPlan';
+import { ALL_SYSTEM_FEATURE_SOURCES } from '@transitmapper/renderer/layers';
 
 describe('service occurrence hit layer', () => {
   it('uses the same per-feature offset as the painted bundled line', () => {

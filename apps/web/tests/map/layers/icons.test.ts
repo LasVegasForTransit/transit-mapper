@@ -3,7 +3,7 @@ import { FACILITY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
 import { facilityRender } from '@transitmapper/core/style/catalogStyle';
 import { ensureIcon } from '../../../src/map/icons';
 import { MAP_THEMES } from '../../../src/map/mapTheme';
-import { HANDLE_INK } from '../../../src/map/layers/constants';
+import { HANDLE_INK } from '@transitmapper/renderer/layers';
 import { registerMapIcons } from '../../../src/map/layers/icons';
 
 vi.mock('../../../src/map/icons', () => ({

@@ -1,6 +1,11 @@
 import type { GestureAffectedEntities } from './gestureProjection';
-import { SRC_FOOTPRINTS, SRC_PHYSICAL_HANDLES, SRC_PLATFORMS, SRC_STATIONS } from './layers';
-import type { SystemFeatureSourceId } from './sourceUploadPlan';
+import {
+  SRC_FOOTPRINTS,
+  SRC_PHYSICAL_HANDLES,
+  SRC_PLATFORMS,
+  SRC_STATIONS,
+} from '@transitmapper/renderer/layers';
+import type { SystemFeatureSourceId } from '@transitmapper/renderer/projection';
 
 const NETWORK_STATION_SOURCES: readonly SystemFeatureSourceId[] = [
   SRC_STATIONS,

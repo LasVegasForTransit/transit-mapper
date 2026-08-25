@@ -5,8 +5,8 @@ import {
   SRC_PLATFORMS,
   SRC_STATIONS,
   SRC_WAYS,
-} from '../../src/map/layers';
-import type { SystemFeatureSourceId } from '../../src/map/sourceUploadPlan';
+} from '@transitmapper/renderer/layers';
+import type { SystemFeatureSourceId } from '@transitmapper/renderer/projection';
 import {
   planStopGestureSettlement,
   type StopGestureSettlementOptions,

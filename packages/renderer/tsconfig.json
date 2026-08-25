@@ -1,0 +1,11 @@
+// Every TypeScript file in this package. TypeScript's language service resolves
+// a file by walking up to the nearest tsconfig.json, so this config includes the
+// test and tool files that the production build excludes.
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src", "tests", "vitest.config.ts"]
+}

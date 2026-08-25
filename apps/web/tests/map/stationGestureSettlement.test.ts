@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SRC_STATIONS } from '../../src/map/layers';
+import { SRC_STATIONS } from '@transitmapper/renderer/layers';
 import { createStopGestureSettlementController } from '../../src/map/stopGestureSettlement';
 import type {
   SettledSourceDataEvent,

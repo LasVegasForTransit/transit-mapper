@@ -1,10 +1,10 @@
 /** Validates the machine-observable half of the appendix: interaction work
  * counters and the physical identities involved in an atomic bank promotion. */
 import { RENDERER_LOD_ACCEPTANCE_ASSERTION_IDS } from '../../src/perf/renderer-lod-acceptance';
-import { SRC_HIT_FEATURES } from '../../src/map/layers';
+import { SRC_HIT_FEATURES } from '@transitmapper/renderer/layers';
 import { LIGHT_LAYER_SPECS } from '../../src/map/layers/layerSpecs';
-import { isBankedRenderLayer } from '../../src/map/source-bank-layers';
-import { COMMITTED_SYSTEM_FEATURE_SOURCES } from '../../src/map/system-feature-sources';
+import { isBankedRenderLayer } from '@transitmapper/renderer/layers';
+import { COMMITTED_SYSTEM_FEATURE_SOURCES } from '@transitmapper/renderer/layers';
 import type { RendererLodAcceptanceBankIdentity } from './lod-acceptance-types';
 import {
   computedDelta,

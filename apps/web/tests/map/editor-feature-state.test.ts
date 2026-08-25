@@ -5,8 +5,8 @@ import {
   createEditorFeatureState,
   type RenderedFeatureIdentity,
 } from '../../src/map/editor-feature-state';
-import { LYR_SERVICES_SOLID, LYR_WAY_SELECTED, SRC_WAYS } from '../../src/map/layers';
-import type { LiveMapRenderer } from '../../src/map/live-map-renderer';
+import { LYR_SERVICES_SOLID, LYR_WAY_SELECTED, SRC_WAYS } from '@transitmapper/renderer/layers';
+import type { LiveMapRenderer } from '@transitmapper/renderer/runtime';
 
 interface FeatureStateChange {
   readonly target: RenderedFeatureIdentity;

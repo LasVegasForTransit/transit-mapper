@@ -11,9 +11,9 @@ import type { FrameStats } from './frameStats';
 import type { RawGestureMeasurements } from './gestureStats';
 import { attachPaintedFrameCapture } from './paintedFrameCapture';
 import { attachRendererCaptureHarness } from './renderer-capture-harness';
-import type { RendererStatsSnapshot } from './renderer-stats';
-import type { SourceBankDiagnostics } from '../map/source-bank';
-import type { CooperativeRenderJobSchedulerStats } from '../map/cooperative-render-job-scheduler';
+import type { CooperativeRenderJobSchedulerStats } from '@transitmapper/renderer/projection';
+import type { SourceBankDiagnostics } from '@transitmapper/renderer/runtime';
+import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
 import { MAP_THEMES } from '../map/mapThemePalette';
 
 /** Runtime A/B toggles, flipped from the devtools console to attribute cost —

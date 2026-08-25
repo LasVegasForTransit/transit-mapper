@@ -1,0 +1,16 @@
+// Production sources only. See tsconfig.json beside this one for why the split
+// exists.
+{
+  "extends": "@transitmapper/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src"]
+}

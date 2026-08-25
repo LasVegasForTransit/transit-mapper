@@ -2,7 +2,7 @@ import { cumulativeLengths, pointAtDistance } from '@transitmapper/core/model/ge
 import type { LngLat } from '@transitmapper/core/model/system';
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 import { runStateAt } from '@transitmapper/core/sim/fleet';
-import { SRC_PREVIEW } from '../../map/layers';
+import { SRC_PREVIEW } from '@transitmapper/renderer/layers';
 import { ONBOARDING_AUTHORED_CONNECTOR_ID, ONBOARDING_VEHICLE_RUNS } from './fixtureSystem';
 import type { OnboardingSceneId } from './slides';
 

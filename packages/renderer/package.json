@@ -1,0 +1,56 @@
+{
+  "name": "@transitmapper/renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./layers": {
+      "development": {
+        "types": "./src/layers.ts",
+        "import": "./src/layers.ts"
+      },
+      "types": "./dist/layers.d.ts",
+      "import": "./dist/layers.js"
+    },
+    "./projection": {
+      "development": {
+        "types": "./src/projection.ts",
+        "import": "./src/projection.ts"
+      },
+      "types": "./dist/projection.d.ts",
+      "import": "./dist/projection.js"
+    },
+    "./runtime": {
+      "development": {
+        "types": "./src/runtime.ts",
+        "import": "./src/runtime.ts"
+      },
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
+    },
+    "./stats": {
+      "development": {
+        "types": "./src/stats.ts",
+        "import": "./src/stats.ts"
+      },
+      "types": "./dist/stats.d.ts",
+      "import": "./dist/stats.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit && tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "verify": "vitest run"
+  },
+  "devDependencies": {
+    "@transitmapper/tsconfig": "workspace:*",
+    "@types/geojson": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@transitmapper/core": "workspace:*",
+    "maplibre-gl": "catalog:"
+  }
+}

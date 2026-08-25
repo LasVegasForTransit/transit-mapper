@@ -8,7 +8,12 @@ import {
   resolveOnboardingSceneSystems,
 } from '../../../src/ui/onboarding/onboarding-map-controller';
 import { localBlankStyleForScheme } from '../../../src/map/mapTheme';
-import { LYR_VEHICLES, SRC_PREVIEW, SRC_SERVICES, SRC_VEHICLES } from '../../../src/map/layers';
+import {
+  LYR_VEHICLES,
+  SRC_PREVIEW,
+  SRC_SERVICES,
+  SRC_VEHICLES,
+} from '@transitmapper/renderer/layers';
 import { ONBOARDING_TEST_PRESENTATION } from '../../support/onboarding-presentation.test';
 
 interface MapOptions {

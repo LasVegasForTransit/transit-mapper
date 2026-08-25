@@ -1,8 +1,8 @@
-import { SRC_HIT_FEATURES } from '../../src/map/layers';
+import { SRC_HIT_FEATURES } from '@transitmapper/renderer/layers';
 import {
   COMMITTED_SYSTEM_FEATURE_SOURCES,
   EDITOR_SYSTEM_FEATURE_SOURCES,
-} from '../../src/map/system-feature-sources';
+} from '@transitmapper/renderer/layers';
 import type {
   RendererLodAcceptanceAssertion,
   RendererLodAcceptanceBankIdentity,

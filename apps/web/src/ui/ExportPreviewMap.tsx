@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
-import { registerMapIcons, SRC_STATIONS } from '../map/layers';
+import { SRC_STATIONS } from '@transitmapper/renderer/layers';
+import { registerMapIcons } from '../map/layers';
 import { addExportSourcesAndLayers, setExportFeatureData } from '../map/export/exportLayerSetup';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
@@ -11,7 +12,7 @@ import { projectFeaturesForFittedMap } from '../map/static-render-features';
 import {
   createFeatureProjectionWorker,
   type FeatureProjectionWorkerClient,
-} from '../map/feature-projection-worker';
+} from '@transitmapper/renderer/projection';
 
 /**
  * A second, read-only MapLibre instance for the export dialog — deliberately

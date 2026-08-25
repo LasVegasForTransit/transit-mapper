@@ -17,13 +17,13 @@ import {
   recordSourceUpload,
 } from '../../src/map/gestureProjection';
 import {
-  LAYER_SPECS,
   LYR_GESTURE_FILL,
   LYR_GESTURE_LINE,
   LYR_GESTURE_POINT,
   LYR_GESTURE_STROKE,
   SRC_GESTURE,
-} from '../../src/map/layers';
+} from '@transitmapper/renderer/layers';
+import { LAYER_SPECS } from '../../src/map/layers';
 const fixedWay: Way = {
   id: 'fixed-way',
   typeId: 'road',

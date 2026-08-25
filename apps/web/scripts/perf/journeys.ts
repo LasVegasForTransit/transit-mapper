@@ -9,7 +9,7 @@ import {
   projectedPointChanged,
 } from '../../src/perf/journeyProof';
 import { FIRST_SYSTEM_MAP_PAINT_MARK } from '../../src/perf/mapPaintMark';
-import type { RendererStatsSnapshot } from '../../src/perf/renderer-stats';
+import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
 import type {
   PerfGestureDiagnostics,
   PerfPhaseCounters,

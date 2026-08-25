@@ -5,10 +5,10 @@ import {
   isBankedRenderLayer,
   OFFSCREEN_RENDER_TRANSLATE,
   renderLayerTranslateProperties,
-} from '../../src/map/source-bank-layers';
-import { bankedLayerId, bankedSourceId } from '../../src/map/source-bank';
-import { COMMITTED_SYSTEM_FEATURE_SOURCES } from '../../src/map/system-feature-sources';
-import { SRC_HIT_FEATURES } from '../../src/map/layers/constants';
+} from '@transitmapper/renderer/layers';
+import { bankedLayerId, bankedSourceId } from '@transitmapper/renderer/layers';
+import { COMMITTED_SYSTEM_FEATURE_SOURCES } from '@transitmapper/renderer/layers';
+import { SRC_HIT_FEATURES } from '@transitmapper/renderer/layers';
 
 describe('banked renderer layer specifications', () => {
   it('duplicates only committed visual and hit layers in exact paint order', () => {

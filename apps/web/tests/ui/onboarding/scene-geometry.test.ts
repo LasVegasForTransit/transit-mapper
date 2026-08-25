@@ -7,7 +7,7 @@ import {
   ONBOARDING_VEHICLE_RUNS,
   onboardingViewOptions,
 } from '../../../src/ui/onboarding/fixtureSystem';
-import { SRC_PREVIEW } from '../../../src/map/layers';
+import { SRC_PREVIEW } from '@transitmapper/renderer/layers';
 import {
   onboardingDrawnServiceFeatures,
   onboardingScenePresentation,

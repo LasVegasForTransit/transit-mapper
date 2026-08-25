@@ -16,7 +16,7 @@ import {
   continueStraight,
   isDoubleClickFinish,
 } from '../../src/map/interactions';
-import { SRC_ENDPOINT_HINT, SRC_PREVIEW } from '../../src/map/layers';
+import { SRC_ENDPOINT_HINT, SRC_PREVIEW } from '@transitmapper/renderer/layers';
 import {
   attachOpts,
   createFakeMap,

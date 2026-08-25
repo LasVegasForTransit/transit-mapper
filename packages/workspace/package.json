@@ -1,0 +1,26 @@
+{
+  "name": "@transitmapper/workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "development": {
+        "types": "./src/index.ts",
+        "import": "./src/index.ts"
+      },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit && tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "verify": "vitest run"
+  },
+  "devDependencies": {
+    "@transitmapper/tsconfig": "workspace:*",
+    "vitest": "catalog:"
+  }
+}

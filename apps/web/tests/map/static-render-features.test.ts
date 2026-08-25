@@ -13,8 +13,8 @@ import {
   renderPresentationForFittedMap,
   type FittedMapLike,
 } from '../../src/map/static-render-features';
-import type { FeatureProjectionWorkerClient } from '../../src/map/feature-projection-worker';
-import { SYSTEM_FEATURE_SOURCE_BY_NAME } from '../../src/map/system-feature-sources';
+import type { FeatureProjectionWorkerClient } from '@transitmapper/renderer/projection';
+import { SYSTEM_FEATURE_SOURCE_BY_NAME } from '@transitmapper/renderer/layers';
 
 function fittedMap(): FittedMapLike {
   return {

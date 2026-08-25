@@ -1,7 +1,6 @@
-import type { FilterSpecification } from 'maplibre-gl';
+import type { FilterSpecification, Map as MLMap } from 'maplibre-gl';
 import type { GestureAffectedEntities } from './gestureProjection';
 import {
-  LAYER_SPECS,
   SRC_CONNECTORS,
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
@@ -17,7 +16,8 @@ import {
   SRC_STATIONS,
   SRC_WAYS,
   SRC_WAY_LABELS,
-} from './layers';
+} from '@transitmapper/renderer/layers';
+import { LAYER_SPECS } from './layers';
 
 export interface GestureFilterExclusion {
   property: string;
@@ -37,7 +37,7 @@ export interface GestureLayerMaskPlan {
 
 export interface GestureLayerMaskMap {
   getLayer: (layerId: string) => unknown;
-  getFilter: (layerId: string) => FilterSpecification | undefined | void;
+  getFilter: MLMap['getFilter'];
   setFilter: (layerId: string, filter: FilterSpecification | null) => void;
   getLayoutProperty: (layerId: string, property: string) => unknown;
   setLayoutProperty: (layerId: string, property: string, value: unknown) => void;

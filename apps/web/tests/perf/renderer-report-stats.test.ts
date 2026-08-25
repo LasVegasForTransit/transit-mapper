@@ -2,7 +2,7 @@ import type { Page } from 'playwright-core';
 import { describe, expect, it } from 'vitest';
 import * as journeys from '../../scripts/perf/journeys';
 import { createPerfReport } from '../../src/perf/report';
-import type { RendererStatsSnapshot } from '../../src/perf/renderer-stats';
+import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
 import { PERF_PROTOCOL, PERF_SCENARIOS } from '../../src/perf/scenarios';
 import type { PerfSample } from '../../src/perf/types';
 

@@ -1,5 +1,5 @@
 import type { PerfNetworkByteReport } from './network-byte-types';
-import type { RendererStatsSnapshot } from './renderer-stats';
+import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
 
 export type PerfFixtureId = 'small' | 'dense' | 'published' | 'rtc';
 export type PerfScenarioId = 'small' | 'dense' | 'rtc' | 'share' | 'embed';

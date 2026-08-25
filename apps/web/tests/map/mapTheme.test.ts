@@ -4,7 +4,7 @@ import {
   LYR_SERVICES_UNDERGROUND_CASING,
   LYR_WAYS_DASHED_CASING,
   LYR_WAYS_SOLID_CASING,
-} from '../../src/map/layers/constants';
+} from '@transitmapper/renderer/layers';
 import { createLayerSpecs } from '../../src/map/layers/layerSpecs';
 import {
   MAP_THEMES,

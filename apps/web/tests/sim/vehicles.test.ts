@@ -6,7 +6,7 @@ import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { oneSection, wholeLeg } from '@transitmapper/core/model/geo';
 import type { Stop, TransitSystem, Way } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
-import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from '../../src/map/layers';
+import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from '@transitmapper/renderer/layers';
 import { createSimClock } from '../../src/sim/simClock';
 
 const patternStatsProbe = vi.hoisted(() => ({ calls: 0 }));

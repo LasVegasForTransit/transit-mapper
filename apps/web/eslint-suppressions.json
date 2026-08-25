@@ -117,15 +117,7 @@
       "count": 4
     }
   },
-  "src/map/export/exportLayerSetup.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "src/map/gestureLayerMask.ts": {
-    "@typescript-eslint/no-invalid-void-type": {
-      "count": 1
-    },
     "complexity": {
       "count": 1
     },
@@ -172,7 +164,7 @@
       "count": 5
     },
     "@typescript-eslint/prefer-nullish-coalescing": {
-      "count": 3
+      "count": 2
     },
     "@typescript-eslint/prefer-optional-chain": {
       "count": 2
@@ -190,7 +182,7 @@
       "count": 2
     },
     "sonarjs/cognitive-complexity": {
-      "count": 6
+      "count": 5
     }
   },
   "src/map/layers/layerSpecs.ts": {
@@ -565,7 +557,7 @@
       "count": 1
     },
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 14
+      "count": 12
     },
     "max-lines": {
       "count": 1

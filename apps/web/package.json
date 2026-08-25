@@ -24,6 +24,7 @@
     "@tailwindcss/vite": "catalog:",
     "@transitmapper/core": "workspace:*",
     "@transitmapper/pwa-updater": "workspace:*",
+    "@transitmapper/renderer": "workspace:*",
     "lucide-react": "catalog:",
     "maplibre-gl": "catalog:",
     "react": "catalog:",

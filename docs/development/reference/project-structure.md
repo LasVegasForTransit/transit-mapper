@@ -1,6 +1,7 @@
 # Project structure
 
-TransitMapper has a domain package, browser editor, and Cloudflare Worker.
+TransitMapper has four shared map packages, a domain package, a browser
+application, and a Cloudflare Worker.
 
 ## Workspace
 
@@ -9,11 +10,15 @@ TransitMapper has a domain package, browser editor, and Cloudflare Worker.
 Dependencies flow from the applications toward shared packages:
 
 ```text
-apps/web ─────┐
-              ├──> packages/core
-apps/worker ──┘
+apps/web ────────┬──> packages/renderer ──> packages/core
+                 ├──> packages/core
+                 └──> packages/pwa-updater
 
-apps/web ────────> packages/pwa-updater
+packages/views       independent package shell
+packages/map         independent package shell
+packages/workspace   independent package shell
+
+apps/worker ──────> packages/core
 
 all TypeScript packages ──> packages/tsconfig
 repository linting ───────> packages/config-eslint ──> packages/eslint-plugin
@@ -29,7 +34,11 @@ rules portable across the browser and workerd runtimes.
 
 ```text
 packages/
-  core/           Shared domain, geometry, rendering, simulation, and contracts
+  views/          Portable map View values and validation
+  map/            Map runtime and presentation state
+  workspace/      Shared React map and Workbench composition
+  renderer/       Transit document projection and MapLibre publication
+  core/           Shared domain, geometry, simulation, and contracts
   pwa-updater/    Editor update lifecycle
   config-eslint/  The org's ESLint baseline, as a function
   eslint-plugin/  Repository-specific lint rules
@@ -43,6 +52,35 @@ turbo/            Turborepo generators and templates
 ```
 
 ## Packages
+
+### Views
+
+`packages/views` is the build boundary for portable View values and parsing.
+Its empty shell has no runtime dependency. Its contracts will remain portable.
+
+### Map
+
+`packages/map` will own browser map runtime and presentation state without
+React or transit-document dependencies. Its empty shell has no dependency yet.
+
+### Workspace
+
+`packages/workspace` will own shared React composition around the map and
+Workbench. Its empty shell has no dependency yet. Hosts will supply slots.
+
+### Renderer
+
+`packages/renderer` owns document projection, accepted scenes, source banks,
+recovery, and workers. It depends on core and MapLibre. Separate `layers`,
+`projection`, `runtime`, and `stats` entries keep its API bounded. It will add
+a map dependency when the document driver moves.
+
+`packages/renderer/src/layers` owns stable source and layer identities. Worker
+clients remain beside their projection modules until that directory moves.
+
+The web application supplies editor overlays, resolved theme layer specs, and
+performance reporting. Those modules consume renderer exports and do not move
+application policy back into the package.
 
 ### Core
 
@@ -85,7 +123,7 @@ geometry and fixes paint order; the static resolver emits SVG paint directly.
 
 `SystemFeatures.stops` are boarding markers; physical Stations produce
 footprints, platforms, and handles. The historical `tm-stations` source name
-is translated only by `apps/web/src/map/system-feature-sources.ts`.
+is translated only by `packages/renderer/src/system-feature-sources.ts`.
 `service-lane-assignments.ts` resolves a directional service run once, so its
 line, connector, and vehicle path agree. `packages/core/src/style` supplies
 appearance without mixing it into the domain catalog.
@@ -213,29 +251,21 @@ editing manages physical passenger-place geometry.
 
 #### Map rendering
 
-`apps/web/src/map` adapts core rendering output to MapLibre sources, layers,
-pointer interaction, and exports. `MapCanvas.tsx` translates browser/editor
-events into calls on one `LiveMapRenderer`; committed geometry still comes from
-the store and core projectors.
+`apps/web/src/map` owns MapLibre runtime setup, pointer interaction, editor
+overlays, theme-resolved layer specs, and exports. It delegates committed
+document projection and source publication to `packages/renderer`.
+`MapCanvas.tsx` translates browser and editor events into calls on one
+`LiveMapRenderer` from that package.
 
-| Modules                                                                                                                                                              | Responsibility                                                                                                                                                                                                                                                        |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `render-presentation.ts`, `camera-render-preload.ts`                                                                                                                 | Describe display scale and reusable camera coverage.                                                                                                                                                                                                                  |
-| `live-map-renderer.ts`                                                                                                                                               | Own accepted projection, scene publication, physical banks, and recovery. Start lifecycle changes here.                                                                                                                                                               |
-| `document-projection.ts`, `committed-feature-projection.ts`, `render-preparation-scheduling.ts`, `feature-projection-worker*.ts`, `resumable-feature-projection*.ts` | Prepare dependency-scoped requests in one four-entity cooperative attempt, build detached features in the persistent Worker, and cancel superseded generations.                                                                                                       |
-| `scene-draft*.ts`, `accepted-scene-state.ts`, `scene-source-state.ts`, `persistent-render-source-state.ts`                                                           | Normalize stable IDs and compute source-local changes without publishing partial work.                                                                                                                                                                                |
-| `scene-publication*.ts`, `renderer-source-publication.ts`, `accepted-scene-store.ts`, `render-scene-source-updater.ts`                                               | Build a private scene, then own MapLibre source mutation, load observation, bank activation, and accepted CPU publication as one lifecycle.                                                                                                                           |
-| `source-bank*.ts`, `accepted-scene-recovery.ts`                                                                                                                      | Prewarm two physical banks, switch visual/hit ownership, and roll back failures.                                                                                                                                                                                      |
-| `diagram-layout-worker*.ts`                                                                                                                                          | Run and retain revision-keyed `DiagramLayoutResult` values outside the UI thread. The result carries the renderable schematic system together with node, stop, station, and named-corridor label anchors, so later Diagram consumers do not need to reconstruct them. |
-| `editor-feature-state.ts`                                                                                                                                            | Own paint-only selection, hover, halos, and route focus.                                                                                                                                                                                                              |
-| `editor-overlays.ts`, `render-visibility.ts`                                                                                                                         | Own small editor geometry and mode/type filters outside committed projection.                                                                                                                                                                                         |
+| Modules                                              | Responsibility                                                                |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `render-presentation.ts`, `camera-render-preload.ts` | Describe display scale and reusable camera coverage.                          |
+| `editor-feature-state.ts`                            | Own paint-only selection, hover, halos, and route focus.                      |
+| `editor-overlays.ts`, `render-visibility.ts`         | Own small editor geometry and mode/type filters outside committed projection. |
 
-`feature-projection-worker.ts` is the browser client and
-`feature-projection-worker-entry.ts` the worker-only CPU endpoint. Their
-protocol contains serializable document and presentation facts, never MapLibre
-objects or a store. `worker-feature-projection-submission.ts` cancels stale
-replies before source-bank publication. Fitted read-only maps use the same
-worker and presentation facts as SVG.
+The renderer package's worker protocol contains serializable document and
+presentation facts, never MapLibre objects or an editor store. Fitted
+read-only maps use the same worker and presentation facts as SVG.
 
 Scoped scenes retain a stable source base and small deltas. Static map, embed,
 export, and SVG share scene normalization. Handles, termini, and movement

@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { LAYER_SPECS } from '../../src/map/layers';
+import type { LayerSpecification } from 'maplibre-gl';
 import {
-  createSourceBankLayerController,
+  bankedLayerId,
   isBankedRenderLayer,
   OFFSCREEN_RENDER_TRANSLATE,
   renderLayerTranslateProperties,
-} from '../../src/map/source-bank-layers';
-import { bankedLayerId, createSourceBankController } from '../../src/map/source-bank';
+} from '@transitmapper/renderer/layers';
+import {
+  createSourceBankController,
+  createSourceBankLayerController,
+} from '@transitmapper/renderer/runtime';
+
+const layerSpecsModulePath = '../../src/map/layers/layerSpecs.ts';
+const { LAYER_SPECS } = (await import(/* @vite-ignore */ layerSpecsModulePath)) as {
+  LAYER_SPECS: readonly LayerSpecification[];
+};
 
 function paintProperties(spec: (typeof LAYER_SPECS)[number]): Record<string, unknown> {
   return spec.paint ?? {};

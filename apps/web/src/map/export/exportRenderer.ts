@@ -4,10 +4,11 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import { basemapStyleForScheme } from '../mapTheme';
 import { armVisibilityAwareTimeout } from './visibilityAwareTimeout';
-import { LYR_STATIONS, registerMapIcons } from '../layers';
+import { LYR_STATIONS } from '@transitmapper/renderer/layers';
+import { registerMapIcons } from '../layers';
 import { addExportSourcesAndLayers, setExportFeatureData } from './exportLayerSetup';
 import { projectFeaturesForFittedMap } from '../static-render-features';
-import { createFeatureProjectionWorker } from '../feature-projection-worker';
+import { createFeatureProjectionWorker } from '@transitmapper/renderer/projection';
 
 const DEFAULT_SIZE = { width: 1600, height: 1000 };
 const RENDER_TIMEOUT_MS = 20000;

@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
-import { serviceFocusOpacityExpr, tierOpacityExpr } from '../../src/map/layers/constants';
+import { serviceFocusOpacityExpr, tierOpacityExpr } from '@transitmapper/renderer/layers';
 import { createLayerSpecs } from '../../src/map/layers/layerSpecs';
 import { MAP_THEMES } from '../../src/map/mapThemePalette';
 

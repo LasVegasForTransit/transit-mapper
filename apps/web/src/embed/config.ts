@@ -5,7 +5,7 @@ import {
   SRC_SERVICES,
   SRC_STATIONS,
   SRC_WAYS,
-} from '../map/layers';
+} from '@transitmapper/renderer/layers';
 import type { ColorScheme } from '../theme/systemColorScheme';
 import { layerSpecsForScheme } from '../map/mapTheme';
 

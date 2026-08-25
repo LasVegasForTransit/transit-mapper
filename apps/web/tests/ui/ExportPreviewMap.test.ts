@@ -3,6 +3,7 @@ import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { aRoad, aSystem } from '@transitmapper/core/testing/fixtures';
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { EffectCallback } from 'react';
+import { emptySystemFeatures } from '@transitmapper/renderer/layers';
 
 interface FakeSource {
   setData: (data: GeoJSON.FeatureCollection) => void;
@@ -37,9 +38,10 @@ interface ProjectionRequest {
   readonly view: ViewOptions;
 }
 
-vi.mock('../../src/map/feature-projection-worker', async () => {
-  const { emptySystemFeatures } = await import('../../src/map/system-feature-sources');
+vi.mock('@transitmapper/renderer/projection', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@transitmapper/renderer/projection')>();
   return {
+    ...actual,
     createFeatureProjectionWorker: () => ({
       project: ({ view }: ProjectionRequest) => {
         previewHarness.featureViews.push(view);

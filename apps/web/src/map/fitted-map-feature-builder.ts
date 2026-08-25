@@ -12,7 +12,7 @@ import {
   type FittedMapLike,
   type StaticDisplaySize,
 } from './fitted-map-presentation';
-import { SYSTEM_FEATURE_SOURCE_BY_NAME } from './system-feature-sources';
+import { SYSTEM_FEATURE_SOURCE_BY_NAME } from '@transitmapper/renderer/layers';
 
 type StaticFeatureBuilder = (
   system: TransitSystem,

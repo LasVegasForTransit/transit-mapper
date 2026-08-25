@@ -1,7 +1,7 @@
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { SystemFeatures, ViewOptions } from '@transitmapper/core/render/buildFeatures';
-import { ALL_SYSTEM_FEATURE_SOURCES } from './system-feature-sources';
-import type { FeatureProjectionWorkerClient } from './feature-projection-worker';
+import { ALL_SYSTEM_FEATURE_SOURCES } from '@transitmapper/renderer/layers';
+import type { FeatureProjectionWorkerClient } from '@transitmapper/renderer/projection';
 import {
   renderPresentationForFittedMap,
   type FittedMapLike,

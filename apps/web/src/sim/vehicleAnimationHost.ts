@@ -11,7 +11,7 @@ import {
   serviceDisplayLabel,
   servicePattern,
 } from '@transitmapper/core/model/line-service';
-import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from '../map/layers';
+import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from '@transitmapper/renderer/layers';
 import { vehiclesDisabledForPerf } from '../perf';
 import { resolvePatternGeometry } from './patternGeometry';
 import { nextActiveServiceMs, ScheduleResolver } from './serviceSchedule';

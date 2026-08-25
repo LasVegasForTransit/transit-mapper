@@ -25,7 +25,6 @@ import { renderDomainIdentity } from '@transitmapper/core/render/render-identity
 import { createRenderTierStateResolver } from '@transitmapper/core/render/render-presentation';
 import { selectionFocus } from './selectionFocus';
 import {
-  LAYER_SPECS,
   LYR_LANDMARKS,
   LYR_LANDMARK_LABELS,
   LYR_JUNCTIONS,
@@ -38,7 +37,6 @@ import {
   LYR_STATIONS,
   LYR_STATION_LABELS_MAJOR,
   LYR_FACILITIES,
-  registerMapIcons,
   SRC_ENDPOINT_HINT,
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
@@ -66,7 +64,8 @@ import {
   SRC_WAYS,
   SRC_WAY_LABELS,
   SRC_STATIONS,
-} from './layers';
+} from '@transitmapper/renderer/layers';
+import { LAYER_SPECS, registerMapIcons } from './layers';
 import type { RenderViewOptions, ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import {
   createGestureProjectionController,
@@ -90,18 +89,18 @@ import type { SourceMutationSettlementHost } from './sourceMutationSettlement';
 import { planStopGestureSettlement } from './stopGesturePlan';
 import { createStopGesturePreviewController } from './stopGesturePreview';
 import { createStopGestureSettlementController } from './stopGestureSettlement';
+import { ALL_SYSTEM_FEATURE_SOURCES } from '@transitmapper/renderer/layers';
 import {
-  ALL_SYSTEM_FEATURE_SOURCES,
   createSourceUploadQueue,
   sourceUploadsForSystemChange,
   type SourceUploadBatch,
   type SourceUploadRequest,
   type SourceUploadTransition,
   type SystemFeatureSourceId,
-} from './sourceUploadPlan';
-import { mergeSourceFeatureProjectionCounts } from './feature-projection-counts';
-import type { AcceptedSceneUpdate } from './accepted-scene-store';
-import type { RenderSceneSourceUpdateResult } from './render-scene-source-updater';
+} from '@transitmapper/renderer/projection';
+import { mergeSourceFeatureProjectionCounts } from '@transitmapper/renderer/projection';
+import type { AcceptedSceneUpdate } from '@transitmapper/renderer/runtime';
+import type { RenderSceneSourceUpdateResult } from '@transitmapper/renderer/runtime';
 import { renderPresentationFromMap } from './render-presentation';
 import { landmarksFeatureCollection } from './landmarks';
 import { getMap, setMap } from './mapRef';
@@ -121,7 +120,7 @@ import {
   markFirstSystemMapPaint,
   systemPaintReady,
 } from '../perf/mapPaintMark';
-import { createRendererStatsCollector } from '../perf/renderer-stats';
+import { createRendererStatsCollector } from '@transitmapper/renderer/stats';
 import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
 import { createVehicleAnimationGateController } from '../sim/vehicle-animation-gate';
@@ -143,18 +142,18 @@ import {
   EDITOR_SYSTEM_FEATURE_SOURCES,
   committedSystemFeatureSources,
   emptySystemFeatures,
-} from './system-feature-sources';
+} from '@transitmapper/renderer/layers';
 import {
   createSourceFeatureProjectionAccounting,
   scheduleRenderProjectionFailureRetry,
-} from './committed-feature-projection';
+} from '@transitmapper/renderer/projection';
 import {
   canReuseCommittedCameraRefresh,
   createCameraRenderPreloadController,
   createPresentationRefreshScheduler,
   type CommittedCameraCoverage,
 } from './camera-render-preload';
-import { bankedLayerId, SOURCE_BANK_IDS } from './source-bank';
+import { bankedLayerId, SOURCE_BANK_IDS } from '@transitmapper/renderer/layers';
 import {
   logicalBankedLayerIds,
   sourceBankLayerSpecs,
@@ -163,11 +162,11 @@ import {
   logicalRenderSourceId,
   physicalRenderSourceIds,
   renderOverlayNeedsHealing as physicalOverlayNeedsHealing,
-} from './source-bank-layers';
-import type { SourceBankSettlementHost } from './source-bank-settlement';
-import { createLiveMapRenderer, type LiveMapRenderer } from './live-map-renderer';
-import { createDiagramLayoutWorker } from './diagram-layout-worker';
-import { createFeatureProjectionWorker } from './feature-projection-worker';
+} from '@transitmapper/renderer/layers';
+import type { SourceBankSettlementHost } from '@transitmapper/renderer/runtime';
+import { createLiveMapRenderer, type LiveMapRenderer } from '@transitmapper/renderer/runtime';
+import { createDiagramLayoutWorker } from '@transitmapper/renderer/projection';
+import { createFeatureProjectionWorker } from '@transitmapper/renderer/projection';
 import { createFrameFallbackScheduler } from './frame-fallback-scheduler';
 import {
   createEditorFeatureState,

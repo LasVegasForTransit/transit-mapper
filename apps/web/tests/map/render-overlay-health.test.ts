@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { LAYER_SPECS } from '../../src/map/layers';
+import type { LayerSpecification } from 'maplibre-gl';
 import {
+  ALL_SYSTEM_FEATURE_SOURCES,
   sourceBankLayerSpecs,
   physicalRenderSourceIds,
   renderOverlayNeedsHealing,
-} from '../../src/map/source-bank-layers';
-import { ALL_SYSTEM_FEATURE_SOURCES } from '../../src/map/system-feature-sources';
+} from '@transitmapper/renderer/layers';
+
+const layerSpecsModulePath = '../../src/map/layers/layerSpecs.ts';
+const { LAYER_SPECS } = (await import(/* @vite-ignore */ layerSpecsModulePath)) as {
+  LAYER_SPECS: readonly LayerSpecification[];
+};
 
 describe('render overlay health', () => {
   it('recognizes the complete physical bank overlay without logical committed layer IDs', () => {

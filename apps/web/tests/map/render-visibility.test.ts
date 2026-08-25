@@ -12,7 +12,7 @@ import {
   LYR_SERVICE_TERMINI,
   LYR_STATIONS,
   LYR_WAYS_SOLID,
-} from '../../src/map/layers';
+} from '@transitmapper/renderer/layers';
 
 const BASE_SERVICE_FILTER: FilterSpecification = [
   'all',

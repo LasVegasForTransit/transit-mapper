@@ -1,13 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { LAYER_SPECS, SRC_HANDLES, SRC_HIT_FEATURES, SRC_WAYS } from '../../src/map/layers';
+import type { LayerSpecification } from 'maplibre-gl';
 import {
+  SRC_HANDLES,
+  SRC_HIT_FEATURES,
+  SRC_WAYS,
   logicalBankedLayerIds,
   logicalRenderLayerId,
   logicalRenderSourceId,
   physicalRenderLayerIds,
   physicalRenderSourceIds,
   sourceBankForPhysicalId,
-} from '../../src/map/source-bank-layers';
+} from '@transitmapper/renderer/layers';
+
+const layerSpecsModulePath = '../../src/map/layers/layerSpecs.ts';
+const { LAYER_SPECS } = (await import(/* @vite-ignore */ layerSpecsModulePath)) as {
+  LAYER_SPECS: readonly LayerSpecification[];
+};
 
 describe('render source bank identities', () => {
   it('expands committed and hit sources while leaving editor sources unbanked', () => {

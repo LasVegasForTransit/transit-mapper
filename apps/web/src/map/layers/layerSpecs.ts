@@ -104,7 +104,7 @@ import {
   SRC_WAY_LABELS,
   TIER_OPACITY_EXPR,
   tierOpacityExpr,
-} from './constants';
+} from '@transitmapper/renderer/layers';
 
 function contextLayerSpecs(theme: MapTheme): LayerSpecification[] {
   return [

@@ -71,7 +71,7 @@ import {
   SRC_MARQUEE,
   SRC_PREVIEW,
   SRC_SHARING,
-} from './layers';
+} from '@transitmapper/renderer/layers';
 
 /** A screen-space pixel coordinate (as opposed to LngLat's map-space one). */
 interface ScreenPoint {
@@ -433,7 +433,7 @@ export function attachInteractions(
         selected = feature;
         continue;
       }
-      if (selectedDistance === undefined) selectedDistance = squaredDistance(e, selected);
+      selectedDistance ??= squaredDistance(e, selected);
       const candidateDistance = squaredDistance(e, feature);
       // Strictly nearer wins. Equal distances retain MapLibre's first result,
       // matching stable Array.sort without allocating and sorting candidates.

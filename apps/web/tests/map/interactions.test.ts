@@ -20,7 +20,7 @@ import {
   LYR_STATIONS,
   LYR_WAYS_SOLID,
   SRC_ENDPOINT_HINT,
-} from '../../src/map/layers';
+} from '@transitmapper/renderer/layers';
 import { attachInteractions, type AttachInteractionsOptions } from '../../src/map/interactions';
 import {
   COARSE_POINTER_TUNING,
@@ -1773,10 +1773,11 @@ describe('pointer work coalescing', () => {
     expect(shown.at(-1)).toMatchObject({ primaryOperation: 'select-line-and-branch' });
 
     menuOpen = true;
-    refresh!();
+    if (!refresh) throw new Error('expected a pointer intent refresh callback');
+    refresh();
     expect(shown.at(-1)).toBeNull();
     menuOpen = false;
-    refresh!();
+    refresh();
     expect(shown.at(-1)).toMatchObject({ primaryOperation: 'select-line-and-branch' });
     detach();
   });

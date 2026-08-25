@@ -7,7 +7,7 @@ import {
   LYR_WAYS_SOLID,
   SRC_SERVICES,
   SRC_WAYS,
-} from '../../src/map/layers';
+} from '@transitmapper/renderer/layers';
 import {
   buildGestureLayerMaskPlan,
   createGestureLayerMaskController,
