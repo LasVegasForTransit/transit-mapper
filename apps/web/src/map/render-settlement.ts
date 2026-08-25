@@ -1,6 +1,6 @@
 import type { GestureAffectedEntities } from './gestureProjection';
 
-export interface RendererWorkLease {
+interface RendererWorkLease {
   complete(): void;
   fail(error: unknown): void;
 }
