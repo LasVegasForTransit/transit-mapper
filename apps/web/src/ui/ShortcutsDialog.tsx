@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { KEY_BINDINGS } from '../editor/keymap';
+import { SIMULATION_SHORTCUT_BINDINGS } from '../sim/simulation-shortcuts';
 import { Modal } from './Modal';
 const KEY_LABEL: Record<string, string> = {
   ArrowUp: '↑',
@@ -29,9 +30,15 @@ interface ShortcutsDialogProps {
 export function ShortcutsDialog({ onClose }: ShortcutsDialogProps) {
   // Group bindings by their declared group, preserving first-seen order.
   const groups = useMemo(() => {
+    const helpIndex = KEY_BINDINGS.findIndex((binding) => binding.group === 'Help');
+    const bindings = [
+      ...KEY_BINDINGS.slice(0, helpIndex),
+      ...SIMULATION_SHORTCUT_BINDINGS,
+      ...KEY_BINDINGS.slice(helpIndex),
+    ];
     const order: string[] = [];
-    const byGroup = new Map<string, typeof KEY_BINDINGS>();
-    for (const b of KEY_BINDINGS) {
+    const byGroup = new Map<string, typeof bindings>();
+    for (const b of bindings) {
       if (!byGroup.has(b.group)) {
         byGroup.set(b.group, []);
         order.push(b.group);

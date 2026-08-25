@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { DEFAULT_SIM_SPEED_ID, stepSimSpeed } from '@transitmapper/core/sim/clock';
 import { createSimClock, type SimClock } from '../sim/simClock';
+import { attachSimulationKeyboard } from '../sim/simulation-shortcuts';
 
 // The simulation's SETTINGS — which speed, and whether it's running — plus
 // ownership of the one SimClock instance everything else is handed.
@@ -80,6 +81,8 @@ export function SimProvider({ children }: SimProviderProps) {
     [],
   );
   const togglePaused = useCallback(() => setPaused((p) => !p), []);
+
+  useEffect(() => attachSimulationKeyboard({ togglePaused, stepSpeed }), [stepSpeed, togglePaused]);
 
   const value = useMemo<SimState>(
     () => ({
