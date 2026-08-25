@@ -87,6 +87,108 @@ function driverOptions(
 }
 
 describe('document map driver', () => {
+  it('installs only the layers required by the current representation', async () => {
+    const source = new TestDocumentSource(readySnapshot(aSystem({ id: 'empty' })));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const layers: LayerSpecification[] = [
+      { id: 'document-lines', type: 'line', source: SRC_WAYS },
+      { id: 'document-stops', type: 'circle', source: SRC_STATIONS },
+    ];
+    const viewStore = createMapViewStore({
+      schemaVersion: 1,
+      camera: { center: [-115.18, 36.14], zoom: 10 },
+      representationId: 'network',
+      filters: { modes: ['bus'], 'way-types': ['road'] },
+    });
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, createProjectionWorker(), {
+        layerSpecs: () => layers,
+        layerSpecsForPresentation: (_catalog, presentation) =>
+          presentation.viewMode === 'network' ? layers.slice(0, 1) : layers,
+      }),
+    );
+
+    const attachment = await driver.attach(createAttachOptions(map, [], [], { viewStore }));
+
+    expect(map.styleUpdates).toHaveLength(1);
+    expect(map.styleUpdates[0]?.options).toEqual({ diff: true, validate: false });
+    expect(map.styleUpdates[0]?.style.layers.map((layer) => layer.id)).toEqual([
+      'document-lines--bank-a',
+      'document-lines--bank-b',
+    ]);
+    expect(map.layerAdds).toEqual([]);
+
+    viewStore.setRepresentationId('infrastructure');
+
+    expect(map.styleUpdates).toHaveLength(2);
+    expect(map.styleUpdates[1]?.style.layers.map((layer) => layer.id)).toEqual([
+      'document-lines--bank-a',
+      'document-lines--bank-b',
+      'document-stops--bank-a',
+      'document-stops--bank-b',
+    ]);
+    attachment.dispose();
+  });
+
+  it('installs one composed surface plan without giving extension layers to the renderer', async () => {
+    const source = new TestDocumentSource(readySnapshot(aSystem({ id: 'empty' })));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const layers: LayerSpecification[] = [
+      { id: 'document-lines', type: 'line', source: SRC_WAYS },
+      { id: 'editor-handles', type: 'circle', source: 'tm-handles' },
+      { id: 'document-stops', type: 'circle', source: SRC_STATIONS },
+    ];
+    const documentLayersFor = (
+      _catalog: readonly LayerSpecification[],
+      presentation: ReturnType<typeof resolvePresentation>,
+    ) => (presentation.viewMode === 'network' ? [layers[0]] : [layers[0], layers[2]]);
+    const surfaceLayersFor = (
+      catalog: readonly LayerSpecification[],
+      presentation: ReturnType<typeof resolvePresentation>,
+    ) => {
+      const documentIds = new Set(
+        documentLayersFor(catalog, presentation).map((layer) => layer.id),
+      );
+      return catalog.filter((layer) => documentIds.has(layer.id) || layer.id === 'editor-handles');
+    };
+    const viewStore = createMapViewStore({
+      schemaVersion: 1,
+      camera: { center: [-115.18, 36.14], zoom: 10 },
+      representationId: 'network',
+      filters: { modes: ['bus'], 'way-types': ['road'] },
+    });
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, createProjectionWorker(), {
+        layerSpecs: () => layers,
+        layerSpecsForPresentation: documentLayersFor,
+        surfaceLayerSpecsForPresentation: surfaceLayersFor,
+      }),
+    );
+
+    const attachment = await driver.attach(createAttachOptions(map, [], [], { viewStore }));
+
+    expect(map.styleUpdates).toHaveLength(1);
+    expect(map.styleUpdates[0]?.style.layers.map((layer) => layer.id)).toEqual([
+      'document-lines--bank-a',
+      'document-lines--bank-b',
+      'editor-handles',
+    ]);
+
+    viewStore.setRepresentationId('infrastructure');
+
+    expect(map.styleUpdates).toHaveLength(2);
+    expect(map.styleUpdates[1]?.style.layers.map((layer) => layer.id)).toEqual([
+      'document-lines--bank-a',
+      'document-lines--bank-b',
+      'editor-handles',
+      'document-stops--bank-a',
+      'document-stops--bank-b',
+    ]);
+    attachment.dispose();
+  });
+
   it('renders an initial ready document before it publishes startup milestones', async () => {
     const source = new TestDocumentSource(readySnapshot(createReadySystem()));
     const map = new TestDocumentMap();

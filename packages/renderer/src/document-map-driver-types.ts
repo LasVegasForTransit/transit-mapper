@@ -68,6 +68,18 @@ export interface DocumentMapDriverOptions {
   readonly definition: MapDefinition;
   readonly source: DocumentMapSnapshotSource;
   layerSpecs(): readonly LayerSpecification[];
+  layerSpecsForPresentation?(
+    catalog: readonly LayerSpecification[],
+    presentation: DocumentMapPresentation,
+  ): readonly LayerSpecification[];
+  /** Composes renderer-owned layers with extensions that share the same
+   * MapLibre style. The renderer still receives only
+   * `layerSpecsForPresentation`; this hook changes installation, not scene
+   * ownership. */
+  surfaceLayerSpecsForPresentation?(
+    catalog: readonly LayerSpecification[],
+    presentation: DocumentMapPresentation,
+  ): readonly LayerSpecification[];
   resolvePresentation(state: MapPresentationStateV1): DocumentMapPresentation;
   setupStaticSources?(map: MapLibreMap): void;
   createFeatureProjectionWorker?(): FeatureProjectionClient;

@@ -1,5 +1,10 @@
 /* eslint-disable max-lines, max-lines-per-function -- The attachment closure keeps every listener and worker in one disposal scope. */
-import type { Map as MapLibreMap, MapEventType, MapSourceDataEvent } from 'maplibre-gl';
+import type {
+  LayerSpecification,
+  Map as MapLibreMap,
+  MapEventType,
+  MapSourceDataEvent,
+} from 'maplibre-gl';
 import { systemBounds } from '@transitmapper/core/model/geo/bounds';
 import { createRenderTierStateResolver } from '@transitmapper/core/render/render-presentation';
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
@@ -87,6 +92,30 @@ function cleanupSafely(options: MapDriverAttachOptions, cleanup: (() => void) | 
   }
 }
 
+function sameLayerOrder(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
+}
+
+function installSurfaceLayers(
+  map: MapLibreMap,
+  specs: readonly LayerSpecification[],
+  catalogLayerIds: ReadonlySet<string>,
+): void {
+  const style = map.getStyle();
+  const installedIds = style.layers
+    .filter((layer) => catalogLayerIds.has(layer.id))
+    .map((layer) => layer.id);
+  const desiredIds = specs.map((spec) => spec.id);
+  if (sameLayerOrder(installedIds, desiredIds)) return;
+  map.setStyle(
+    {
+      ...style,
+      layers: [...style.layers.filter((layer) => !catalogLayerIds.has(layer.id)), ...specs],
+    },
+    { diff: true, validate: false },
+  );
+}
+
 function presentationFromMap(map: MapLibreMap) {
   const canvas = map.getCanvas();
   const container = map.getContainer();
@@ -170,7 +199,21 @@ class DocumentMapDriver implements MapDriver {
     const tierStateResolver = createRenderTierStateResolver();
 
     const logicalLayerSpecs = () => this.options.layerSpecs();
-    const physicalLayerSpecs = () => sourceBankLayerSpecs(logicalLayerSpecs());
+    const requiredLogicalLayerSpecs = () => {
+      const catalog = logicalLayerSpecs();
+      return this.options.layerSpecsForPresentation?.(catalog, previousView) ?? catalog;
+    };
+    const surfaceLogicalLayerSpecs = () => {
+      const catalog = logicalLayerSpecs();
+      return (
+        this.options.surfaceLayerSpecsForPresentation?.(catalog, previousView) ??
+        requiredLogicalLayerSpecs()
+      );
+    };
+    const physicalLayerSpecs = () => sourceBankLayerSpecs(requiredLogicalLayerSpecs());
+    const physicalSurfaceLayerSpecs = () => sourceBankLayerSpecs(surfaceLogicalLayerSpecs());
+    const physicalCatalogLayerIds = () =>
+      new Set(sourceBankLayerSpecs(logicalLayerSpecs()).map((spec) => spec.id));
     const applyVisibility = () =>
       applyRendererVisibilityFilters(
         map,
@@ -189,13 +232,7 @@ class DocumentMapDriver implements MapDriver {
             map.addSource(sourceId, { type: 'geojson', data: emptyFeatureCollection });
           }
         }
-        const specs = physicalLayerSpecs();
-        for (let index = 0; index < specs.length; index += 1) {
-          const spec = specs[index];
-          if (map.getLayer(spec.id)) continue;
-          const anchor = specs.slice(index + 1).find((candidate) => map.getLayer(candidate.id));
-          map.addLayer(spec, anchor?.id);
-        }
+        installSurfaceLayers(map, physicalSurfaceLayerSpecs(), physicalCatalogLayerIds());
         applyVisibility();
         overlayReady = true;
         return true;
@@ -450,6 +487,7 @@ class DocumentMapDriver implements MapDriver {
         const next = this.options.resolvePresentation(state);
         const plan = planViewRenderUpdate(previousView, next);
         previousView = next;
+        if (plan.reproject) overlayReady = ensureOverlay();
         if (plan.updateFilters) applyVisibility();
         if (plan.reproject) scheduleProjection({ replaceActive: true });
       } catch (error) {

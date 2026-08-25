@@ -5,6 +5,7 @@ import type {
   Map as MapLibreMap,
   MapEventType,
   MapSourceDataEvent,
+  StyleSpecification,
 } from 'maplibre-gl';
 import { vi } from 'vitest';
 import { aSystem } from '@transitmapper/core/testing/fixtures';
@@ -55,6 +56,11 @@ export class TestDocumentMap {
   readonly filters = new Map<string, unknown>();
   readonly sourceMutations: string[] = [];
   readonly sourceOperations: Array<{ id: string; method: 'setData' | 'updateData' }> = [];
+  readonly layerAdds: string[] = [];
+  readonly styleUpdates: Array<{
+    style: StyleSpecification;
+    options: { diff?: boolean; validate?: boolean } | undefined;
+  }> = [];
   failNextSourceMutation = false;
   failNextOverlaySetup = false;
   private bounds = {
@@ -79,7 +85,27 @@ export class TestDocumentMap {
   }
 
   addLayer(layer: LayerSpecification): void {
+    this.layerAdds.push(layer.id);
     this.layers.set(layer.id, layer);
+  }
+
+  getStyle(): StyleSpecification {
+    return {
+      version: 8,
+      sources: Object.fromEntries(
+        [...this.sources.keys()].map((id) => [
+          id,
+          { type: 'geojson' as const, data: { type: 'FeatureCollection' as const, features: [] } },
+        ]),
+      ),
+      layers: [...this.layers.values()],
+    };
+  }
+
+  setStyle(style: StyleSpecification, options?: { diff?: boolean; validate?: boolean }): void {
+    this.styleUpdates.push({ style, options });
+    this.layers.clear();
+    for (const layer of style.layers) this.layers.set(layer.id, layer);
   }
 
   getLayer(id: string): LayerSpecification | undefined {
