@@ -33,7 +33,7 @@ import type { TerminusConnectionChoice } from './interactions';
 import { PointerBadge } from './PointerBadge';
 import { getMap, setMap } from './mapRef';
 import { basemapStyleForScheme, localBlankStyleForScheme } from './mapTheme';
-import type { EditorMapDriverPorts, EditorMapStyleBridge } from './editor-map-driver';
+import type { EditorMapDriverPorts, EditorMapStyleBridge } from './editor-map-ports';
 
 export interface EditorMapSurfaceFrameProps {
   readonly driver: MapDriver;

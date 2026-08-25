@@ -22,7 +22,7 @@ import { attachPerfHarness, type PerfHarnessOptions } from '../perf';
 import { markFirstSystemMapPaint } from '../perf/mapPaintMark';
 import { attachSimDevHandle } from '../sim/devHandle';
 import type { EditorMapAttachment } from '../editor/editor-map-attachment';
-import type { EditorMapDriverPorts } from './editor-map-driver';
+import type { EditorMapDriverPorts } from './editor-map-ports';
 import type { ProjectionOperationCounts } from './gestureProjection';
 import { recordFullProjection } from './gestureProjection';
 import { layerSpecsForScheme } from './mapTheme';

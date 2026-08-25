@@ -1,18 +1,6 @@
-import type { Map as MLMap, StyleSpecification } from 'maplibre-gl';
-import type { MapDriver, MapRuntime, MapViewStore } from '@transitmapper/map';
+import type { Map as MLMap } from 'maplibre-gl';
+import type { MapDriver, MapViewStore } from '@transitmapper/map';
 import type { RenderViewOptions, ViewOptions } from '@transitmapper/core/render/buildFeatures';
-import type { EditorStore } from '../editor/store';
-import type { ColorScheme } from '../theme/systemColorScheme';
-import type { SimClock } from '../sim/simClock';
-import type { VehicleAnimationGateController } from '../sim/vehicle-animation-gate';
-import type { InputTuning } from '../editor/input-tuning';
-import type { PointerIntent } from '../editor/pointerIntent';
-import type { TerminusConnectionChoice } from './interactions';
-import type { LngLat } from '@transitmapper/core/model/system';
-import type {
-  CorridorActionHit,
-  ServiceActionHit,
-} from '@transitmapper/core/model/selectionActions';
 import {
   ALL_SYSTEM_FEATURE_SOURCES,
   LYR_LANDMARKS,
@@ -65,6 +53,7 @@ import {
   type ProjectionOperationCounts,
 } from './gestureProjection';
 import { attachEditorMapInstrumentation } from './editor-map-instrumentation';
+import type { EditorMapDriverPorts, EditorMapStyleBridge } from './editor-map-ports';
 
 const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
 const LOGICAL_SOURCES = [
@@ -81,50 +70,6 @@ const LOGICAL_SOURCES = [
   SRC_JUNCTION_GUIDES,
 ] as const;
 const PHYSICAL_SOURCES = physicalRenderSourceIds(LOGICAL_SOURCES);
-
-export interface EditorMapStyleBridge {
-  readonly runtime: MapRuntime<ColorScheme> | null;
-  readonly activeTheme: ColorScheme;
-  readonly attachment: EditorMapAttachment | null;
-  carry(
-    previous: StyleSpecification | undefined,
-    next: StyleSpecification,
-    theme: ColorScheme,
-  ): StyleSpecification;
-  retained(): boolean;
-  themeApplied(theme: ColorScheme): void;
-  interactionActive(): boolean;
-  resized(): void;
-}
-
-export interface EditorMapDriverPorts {
-  readonly store: EditorStore;
-  readonly viewStore: MapViewStore;
-  readonly style: { current: EditorMapStyleBridge };
-  readonly simClock: SimClock;
-  readonly vehicleGate: VehicleAnimationGateController;
-  readonly tuning: InputTuning;
-  readonly container: () => HTMLElement | null;
-  framePadding(
-    margin: number,
-  ): number | { top: number; bottom: number; left: number; right: number };
-  setRepresentation(mode: string): void;
-  openShortcuts(): void;
-  toggleUi(): void;
-  openContextMenu(
-    x: number,
-    y: number,
-    at: LngLat,
-    serviceHit?: ServiceActionHit,
-    corridorHit?: CorridorActionHit,
-  ): void;
-  closeContextMenu(): void;
-  isContextMenuOpen(): boolean;
-  onPointerIntent(intent: PointerIntent | null, x: number, y: number): void;
-  registerPointerIntentRefresh(refresh: () => void): () => void;
-  openTerminusConnectionChoice(choice: TerminusConnectionChoice): void;
-  reportError(error: unknown): void;
-}
 
 function mapPresentation(map: MLMap) {
   const canvas = map.getCanvas();
