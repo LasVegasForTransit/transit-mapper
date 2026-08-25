@@ -14,7 +14,10 @@ import {
   type DocumentMapDriverOptions,
   type DocumentMapSession,
 } from '../src/document-map-driver';
+import { createSourceFeatureProjectionAccounting } from '../src/committed-feature-projection';
 import { LYR_WAYS_SOLID, SRC_STATIONS, SRC_WAYS } from '../src/layers/constants';
+import type { RendererStatsCollector } from '../src/renderer-stats';
+import { createSourceFeatureProjectionCounts } from '../src/sourceFeatureProjection';
 import { COMMITTED_SYSTEM_FEATURE_SOURCES } from '../src/system-feature-sources';
 import {
   DocumentDriverClock,
@@ -397,6 +400,45 @@ describe('document map driver', () => {
 
     expect(worker.project.mock.calls[1]?.[0].sourceIds).toEqual([SRC_STATIONS]);
     expect(errors).toEqual([]);
+    attachment.dispose();
+  });
+
+  it('uses injected projection accounting and renderer instrumentation', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem()));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const counts = createSourceFeatureProjectionCounts();
+    counts.featureStopVisitCount = 7;
+    const worker = createProjectionWorker(() =>
+      Promise.resolve({ features: projectedWayFeatures('system'), counts }),
+    );
+    const projectionAccounting = createSourceFeatureProjectionAccounting();
+    const rendererStats: RendererStatsCollector = {
+      recordProjection: vi.fn(),
+      recordEditorProjection: vi.fn(),
+      recordPatch: vi.fn(),
+      recordFullUpload: vi.fn(),
+      recordScheduling: vi.fn(),
+      recordPreparation: vi.fn(),
+      snapshot: vi.fn(() => {
+        throw new Error('The test does not read a statistics snapshot.');
+      }),
+    };
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, worker, {
+        projectionAccounting,
+        rendererStats,
+        instrumentationEnabled: true,
+      }),
+    );
+
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+    await advanceUntil(clock, map, () => projectionAccounting.snapshot().featureStopVisitCount > 0);
+
+    expect(projectionAccounting.snapshot().featureStopVisitCount).toBe(7);
+    expect(rendererStats.recordProjection).toHaveBeenCalledOnce();
+    expect(rendererStats.recordScheduling).toHaveBeenCalled();
+    expect(rendererStats.recordPreparation).toHaveBeenCalled();
     attachment.dispose();
   });
 

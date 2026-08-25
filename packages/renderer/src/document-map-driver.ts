@@ -289,6 +289,9 @@ class DocumentMapDriver implements MapDriver {
         },
         requeueProjection: (sourceIds, transition) =>
           sourceQueue.add(sourceIds, transition ?? undefined),
+        projectionAccounting: this.options.projectionAccounting,
+        rendererStats: this.options.rendererStats,
+        instrumentationEnabled: this.options.instrumentationEnabled,
         onError: (error) => {
           if (!disposed && !attachOptions.signal.aborted && !styleRecovery?.isPending()) {
             reportSafely(attachOptions, error);

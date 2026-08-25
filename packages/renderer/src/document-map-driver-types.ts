@@ -4,9 +4,11 @@ import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { MapDefinition } from '@transitmapper/map';
 import type { MapPresentationStateV1 } from '@transitmapper/views';
 import type { AcceptedSceneUpdate } from './accepted-scene-store';
+import type { SourceFeatureProjectionAccounting } from './committed-feature-projection';
 import type { DiagramLayoutWorkerClient } from './diagram-layout-worker';
 import type { FeatureProjectionClient } from './feature-projection-worker';
 import type { LiveMapRenderer } from './live-map-renderer';
+import type { RendererStatsCollector } from './renderer-stats';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 import type { SourceUploadTransition } from './sourceUploadPlan';
 
@@ -84,6 +86,9 @@ export interface DocumentMapDriverOptions {
   setupStaticSources?(map: MapLibreMap): void;
   createFeatureProjectionWorker?(): FeatureProjectionClient;
   createDiagramLayoutWorker?(): DiagramLayoutWorkerClient;
+  readonly projectionAccounting?: SourceFeatureProjectionAccounting;
+  readonly rendererStats?: RendererStatsCollector;
+  readonly instrumentationEnabled?: boolean;
   readonly scheduler?: DocumentMapScheduler;
   attachSession?(
     session: DocumentMapSession,
