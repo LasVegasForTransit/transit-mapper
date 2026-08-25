@@ -127,11 +127,13 @@ describe('renderer visibility filters', () => {
         new Set(['bus']),
         new Set(['road']),
       ),
+      { validate: false },
     );
     expect(setFilter).toHaveBeenNthCalledWith(
       2,
       LYR_WAYS_SOLID,
       rendererVisibilityFilter(LYR_WAYS_SOLID, undefined, new Set(['bus']), new Set(['road'])),
+      { validate: false },
     );
   });
 
@@ -155,11 +157,13 @@ describe('renderer visibility filters', () => {
       1,
       `${LYR_WAYS_SOLID}--bank-a`,
       rendererVisibilityFilter(LYR_WAYS_SOLID, undefined, new Set(['bus']), new Set(['road'])),
+      { validate: false },
     );
     expect(setFilter).toHaveBeenNthCalledWith(
       2,
       `${LYR_WAYS_SOLID}--bank-b`,
       rendererVisibilityFilter(LYR_WAYS_SOLID, undefined, new Set(['bus']), new Set(['road'])),
+      { validate: false },
     );
   });
 });

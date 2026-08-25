@@ -45,7 +45,11 @@ type VisibilityKind = 'mode' | 'mode-and-type' | 'served-modes' | 'type' | 'type
 
 export interface RendererVisibilityMap {
   getLayer(id: string): unknown;
-  setFilter(id: string, filter: FilterSpecification | null): unknown;
+  setFilter(
+    id: string,
+    filter: FilterSpecification | null,
+    options?: { validate?: boolean },
+  ): unknown;
 }
 
 export interface ViewRenderUpdatePlan {
@@ -144,6 +148,7 @@ export function applyRendererVisibilityFilters(
     map.setFilter(
       layer.id,
       rendererVisibilityFilter(layer.id, baseLayerFilter(layer), visibleModes, visibleWayTypes),
+      { validate: false },
     );
   }
 }
