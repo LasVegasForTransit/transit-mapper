@@ -54,7 +54,7 @@ const SimClockContext = createContext<SimClock | null>(null);
  *  play button still works — it just doesn't start on its own. */
 function prefersReducedMotion(): boolean {
   return (
-    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   );
 }
 

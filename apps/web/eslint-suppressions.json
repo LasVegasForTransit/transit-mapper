@@ -377,11 +377,6 @@
       "count": 1
     }
   },
-  "src/ui/SimProvider.tsx": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    }
-  },
   "src/ui/SystemsDialog.tsx": {
     "max-lines-per-function": {
       "count": 1
