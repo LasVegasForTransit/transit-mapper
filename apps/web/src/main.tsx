@@ -1,7 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createMapViewStore } from '@transitmapper/map';
 import { App } from './App';
 import { EditorProvider } from './editor/EditorProvider';
+import { createEditorStore } from './editor/store';
+import {
+  createDocumentPresentationState,
+  currentDocumentCamera,
+} from './editor/document-view-adapter';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { SaveStatusProvider } from './ui/SaveStatusProvider';
 import { SimProvider } from './ui/SimProvider';
@@ -24,14 +30,19 @@ startFieldSampling(performanceSurfaceForPath(window.location.pathname));
 // ever reaches this one.
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Editor root element is missing');
+const mapViewStore = createMapViewStore(createDocumentPresentationState());
+const editorStore = createEditorStore({
+  documentStatus: 'loading',
+  readCameraCenter: () => currentDocumentCamera(mapViewStore).center,
+});
 createRoot(rootElement).render(
   <StrictMode>
     <ErrorBoundary label="editor">
-      <EditorProvider>
+      <EditorProvider store={editorStore}>
         <InstallProvider enabled={!window.location.pathname.startsWith('/s/')}>
           <UiProvider>
             <SaveStatusProvider>
-              <ViewProvider>
+              <ViewProvider store={mapViewStore}>
                 <SimProvider>
                   <App />
                 </SimProvider>

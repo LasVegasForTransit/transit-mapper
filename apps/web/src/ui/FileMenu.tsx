@@ -1,4 +1,5 @@
 import { useEditor, useEditorStore } from '../editor/EditorProvider';
+import { withDocumentCamera } from '../editor/document-view-adapter';
 import { exportSystemJson } from '../share/jsonExport';
 import {
   DropdownMenu,
@@ -8,6 +9,7 @@ import {
 } from './DropdownMenu';
 import { Icon } from './Icon';
 import { useUi } from './UiProvider';
+import { useMapViewStore } from './ViewProvider';
 
 /** Figma-style application menu: whole-document actions plus project identity,
  *  tucked behind one trigger in
@@ -24,6 +26,7 @@ export function FileMenu() {
   // only read inside the Export click handler, always wanting the latest
   // value anyway). Read it imperatively instead.
   const store = useEditorStore();
+  const mapViewStore = useMapViewStore();
   const readOnly = useEditor((s) => s.readOnly);
   const { openDialog, openNewSystemLocation } = useUi();
 
@@ -60,7 +63,11 @@ export function FileMenu() {
               other place a system lives) — back it up, put it in git, move it
               to another browser/computer. Not the same as Share, which creates
               a hosted read-only snapshot rather than a file you keep. */}
-          <DropdownMenuItem onSelect={() => exportSystemJson(store.getState().system)}>
+          <DropdownMenuItem
+            onSelect={() =>
+              exportSystemJson(withDocumentCamera(store.getState().system, mapViewStore))
+            }
+          >
             <Icon name="download" size={17} /> Export system data (.json)
           </DropdownMenuItem>
           <DropdownMenuSeparator />

@@ -1,5 +1,5 @@
 import { shortId } from '@transitmapper/core/model/ids';
-import { liveCamera } from '../../camera/liveCamera';
+import { DEFAULT_VIEWPORT } from '@transitmapper/core/model/system';
 import { createDocumentCommands, createHistoryCommands } from './commands/document-commands';
 import { createFacilityCommands } from './commands/facility-commands';
 import { createGroupCommands } from './commands/group-commands';
@@ -48,7 +48,9 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}): Edito
     stations: createStationCommands(runtime),
     facilities: createFacilityCommands(runtime),
     groups: createGroupCommands(runtime, {
-      readCameraCenter: () => liveCamera().center,
+      readCameraCenter:
+        options.readCameraCenter ??
+        (() => [DEFAULT_VIEWPORT.center[0], DEFAULT_VIEWPORT.center[1]]),
     }),
   };
 

@@ -3,7 +3,7 @@ import { useEditor } from '../editor/EditorProvider';
 import type { Selection, Tool } from '../editor/store';
 import { Panel } from './Panel';
 import { useDelayedUnmount } from './useDelayedUnmount';
-import { useView, type ViewMode } from './ViewProvider';
+import { useView, type DocumentRepresentationId } from './ViewProvider';
 import { ToolDraftInspector } from './inspector/drafts';
 import { loadSelectionInspectorContent } from './inspector/selection-content-loader';
 
@@ -42,7 +42,7 @@ export type SupplementalContent =
 export interface SupplementalInput {
   tool: Tool;
   readOnly: boolean;
-  viewMode: ViewMode;
+  viewMode: DocumentRepresentationId;
   hasSelection: boolean;
 }
 

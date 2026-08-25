@@ -36,6 +36,7 @@ import { TopBarActions, TopBarBrand, ViewSwitch, ViewSwitchCompact } from './ui/
 import { useSaveStatus } from './ui/SaveStatusProvider';
 import { useUi } from './ui/UiProvider';
 import { Workbench } from './ui/Workbench';
+import { useMapViewStore } from './ui/ViewProvider';
 import { InstallBanner } from './ui/InstallBanner';
 import { useInstall } from './pwa/InstallProvider';
 import { shouldShowInstallBanner } from './pwa/install';
@@ -132,6 +133,7 @@ function LazyDialog({ children, onFailure }: LazyDialogProps) {
 
 export function App() {
   const store = useEditorStore();
+  const mapViewStore = useMapViewStore();
   const {
     document: { newSystem, setSystem },
     tools: { setDraftMode, setTool },
@@ -281,13 +283,13 @@ export function App() {
   const persistence = useRef<PersistenceCoordinator | null>(null);
   useEffect(() => {
     if (documentStatus !== 'ready') return;
-    const coordinator = attachPersistenceCoordinator(store, report);
+    const coordinator = attachPersistenceCoordinator(store, mapViewStore, report);
     persistence.current = coordinator;
     return () => {
       if (persistence.current === coordinator) persistence.current = null;
       coordinator.detach();
     };
-  }, [store, report, documentStatus]);
+  }, [store, mapViewStore, report, documentStatus]);
 
   const flushPendingSave = useCallback(
     async (): Promise<SaveOutcome> => (await persistence.current?.flush()) ?? 'saved',

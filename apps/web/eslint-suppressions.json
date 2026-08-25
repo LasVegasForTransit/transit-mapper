@@ -391,12 +391,6 @@
     }
   },
   "src/ui/ShareDialog.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
-    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     }

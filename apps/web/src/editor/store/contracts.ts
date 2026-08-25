@@ -1,3 +1,4 @@
+import type { LngLat } from '@transitmapper/core/model/system';
 import type { DocumentCommands, HistoryCommands } from './contracts/document-commands';
 import type { ImportCommands, RoutingCommands } from './contracts/import-routing-commands';
 import type {
@@ -36,6 +37,7 @@ export interface EditorStore {
 
 export interface CreateEditorStoreOptions {
   documentStatus?: EditorState['documentStatus'];
+  readCameraCenter?: () => LngLat;
 }
 
 export type { EditorState } from './state';

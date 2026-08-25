@@ -215,12 +215,18 @@ importers:
       '@transitmapper/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@transitmapper/map':
+        specifier: workspace:*
+        version: link:../../packages/map
       '@transitmapper/pwa-updater':
         specifier: workspace:*
         version: link:../../packages/pwa-updater
       '@transitmapper/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
+      '@transitmapper/views':
+        specifier: workspace:*
+        version: link:../../packages/views
       lucide-react:
         specifier: 'catalog:'
         version: 1.27.0(react@18.3.1)
@@ -371,6 +377,10 @@ importers:
         version: 4.1.10(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/map:
+    dependencies:
+      '@transitmapper/views':
+        specifier: workspace:*
+        version: link:../views
     devDependencies:
       '@transitmapper/tsconfig':
         specifier: workspace:*

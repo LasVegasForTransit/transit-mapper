@@ -34,8 +34,8 @@ import type { TransitSystem } from '../model/system';
 //   - `vehicleKinds` drives the vehicle sources, which apps/web/src/sim/
 //     vehicles.ts fills from its own store.getState() inside its animation
 //     tick with no subscription, so it self-heals within one frame.
-//   - `viewport` is not the live camera: apps/web/src/camera/liveCamera.ts owns
-//     that, precisely so a pan does not mint a new `system`.
+//   - `viewport` is not the live camera. The mounted map View owns that state
+//     so a pan does not mint a new `system`.
 //   - `name` is rendered only on EXPORTS (render/svg.ts titles, legends), which
 //     build through their own call into buildFeatures rather than through this
 //     gate, so they are unaffected.

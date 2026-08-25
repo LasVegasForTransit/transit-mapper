@@ -7,12 +7,12 @@ import { aPattern, aRoad, aService, aStop, aSystem } from '@transitmapper/core/t
 import { EditorProvider } from '../../src/editor/EditorProvider';
 import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { SidebarPanel } from '../../src/ui/SidebarPanel';
-import { ViewProvider, type ViewMode } from '../../src/ui/ViewProvider';
+import { ViewProvider, type DocumentRepresentationId } from '../../src/ui/ViewProvider';
 
 let container: HTMLDivElement;
 let root: Root;
 
-function renderSidebar(store: EditorStore, viewMode: ViewMode = 'network'): void {
+function renderSidebar(store: EditorStore, viewMode: DocumentRepresentationId = 'network'): void {
   act(() => {
     root.render(
       <EditorProvider store={store}>

@@ -1,12 +1,12 @@
 import type { Tool } from '../editor/store';
-import type { ViewMode } from './ViewProvider';
+import type { DocumentRepresentationId } from './ViewProvider';
 
 export interface MapContextMenuLifecycleInput {
   actionCount: number;
   openedTool: Tool;
   currentTool: Tool;
-  openedViewMode: ViewMode;
-  currentViewMode: ViewMode;
+  openedViewMode: DocumentRepresentationId;
+  currentViewMode: DocumentRepresentationId;
 }
 
 /** A menu is valid only while its actions and the interaction surface that

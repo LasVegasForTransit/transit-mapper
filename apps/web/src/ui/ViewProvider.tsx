@@ -1,71 +1,170 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
+import { createMapViewStore, type MapViewStore } from '@transitmapper/map';
+import type { MapCameraStateV1 } from '@transitmapper/views';
+import {
+  createDocumentPresentationState,
+  DOCUMENT_VIEW_FILTER_IDS,
+  type DocumentRepresentationId,
+} from '../editor/document-view-adapter';
 
-// Level-of-detail state: Network (stylized, service-focused), Infrastructure
-// (physical, catalog-styled), or Diagram (schematic, octolinear, read-only)
-// — plus per-mode/per-way-type visibility, derived from the catalogs so a new
-// catalog entry is visible by default with no code change here. Kept as its
-// own React context (not the zustand domain store) because it's view/
-// presentation state, not part of the transit system model.
-export type ViewMode = 'network' | 'infrastructure' | 'diagram';
+export type { DocumentRepresentationId } from '../editor/document-view-adapter';
+export type ViewMode = DocumentRepresentationId;
 
 interface ViewState {
-  viewMode: ViewMode;
-  setViewMode: (m: ViewMode) => void;
+  viewMode: DocumentRepresentationId;
+  setViewMode: (mode: DocumentRepresentationId) => void;
   visibleModes: Set<string>;
   visibleWayTypes: Set<string>;
   toggleMode: (id: string) => void;
   toggleWayType: (id: string) => void;
   showAllModes: () => void;
   showAllWayTypes: () => void;
-  /** Hand-placed reference points (the Strip, UNLV, …) — context, not part
-   *  of the system, so its own toggle rather than a mode/way-type filter. */
   showLandmarks: boolean;
   toggleLandmarks: () => void;
 }
 
 const ViewContext = createContext<ViewState | null>(null);
+const MapViewStoreContext = createContext<MapViewStore | null>(null);
 
-function toggleInSet(set: Set<string>, id: string): Set<string> {
+interface ViewControlSnapshot {
+  representationId: string;
+  filters: ReturnType<MapViewStore['getSnapshot']>['filters'];
+}
+
+function useViewControlSnapshot(store: MapViewStore): ViewControlSnapshot {
+  const current = useRef<ViewControlSnapshot | null>(null);
+  const subscribe = useCallback((listener: () => void) => store.subscribe(listener), [store]);
+  const getSnapshot = useCallback(() => {
+    const state = store.getSnapshot();
+    if (
+      current.current?.representationId === state.representationId &&
+      current.current.filters === state.filters
+    ) {
+      return current.current;
+    }
+    current.current = {
+      representationId: state.representationId,
+      filters: state.filters,
+    };
+    return current.current;
+  }, [store]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+function stringSet(value: unknown, fallback: readonly string[]): Set<string> {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
+    return new Set(fallback);
+  }
+  return new Set(value);
+}
+
+function toggleInSet(set: Set<string>, id: string): string[] {
   const next = new Set(set);
   if (next.has(id)) next.delete(id);
   else next.add(id);
-  return next;
+  return [...next];
 }
 
 interface ViewProviderProps {
   children: ReactNode;
-  initialViewMode?: ViewMode;
+  initialViewMode?: DocumentRepresentationId;
+  initialCamera?: MapCameraStateV1;
+  store?: MapViewStore;
 }
 
-export function ViewProvider({ children, initialViewMode = 'network' }: ViewProviderProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
-  const [visibleModes, setVisibleModes] = useState<Set<string>>(() => new Set(MODE_ORDER));
-  const [visibleWayTypes, setVisibleWayTypes] = useState<Set<string>>(
-    () => new Set(WAY_TYPE_ORDER),
+export function ViewProvider({
+  children,
+  initialViewMode = 'network',
+  initialCamera,
+  store,
+}: ViewProviderProps) {
+  const [ownedStore] = useState(() =>
+    createMapViewStore(
+      createDocumentPresentationState({
+        camera: initialCamera,
+        representationId: initialViewMode,
+      }),
+    ),
   );
-  const [showLandmarks, setShowLandmarks] = useState(true);
+  const viewStore = store ?? ownedStore;
+  const snapshot = useViewControlSnapshot(viewStore);
+  const visibleModes = useMemo(
+    () => stringSet(snapshot.filters[DOCUMENT_VIEW_FILTER_IDS.modes], MODE_ORDER),
+    [snapshot.filters],
+  );
+  const visibleWayTypes = useMemo(
+    () => stringSet(snapshot.filters[DOCUMENT_VIEW_FILTER_IDS.wayTypes], WAY_TYPE_ORDER),
+    [snapshot.filters],
+  );
+  const landmarks = snapshot.filters[DOCUMENT_VIEW_FILTER_IDS.landmarks];
+  const showLandmarks = typeof landmarks === 'boolean' ? landmarks : true;
 
+  const actions = useMemo<
+    Omit<ViewState, 'viewMode' | 'visibleModes' | 'visibleWayTypes' | 'showLandmarks'>
+  >(
+    () => ({
+      setViewMode: (mode) => viewStore.setRepresentationId(mode),
+      toggleMode: (id) => {
+        const modes = stringSet(
+          viewStore.getSnapshot().filters[DOCUMENT_VIEW_FILTER_IDS.modes],
+          MODE_ORDER,
+        );
+        viewStore.setFilter(DOCUMENT_VIEW_FILTER_IDS.modes, toggleInSet(modes, id));
+      },
+      toggleWayType: (id) => {
+        const wayTypes = stringSet(
+          viewStore.getSnapshot().filters[DOCUMENT_VIEW_FILTER_IDS.wayTypes],
+          WAY_TYPE_ORDER,
+        );
+        viewStore.setFilter(DOCUMENT_VIEW_FILTER_IDS.wayTypes, toggleInSet(wayTypes, id));
+      },
+      showAllModes: () => viewStore.setFilter(DOCUMENT_VIEW_FILTER_IDS.modes, MODE_ORDER),
+      showAllWayTypes: () => viewStore.setFilter(DOCUMENT_VIEW_FILTER_IDS.wayTypes, WAY_TYPE_ORDER),
+      toggleLandmarks: () => {
+        const value = viewStore.getSnapshot().filters[DOCUMENT_VIEW_FILTER_IDS.landmarks];
+        viewStore.setFilter(
+          DOCUMENT_VIEW_FILTER_IDS.landmarks,
+          !(typeof value === 'boolean' ? value : true),
+        );
+      },
+    }),
+    [viewStore],
+  );
   const value = useMemo<ViewState>(
     () => ({
-      viewMode,
-      setViewMode,
+      viewMode: snapshot.representationId as DocumentRepresentationId,
       visibleModes,
       visibleWayTypes,
-      toggleMode: (id) => setVisibleModes((prev) => toggleInSet(prev, id)),
-      toggleWayType: (id) => setVisibleWayTypes((prev) => toggleInSet(prev, id)),
-      showAllModes: () => setVisibleModes(new Set(MODE_ORDER)),
-      showAllWayTypes: () => setVisibleWayTypes(new Set(WAY_TYPE_ORDER)),
       showLandmarks,
-      toggleLandmarks: () => setShowLandmarks((v) => !v),
+      ...actions,
     }),
-    [viewMode, visibleModes, visibleWayTypes, showLandmarks],
+    [snapshot.representationId, visibleModes, visibleWayTypes, showLandmarks, actions],
   );
-  return <ViewContext.Provider value={value}>{children}</ViewContext.Provider>;
+  return (
+    <MapViewStoreContext.Provider value={viewStore}>
+      <ViewContext.Provider value={value}>{children}</ViewContext.Provider>
+    </MapViewStoreContext.Provider>
+  );
+}
+
+export function useMapViewStore(): MapViewStore {
+  const store = useContext(MapViewStoreContext);
+  if (!store) throw new Error('useMapViewStore must be used within <ViewProvider>');
+  return store;
 }
 
 export function useView(): ViewState {
-  const ctx = useContext(ViewContext);
-  if (!ctx) throw new Error('useView must be used within <ViewProvider>');
-  return ctx;
+  const view = useContext(ViewContext);
+  if (!view) throw new Error('useView must be used within <ViewProvider>');
+  return view;
 }

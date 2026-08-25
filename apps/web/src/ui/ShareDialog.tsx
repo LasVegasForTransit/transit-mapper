@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { useEditor } from '../editor/EditorProvider';
 import { getOrCreateShare, stopSharing } from '../share/api';
 import { getMyShare } from '../share/myShares';
-import { withLiveCamera } from '../camera/liveCamera';
+import { withDocumentCamera } from '../editor/document-view-adapter';
 import { useOnlineStatus } from '../network/useOnlineStatus';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
+import { useMapViewStore } from './ViewProvider';
 
 interface ShareDialogProps {
   onClose: () => void;
@@ -18,6 +19,7 @@ type Status = 'loading' | 'done' | 'error' | 'stopped';
  *  share/api.ts#getOrCreateShare for how that's guaranteed. */
 export function ShareDialog({ onClose }: ShareDialogProps) {
   const system = useEditor((s) => s.system);
+  const mapViewStore = useMapViewStore();
   const [status, setStatus] = useState<Status>('loading');
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
@@ -30,18 +32,18 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
-    // Fold in the live camera so the shared link opens where the user is now —
-    // interactive pan/zoom bypasses the store, so system.viewport lags it.
-    getOrCreateShare(withLiveCamera(system), { signal: controller.signal })
+    // Fold in the View camera so the shared link opens where the user is now.
+    // The saved document camera changes only at serialization boundaries.
+    getOrCreateShare(withDocumentCamera(system, mapViewStore), { signal: controller.signal })
       .then((sharedUrl) => {
         if (cancelled) return;
         setUrl(sharedUrl);
         setRevocable(getMyShare(system.id) !== null);
         setStatus('done');
       })
-      .catch((e: Error) => {
+      .catch((caught: unknown) => {
         if (cancelled) return;
-        setError(e.message);
+        setError(caught instanceof Error ? caught.message : 'Sharing failed.');
         setStatus('error');
       });
     return () => {
@@ -65,8 +67,8 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
     try {
       await stopSharing(system.id);
       setStatus('stopped');
-    } catch (e) {
-      setError((e as Error).message);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Sharing could not be stopped.');
       setStatus('error');
     }
   };
@@ -106,12 +108,17 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
           </p>
           <div className="share-row">
             <input className="share-url" value={url} readOnly onFocus={(e) => e.target.select()} />
-            <button className="primary-btn" onClick={copy}>
+            <button className="primary-btn" onClick={() => void copy()}>
               <Icon name="copy" size={18} /> {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
           {revocable && (
-            <button type="button" className="ghost-btn" style={{ marginTop: 8 }} onClick={stop}>
+            <button
+              type="button"
+              className="ghost-btn"
+              style={{ marginTop: 8 }}
+              onClick={() => void stop()}
+            >
               Stop sharing
             </button>
           )}

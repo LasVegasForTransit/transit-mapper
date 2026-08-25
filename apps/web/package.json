@@ -23,8 +23,10 @@
   "dependencies": {
     "@tailwindcss/vite": "catalog:",
     "@transitmapper/core": "workspace:*",
+    "@transitmapper/map": "workspace:*",
     "@transitmapper/pwa-updater": "workspace:*",
     "@transitmapper/renderer": "workspace:*",
+    "@transitmapper/views": "workspace:*",
     "lucide-react": "catalog:",
     "maplibre-gl": "catalog:",
     "react": "catalog:",

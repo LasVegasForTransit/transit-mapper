@@ -11,7 +11,8 @@ import type { EditorState } from '../editor/store';
 import type { SimCommands } from '../editor/keymap';
 import { useSim, useSimClock } from '../ui/SimProvider';
 import { useContextMenu, useUi } from '../ui/UiProvider';
-import { useView } from '../ui/ViewProvider';
+import { useMapViewStore, useView } from '../ui/ViewProvider';
+import { initializeDocumentCamera } from '../editor/document-view-adapter';
 import { useSystemColorScheme } from '../theme/systemColorScheme';
 import { attachInteractions, type TerminusConnectionChoice } from './interactions';
 import { PointerBadge } from './PointerBadge';
@@ -113,7 +114,6 @@ import {
   shouldProjectInitialDocument,
   shouldScheduleInitialReadyDocument,
 } from './initial-map-ready';
-import { initLiveCamera, setLiveCamera } from '../camera/liveCamera';
 import { attachPerfHarness } from '../perf';
 import {
   acceptedSystemScenePaintReady,
@@ -300,6 +300,7 @@ export function MapCanvas({
   const [terminusConnectionChoice, setTerminusConnectionChoice] =
     useState<TerminusConnectionChoice | null>(null);
   const store = useEditorStore();
+  const mapViewStore = useMapViewStore();
   const { openShortcuts, toggleUi } = useUi();
   const { contextMenuAt, openContextMenu, closeContextMenu } = useContextMenu();
   const contextMenuOpenRef = useRef(false);
@@ -435,9 +436,9 @@ export function MapCanvas({
     if (!containerRef.current) return;
     const initialColorScheme = initialColorSchemeRef.current;
     const initial = store.getState().system;
-    // Seed the live camera holder from the loaded system's saved viewport
-    // (camera/liveCamera.ts owns the LIVE camera from here on, not `system`).
-    initLiveCamera(initial.viewport);
+    // The map View owns the live camera. The document keeps only the last
+    // serialized camera so a pure pan never becomes a content edit.
+    initializeDocumentCamera(mapViewStore, initial.viewport);
 
     const map = new maplibregl.Map({
       container: containerRef.current,
@@ -2024,8 +2025,8 @@ export function MapCanvas({
         cameraRenderPreload.reset();
         committedCameraCoverage = null;
         map.jumpTo({ center: state.system.viewport.center, zoom: state.system.viewport.zoom });
-        // The newly-loaded system's saved camera becomes the live camera.
-        initLiveCamera(state.system.viewport);
+        // The newly loaded document seeds this workspace's camera.
+        initializeDocumentCamera(mapViewStore, state.system.viewport);
       }
     };
 
@@ -2089,13 +2090,13 @@ export function MapCanvas({
     const onMoveEnd = () => {
       const c = map.getCenter();
       cameraRenderPreload.observe(renderPresentationNow(), performance.now());
-      // Record the move on the live camera holder — NOT the domain store. A pure
+      // Record the move on the map View store, not the domain store. A pure
       // pan/zoom must not mint a new `system` reference: that used to fire the
       // subscription below → full-system buildFeatures + 13 setData + selector
       // fan-out + autosave, once per coalesced drag frame (panBy(duration:0)
       // fires moveend per mousemove). Camera persistence is handled separately
       // and debounced (storage/persistenceCoordinator.ts).
-      setLiveCamera({ center: [c.lng, c.lat], zoom: map.getZoom() });
+      mapViewStore.setCamera({ center: [c.lng, c.lat], zoom: map.getZoom() });
       // moveend fires per mouse-move from panBy(duration:0), so coalesce it.
       presentationRefresh.request();
     };
@@ -2147,17 +2148,15 @@ export function MapCanvas({
       setMap(null);
       map.remove();
     };
-    // setViewMode is a useState setter from ViewProvider, and React guarantees
-    // those keep their identity for the life of the component. Naming it here
-    // therefore cannot retrigger this effect — which matters, because this
-    // effect's cleanup calls map.remove(), so a retrigger would tear down and
-    // rebuild the whole MapLibre map. simClock and simCommands are stable for
-    // the same kind of reason: SimProvider holds one clock instance for the
-    // session, and simCommands is a ref-held façade whose identity never
-    // changes (it reads the live handlers through simCommandsRef). All are
-    // listed because the effect genuinely closes over them.
+    // ViewProvider binds setViewMode to one MapViewStore instance, so its
+    // identity stays stable while camera and filter snapshots change. That
+    // matters because this cleanup calls map.remove(); a changing action would
+    // rebuild MapLibre. SimProvider likewise holds one clock instance, and
+    // simCommands is a ref-held facade that reads live handlers. The effect
+    // closes over each dependency listed here.
   }, [
     store,
+    mapViewStore,
     openShortcuts,
     toggleUi,
     openContextMenu,

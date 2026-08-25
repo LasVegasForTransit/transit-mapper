@@ -4,10 +4,17 @@ import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aSystem } from '@transitmapper/core/testing/fixtures';
+import { createMapViewStore, type MapViewStore } from '@transitmapper/map';
 import { EditorProvider } from '../../src/editor/EditorProvider';
+import { createDocumentPresentationState } from '../../src/editor/document-view-adapter';
 import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { FileMenu } from '../../src/ui/FileMenu';
 import { TopBarBrand } from '../../src/ui/TopBar';
+import { ViewProvider } from '../../src/ui/ViewProvider';
+
+const { exportSystemJson } = vi.hoisted(() => ({ exportSystemJson: vi.fn() }));
+
+vi.mock('../../src/share/jsonExport', () => ({ exportSystemJson }));
 
 vi.mock('../../src/ui/UiProvider', () => ({
   useUi: () => ({
@@ -21,10 +28,15 @@ vi.mock('../../src/ui/UiProvider', () => ({
 let container: HTMLDivElement;
 let root: Root;
 let store: EditorStore;
+let mapViewStore: MapViewStore;
 
 function renderWithEditor(children: ReactNode): void {
   act(() => {
-    root.render(<EditorProvider store={store}>{children}</EditorProvider>);
+    root.render(
+      <EditorProvider store={store}>
+        <ViewProvider store={mapViewStore}>{children}</ViewProvider>
+      </EditorProvider>,
+    );
   });
 }
 
@@ -42,6 +54,9 @@ beforeEach(() => {
   ).IS_REACT_ACT_ENVIRONMENT = true;
   store = createEditorStore();
   store.commands.document.setSystem(aSystem({ name: 'Test system' }));
+  mapViewStore = createMapViewStore(
+    createDocumentPresentationState({ camera: store.getState().system.viewport }),
+  );
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -77,6 +92,24 @@ describe('File menu', () => {
     expect(document.body.textContent).not.toContain('My systems…');
     expect(document.body.textContent).not.toContain('Import streets…');
     expect(document.body.textContent).not.toContain('Export system data (.json)');
+  });
+
+  it('exports the current map camera without mutating the editor document', () => {
+    const original = store.getState().system;
+    mapViewStore.setCamera({ center: [-73.9857, 40.7484], zoom: 13 });
+    renderWithEditor(<FileMenu />);
+    openMenu();
+    const exportItem = [...document.querySelectorAll('[role="menuitem"]')].find((item) =>
+      item.textContent.includes('Export system data'),
+    );
+    if (!(exportItem instanceof HTMLElement)) throw new Error('Expected export item');
+
+    act(() => exportItem.click());
+
+    expect(exportSystemJson).toHaveBeenCalledWith(
+      expect.objectContaining({ viewport: { center: [-73.9857, 40.7484], zoom: 13 } }),
+    );
+    expect(store.getState().system).toBe(original);
   });
 
   it('keeps the application menu mounted in the read-only brand row', () => {

@@ -8,6 +8,18 @@ afterEach(() => {
 });
 
 describe('the editor store contract', () => {
+  it('reads placement camera state through its injected session dependency', () => {
+    const readCameraCenter = vi.fn(() => [-73.9857, 40.7484] as [number, number]);
+    const store = createEditorStore({ readCameraCenter });
+    const groupId = store.commands.groups.createGroup([]);
+    if (!groupId) throw new Error('Expected a group.');
+
+    store.commands.groups.addGroupFootprint(groupId);
+
+    expect(readCameraCenter).toHaveBeenCalledOnce();
+    expect(store.getState().system.groups[0]?.footprint).toHaveLength(4);
+  });
+
   it('isolates state, commands, and history per editor instance', () => {
     const first = createEditorStore();
     const second = createEditorStore();

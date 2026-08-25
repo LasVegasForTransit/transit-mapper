@@ -41,6 +41,14 @@ configuration, and lint tasks hash both the root config and the repository's
 local ESLint plugin. The migration check is deliberately uncached because its
 result also depends on the current Git merge base, not only on file contents.
 
+Runtime packages use `tsc -p tsconfig.build.json` and declare `dist/**` as the
+existing Turbo build task's output. Workspace dependencies create the graph;
+`build` already depends on `^build`, so the repository has no second package
+builder or cache wrapper. Package exports select source under the development
+condition and emitted JavaScript and declarations otherwise. A clean
+production build therefore checks the same package artifacts that deployment
+consumes, while Vite development needs no package watcher.
+
 ## Layers
 
 | Layer          | What runs                                          | Blocks on                   |

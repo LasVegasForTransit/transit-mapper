@@ -1,5 +1,6 @@
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import { subscribeLiveCamera, withLiveCamera } from '../camera/liveCamera';
+import type { MapViewStore } from '@transitmapper/map';
+import { withDocumentCamera } from '../editor/document-view-adapter';
 import { saveToLibrary, type SaveOutcome } from './browserLibrary';
 import { saveEmergencyToLibrary, setActiveId } from './localStore';
 
@@ -37,12 +38,9 @@ export interface PersistenceCoordinatorOptions {
 }
 
 export interface PersistenceCoordinator {
-  /** Force the one pending content/camera snapshot to disk now and report
-   * whether the current document is durable. */
+  /** Force the pending snapshot to disk and report its durability. */
   readonly flush: () => Promise<SaveOutcome>;
-  /** Reconcile a library write performed outside the autosave lane. */
   readonly recordOutcome: (id: string, outcome: SaveOutcome) => void;
-  /** Forget a successfully deleted document after its pending save is flushed. */
   readonly discard: (id: string) => void;
   readonly detach: () => void;
 }
@@ -242,6 +240,7 @@ export function createPersistenceCoordinator(
 
 export function attachPersistenceCoordinator(
   store: PersistenceStore,
+  mapViewStore: MapViewStore,
   report: (outcome: SaveOutcome) => void,
 ): PersistenceCoordinator {
   return createPersistenceCoordinator({
@@ -250,8 +249,8 @@ export function attachPersistenceCoordinator(
     emergencySave: saveEmergencyToLibrary,
     report,
     setActiveId,
-    withLiveCamera,
-    subscribeCamera: subscribeLiveCamera,
+    withLiveCamera: (system) => withDocumentCamera(system, mapViewStore),
+    subscribeCamera: (listener) => mapViewStore.subscribe(listener),
     scheduler: browserScheduler,
   });
 }

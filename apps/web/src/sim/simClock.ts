@@ -21,8 +21,8 @@ import {
 // which is also why it isn't in the zustand store: writing a ticking value
 // into the immutable `system` would mint a new system reference every frame,
 // and with it a full buildFeatures rebuild, every mounted selector, and an
-// autosave. Camera position already taught this project that lesson once (see
-// camera/liveCamera.ts), and a clock ticks whether or not anyone is dragging.
+// autosave. Camera position already taught this project that lesson once in
+// the map View store, and a clock ticks whether or not anyone is dragging.
 //
 // So this holds the number; ui/SimProvider.tsx pushes the user's settings in
 // on change (rare, a click); the rAF loop advances it and reads them back

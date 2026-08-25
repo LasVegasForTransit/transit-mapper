@@ -11,11 +11,11 @@ Dependencies flow from the applications toward shared packages:
 
 ```text
 apps/web ────────┬──> packages/renderer ──> packages/core
+                 ├──> packages/map ───────> packages/views
+                 ├──> packages/views
                  ├──> packages/core
                  └──> packages/pwa-updater
 
-packages/views       independent package shell
-packages/map         independent package shell
 packages/workspace   independent package shell
 
 apps/worker ──────> packages/core
@@ -55,13 +55,15 @@ turbo/            Turborepo generators and templates
 
 ### Views
 
-`packages/views` is the build boundary for portable View values and parsing.
-Its empty shell has no runtime dependency. Its contracts will remain portable.
+`packages/views` owns portable, versioned View values and hostile-input
+parsing. It imports no React, MapLibre, DOM, editor, or Worker framework code.
 
 ### Map
 
-`packages/map` will own browser map runtime and presentation state without
-React or transit-document dependencies. Its empty shell has no dependency yet.
+`packages/map` owns instance-scoped presentation state without React or
+transit-document dependencies. `MapViewStore` publishes immutable snapshots
+and preserves unchanged sub-object identity. It depends only on `views` until
+the MapLibre runtime moves.
 
 ### Workspace
 
@@ -240,9 +242,10 @@ retains preferences for future drafts.
 its target and modifier channels alone, without browser or map state, so
 presentation and dispatch reach the same decision.
 `apps/web/src/editor/input-tuning.ts` declares the hit, snap, and drag
-tolerances for each pointer precision. `apps/web/src/camera` holds the live map
-camera outside the saved system. Domain mutations pass through grouped editor
-commands; map and UI modules do not modify records directly.
+tolerances for each pointer precision. The web root injects one `MapViewStore`
+into map, editor, persistence, and sharing paths. `document-view-adapter.ts`
+copies its camera into saves, shares, and exports. Domain mutations pass
+through grouped editor commands; map and UI modules do not modify records.
 
 `apps/web/src/ui/sidebarOutline.ts` is the pure outline projection boundary;
 `SidebarPanel.tsx` owns search, expansion, bounded rendering, keyboard focus,

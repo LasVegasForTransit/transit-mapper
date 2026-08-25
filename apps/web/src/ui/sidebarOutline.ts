@@ -14,7 +14,7 @@ import type {
   TransitSystem,
 } from '@transitmapper/core/model/system';
 import { patternStops } from '@transitmapper/core/sim/serviceStats';
-import type { ViewMode } from './ViewProvider';
+import type { DocumentRepresentationId } from './ViewProvider';
 export interface SidebarStop {
   stopId: string;
   name: string;
@@ -87,7 +87,7 @@ export function limitSidebarItems<T>(
   return { items: visible, hiddenCount: items.length - visible.length };
 }
 
-export function sidebarSectionsForView(viewMode: ViewMode): string[] {
+export function sidebarSectionsForView(viewMode: DocumentRepresentationId): string[] {
   if (viewMode === 'infrastructure') {
     return [
       'Roads',

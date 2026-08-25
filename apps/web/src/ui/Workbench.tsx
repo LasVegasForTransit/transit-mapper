@@ -16,7 +16,7 @@ import { IconButton } from './IconButton';
 import { Panel } from './Panel';
 import { useInertRef } from './useInertRef';
 import { useUi } from './UiProvider';
-import { useView, type ViewMode } from './ViewProvider';
+import { useView, type DocumentRepresentationId } from './ViewProvider';
 
 /**
  * Whether the top row can afford the wide rendering of the view switch and
@@ -58,7 +58,7 @@ export type SupplementalKind = 'none' | 'selection' | 'tool-draft';
 export type Detent = 'closed' | 'half' | 'full';
 
 const DETENTS: Detent[] = ['closed', 'half', 'full'];
-const VIEW_LABEL: Record<ViewMode, string> = {
+const VIEW_LABEL: Record<DocumentRepresentationId, string> = {
   network: 'Network',
   infrastructure: 'Infrastructure',
   diagram: 'Diagram',

@@ -7,9 +7,9 @@ import {
   infrastructureOutlineProjection,
   sidebarSectionsForView,
 } from '../../src/ui/sidebarOutline';
-import { ViewProvider, type ViewMode } from '../../src/ui/ViewProvider';
+import { ViewProvider, type DocumentRepresentationId } from '../../src/ui/ViewProvider';
 
-function renderSidebar(viewMode: ViewMode = 'network'): string {
+function renderSidebar(viewMode: DocumentRepresentationId = 'network'): string {
   return renderToStaticMarkup(
     <EditorProvider>
       <ViewProvider initialViewMode={viewMode}>
