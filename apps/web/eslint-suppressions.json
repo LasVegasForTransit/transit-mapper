@@ -20,7 +20,7 @@
       "count": 1
     },
     "@typescript-eslint/prefer-promise-reject-errors": {
-      "count": 4
+      "count": 3
     },
     "@typescript-eslint/unbound-method": {
       "count": 2

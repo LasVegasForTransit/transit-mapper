@@ -138,7 +138,8 @@ async function deletePerformanceDatabase(page: Page): Promise<void> {
       new Promise<void>((resolvePromise, reject) => {
         const request = indexedDB.deleteDatabase(databaseName);
         request.onsuccess = () => resolvePromise();
-        request.onerror = () => reject(request.error);
+        request.onerror = () =>
+          reject(request.error ?? new Error('Performance database reset failed.'));
         request.onblocked = () =>
           reject(new DOMException('Performance database reset was blocked.', 'InvalidStateError'));
       }),
