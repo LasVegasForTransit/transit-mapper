@@ -387,7 +387,7 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - [x] Define explicit Workbench slot interfaces for brand, primary actions, representation controls, simulation controls, main panel, supplemental panel, tool dock, import status, and application notices.
 - [x] Move MapLibre construction, disposal, resize observation, theme switching, base-style recovery, and common camera publication into `@transitmapper/map`.
 - [ ] Move `LiveMapRenderer`, document projection, source banks, layer definitions, and their workers into `@transitmapper/renderer` without changing their accepted-scene contracts.
-- [ ] Implement `DocumentMapDriver` over `TransitSystem` and `LiveMapRenderer`. Pass document snapshots through an attachment port instead of importing `EditorStore`.
+- [x] Implement `DocumentMapDriver` over `TransitSystem` and `LiveMapRenderer`. Pass document snapshots through an attachment port instead of importing `EditorStore`.
 - [ ] Keep editing gestures, handles, termini, route previews, and simulation painting in `apps/web/src/editor/editor-map-attachment.ts`.
 - [ ] Reduce `MapCanvas.tsx` to a compatibility wrapper while callers move to `MapSurface`.
 - [ ] Prove with dependency tests that `workspace`, `map`, and `renderer` import no editor provider or editor command.
