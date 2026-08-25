@@ -182,9 +182,6 @@
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 11
     },
-    "max-lines-per-function": {
-      "count": 1
-    },
     "max-params": {
       "count": 1
     }
