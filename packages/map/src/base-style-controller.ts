@@ -45,6 +45,11 @@ interface CarriedStyleTransition {
   carried: StyleSpecification;
 }
 
+interface ActiveStyleNotification {
+  marker: string;
+  onApplied(): void;
+}
+
 const STYLE_TRANSITION_METADATA_KEY = 'transitmapper:base-style-transition';
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
@@ -101,12 +106,22 @@ class BaseStyleControllerImplementation<
   private lastUsableTheme: ThemeId;
   private hasRemoteTransitionBaseline = false;
   private transitionSequence = 0;
+  private activeStyleNotification: ActiveStyleNotification | undefined;
+  private readonly onStyleLoad = () => {
+    const notification = this.activeStyleNotification;
+    if (!notification) return;
+    if (!styleHasTransitionMarker(this.options.map.getStyle(), notification.marker)) return;
+    notification.onApplied();
+  };
 
   constructor(private readonly options: BaseStyleControllerOptions<ThemeId>) {
     this.currentTheme = options.initialTheme;
     this.appliedRemoteTheme = options.initialStyle === 'remote' ? options.initialTheme : undefined;
     this.lastUsableTheme = options.initialTheme;
     this.lastUsableStyle = options.map.getStyle();
+    // Register before the host installs its persistent recovery listeners.
+    // Those listeners must observe the theme that belongs to this style.load.
+    options.map.on('style.load', this.onStyleLoad);
   }
 
   request(theme: ThemeId): Promise<void> {
@@ -137,6 +152,7 @@ class BaseStyleControllerImplementation<
     this.disposed = true;
     this.cancelActive();
     this.pendingTheme = undefined;
+    this.options.map.off('style.load', this.onStyleLoad);
   }
 
   private async execute(theme: ThemeId): Promise<void> {
@@ -246,6 +262,7 @@ class BaseStyleControllerImplementation<
       localStyle,
       (markedStyle) => this.options.map.setStyle(markedStyle, { diff: true }),
       requestGeneration,
+      () => this.options.onThemeApplied?.(theme),
     );
     if (result.kind === 'cancelled') return;
     if (result.kind === 'failed') {
@@ -257,7 +274,6 @@ class BaseStyleControllerImplementation<
     this.appliedRemoteTheme = undefined;
     this.lastUsableTheme = theme;
     this.lastUsableStyle = this.options.map.getStyle();
-    this.options.onThemeApplied?.(theme);
   }
 
   private async commit(
@@ -275,6 +291,7 @@ class BaseStyleControllerImplementation<
       carried,
       (markedStyle) => this.options.map.setStyle(markedStyle, { diff: true }),
       requestGeneration,
+      () => this.options.onThemeApplied?.(theme),
     );
     if (result.kind === 'cancelled') return false;
     if (result.kind === 'failed') {
@@ -287,7 +304,6 @@ class BaseStyleControllerImplementation<
     const fullRebuild =
       result.fullRebuild ||
       (this.options.isDocumentStateRetained ? !this.options.isDocumentStateRetained() : false);
-    this.options.onThemeApplied?.(theme);
     this.options.recoverDocumentLayers?.(theme, fullRebuild);
     return true;
   }
@@ -305,12 +321,20 @@ class BaseStyleControllerImplementation<
     style: StyleSpecification,
     apply: (markedStyle: StyleSpecification) => unknown,
     requestGeneration: number,
+    onApplied: () => void,
   ): Promise<StyleSettlement> {
     if (this.disposed || requestGeneration !== this.generation) {
       return Promise.resolve({ kind: 'cancelled' });
     }
     const marker = `${requestGeneration}:${++this.transitionSequence}`;
     const markedStyle = styleWithTransitionMarker(style, marker);
+    let applied = false;
+    const notifyApplied = () => {
+      if (applied) return;
+      applied = true;
+      onApplied();
+    };
+    this.activeStyleNotification = { marker, onApplied: notifyApplied };
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         cleanup();
@@ -320,6 +344,9 @@ class BaseStyleControllerImplementation<
         clearTimeout(timer);
         this.options.map.off('style.load', onStyleLoad);
         if (this.activeTransitionCancel === cancel) this.activeTransitionCancel = undefined;
+        if (this.activeStyleNotification?.marker === marker) {
+          this.activeStyleNotification = undefined;
+        }
       };
       const cancel = () => {
         cleanup();
@@ -342,6 +369,7 @@ class BaseStyleControllerImplementation<
         // style.load event. A full rebuild does emit style.load later. The
         // marker distinguishes both from stale events and unrelated errors.
         if (styleHasTransitionMarker(this.options.map.getStyle(), marker)) {
+          notifyApplied();
           cleanup();
           resolve({ kind: 'loaded', fullRebuild: false });
         }
@@ -357,9 +385,9 @@ class BaseStyleControllerImplementation<
       this.lastUsableStyle,
       (markedStyle) => this.options.map.setStyle(markedStyle, { diff: false }),
       requestGeneration,
+      () => this.options.onThemeApplied?.(this.lastUsableTheme),
     );
     if (result.kind !== 'loaded') return;
-    this.options.onThemeApplied?.(this.lastUsableTheme);
     this.options.recoverDocumentLayers?.(this.lastUsableTheme, true);
   }
 
@@ -369,6 +397,7 @@ class BaseStyleControllerImplementation<
     this.activeAbort = undefined;
     this.activeTransitionCancel?.();
     this.activeTransitionCancel = undefined;
+    this.activeStyleNotification = undefined;
   }
 }
 

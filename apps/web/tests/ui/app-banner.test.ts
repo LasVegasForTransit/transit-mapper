@@ -168,15 +168,15 @@ describe('naming the network as the reason', () => {
     }
   });
 
-  it('describes the usable drafting surface instead of a broken-looking blank map', () => {
-    const message = resolveAppBanner({
-      ...calm,
-      notice: 'basemap-unavailable',
-      online: true,
-    })?.message;
+  it('does not claim which background remains after an update fails', () => {
+    const cause: AppBannerInputs = { ...calm, notice: 'basemap-unavailable' };
 
-    expect(message).toContain('drafting grid');
-    expect(message).not.toContain('blank');
+    expect(resolveAppBanner({ ...cause, online: true })?.message).toBe(
+      'The background map couldn’t be updated. Your transit system is still visible and saved.',
+    );
+    expect(resolveAppBanner({ ...cause, online: false })?.message).toBe(
+      'You’re offline, so the background map can’t update. Your transit system is still visible and saved.',
+    );
   });
 
   // The message is derived from the cause each render rather than frozen when
@@ -195,7 +195,7 @@ describe('naming the network as the reason', () => {
   it('says the work is safe whenever it blames the network', () => {
     for (const inputs of remoteFailures) {
       const message = resolveAppBanner({ ...inputs, online: false })?.message ?? '';
-      expect(message).toMatch(/still saved|aren’t stored on this device/);
+      expect(message).toMatch(/saved|aren’t stored on this device/);
     }
   });
 

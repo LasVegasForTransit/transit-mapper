@@ -4,6 +4,54 @@ import { createBaseStyleController } from '../src/index';
 import { FakeMap, localStyle, remoteStyle } from './support/map-runtime-harness.test';
 
 describe('createBaseStyleController', () => {
+  it('publishes a rebuilt local theme before later style listeners restore host layers', async () => {
+    const map = new FakeMap({
+      container: {},
+      center: [0, 0],
+      zoom: 1,
+      style: localStyle('light'),
+    } as MapOptions);
+    let hostTheme: 'light' | 'dark' = 'light';
+    const controller = createBaseStyleController<'light' | 'dark'>({
+      map: map as unknown as MapLibreMap,
+      initialTheme: hostTheme,
+      local: localStyle,
+      remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+      fetch: () => Promise.resolve(remoteStyle('dark')),
+      onThemeApplied: (theme) => {
+        hostTheme = theme;
+      },
+      timeoutMs: 250,
+      online: () => true,
+      isInteractionActive: () => false,
+      onUnavailable: vi.fn(),
+    });
+    map.on('style.load', () => {
+      const style = map.getStyle();
+      map.style = {
+        ...style,
+        layers: style.layers.map((layer) =>
+          layer.type === 'background'
+            ? {
+                ...layer,
+                paint: { 'background-color': hostTheme === 'dark' ? '#111111' : '#eeeeee' },
+              }
+            : layer,
+        ),
+      };
+    });
+
+    const request = controller.selectLocal('dark');
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(localStyle('dark')));
+    map.settleStyle({ rebuilt: true });
+    await request;
+
+    expect(map.style.layers[0]).toMatchObject({
+      paint: { 'background-color': '#111111' },
+    });
+    controller.dispose();
+  });
+
   it('accepts a successful MapLibre diff without waiting for style.load', async () => {
     const map = new FakeMap({
       container: {},

@@ -118,16 +118,13 @@ function noticeMessage(cause: NoticeCause, online: boolean): string {
     // that was left open, so "reload" is the actual fix rather than a shrug.
     case 'dialog-failed':
       return 'That dialog couldn’t be loaded. Your system is safe — reload the page and try again.';
-    // Says what still works, because most of it does: the basemap is a
-    // backdrop from a third-party host, and everything the user has drawn is
-    // ours. Being offline is the likeliest reason by a wide margin and the
-    // only one the reader can act on, so it is named when it applies — and
-    // because this is derived at render time rather than frozen when the
-    // tiles failed, going offline afterwards rewords it.
+    // A failed first load leaves the drafting grid, while a failed later
+    // update retains the last remote map. Name only what both states share.
+    // This stays derived at render time so going offline afterwards rewords it.
     case 'basemap-unavailable':
       return online
-        ? 'The background map couldn’t be loaded. Your system is still shown on the drafting grid and is still saved.'
-        : 'You’re offline, so the background map isn’t available. Everything you’ve drawn is still here on the drafting grid and still saved — the map fills in when you reconnect.';
+        ? 'The background map couldn’t be updated. Your transit system is still visible and saved.'
+        : 'You’re offline, so the background map can’t update. Your transit system is still visible and saved.';
     // Deliberately says the damaged copy still exists. "Your work is gone" and
     // "your work is here but unreadable" call for very different reactions,
     // and only one of them is true.
