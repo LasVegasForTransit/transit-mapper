@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
-import { planViewRenderUpdate } from '../../src/map/render-visibility';
+import { planViewRenderUpdate } from '@transitmapper/renderer/driver';
 
 function view(
   viewMode: ViewOptions['viewMode'],

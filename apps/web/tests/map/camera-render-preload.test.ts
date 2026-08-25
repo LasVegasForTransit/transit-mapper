@@ -3,7 +3,7 @@ import type { RenderPresentation } from '@transitmapper/core/render/render-prese
 import {
   candidateEnvelopeCoversViewport,
   createCameraRenderPreloadController,
-} from '../../src/map/camera-render-preload';
+} from '@transitmapper/renderer/driver';
 
 function presentationAt(centerXPx: number, centerYPx = 0): RenderPresentation {
   const longitude = centerXPx / 1_000;

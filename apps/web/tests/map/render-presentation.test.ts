@@ -4,7 +4,7 @@ import {
   displayedCorridorWidthPx,
   renderPresentationFromMap,
   type MapRenderPresentationInput,
-} from '../../src/map/render-presentation';
+} from '@transitmapper/renderer/driver';
 
 const MPP_Z14_EQUATOR = 40075016.686 / (512 * 2 ** 14);
 

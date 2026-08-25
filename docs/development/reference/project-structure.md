@@ -73,17 +73,17 @@ The package depends on map, treats React as a peer, and imports no editor state.
 
 ### Renderer
 
-`packages/renderer` owns document projection, accepted scenes, source banks,
-recovery, and workers. It depends on core and MapLibre. Separate `layers`,
-`projection`, `runtime`, and `stats` entries keep its API bounded. It will add
-a map dependency when the document driver moves.
+`packages/renderer` owns document projection, source banks, recovery, workers,
+and the read-only `DocumentMapDriver`. Hosts inject immutable snapshots and can
+attach neutral session extensions. The package depends on core, map, views,
+and MapLibre. Its bounded entries include `driver`, `layers`, `projection`,
+`runtime`, and `stats`.
 
 `packages/renderer/src/layers` owns stable source and layer identities. Worker
 clients remain beside their projection modules until that directory moves.
 
-The web application supplies editor overlays, resolved theme layer specs, and
-performance reporting. Those modules consume renderer exports and do not move
-application policy back into the package.
+The web application supplies editor overlays, theme layers, and performance
+reporting. It still mounts `MapCanvas` until the editor session migration lands.
 
 ### Core
 

@@ -103,7 +103,16 @@ import {
 import { mergeSourceFeatureProjectionCounts } from '@transitmapper/renderer/projection';
 import type { AcceptedSceneUpdate } from '@transitmapper/renderer/runtime';
 import type { RenderSceneSourceUpdateResult } from '@transitmapper/renderer/runtime';
-import { renderPresentationFromMap } from './render-presentation';
+import {
+  applyRendererVisibilityFilters,
+  canReuseCommittedCameraRefresh,
+  createCameraRenderPreloadController,
+  createFrameFallbackScheduler,
+  createPresentationRefreshScheduler,
+  planViewRenderUpdate,
+  renderPresentationFromMap,
+  type CommittedCameraCoverage,
+} from '@transitmapper/renderer/driver';
 import { landmarksFeatureCollection } from './landmarks';
 import { getMap, setMap } from './mapRef';
 import {
@@ -143,7 +152,6 @@ import {
   planSelectionRenderUpdate,
   selectedJunctionConnectorFeatures,
 } from './editor-overlays';
-import { applyRendererVisibilityFilters, planViewRenderUpdate } from './render-visibility';
 import {
   COMMITTED_SYSTEM_FEATURE_SOURCES,
   EDITOR_SYSTEM_FEATURE_SOURCES,
@@ -154,12 +162,6 @@ import {
   createSourceFeatureProjectionAccounting,
   scheduleRenderProjectionFailureRetry,
 } from '@transitmapper/renderer/projection';
-import {
-  canReuseCommittedCameraRefresh,
-  createCameraRenderPreloadController,
-  createPresentationRefreshScheduler,
-  type CommittedCameraCoverage,
-} from './camera-render-preload';
 import { bankedLayerId, SOURCE_BANK_IDS } from '@transitmapper/renderer/layers';
 import {
   logicalBankedLayerIds,
@@ -174,7 +176,6 @@ import type { SourceBankSettlementHost } from '@transitmapper/renderer/runtime';
 import { createLiveMapRenderer, type LiveMapRenderer } from '@transitmapper/renderer/runtime';
 import { createDiagramLayoutWorker } from '@transitmapper/renderer/projection';
 import { createFeatureProjectionWorker } from '@transitmapper/renderer/projection';
-import { createFrameFallbackScheduler } from './frame-fallback-scheduler';
 import {
   createEditorFeatureState,
   type EditorFeatureState,

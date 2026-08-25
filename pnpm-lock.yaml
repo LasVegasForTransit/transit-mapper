@@ -419,6 +419,12 @@ importers:
       '@transitmapper/core':
         specifier: workspace:*
         version: link:../core
+      '@transitmapper/map':
+        specifier: workspace:*
+        version: link:../map
+      '@transitmapper/views':
+        specifier: workspace:*
+        version: link:../views
       maplibre-gl:
         specifier: 'catalog:'
         version: 4.7.1

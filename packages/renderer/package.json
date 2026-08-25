@@ -4,6 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./driver": {
+      "development": {
+        "types": "./src/driver.ts",
+        "import": "./src/driver.ts"
+      },
+      "types": "./dist/driver.d.ts",
+      "import": "./dist/driver.js"
+    },
     "./layers": {
       "development": {
         "types": "./src/layers.ts",
@@ -51,6 +59,8 @@
   },
   "dependencies": {
     "@transitmapper/core": "workspace:*",
+    "@transitmapper/map": "workspace:*",
+    "@transitmapper/views": "workspace:*",
     "maplibre-gl": "catalog:"
   }
 }

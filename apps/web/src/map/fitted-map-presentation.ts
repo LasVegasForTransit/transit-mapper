@@ -1,5 +1,5 @@
 import type { RenderPresentation } from '@transitmapper/core/render/render-presentation';
-import { renderPresentationFromMap, type MapBoundsLike } from './render-presentation';
+import { renderPresentationFromMap, type MapBoundsLike } from '@transitmapper/renderer/driver';
 
 interface CssSizeLike {
   readonly clientWidth: number;

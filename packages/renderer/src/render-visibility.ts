@@ -38,8 +38,8 @@ import {
   LYR_WAYS_DASHED_CASING,
   LYR_WAYS_SOLID,
   LYR_WAYS_SOLID_CASING,
-} from '@transitmapper/renderer/layers';
-import { logicalRenderLayerId } from '@transitmapper/renderer/layers';
+} from './layers';
+import { logicalRenderLayerId } from './layers';
 
 type VisibilityKind = 'mode' | 'mode-and-type' | 'served-modes' | 'type' | 'type-array';
 

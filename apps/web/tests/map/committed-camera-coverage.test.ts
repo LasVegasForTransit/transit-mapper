@@ -4,7 +4,7 @@ import type { RenderPresentation } from '@transitmapper/core/render/render-prese
 import {
   canReuseCommittedCameraRefresh,
   canReuseCommittedCameraScene,
-} from '../../src/map/camera-render-preload';
+} from '@transitmapper/renderer/driver';
 
 function presentation(
   southwest: [number, number] = [-115.2, 36.1],

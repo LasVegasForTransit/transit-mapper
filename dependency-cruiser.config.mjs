@@ -142,6 +142,17 @@ export default {
       },
     },
     {
+      name: 'renderer-package-dependencies-are-an-allowlist',
+      severity: 'error',
+      comment:
+        'The renderer projects immutable transit documents into MapLibre. Editor, React, ' +
+        'application, simulation, persistence, and UI policy stay in application hosts.',
+      from: { path: '^packages/renderer/src/' },
+      to: {
+        pathNot: '^(packages/(renderer|core|map|views)/|node_modules/maplibre-gl/|geojson$)',
+      },
+    },
+    {
       name: 'workspace-has-no-application-semantics',
       severity: 'error',
       comment:
