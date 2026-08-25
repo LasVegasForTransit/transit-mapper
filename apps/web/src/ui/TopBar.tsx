@@ -1,5 +1,6 @@
 import { useEditor, useEditorCommands, useEditorStore } from '../editor/EditorProvider';
 import { forkSystem } from '@transitmapper/core/model/serialize';
+import { useInertRef } from '@transitmapper/workspace/inert-ref';
 import { blurOnEnter } from './formUtils';
 import { DropdownMenu, DropdownMenuChoice, DropdownMenuItem } from './DropdownMenu';
 import { DrivingSidePopover } from './DrivingSidePopover';
@@ -7,7 +8,6 @@ import { ExportSplitButton } from './ExportSplitButton';
 import { FileMenu } from './FileMenu';
 import { IconButton } from './IconButton';
 import { LayersPopover } from './LayersPopover';
-import { useInertRef } from './useInertRef';
 import { useUi } from './UiProvider';
 import { useView, type ViewMode } from './ViewProvider';
 import { Icon } from './Icon';
@@ -167,8 +167,7 @@ export function TopBarBrand() {
  *
  * Three buttons carry neither class and are always present: the issues badge,
  * a warning light that only renders when something is actually wrong; layers;
- * and undo. Driving side is unmarked too — it is a document setting, and a
- * menu of verbs has no shape for it.
+ * and undo. Driving side is unmarked because a verb menu cannot represent a document setting.
  */
 export function TopBarActions() {
   const store = useEditorStore();

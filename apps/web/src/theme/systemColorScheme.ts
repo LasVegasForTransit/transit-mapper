@@ -1,4 +1,4 @@
-import { useMediaQuery } from '../device/media-query';
+import { useMediaQuery } from '@transitmapper/workspace/media-query';
 import type { ColorScheme } from './color-scheme';
 
 export type { ColorScheme } from './color-scheme';

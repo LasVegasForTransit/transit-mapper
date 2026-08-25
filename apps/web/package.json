@@ -27,6 +27,7 @@
     "@transitmapper/pwa-updater": "workspace:*",
     "@transitmapper/renderer": "workspace:*",
     "@transitmapper/views": "workspace:*",
+    "@transitmapper/workspace": "workspace:*",
     "lucide-react": "catalog:",
     "maplibre-gl": "catalog:",
     "react": "catalog:",

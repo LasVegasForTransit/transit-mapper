@@ -444,17 +444,6 @@
       "count": 2
     }
   },
-  "src/ui/Workbench.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/ui/inspector/FacilityInspector.tsx": {
     "@typescript-eslint/prefer-nullish-coalescing": {
       "count": 1

@@ -1,0 +1,386 @@
+/* Workbench owns the chrome motion because its explicit chromeHidden state
+   keeps visual hiding and DOM inertness on the same component boundary. */
+.zen-label,
+.btn-label {
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 220px;
+  opacity: 1;
+  transition:
+    max-width 200ms var(--motion-chrome-curve),
+    opacity 120ms var(--motion-chrome-curve);
+  transition-delay: 0ms, 140ms;
+}
+[data-zen] .zen-label,
+[data-zen] .btn-label {
+  max-width: 0;
+  opacity: 0;
+}
+.zen-label-block,
+.tool-btn-label {
+  overflow: hidden;
+  max-height: 16px;
+  opacity: 1;
+  transition:
+    max-height 200ms var(--motion-chrome-curve),
+    opacity 120ms var(--motion-chrome-curve);
+  transition-delay: 0ms, 140ms;
+}
+[data-zen] .zen-label-block,
+[data-zen] .tool-btn-label {
+  max-height: 0;
+  opacity: 0;
+}
+.zen-cluster {
+  transition:
+    opacity 160ms var(--motion-chrome-curve),
+    transform 160ms var(--motion-chrome-curve);
+}
+[data-zen] .zen-cluster {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+}
+.zen-collapse-cluster {
+  overflow: hidden;
+  max-width: 400px;
+  opacity: 1;
+  transition:
+    max-width 220ms var(--motion-chrome-curve),
+    opacity 140ms var(--motion-chrome-curve);
+  transition-delay: 0ms, 160ms;
+}
+[data-zen] .zen-collapse-cluster {
+  max-width: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.panel-left {
+  align-self: stretch;
+}
+.panel-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 12px 8px 8px;
+  border-bottom: 1px solid var(--md-sys-color-surface-container-highest);
+}
+.panel-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+[data-zen] .panel-brand-row,
+[data-zen] .panel-brand {
+  align-self: flex-start;
+}
+.panel-brand .system-name {
+  flex: 1 1 128px;
+  max-width: 320px;
+}
+[data-zen] .panel-brand .system-name {
+  flex: 0 1 140px;
+}
+.menu-card {
+  transition: width 220ms var(--motion-chrome-curve);
+}
+[data-zen] .menu-card,
+[data-zen] .menu-card-slot {
+  align-self: flex-start;
+}
+[data-zen] .menu-card {
+  width: auto;
+}
+.collapsible {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  transition: max-height 220ms var(--motion-chrome-curve);
+}
+[data-zen] .collapsible {
+  max-height: 0;
+  max-width: 0;
+}
+.collapsible-inner {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-handle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  flex: 0 0 auto;
+  touch-action: none;
+  cursor: grab;
+  color: var(--md-sys-color-on-surface);
+}
+.sheet-grip {
+  width: 32px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--md-sys-color-outline-variant);
+  flex: 0 0 auto;
+}
+.sheet-title {
+  flex: 1;
+  text-align: left;
+  font-size: var(--md-sys-typescale-title-small-size);
+  font-weight: 600;
+}
+.sheet-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  margin: 0 8px 4px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: var(--md-sys-typescale-label-small-size);
+  color: var(--md-sys-color-on-surface-variant);
+  border: none;
+  background: transparent;
+  flex: 0 0 auto;
+}
+.sheet-back:hover {
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+}
+
+.dock-slot {
+  left: calc(var(--panel-w) + var(--overlay-gap));
+  right: 0;
+}
+[data-zen] .dock-slot {
+  left: 0;
+}
+
+.app-banner-slot {
+  top: 68px;
+}
+@media (max-width: 767px), (max-height: 500px) {
+  .app-banner-slot {
+    top: 136px;
+  }
+}
+[data-zen] .app-banner-slot {
+  top: 12px;
+}
+
+/* Hosts may supply a contextual notice instead of a global banner. It aligns
+   with the right panel without entering the hideable Workbench subtree. */
+.install-banner-slot {
+  position: absolute;
+  top: 64px;
+  right: var(--overlay-gap);
+  z-index: 1;
+  width: var(--panel-w);
+}
+@media (max-width: 767px), (max-height: 500px) {
+  .install-banner-slot {
+    display: none;
+  }
+}
+
+.zen-restore {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  right: 8px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface-variant);
+  box-shadow: var(--md-sys-elevation-level2);
+}
+.compact-top-bar {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: 6;
+  background: var(--md-sys-color-surface);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+.compact-top-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 8px;
+  min-width: 0;
+}
+.compact-top-bar .system-name {
+  width: auto;
+  min-width: 0;
+  flex: 1;
+}
+.compact-top-bar .actions-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.compact-workbench {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 16px 16px 0 0;
+  background: var(--md-sys-color-surface);
+  box-shadow: var(--md-sys-elevation-level3);
+  transition:
+    max-height 200ms var(--motion-chrome-curve),
+    opacity 200ms var(--motion-chrome-curve);
+}
+.compact-workbench.is-half {
+  max-height: min(46dvh, calc(100dvh - 96px));
+}
+.compact-workbench.is-full {
+  max-height: calc(100dvh - 96px);
+}
+.compact-workbench.is-hidden {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.workbench-panel {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transition: max-height 200ms var(--motion-chrome-curve);
+}
+.compact-workbench.is-closed .workbench-panel,
+.compact-workbench.is-closed .sheet-back {
+  max-height: 0;
+  min-height: 0;
+  flex: none;
+  overflow: hidden;
+  padding-block: 0;
+  border: 0;
+}
+.workbench-status {
+  display: flex;
+  justify-content: center;
+  flex: none;
+  padding: 4px 8px 0;
+}
+.workbench-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 6px 0 8px;
+  border-top: 1px solid var(--md-sys-color-surface-container-highest);
+}
+.workbench-rail-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+.workbench-rail-state .view-switch-btn {
+  min-width: 0;
+}
+.workbench-rail-state .view-switch-label {
+  max-width: 140px;
+}
+.workbench-rail-sim:empty {
+  display: none;
+}
+@media (max-height: 500px) {
+  .workbench-rail {
+    flex-direction: row;
+    justify-content: center;
+    gap: 12px;
+  }
+  :root {
+    --map-pad-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.top-chrome-card {
+  border: 1px solid var(--md-sys-color-surface-container-highest);
+  border-radius: 12px;
+  background: var(--md-sys-color-surface);
+  box-shadow: var(--md-sys-elevation-level2);
+}
+.top-app-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.top-app-bar::-webkit-scrollbar {
+  display: none;
+}
+.top-app-bar > * {
+  flex: none;
+}
+.top-app-bar-center {
+  justify-content: safe center;
+}
+.top-app-bar-end {
+  justify-content: safe flex-end;
+}
+.zen-collapse-bar {
+  max-width: 400px;
+  transition: max-width 220ms var(--motion-chrome-curve);
+}
+[data-zen] .zen-collapse-bar {
+  max-width: 0;
+  padding: 0;
+  border-width: 0;
+  overflow: hidden;
+}
+.actions-full .act-overflow {
+  display: none;
+}
+.actions-collapsed .primary-btn .btn-label,
+.actions-full[data-fit='labels'] .btn-label,
+.actions-full[data-fit='tertiary'] .btn-label,
+.actions-full[data-fit='overflow'] .btn-label {
+  display: none;
+}
+.actions-full[data-fit='tertiary'] .act-tertiary,
+.actions-full[data-fit='overflow'] .act-tertiary {
+  display: none;
+}
+.actions-collapsed .act-secondary,
+.actions-full[data-fit='overflow'] .act-secondary {
+  display: none;
+}
+.actions-collapsed .act-overflow,
+.actions-full[data-fit='tertiary'] .act-overflow,
+.actions-full[data-fit='overflow'] .act-overflow {
+  display: inline-flex;
+}

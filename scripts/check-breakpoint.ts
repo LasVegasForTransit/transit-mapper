@@ -3,8 +3,8 @@
  * The layout condition is declared in three places, and all three are
  * load-bearing.
  *
- * `device/capabilities.ts` decides which component tree mounts. `ui/app.css`
- * repeats the same condition in every media query that has to move with that
+ * `packages/workspace/src/media-query.ts` decides which component tree mounts.
+ * The workspace and application stylesheets repeat the same condition in every media query that has to move with that
  * tree, and separately declares `--breakpoint-md` so Tailwind's `md:`
  * utilities agree about the width half. Mounting a tree on one side of a
  * boundary while styling it for the other produces a layout nobody wrote and
@@ -32,8 +32,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const CAPABILITIES = 'apps/web/src/device/capabilities.ts';
-const STYLESHEET = 'apps/web/src/ui/app.css';
+const CAPABILITIES = 'packages/workspace/src/media-query.ts';
+const STYLESHEETS = ['apps/web/src/ui/app.css', 'packages/workspace/src/workbench.css'];
 
 function read(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf8');
@@ -45,7 +45,9 @@ function fail(message: string): never {
 }
 
 const capabilities = read(CAPABILITIES);
-const stylesheet = read(STYLESHEET);
+const stylesheets = STYLESHEETS.map((path) => ({ path, source: read(path) }));
+const applicationStylesheet = stylesheets[0];
+if (!applicationStylesheet) fail('the application stylesheet list is empty.');
 
 const declaration = /COMPACT_LAYOUT_QUERY\s*=\s*'([^']+)'/.exec(capabilities);
 if (!declaration) {
@@ -65,9 +67,11 @@ if (!compactWidth) {
   );
 }
 
-const themeToken = /--breakpoint-md:\s*(\d+)px/.exec(stylesheet);
+const themeToken = /--breakpoint-md:\s*(\d+)px/.exec(applicationStylesheet.source);
 if (!themeToken) {
-  fail(`could not find --breakpoint-md in ${STYLESHEET}. Update this check with it.`);
+  fail(
+    `could not find --breakpoint-md in ${applicationStylesheet.path}. Update this check with it.`,
+  );
 }
 
 const compactMax = Number(compactWidth[1]);
@@ -75,7 +79,7 @@ const themeMin = Number(themeToken[1]);
 
 if (themeMin !== compactMax + 1) {
   fail(
-    `${STYLESHEET} styles for a boundary at ${themeMin}px while ${CAPABILITIES} mounts for one at ${compactMax + 1}px.\n` +
+    `${applicationStylesheet.path} styles for a boundary at ${themeMin}px while ${CAPABILITIES} mounts for one at ${compactMax + 1}px.\n` +
       `  --breakpoint-md must be exactly one more than COMPACT_LAYOUT_QUERY's max-width.\n` +
       `  Fix: set --breakpoint-md to ${compactMax + 1}px, or the clause to (max-width: ${themeMin - 1}px).`,
   );
@@ -98,17 +102,20 @@ const wanted = normalise(condition);
 // Comments quote the condition — that is the point of them — so scanning the
 // raw text finds the prose as well as the rules and reports it as a rule that
 // disagrees with itself.
-const rules = stylesheet.replace(/\/\*[\s\S]*?\*\//g, '');
-const offenders = [...rules.matchAll(/@media\s+([^{]+)\{/g)]
-  .map((match) => normalise(match[1] ?? ''))
-  .filter((query) => query.includes(`max-width: ${compactMax}px`))
-  .filter((query) => query !== wanted);
+const offenders = stylesheets.flatMap(({ path, source }) => {
+  const rules = source.replace(/\/\*[\s\S]*?\*\//g, '');
+  return [...rules.matchAll(/@media\s+([^{]+)\{/g)]
+    .map((match) => normalise(match[1] ?? ''))
+    .filter((query) => query.includes(`max-width: ${compactMax}px`))
+    .filter((query) => query !== wanted)
+    .map((query) => ({ path, query }));
+});
 
 if (offenders.length > 0) {
   fail(
-    `${STYLESHEET} has ${offenders.length} media quer${offenders.length === 1 ? 'y' : 'ies'} at the layout boundary that\n` +
+    `The stylesheets have ${offenders.length} media quer${offenders.length === 1 ? 'y' : 'ies'} at the layout boundary that\n` +
       `  do not spell out the whole condition:\n` +
-      offenders.map((query) => `    @media ${query}`).join('\n') +
+      offenders.map(({ path, query }) => `    ${path}: @media ${query}`).join('\n') +
       `\n  Each must read exactly:\n    @media ${wanted}\n` +
       `  A width-only copy stops applying on a short screen — a phone in\n` +
       `  landscape is ${compactMax + 77}px wide — while the compact tree is still mounted.`,

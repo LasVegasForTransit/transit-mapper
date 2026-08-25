@@ -1,4 +1,8 @@
-import { mediaQuery, useMediaQuery } from './media-query';
+import {
+  compactLayoutSnapshot,
+  mediaQuery,
+  useMediaQuery,
+} from '@transitmapper/workspace/media-query';
 
 /**
  * What this app needs to know about the device it is running on.
@@ -39,8 +43,6 @@ import { mediaQuery, useMediaQuery } from './media-query';
  * ui/app.css mirrors this exactly. The two must move together — grep for the
  * comment that names this constant.
  */
-const COMPACT_LAYOUT_QUERY = '(max-width: 767px), (max-height: 500px)';
-
 /**
  * The primary pointer cannot be precise. Decides hit tolerance — see
  * editor/input-tuning.ts.
@@ -55,9 +57,7 @@ const COARSE_POINTER_QUERY = '(pointer: coarse)';
  */
 const NO_HOVER_QUERY = '(hover: none)';
 
-export function useCompactLayout(): boolean {
-  return useMediaQuery(COMPACT_LAYOUT_QUERY);
-}
+export { compactLayoutSnapshot };
 
 export function useCoarsePointer(): boolean {
   return useMediaQuery(COARSE_POINTER_QUERY);
@@ -69,10 +69,6 @@ export function useCoarsePointer(): boolean {
  * it already handles rather than having an answer change under a gesture in
  * progress.
  */
-export function compactLayoutSnapshot(): boolean {
-  return mediaQuery(COMPACT_LAYOUT_QUERY).snapshot();
-}
-
 export function hoverCapableSnapshot(): boolean {
   return !mediaQuery(NO_HOVER_QUERY).snapshot();
 }

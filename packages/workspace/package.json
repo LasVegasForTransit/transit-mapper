@@ -11,7 +11,32 @@
       },
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./media-query": {
+      "development": {
+        "types": "./src/media-query.ts",
+        "import": "./src/media-query.ts"
+      },
+      "types": "./dist/media-query.d.ts",
+      "import": "./dist/media-query.js"
+    },
+    "./media-query-store": {
+      "development": {
+        "types": "./src/media-query-store.ts",
+        "import": "./src/media-query-store.ts"
+      },
+      "types": "./dist/media-query-store.d.ts",
+      "import": "./dist/media-query-store.js"
+    },
+    "./inert-ref": {
+      "development": {
+        "types": "./src/inert-ref.ts",
+        "import": "./src/inert-ref.ts"
+      },
+      "types": "./dist/inert-ref.d.ts",
+      "import": "./dist/inert-ref.js"
+    },
+    "./workbench.css": "./src/workbench.css"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -21,6 +46,17 @@
   },
   "devDependencies": {
     "@transitmapper/tsconfig": "workspace:*",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "jsdom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@transitmapper/map": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "catalog:"
   }
 }

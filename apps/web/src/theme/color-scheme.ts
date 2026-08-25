@@ -1,4 +1,4 @@
-import { mediaQuery } from '../device/media-query-store';
+import { mediaQuery } from '@transitmapper/workspace/media-query-store';
 
 export type ColorScheme = 'light' | 'dark';
 

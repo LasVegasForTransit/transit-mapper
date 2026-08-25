@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { mediaQuery } from '../../device/media-query';
+import { mediaQuery } from '@transitmapper/workspace/media-query-store';
 import { SimControlsPresentation } from '../SimControls';
 import { OnboardingServiceInspectorPreview } from './onboarding-service-inspector-preview';
 import { onboardingSceneFrame } from './scene-timing';

@@ -6,11 +6,11 @@
 (max-width: 767px), (max-height: 500px)
 ```
 
-`COMPACT_LAYOUT_QUERY` in `device/capabilities.ts` decides which component
-tree mounts. `ui/app.css` repeats the same condition in every media query
-that has to move with that tree, and `pnpm check:breakpoint` compares the
-two, failing on drift — including a stylesheet query that spells out only
-the width half.
+`COMPACT_LAYOUT_QUERY` in `packages/workspace/src/media-query.ts` decides which
+component tree mounts. `packages/workspace/src/workbench.css` repeats the same
+condition for shared chrome. `apps/web/src/ui/app.css` repeats it for map and
+editor presentation. `pnpm check:breakpoint` compares all three and fails on
+drift, including a stylesheet query that spells out only the width half.
 
 The height clause exists because a phone held sideways is 844x390. A
 width-only test would put that screen on the desktop branch, docking a
@@ -19,7 +19,7 @@ height below which a full-height side card stops holding a useful list — a
 different question from where two 280px columns stop leaving a map between
 them — so neither number is derived from the other.
 
-`ui/app.css` also declares `--breakpoint-md` at 768px, one more than the
+`apps/web/src/ui/app.css` also declares `--breakpoint-md` at 768px, one more than the
 condition's `max-width`, so Tailwind's `md:` utilities agree about the
 width half. `md:` cannot express the height half, so it must never fork
 layout: used that way, a landscape phone would take the desktop branch. It
@@ -27,8 +27,9 @@ stays correct for anything that only cares about width.
 
 ## Three questions, never bundled
 
-`device/capabilities.ts` exposes three independent questions, and no code
-in this layout collapses one into another:
+`apps/web/src/device/capabilities.ts` exposes three independent questions
+through the workspace package's generic media-query APIs. No code in this
+layout collapses one into another:
 
 | Question                  | Media query         | Decides                                                                 |
 | ------------------------- | ------------------- | ----------------------------------------------------------------------- |
@@ -84,9 +85,10 @@ opens to depends on why it appeared:
   waits.
 - A selection opens to `half`. You selected the object to look at it.
 
-`detentFor()` in `Workbench.tsx` is a plain function of `SupplementalKind`,
-which makes it testable without a renderer. A mounted component test could
-only ever observe the first stop: effects do not run in a static render.
+`supplementalDetent()` in `apps/web/src/ui/workspace-adapter.ts` is a plain
+function of `SupplementalKind`. It keeps editor meaning out of the shared
+Workbench and makes the policy testable without a renderer. The Workbench
+accepts only the resulting initial detent.
 
 Dragging the handle moves the surface one stop in the direction of the
 drag, not to the nearest stop. Its height is a CSS transition rather than
@@ -99,7 +101,7 @@ never rise above the top bar.
 ## What the chrome covers
 
 The map is full-bleed behind the chrome, so it has no idea any of it is there.
-Four custom properties in `app.css` say what it covers:
+Four custom properties in `apps/web/src/ui/app.css` say what it covers:
 
 ```
 --map-pad-top  --map-pad-bottom  --map-pad-left  --map-pad-right
@@ -147,12 +149,13 @@ the container's available width picks between them:
 - the simulation transport — a four-button speed ladder, or play/pause
   plus a clock, with the ladder behind a trigger wearing the current speed
 
-`ROOMY_TOP_ROW_QUERY`, `(min-width: 1089px)` in `Workbench.tsx`, sets the
-threshold. 1089 is arithmetic over fixed widths, not a measured
-breakpoint: 280px for the workspace panel, 254px for the segmented view
-switch, 337px for the simulation bar, 178px for the action bar's narrowest
-step, 24px for three 8px gaps, and 16px for the overlay's inset. Adding a
-control to either bar changes this sum; re-measure it when that happens.
+`ROOMY_TOP_ROW_QUERY`, `(min-width: 1089px)` in
+`packages/workspace/src/workbench.tsx`, sets the threshold. 1089 is arithmetic
+over fixed widths, not a measured breakpoint: 280px for the workspace panel,
+254px for the segmented view switch, 337px for the simulation bar, 178px for
+the action bar's narrowest step, 24px for three 8px gaps, and 16px for the
+overlay's inset. Adding a control to either bar changes this sum; re-measure it
+when that happens.
 
 `.top-app-bar` keeps `overflow-x: auto` as a backstop, so a wrong
 threshold degrades to a scroll instead of hiding content with nothing to

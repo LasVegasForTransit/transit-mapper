@@ -131,6 +131,17 @@ export default {
       to: { path: '^apps/' },
     },
     {
+      name: 'workspace-has-no-application-semantics',
+      severity: 'error',
+      comment:
+        'Workspace composes injected map and chrome slots. Editor commands, application hosts, ' +
+        'viewer, persistence, import, simulation, installation, and PWA policy stay in hosts.',
+      from: { path: '^packages/workspace/src/' },
+      to: {
+        path: '^apps/web/src/(App\\.tsx|app/|editor/|viewer/|storage/|import/|sim/|pwa/|ui/(InstallProvider|SimProvider))',
+      },
+    },
+    {
       name: 'src-does-not-import-tests',
       severity: 'error',
       comment: 'Test material must not reach a shipped bundle.',

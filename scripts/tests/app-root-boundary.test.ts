@@ -17,7 +17,10 @@ function runBoundaryFixture(files: Readonly<Record<string, string>>): BoundaryRe
   temporaryDirectories.push(fixtureRoot);
   writeFileSync(
     join(fixtureRoot, 'tsconfig.json'),
-    JSON.stringify({ compilerOptions: { jsx: 'react-jsx' }, include: ['apps/**/*'] }),
+    JSON.stringify({
+      compilerOptions: { jsx: 'react-jsx' },
+      include: ['apps/**/*', 'packages/**/*'],
+    }),
   );
   for (const [path, contents] of Object.entries(files)) {
     const destination = join(fixtureRoot, path);
@@ -44,21 +47,23 @@ describe('the eager AppRoot dependency boundary', () => {
   it('rejects a forbidden implementation reached through a shell-safe intermediary', () => {
     const result = runBoundaryFixture({
       'apps/web/src/main.tsx': "import './perf/startup-marks';\n",
-      'apps/web/src/perf/startup-marks.ts': "import '../ui/Workbench';\n",
-      'apps/web/src/ui/Workbench.tsx': 'export const Workbench = {};\n',
+      'apps/web/src/perf/startup-marks.ts':
+        "import '../../../../packages/workspace/src/workbench';\n",
+      'packages/workspace/src/workbench.tsx': 'export const Workbench = {};\n',
     });
 
     expect(result.status).toBe(1);
     expect(result.output).toContain('app-root-eager-closure-is-shell-only');
-    expect(result.output).toContain('apps/web/src/ui/Workbench.tsx');
+    expect(result.output).toContain('packages/workspace/src/workbench.tsx');
   });
 
   it('permits a forbidden implementation behind the dynamic route-host edge', () => {
     const result = runBoundaryFixture({
       'apps/web/src/main.tsx': "import './app/app-root';\n",
       'apps/web/src/app/app-root.tsx': "void import('../editor/editor-application');\n",
-      'apps/web/src/editor/editor-application.tsx': "import '../ui/Workbench';\n",
-      'apps/web/src/ui/Workbench.tsx': 'export const Workbench = {};\n',
+      'apps/web/src/editor/editor-application.tsx':
+        "import '../../../../packages/workspace/src/workbench';\n",
+      'packages/workspace/src/workbench.tsx': 'export const Workbench = {};\n',
     });
 
     expect(result.status).toBe(0);

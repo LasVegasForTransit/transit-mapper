@@ -1,7 +1,7 @@
 import { Icon } from './Icon';
 import { useInstall } from '../pwa/InstallProvider';
 
-/** The invitation lives in Workbench's top-chrome flow, never on a fixed App offset. */
+/** The invitation uses MapWorkspace's notice slot, outside hideable editor chrome. */
 export function InstallBanner() {
   const { installState, dismiss, requestInstall } = useInstall();
   if (!installState.eligible) return null;

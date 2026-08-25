@@ -1,4 +1,5 @@
 import { useEditor, useEditorCommands } from '../editor/EditorProvider';
+import { useInertRef } from '@transitmapper/workspace/inert-ref';
 import type { SelectVariant } from '../editor/store';
 import {
   FACILITY_TYPE_ORDER,
@@ -19,7 +20,6 @@ import {
   DropdownMenuSeparator,
 } from './DropdownMenu';
 import { Icon, type IconName } from './Icon';
-import { useInertRef } from './useInertRef';
 import { useUi } from './UiProvider';
 import { useView } from './ViewProvider';
 interface PassengerPlaceToolPresentation {
@@ -82,10 +82,9 @@ export function Toolbar() {
   const { viewMode } = useView();
   const { uiHidden } = useUi();
   const dockRef = useInertRef<HTMLDivElement>(uiHidden);
-  // Diagram is a schematic projection, not the real system — nothing drawn
-  // on it can be dragged or clicked back into a real edit (see
-  // map/interactions.ts's isDiagramMode gating), so drawing/editing tools are
-  // disabled here too, same treatment as a read-only shared view.
+  // Diagram is schematic, so its marks cannot become document edits (see
+  // map/interactions.ts's isDiagramMode gating). Drawing tools stay disabled,
+  // like they do in a read-only shared view.
   const diagram = viewMode === 'diagram';
   const locked = readOnly || diagram;
   const network = viewMode === 'network';

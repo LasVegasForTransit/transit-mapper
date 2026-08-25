@@ -10,13 +10,12 @@ application, and a Cloudflare Worker.
 Dependencies flow from the applications toward shared packages:
 
 ```text
-apps/web ────────┬──> packages/renderer ──> packages/core
+apps/web ────────┬──> packages/workspace ────> packages/map ──> packages/views
+                 ├──> packages/renderer ─────> packages/core
                  ├──> packages/map ───────> packages/views
                  ├──> packages/views
                  ├──> packages/core
                  └──> packages/pwa-updater
-
-packages/workspace   independent package shell
 
 apps/worker ──────> packages/core
 
@@ -67,8 +66,9 @@ the MapLibre runtime moves.
 
 ### Workspace
 
-`packages/workspace` will own shared React composition around the map and
-Workbench. Its empty shell has no dependency yet. Hosts will supply slots.
+`packages/workspace` owns responsive React composition around one map surface.
+Hosts inject named slots, state, and actions into `MapWorkspace` and Workbench.
+The package depends on map, treats React as a peer, and imports no editor state.
 
 ### Renderer
 
@@ -290,11 +290,9 @@ markings, and lane-continuous services derive from the same resolved geometry.
 
 #### UI
 
-`apps/web/src/ui` owns React presentation, workbench layout, inspector
-controls, dialogs, onboarding, and accessibility semantics.
+`apps/web/src/ui` owns editor presentation, controls, dialogs, onboarding, and
+accessibility. It adapts editor state and actions into workspace slots.
 Onboarding projects one valid Las Vegas system through shared production UI.
-`apps/web/src/ui/useKeyboardInset.ts` reports how much of the viewport an
-on-screen keyboard covers, which no layout-viewport measurement exposes.
 `apps/web/src/ui/app-banner.ts` decides which single application-level message
 is showing and what it says, as a pure function of save state, startup outcome,
 update state, and connectivity; it holds the copy for every one of them.
@@ -306,11 +304,9 @@ selection.
 These modules may read the editor store and invoke grouped commands but do not
 duplicate domain rules.
 
-`ui/Workbench.tsx` is the single owner of where every surface sits, at every
-viewport. Below the layout condition it mounts a different tree: two
-edge-anchored bars with the map between them, rather than floating cards. See
-[The compact layout](../explanation/compact-layout.md) for that tree, its
-detents, and the four properties that tell the map what the chrome covers.
+`packages/workspace/src/workbench.tsx` owns responsive chrome placement.
+`apps/web/src/ui/workspace-adapter.ts` maps editor representations and content
+to package labels and detents. See [The compact layout](../explanation/compact-layout.md).
 
 #### Device
 

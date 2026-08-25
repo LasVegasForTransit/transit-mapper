@@ -128,8 +128,9 @@
     "//#check:breakpoint": {
       "inputs": [
         "scripts/check-breakpoint.ts",
-        "apps/web/src/device/capabilities.ts",
-        "apps/web/src/ui/app.css"
+        "apps/web/src/ui/app.css",
+        "packages/workspace/src/media-query.ts",
+        "packages/workspace/src/workbench.css"
       ],
       "outputs": []
     },

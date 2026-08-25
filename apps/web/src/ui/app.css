@@ -5,6 +5,7 @@
    is a utility class in the editor. Excluding the false positives removes
    2.4 kB of CSS. Remove a name here before adopting that utility in markup. */
 @source not inline('collapse invisible visible isolate container contents table transform zoom-0 resize text-justify lowercase outline filter select-all');
+@source '../../../../packages/workspace/src';
 
 /* THE layout condition, and the only one that decides which component tree
    mounts. Written out in full wherever it is used:
@@ -244,99 +245,6 @@ input[type='range'] {
   font-size: 0.875rem;
 }
 
-/* ---- Zen mode ("Hide UI"): App.tsx sets one data-zen attribute on .app
-   when hidden, and every opted-in element below reacts to it through a
-   plain CSS attribute selector — a component becomes zen-aware by carrying
-   one of these classes, never by having uiHidden threaded into its props.
-   Sim controls and the view switcher's segmented control carry none of
-   them, so they're untouched no matter where they sit in the tree; nothing
-   here unmounts anything (see MenuCard's own comment in Workbench.tsx for
-   the one case where two elements used to be swapped by mount state and
-   are now one that resizes instead).
-
-   Two motions, both real box-model changes — never a transform standing in
-   for one, so collapsing content actually makes its neighbors reflow into
-   the freed space:
-     1. A text-bearing element collapses its own width (.zen-label) or
-        height (.zen-label-block, for the mode dock's icon-above-label
-        buttons) to zero first.
-     2. Only once that's mostly done (transition-delay staggers the two)
-        does whatever's left fade. A whole cluster (.zen-cluster) — once
-        its own labels have already collapsed above — fades the same way,
-        `pointer-events: none` once hidden, paired with `inert` in the
-        component (not shown here — inert isn't expressible in CSS) so a
-        hidden cluster can't trap keyboard focus either. ---- */
-.zen-label,
-.btn-label {
-  overflow: hidden;
-  white-space: nowrap;
-  max-width: 220px;
-  opacity: 1;
-  transition:
-    max-width 200ms var(--motion-chrome-curve),
-    opacity 120ms var(--motion-chrome-curve);
-  transition-delay: 0ms, 140ms;
-}
-[data-zen] .zen-label,
-[data-zen] .btn-label {
-  max-width: 0;
-  opacity: 0;
-}
-/* The mode dock's own label sits BELOW its icon, not beside it (see
-   Toolbar.tsx's .tool-btn) — collapsing height (not width) is what lets
-   the icon recenter in its fixed-size button as the label vanishes above
-   it, the same "collapse, then whatever's left fades" motion turned 90°. */
-.zen-label-block,
-.tool-btn-label {
-  overflow: hidden;
-  max-height: 16px;
-  opacity: 1;
-  transition:
-    max-height 200ms var(--motion-chrome-curve),
-    opacity 120ms var(--motion-chrome-curve);
-  transition-delay: 0ms, 140ms;
-}
-[data-zen] .zen-label-block,
-[data-zen] .tool-btn-label {
-  max-height: 0;
-  opacity: 0;
-}
-.zen-cluster {
-  transition:
-    opacity 160ms var(--motion-chrome-curve),
-    transform 160ms var(--motion-chrome-curve);
-}
-[data-zen] .zen-cluster {
-  opacity: 0;
-  transform: translateY(6px);
-  pointer-events: none;
-}
-/* Like .zen-cluster, but for a control that shares a flex row with
-   something exempt (sim controls) — a fade/lift alone wouldn't free the
-   width for that neighbor to reflow into, so this actually collapses its
-   own max-width first, the same motion .zen-label uses, just at cluster
-   (not text-span) scale. */
-.zen-collapse-cluster {
-  overflow: hidden;
-  max-width: 400px;
-  opacity: 1;
-  transition:
-    max-width 220ms var(--motion-chrome-curve),
-    opacity 140ms var(--motion-chrome-curve);
-  transition-delay: 0ms, 160ms;
-}
-[data-zen] .zen-collapse-cluster {
-  max-width: 0;
-  /* Padding is the element's own — a flex `gap` on its parent (e.g. the
-     shared view-switcher/sim-controls card) is the parent's, and can't be
-     collapsed from here; that leaves one fixed gap-width of residual space
-     even fully collapsed, an accepted, minor tradeoff for staying pure
-     reflow (no JS-timed display:none once the transition ends). */
-  padding: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
 /* max-width here is load-bearing, not decorative: a CSS transition can't
    interpolate FROM the implicit default (max-width: none, a keyword) TO a
    length — confirmed live, that combination just snaps instantly, the same
@@ -393,9 +301,6 @@ input[type='range'] {
    (3 selectors) rather than bare `[data-zen] .system-name` (2) — needs to
    outrank .panel-brand .system-name's own flex-basis below on
    specificity, not source order. */
-[data-zen] .panel-brand .system-name {
-  flex: 0 1 140px;
-}
 .spacer {
   flex: 1;
 }
@@ -581,32 +486,9 @@ input[type='range'] {
   }
 }
 
-/* Rendered by Workbench.tsx into the same docked card as viewSwitcher, ahead
-   of it in DOM order — a load error can only ever happen right after a
-   shared link fails to fetch, so there's nothing it needs to share a slot
-   with; it just sits above the view switch in that one card. */
-/* Where that banner hangs. It sits outside the chrome (see App.tsx) so a
-   failing autosave survives zen mode, which means it has to clear whichever
-   top chrome is mounted by its own offset rather than by being laid out
-   beside it. Two offsets, on THE layout condition, because the compact top
-   chrome is taller than the desktop bar. */
-.app-banner-slot {
-  top: 68px;
-}
-@media (max-width: 767px), (max-height: 500px) {
-  .app-banner-slot {
-    top: 136px;
-  }
-}
-/* Outranks both by specificity, not by source order: with the chrome hidden
-   there is nothing left to clear, so the banner moves up to the top edge. */
-[data-zen] .app-banner-slot {
-  top: 12px;
-}
-
 /* App-level banner: a share that wouldn't open, a save that isn't happening.
-   Named for the slot rather than the message now that more than one thing
-   uses it (Workbench's `banner` prop). */
+   MapWorkspace renders this notice outside hideable Workbench chrome, so it
+   remains visible while Zen mode is active. */
 .app-banner {
   background: var(--md-sys-color-error-container);
   color: var(--md-sys-color-error);
@@ -660,10 +542,10 @@ input[type='range'] {
   line-height: 1.45;
 }
 
-/* Desktop only — install.ts gates eligibility on a desktop browser, and
-   Workbench renders this in no other layout. It sits in a real grid row of
-   its own below the top chrome, with no viewport offset it could use to
-   cover the bar above it or the Inspector below it.
+/* Desktop only — install.ts gates eligibility on a desktop browser, and the
+   workspace notice slot hides it in compact layouts. It sits in a real grid
+   row of its own below the top chrome, with no viewport offset it could use
+   to cover the bar above it or the Inspector below it.
    Material 3 has no banner component — M2's was dropped and nothing replaced
    it, so the nearest sanctioned pattern for persistent inline messaging is a
    card, and this is styled as one: the same surface, border and elevation as
@@ -1023,20 +905,6 @@ input[type='range'] {
      (popovers/menus) where a shared-element read actually exists. */
   animation: fade-in 160ms var(--motion-chrome-curve);
 }
-/* Left is the unified brand/name + view-specific workspace card, stretched to
-   run the full left edge of the viewport.
-
-   Both this rule and .panel-right below used to carry `grid-area` and
-   `justify-self` naming areas on an `.app-chrome` grid. That container is
-   gone: Workbench.tsx now places each card by numeric `gridArea` on a
-   wrapper, and these panels are flex children of those wrappers, where a
-   grid-area name resolves to nothing and justify-self is ignored outright.
-   Both declarations were removed. `align-self` is NOT inert — it is what
-   makes the card full-height as a flex item, and [data-zen] .menu-card
-   overrides it to flex-start to collapse the card in place. */
-.panel-left {
-  align-self: stretch;
-}
 /* The wrapper's grid row stops short of the bottom row (--controls-clearance,
    deliberately left empty), so this card's own bottom edge already clears
    MapLibre's bottom-right zoom control without a hand-picked bottom value to
@@ -1092,56 +960,6 @@ input[type='range'] {
     padding: 4px 16px 12px;
   }
 }
-/* A row is a set of explicit slots (start/end), not children left to imply
-   their own position via DOM order + ad hoc margins — .panel-brand-start
-   grows to fill the middle, .panel-brand-end always lands flush right via
-   justify-content alone. Add a -center slot here the same way if a middle
-   one is ever needed, rather than reaching for margin tricks on a child. */
-.panel-brand {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 0 0 auto;
-  /* Same column-flex stretch as .panel-brand-row's own comment below (this
-     is ITS parent, .menu-card, doing the same thing one level up) — this
-     box stretches to .menu-card's width by default too, which is exactly
-     as circular for the auto-width card as the row was. */
-  /* 8px, not .panel-body's 16px — the File-menu icon button keeps a real
-     margin from the panel's edge here, and it's the ICON GLYPH inside it
-     (inset by centering in the 34px hit box) that ends up meeting
-     .panel-body's text at the same rendered position. See .panel-body's own
-     comment for the actual math. */
-  padding: 12px 8px 8px;
-  border-bottom: 1px solid var(--md-sys-color-surface-container-highest);
-}
-/* One row, always — app menu, then the system name filling the
-   middle (flex-grow, capped by its own max-width). The only thing that changes size here
-   is the system name itself, which just grows or shrinks within the row
-   rather than forcing a second line. */
-.panel-brand-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-}
-/* .panel-brand is display:flex;flex-direction:column with align-items'
-   default (stretch) untouched — every column-flex child stretches to the
-   parent's full cross-axis (width) UNLESS it opts out, so this row was
-   always rendering at .panel-brand's width, not its own content width.
-   That's invisible normally (.panel-brand IS meant to run the panel's
-   full 280px), but once the CARD itself is trying to shrink-to-fit
-   around this row in zen mode, the stretch becomes circular padding: the
-   row measured ~90px wider than its three children's real combined
-   width, confirmed live. align-self opts this one child out of the
-   parent's stretch, same as .collapsible does below in its own way, so the
-   row (and the auto-width card measuring it)
-   actually hugs its content instead. */
-[data-zen] .panel-brand-row {
-  align-self: flex-start;
-}
-[data-zen] .panel-brand {
-  align-self: flex-start;
-}
 .app-menu-trigger {
   display: inline-flex;
   align-items: center;
@@ -1160,101 +978,6 @@ input[type='range'] {
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
-}
-/* flex-basis:128px, not flex:1's default 0% — a 0% basis reads as "I can
-   be arbitrarily small," and this is the one thing in the row that's
-   ever asked to grow, so it needs a real preferred size to grow FROM (see
-   the [data-zen] override below for the same reasoning applied to the
-   collapsed state's own, smaller basis). max-width caps how far it grows
-   in the open card, where there's real leftover width to fill. */
-.panel-brand .system-name {
-  flex: 1 1 128px;
-  max-width: 320px;
-}
-.panel-brand-row > .icon-btn {
-  flex: 0 0 auto;
-}
-
-/* ---- MenuCard ↔ zen mode's restore control, unified: this is the SAME
-   card in both states, not two elements swapped by mount state (there used
-   to be a separate .ui-restore button in the same top-left corner). Its
-   own width morphs from --panel-w down to auto instead — position never
-   changes, so it visibly shrinks in place. The toggle IconButton inside it
-   (see TopBarBrand) carries none of the zen-* classes below, so it stays
-   clickable throughout, in either direction.
-
-   `auto` below states the intent (and is what a no-JS fallback would
-   render) but ISN'T what actually produces the collapse — a `width`
-   transition can't interpolate toward `auto` at all (no numeric endpoint
-   to animate to; confirmed live, it just snaps), and separately,
-   confirmed live again, this rule's own resolved value didn't reliably
-   match the identical measurement taken through JS (a real, reproducible
-   ~90px discrepancy between the two — case not fully understood, not
-   trusted as a result). MenuCard.tsx is the actual source of truth for
-   this width for as long as the card stays collapsed: it measures the
-   real content width itself and pins that fixed pixel number via an
-   inline style (which beats this rule by specificity while it's set),
-   re-measuring on any resize of the content so a rename while collapsed
-   still tracks correctly. */
-.menu-card {
-  transition: width 220ms var(--motion-chrome-curve);
-}
-/* The card is normally stretched full-height by design (see the comment on
-   .panel-left above) — deliberate when it's actually the workspace list, but
-   wrong for the collapsed pill: a tall, mostly-empty card would read as a
-   layout bug, not a restore button. Both the card's own stretch (a flex
-   default from its wrapper) and the wrapper's own grid-level stretch (see
-   .menu-card-slot below) need overriding, or only one of the two shrinks. */
-[data-zen] .menu-card {
-  width: auto;
-  align-self: flex-start;
-}
-[data-zen] .menu-card-slot {
-  align-self: flex-start;
-}
-/* Animates the workspace section open/closed via max-height instead of an
-   instant show/hide. flex:1 lets it fill whatever space remains in the
-   (possibly viewport-clamped) card when expanded; max-height:0 when
-   collapsed overrides that, which is what actually animates. The expanded
-   ceiling was a flat 640px until it was confirmed live to bind on any panel
-   taller than ~740px — not rare at all on a normal laptop screen — leaving
-   the workspace list scroll-capped inside 640px of its own box, with the
-   rest of the (correctly full-height) card sitting empty below it. 100%
-   resolves against .panel's own height, which is definite here (stretched
-   by the grid), so the transition still animates a concrete value — it
-   just stops tracking the viewport instead of a guessed constant. */
-.collapsible {
-  /* display:flex here (missing before) is what makes .collapsible-inner
-     actually shrink to fit whatever height this ends up with, instead of
-     just sizing to its own content and getting silently clipped (not
-     scrolled) by the overflow:hidden below — confirmed live: with a long
-     enough workspace list, everything past this box's edge was simply gone,
-     no scrollbar, nothing to click to reach it. */
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  max-height: 100%;
-  overflow: hidden;
-  transition: max-height 220ms var(--motion-chrome-curve);
-}
-/* The workspace list's own long hint text has to lose its natural width too,
-   not just its height,
-   or the "auto"-width card stays exactly as wide as it was before. */
-[data-zen] .collapsible {
-  max-height: 0;
-  max-width: 0;
-}
-/* flex:1 (also missing before) is the other half of that fix — this is
-   what actually receives the shrunk height from .collapsible above and
-   hands it to .panel-body's own flex:1, which is what its overflow-y:auto
-   needs to have anything to scroll against. */
-.collapsible-inner {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
 }
 /* Left/right 16px (not 8) so this text lines up with the chevron/File-menu
    icon glyphs above it: those buttons keep a full 34px hit target inside
@@ -3861,61 +3584,6 @@ button.chip-removable-label:hover {
   }
 }
 
-/* ---- mobile bottom sheet: Workbench swaps the floating workspace/Inspector
-   panels for this below --breakpoint-md, so an idle panel isn't a whole side
-   of the map left empty.
-
-   The sheet's own box — position, elevation, max-height, and the expand/peek
-   transition — is built from Tailwind utilities in Workbench.tsx, not from
-   here. An earlier `.sheet`/`.sheet.peek`/`.sheet-shell` implementation and
-   its `.toolbar-fade` pair used to live at this spot; the live sheet stopped
-   carrying those class names and they were deleted. What remains below is
-   only what the live markup still uses: the drag handle and its parts. ---- */
-.sheet-handle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 16px;
-  border: none;
-  background: transparent;
-  flex: 0 0 auto;
-  touch-action: none;
-  cursor: grab;
-  color: var(--md-sys-color-on-surface);
-}
-.sheet-grip {
-  width: 32px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--md-sys-color-outline-variant);
-  flex: 0 0 auto;
-}
-.sheet-title {
-  flex: 1;
-  text-align: left;
-  font-size: var(--md-sys-typescale-title-small-size);
-  font-weight: 600;
-}
-.sheet-back {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  align-self: flex-start;
-  margin: 0 8px 4px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  font-size: var(--md-sys-typescale-label-small-size);
-  color: var(--md-sys-color-on-surface-variant);
-  border: none;
-  background: transparent;
-  flex: 0 0 auto;
-}
-.sheet-back:hover {
-  background: var(--md-sys-color-surface-container);
-  color: var(--md-sys-color-on-surface);
-}
-
 /* ---- content-fit thresholds, NOT layout boundaries ----
    The three media queries below (860px, 620px, 339px) are each the width at
    which one specific piece of content stops fitting. They are deliberately
@@ -4203,24 +3871,6 @@ button.chip-removable-label:hover {
   }
 }
 
-/* The dock centres on the MAP, not on the window.
-   Its container used to span the full width, so its centre was the viewport's
-   — 148px left of the map's own centre at 1280px, and far enough left at
-   768px that the dock's first button painted on top of the workspace panel
-   (measured: 56x66px of overlap, dock winning the z-order). The panel's
-   column is the one fixed thing to subtract; the Inspector opposite it comes
-   and goes, and chasing that would move the dock every time a selection
-   changed. */
-.dock-slot {
-  left: calc(var(--panel-w) + var(--overlay-gap));
-  right: 0;
-}
-/* Zen mode collapses the panel to its brand row, so the map starts at the
-   left edge again and the dock should follow it. */
-[data-zen] .dock-slot {
-  left: 0;
-}
-
 /* ---- dialogs and menus on a small screen ----
 
    A centred 440px box is a desktop object. On a phone it lands mid-screen
@@ -4480,194 +4130,6 @@ button.chip-removable-label:hover {
   }
 }
 
-/* The only way back once zen mode has hidden the chrome on a compact
-   screen. The Hide-UI toggle lives in the ... menu, and that menu is inside
-   the bar zen mode just collapsed — so this is deliberately outside every
-   .zen-* class, and only rendered while `uiHidden` is true. */
-.zen-restore {
-  position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + 8px);
-  right: 8px;
-  z-index: 6;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border: 1px solid var(--md-sys-color-outline-variant);
-  border-radius: 12px;
-  background: var(--md-sys-color-surface);
-  color: var(--md-sys-color-on-surface-variant);
-  box-shadow: var(--md-sys-elevation-level2);
-}
-
-/* ---- the compact layout's two anchored surfaces ----
-
-   Below the layout condition the chrome stops floating. A top bar and a
-   bottom workbench sit flush against the screen's own edges, full-bleed,
-   separated from the map by a hairline rather than by a shadow. The map owns
-   everything between them and nothing overlaps anything.
-
-   What this replaces: five floating cards, four corner radii (4px on
-   MapLibre's zoom group, 8px, 12px on the tool clusters, 16px on the sheet)
-   and three elevation treatments, stacked 6-8px apart along the bottom edge.
-   Anchored bars have no corners to disagree about, which is why this removes
-   the mismatched padding, the 30px stair-step between the two top cards and
-   the 63x34 void in the corner of the left one, all at once.
-
-   The workbench keeps a top radius because it moves. The top bar has none
-   because it does not. */
-.compact-top-bar {
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  z-index: 6;
-  background: var(--md-sys-color-surface);
-  border-bottom: 1px solid var(--md-sys-color-outline-variant);
-}
-.compact-top-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 48px;
-  padding: 0 8px;
-  min-width: 0;
-}
-/* The system name is the one elastic thing in the row: every other control
-   is content-sized, so the name absorbs whatever is left and ellipsises
-   rather than pushing a neighbour off the edge. */
-.compact-top-bar .system-name {
-  width: auto;
-  min-width: 0;
-  flex: 1;
-}
-/* Horizontal here, unlike the vertical column it replaces. */
-.compact-top-bar .actions-collapsed {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: none;
-}
-/* ---- the workbench ---- */
-.compact-workbench {
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--md-sys-color-outline-variant);
-  border-radius: 16px 16px 0 0;
-  background: var(--md-sys-color-surface);
-  box-shadow: var(--md-sys-elevation-level3);
-  transition:
-    max-height 200ms var(--motion-chrome-curve),
-    opacity 200ms var(--motion-chrome-curve);
-}
-/* Three states, not two.
-
-   `is-closed` collapses the PANEL, not the surface. The handle and the rail
-   are always the workbench's real content, so the resting height falls out
-   of what they measure instead of a constant that has to be kept in sync
-   with them — the previous sheet's `max-h-14` was exactly such a constant,
-   and it clipped its own back link.
-
-   `is-open` is capped as a fraction of the viewport rather than a fixed
-   height, so on a short screen the surface cannot rise past the top bar. At
-   667x375 the old sheet put its own handle over the ... menu and made
-   Export, Share, Redo and the shortcuts unreachable.
-
-   dvh, not vh: a mobile browser's vh is measured against the viewport with
-   the URL bar retracted and never changes, so a vh-sized surface is taller
-   than the space it has for as long as that bar is showing. */
-.compact-workbench.is-half {
-  max-height: min(46dvh, calc(100dvh - 96px));
-}
-.compact-workbench.is-full {
-  max-height: calc(100dvh - 96px);
-}
-.compact-workbench.is-hidden {
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
-/* The one scroller in this surface. The rail below it is a sibling, so the
-   panel scrolling never moves the tools, and closing the panel never takes
-   the tools with it. */
-.workbench-panel {
-  min-height: 0;
-  flex: 1;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  transition: max-height 200ms var(--motion-chrome-curve);
-}
-.compact-workbench.is-closed .workbench-panel,
-.compact-workbench.is-closed .sheet-back {
-  max-height: 0;
-  min-height: 0;
-  flex: none;
-  overflow: hidden;
-  padding-block: 0;
-  border: 0;
-}
-.workbench-status {
-  display: flex;
-  justify-content: center;
-  flex: none;
-  padding: 4px 8px 0;
-}
-/* Pinned to the bottom edge, inside the surface. Never covered by the panel
-   above it, because it is not underneath the panel — it is after it. */
-.workbench-rail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  padding: 6px 0 8px;
-  border-top: 1px solid var(--md-sys-color-surface-container-highest);
-}
-.workbench-rail-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-width: 0;
-}
-.workbench-rail-state .view-switch-btn {
-  min-width: 0;
-}
-.workbench-rail-state .view-switch-label {
-  max-width: 140px;
-}
-/* Only there when there is something to simulate — SimControls renders
-   nothing until a service has a schedule. */
-.workbench-rail-sim:empty {
-  display: none;
-}
-/* On a short screen the rail's two rows cost more than they are worth: at
-   844x390 they made the workbench 143px of a 390px screen. Side by side they
-   fit in one row and hand about 35px back to the map. Width is not the
-   question here — a 390px-wide phone held upright has all the height it
-   needs for two rows. */
-@media (max-height: 500px) {
-  .workbench-rail {
-    flex-direction: row;
-    justify-content: center;
-    gap: 12px;
-  }
-  /* One row instead of two, so the chrome the map has to keep clear of shrinks
-     with it. Left where the rule that causes it is, rather than as a fourth
-     copy of the number up in :root.
-
-     128 measured at 844x390, same as the portrait figure above: estimated at
-     112 first, which left the zoom buttons 15px inside the workbench. */
-  :root {
-    --map-pad-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
-  }
-}
-
 /* ---- mobile top chrome: title + navigation left, vertical actions right ---- */
 .mobile-topleft {
   display: flex;
@@ -4724,108 +4186,6 @@ button.chip-removable-label:hover {
   color: var(--md-sys-color-on-surface);
 }
 
-/* ---- every card in the top chrome ----
-   One surface treatment, defined once. Workbench floats several cards over
-   the map — the workspace card, the canvas-state card, the action cluster,
-   and mobile's two — and they are the same object at different widths, so
-   they get their border, radius, fill and elevation from here rather than
-   from a Tailwind chain repeated at each call site. */
-.top-chrome-card {
-  border: 1px solid var(--md-sys-color-surface-container-highest);
-  border-radius: 12px;
-  background: var(--md-sys-color-surface);
-  box-shadow: var(--md-sys-elevation-level2);
-}
-
-/* A top app bar is a row of controls at a fixed height. The bar sets the
-   height and the controls fit it; the controls never resize the bar. So:
-   no wrapping, no shrinking, and anything that will not fit scrolls out of
-   the bar sideways instead of onto a second line. Every top app bar behaves
-   this way — the ones that need to drop content first say so themselves
-   (see `[data-fit]` below). */
-.top-app-bar {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 8px;
-  height: 48px;
-  padding: 0 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.top-app-bar::-webkit-scrollbar {
-  display: none;
-}
-.top-app-bar > * {
-  flex: none;
-}
-/* `safe` matters only in the overflow case, and it is the whole point of
-   these two rules: plain `center`/`flex-end` push a bar's content past BOTH
-   edges of the scroll box, so the first control lands out of view behind the
-   left edge with no way to reach it. `safe` drops back to start alignment the
-   moment the content overflows, which puts the scroll at the first control. */
-.top-app-bar-center {
-  justify-content: safe center;
-}
-.top-app-bar-end {
-  justify-content: safe flex-end;
-}
-/* A bar whose only control collapses itself in zen mode has to collapse with
-   it: .zen-collapse-cluster shrinks the control (see its comment), which was
-   enough when the view switch shared a card with the sim controls, but on its
-   own card it leaves an empty 48px pill standing where the switch was. The
-   card carries this class in addition to the control carrying its own —
-   .zen-collapse-cluster still has to be on the control itself for the mobile
-   layout, where there is no card around it. */
-.zen-collapse-bar {
-  max-width: 400px;
-  transition: max-width 220ms var(--motion-chrome-curve);
-}
-[data-zen] .zen-collapse-bar {
-  max-width: 0;
-  padding: 0;
-  border-width: 0;
-  overflow: hidden;
-}
-
-/* ---- which actions a bar shows is its CONTAINER's decision ----
-   One TopBarActions markup everywhere. `.actions-collapsed` (mobile's
-   vertical column) always keeps only the primary actions plus ⋯.
-   `.actions-full` (the desktop bar) keeps as much as its container's width
-   allows: Workbench measures every `[data-fit]` step below and renders the
-   widest one that fits (see useToolbarFit). The steps give up labels first,
-   then the help actions, then everything marked secondary. */
-.actions-full .act-overflow {
-  display: none;
-}
-.actions-collapsed .primary-btn .btn-label,
-.actions-full[data-fit='labels'] .btn-label,
-.actions-full[data-fit='tertiary'] .btn-label,
-.actions-full[data-fit='overflow'] .btn-label {
-  display: none;
-}
-.actions-full[data-fit='tertiary'] .act-tertiary,
-.actions-full[data-fit='overflow'] .act-tertiary {
-  display: none;
-}
-.actions-collapsed .act-secondary,
-.actions-full[data-fit='overflow'] .act-secondary {
-  display: none;
-}
-/* The ⋯ menu appears at the FIRST step that takes something away, not at the
-   last one. `tertiary` hides Keyboard shortcuts and Replay intro, and this
-   menu is the only other place either one lives — so a bar sitting at that
-   step without the menu has no path to them at all. Measured live at
-   1280x800, where the bar settles on `tertiary`: both help buttons computed
-   `display:none` and so did `.act-overflow`, which left `openDialog('settings')`
-   (one call site, inside this menu) unreachable on a perfectly ordinary
-   desktop. `labels` is deliberately not in this list: it only drops label
-   TEXT, and every button it affects is still on the bar. */
-.actions-collapsed .act-overflow,
-.actions-full[data-fit='tertiary'] .act-overflow,
-.actions-full[data-fit='overflow'] .act-overflow {
-  display: inline-flex;
-}
 /* FileMenu is icon-only in every state now (see FileMenu.tsx) — nothing
    left here to hide on a narrow screen. The Hide-UI toggle itself was
    already unconditionally visible on mobile: it's the ONLY way to reach

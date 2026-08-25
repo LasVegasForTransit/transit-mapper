@@ -11,6 +11,7 @@ import {
 import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
 import { createMapViewStore, type MapViewStore } from '@transitmapper/map';
 import type { MapCameraStateV1 } from '@transitmapper/views';
+import { MapViewProvider, useMapViewStore } from '@transitmapper/workspace';
 import {
   createDocumentPresentationState,
   DOCUMENT_VIEW_FILTER_IDS,
@@ -34,7 +35,6 @@ interface ViewState {
 }
 
 const ViewContext = createContext<ViewState | null>(null);
-const MapViewStoreContext = createContext<MapViewStore | null>(null);
 
 interface ViewControlSnapshot {
   representationId: string;
@@ -151,17 +151,13 @@ export function ViewProvider({
     [snapshot.representationId, visibleModes, visibleWayTypes, showLandmarks, actions],
   );
   return (
-    <MapViewStoreContext.Provider value={viewStore}>
+    <MapViewProvider store={viewStore}>
       <ViewContext.Provider value={value}>{children}</ViewContext.Provider>
-    </MapViewStoreContext.Provider>
+    </MapViewProvider>
   );
 }
 
-export function useMapViewStore(): MapViewStore {
-  const store = useContext(MapViewStoreContext);
-  if (!store) throw new Error('useMapViewStore must be used within <ViewProvider>');
-  return store;
-}
+export { useMapViewStore };
 
 export function useView(): ViewState {
   const view = useContext(ViewContext);

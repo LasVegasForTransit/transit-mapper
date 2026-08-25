@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { MapWorkspace, useMapViewStore } from '@transitmapper/workspace';
 import type { RouteIntent } from './app/route-intent';
 import { useEditor, useEditorCommands, useEditorStore } from './editor/EditorProvider';
 import { resolveEditorBootstrap } from './editor/editor-bootstrap';
@@ -32,9 +33,10 @@ import { SimControls, SimControlsCompact } from './ui/SimControls';
 import { Toolbar } from './ui/Toolbar';
 import { TopBarActions, TopBarBrand, ViewSwitch, ViewSwitchCompact } from './ui/TopBar';
 import { useUi } from './ui/UiProvider';
-import { useMapViewStore } from './ui/ViewProvider';
-import { Workbench } from './ui/Workbench';
+import { useView } from './ui/ViewProvider';
+import { representationLabel, supplementalDetent } from './ui/workspace-adapter';
 import './ui/app.css';
+import '@transitmapper/workspace/workbench.css';
 
 // Lazy-loaded: pulls in fflate + the GTFS parsing pipeline (packages/core's
 // model/gtfsImport.ts), used nowhere else in the app's eager import graph —
@@ -131,18 +133,21 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
   const mapViewStore = useMapViewStore();
   const {
     document: { newSystem, setSystem },
+    selection: { select: clearSelection },
     tools: { setDraftMode, setTool },
   } = useEditorCommands();
   const {
     shortcutsOpen,
     closeShortcuts,
     uiHidden,
+    toggleUi,
     activeDialog,
     openDialog,
     closeDialog,
     newSystemLocationMode,
     openNewSystemLocation,
   } = useUi();
+  const { viewMode } = useView();
   // Whether the document on screen is the one the app went looking for. Owned
   // by the store, because that is where it decides which changes to accept —
   // mirroring it into local state here would let the two disagree.
@@ -362,6 +367,21 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
     }
   };
   const banner = descriptor ? <AppBanner banner={descriptor} onAction={runBannerAction} /> : null;
+  const installBannerShowing = shouldShowInstallBanner({
+    eligible: installState.eligible,
+    uiHidden,
+    readOnly,
+    appNoticeShowing: descriptor !== null,
+  });
+  const applicationNotices = banner ? (
+    <div className="app-banner-slot pointer-events-none absolute inset-x-0 z-20 flex justify-center px-3">
+      <div className="pointer-events-auto max-w-[560px]">{banner}</div>
+    </div>
+  ) : installBannerShowing ? (
+    <div className="install-banner-slot pointer-events-auto">
+      <InstallBanner />
+    </div>
+  ) : undefined;
 
   // There is deliberately no branch here for "not loaded yet". Everything below
   // is already in memory before the first byte is read from storage — the HTML,
@@ -373,77 +393,42 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
   // single sentence with one button. Waiting is now a banner over a working
   // editor. See docs/product/explanation/design-principles.md.
   return (
-    // data-zen cascades to every opted-in chrome element via CSS attribute
-    // selectors (see app.css's "Zen mode" block: .zen-label, .zen-cluster,
-    // and friends) — a component becomes zen-aware by adding a class, not
-    // by threading uiHidden through props. MapCanvas and the banner below
-    // sit under this same root but carry none of those classes, so they're
-    // untouched by it.
-    //
-    // data-document-status publishes the one thing that is no longer visible
-    // from outside now that the shell renders unconditionally: whether what is
-    // on screen is the document the app went looking for. Anything driving the
-    // editor — the performance harness, most of all — used to get that answer
-    // for free, because the chrome did not exist until the document had
-    // loaded. Deleting that gate deleted the signal with it, so it is stated
-    // here rather than inferred from whichever element happened to appear last.
-    <div className="app" data-zen={uiHidden || undefined} data-document-status={documentStatus}>
-      {/* Mounted immediately, so the basemap's network round-trip runs
-          alongside the storage read instead of queueing behind it. The camera
-          starts on the placeholder's viewport and jumps to the real one when
-          the document's id changes — see MapCanvas's system subscription. */}
-      <StagedMapCanvas
-        onBasemapUnavailable={() => setNotice('basemap-unavailable')}
-        vehiclePaintingSuspended={activeDialog === 'onboarding'}
-      />
-      {/* Outside the chrome, like the banner above: right-clicking still has
-          to offer its actions when the UI is hidden, since hiding the panels
-          is exactly when the menu is the only way to reach them. */}
-      <MapContextMenu />
-
-      {/* Outside the chrome on purpose. This used to live in a Workbench
-          slot, which meant hiding the UI with `\` also hid a failing
-          autosave — the one message that must never be gated by a
-          presentation toggle. Offsets clear the top bar when it's there and
-          sit near the top edge when it isn't. */}
-      {banner && (
-        // The vertical offset is app.css's, not a Tailwind `md:` pair: it has
-        // to clear whichever top chrome is actually mounted, and that is
-        // useCompactLayout()'s decision, which asks about height as well as
-        // width. `md:` cannot express the height half — a phone in landscape
-        // is 844px wide and would take the desktop offset over the compact
-        // chrome. Zen mode rides on [data-zen], like every other chrome rule.
-        <div className="app-banner-slot pointer-events-none absolute inset-x-0 z-20 flex justify-center px-3">
-          {/* Sized by its content, capped at 560px — not `w-full`. Two of the
-              four banners are one-liners, and forcing every one to 560px left
-              a short message hugging the left edge with a dead half-card of
-              empty space beside it. A long notice still fills 560 and wraps
-              there, which is what the cap is for. */}
-          <div className="pointer-events-auto max-w-[560px]">{banner}</div>
-        </div>
-      )}
-      <Workbench
-        brand={<TopBarBrand />}
-        menuPanel={<SidebarPanel />}
-        supplementalPanel={<Inspector />}
-        supplemental={supplemental.kind}
-        primaryToolbar={<TopBarActions />}
-        viewSwitcher={<ViewSwitch />}
-        viewSwitcherCompact={<ViewSwitchCompact />}
-        simControls={<SimControls />}
-        simControlsCompact={<SimControlsCompact />}
-        modeToolbar={<Toolbar />}
-        importStatus={<ImportProgressPill />}
-        installBanner={
-          shouldShowInstallBanner({
-            eligible: installState.eligible,
-            uiHidden,
-            readOnly,
-            appNoticeShowing: descriptor !== null,
-          }) ? (
-            <InstallBanner />
-          ) : undefined
+    <>
+      <MapWorkspace
+        mapSurface={
+          <StagedMapCanvas
+            onBasemapUnavailable={() => setNotice('basemap-unavailable')}
+            vehiclePaintingSuspended={activeDialog === 'onboarding'}
+          />
         }
+        mapOverlay={<MapContextMenu />}
+        slots={{
+          brand: <TopBarBrand />,
+          primaryActions: <TopBarActions />,
+          representationControls: <ViewSwitch />,
+          compactRepresentationControls: <ViewSwitchCompact />,
+          simulationControls: <SimControls />,
+          compactSimulationControls: <SimControlsCompact />,
+          mainPanel: <SidebarPanel />,
+          supplementalPanel: <Inspector />,
+          toolDock: <Toolbar />,
+          importStatus: <ImportProgressPill />,
+          applicationNotices,
+        }}
+        state={{
+          representationLabel: representationLabel(viewMode),
+          hasSupplementalContent: supplemental.kind !== 'none',
+          initialSupplementalDetent: supplementalDetent(supplemental),
+          chromeHidden: uiHidden,
+          contentStatus: documentStatus,
+        }}
+        actions={{
+          onToggleInterface: toggleUi,
+          onDismissSupplemental: () => {
+            clearSelection(null);
+            setTool('select');
+          },
+        }}
       />
       {shortcutsOpen && (
         <LazyDialog
@@ -507,6 +492,6 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
           <AboutDialog onClose={closeDialog} />
         </LazyDialog>
       )}
-    </div>
+    </>
   );
 }
