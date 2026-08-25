@@ -1,5 +1,6 @@
 import type { PerfNetworkByteReport } from './network-byte-types';
 import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
+import type { SourceUploadCount } from './source-uploads';
 
 export type PerfFixtureId = 'small' | 'dense' | 'published' | 'rtc';
 export type PerfScenarioId = 'small' | 'dense' | 'rtc' | 'share' | 'embed';
@@ -128,6 +129,8 @@ export interface PerfGestureDiagnostics {
 export interface PerfRuntimeCounters {
   /** Null on the embed, which does not install the editor's source meter. */
   sourceUploadCount: number | null;
+  /** Per-source attribution is absent from reports created before this field. */
+  sourceUploads?: SourceUploadCount[] | null;
   paintedFrameCount: number;
   unexpectedLongTaskCount: number;
   domNodeCount: number;

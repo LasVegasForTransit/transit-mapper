@@ -5,6 +5,7 @@ import {
   INDEXED_DB_INDEX_STORE,
 } from '../../src/storage/indexedDbLibrary';
 import type { PerfPhaseCounters, PerfProductionPersistenceProbe } from '../../src/perf/types';
+import type { SourceUploadCount, SourceUploadTiming } from '../../src/perf/source-uploads';
 import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
 import type {
   PerfRenderSourceBankSnapshot,
@@ -55,6 +56,7 @@ export interface GestureCaptureState {
   lastFrameAt: number;
   startedAt: number;
   sourceUploadsBefore: number | null;
+  sourceUploadTimingsBefore: SourceUploadTiming[] | null;
 }
 
 export interface BrowserOverlaySnapshot {
@@ -79,6 +81,7 @@ export interface PerfPageWindow extends Window {
     sourceUploadCount: number | null;
   }>;
   __perfSourceUploadCount?: () => number;
+  __perfSourceUploadTimings?: () => readonly SourceUploadTiming[];
   __perfProjectLngLat?: (coord: LngLat) => { x: number; y: number };
   __perfStopSnapshot?: (
     stopId: string,
@@ -104,6 +107,7 @@ export interface DirectJourneyMeasurements {
   animationFrameMs: number[];
   longTaskMs: number[];
   sourceUploadCount: number | null;
+  sourceUploads: SourceUploadCount[] | null;
   paintedFrameMs: number[] | null;
   actions: Array<'camera-drag' | 'entity-drag' | 'draw'>;
   productionPersistence: PerfProductionPersistenceProbe | null;

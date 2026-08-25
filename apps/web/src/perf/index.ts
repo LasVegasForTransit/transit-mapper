@@ -15,6 +15,7 @@ import type { CooperativeRenderJobSchedulerStats } from '@transitmapper/renderer
 import type { SourceBankDiagnostics } from '@transitmapper/renderer/runtime';
 import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
 import { MAP_THEMES } from '../map/mapThemePalette';
+import type { SourceUploadTiming } from './source-uploads';
 
 /** Runtime A/B toggles, flipped from the devtools console to attribute cost —
  *  e.g. `__perf.vehicles = false` then re-run `await __panBench()` to see the
@@ -95,14 +96,6 @@ export interface SourceUploadMeter {
   count: () => number;
   snapshot: () => readonly SourceUploadTiming[];
   detach: () => void;
-}
-
-interface SourceUploadTiming {
-  sourceId: string;
-  method: 'setData' | 'updateData';
-  callCount: number;
-  totalDurationMs: number;
-  maxDurationMs: number;
 }
 
 export interface RendererPerfFeatureState {

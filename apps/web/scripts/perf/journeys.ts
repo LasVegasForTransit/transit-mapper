@@ -9,6 +9,7 @@ import {
   projectedPointChanged,
 } from '../../src/perf/journeyProof';
 import { FIRST_SYSTEM_MAP_PAINT_MARK } from '../../src/perf/mapPaintMark';
+import { sourceUploadCountsBetween } from '../../src/perf/source-uploads';
 import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
 import type {
   PerfGestureDiagnostics,
@@ -155,6 +156,9 @@ async function beginGestureCapture(page: Page): Promise<void> {
       lastFrameAt: startedAt,
       startedAt,
       sourceUploadsBefore: (window as PerfPageWindow).__perfSourceUploadCount?.() ?? null,
+      sourceUploadTimingsBefore:
+        (window as PerfPageWindow).__perfSourceUploadTimings?.().map((timing) => ({ ...timing })) ??
+        null,
     };
     (window as PerfPageWindow).__genericPerfGesture = state;
 
@@ -203,6 +207,9 @@ async function resetGestureCapture(page: Page): Promise<void> {
     state.startedAt = performance.now();
     state.lastFrameAt = state.startedAt;
     state.sourceUploadsBefore = (window as PerfPageWindow).__perfSourceUploadCount?.() ?? null;
+    state.sourceUploadTimingsBefore =
+      (window as PerfPageWindow).__perfSourceUploadTimings?.().map((timing) => ({ ...timing })) ??
+      null;
   });
 }
 
@@ -222,6 +229,8 @@ async function finishGestureCapture(
     delete (window as PerfPageWindow).__genericPerfFrame;
 
     const sourceUploadsAfter = (window as PerfPageWindow).__perfSourceUploadCount?.() ?? null;
+    const sourceUploadTimingsAfter =
+      (window as PerfPageWindow).__perfSourceUploadTimings?.() ?? null;
     return {
       eventTimings: state.eventTimings,
       animationFrameMs: state.animationFrameMs.slice(2),
@@ -230,6 +239,8 @@ async function finishGestureCapture(
         state.sourceUploadsBefore === null || sourceUploadsAfter === null
           ? null
           : sourceUploadsAfter - state.sourceUploadsBefore,
+      sourceUploadTimingsBefore: state.sourceUploadTimingsBefore,
+      sourceUploadTimingsAfter,
     };
   });
   return {
@@ -237,6 +248,14 @@ async function finishGestureCapture(
     animationFrameMs: measurements.animationFrameMs,
     longTaskMs: measurements.longTaskMs,
     sourceUploadCount: measurements.sourceUploadCount,
+    sourceUploads:
+      measurements.sourceUploadTimingsBefore === null ||
+      measurements.sourceUploadTimingsAfter === null
+        ? null
+        : sourceUploadCountsBetween(
+            measurements.sourceUploadTimingsBefore,
+            measurements.sourceUploadTimingsAfter,
+          ),
   };
 }
 
@@ -654,6 +673,7 @@ export async function runMeasuredJourney(
     },
     counters: {
       ...summary.counters,
+      sourceUploads: direct.sourceUploads,
       phaseCounters,
     },
     rendererStats,
