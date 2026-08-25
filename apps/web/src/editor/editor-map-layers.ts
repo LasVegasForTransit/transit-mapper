@@ -30,7 +30,7 @@ function layerSource(spec: LayerSpecification): string | null {
   return 'source' in spec && typeof spec.source === 'string' ? spec.source : null;
 }
 
-export function editorMapLayerSpecs(catalog: readonly LayerSpecification[]): LayerSpecification[] {
+function editorMapLayerSpecs(catalog: readonly LayerSpecification[]): LayerSpecification[] {
   return catalog.filter((spec) => {
     const source = layerSource(spec);
     return source !== null && EDITOR_MAP_LAYER_SOURCES.has(source);
