@@ -26,6 +26,7 @@ export interface BaseStyleControllerOptions<ThemeId extends string> {
   timeoutMs: number;
   online?: () => boolean;
   isInteractionActive(): boolean;
+  reportError(error: unknown): void;
   onUnavailable(error: unknown): void;
 }
 
@@ -332,7 +333,16 @@ class BaseStyleControllerImplementation<
     const notifyApplied = () => {
       if (applied) return;
       applied = true;
-      onApplied();
+      try {
+        onApplied();
+      } catch (error) {
+        try {
+          this.options.reportError(error);
+        } catch {
+          // A host reporter is diagnostic. It cannot take ownership of
+          // MapLibre's listener dispatch or invalidate the applied style.
+        }
+      }
     };
     this.activeStyleNotification = { marker, onApplied: notifyApplied };
     return new Promise((resolve) => {

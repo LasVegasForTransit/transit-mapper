@@ -67,6 +67,7 @@ describe('createEmbedStyleController', () => {
       fetch: () => Promise.reject(new Error('offline')),
       timeoutMs: 250,
       isInteractionActive: () => false,
+      reportError: vi.fn(),
       onUnavailable,
     });
 
@@ -89,6 +90,7 @@ describe('createEmbedStyleController', () => {
       probe: () => Promise.resolve(true),
       timeoutMs: 250,
       isInteractionActive: () => false,
+      reportError: vi.fn(),
       onUnavailable: vi.fn(),
     });
 

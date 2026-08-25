@@ -231,6 +231,7 @@ export function createMapRuntime<ThemeId extends string>(
     map,
     initialTheme: options.initialTheme,
     initialStyle: 'local',
+    reportError: (error) => options.reportError(error),
     onUnavailable: (error) => options.style.onBaseStyleUnavailable(error),
   });
   let currentThemeRequest: Promise<void> = Promise.resolve();

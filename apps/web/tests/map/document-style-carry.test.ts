@@ -135,6 +135,7 @@ describe('carryDocumentStyle', () => {
       timeoutMs: 250,
       online: () => true,
       isInteractionActive: () => false,
+      reportError: vi.fn(),
       onUnavailable: vi.fn(),
     });
 

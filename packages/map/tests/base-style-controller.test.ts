@@ -4,6 +4,113 @@ import { createBaseStyleController } from '../src/index';
 import { FakeMap, localStyle, remoteStyle } from './support/map-runtime-harness.test';
 
 describe('createBaseStyleController', () => {
+  it('contains a rebuilt theme callback failure before later style listeners run', async () => {
+    const map = new FakeMap({
+      container: {},
+      center: [0, 0],
+      zoom: 1,
+      style: localStyle('light'),
+    } as MapOptions);
+    const hostFailure = new Error('host theme failed');
+    const reportError = vi.fn(() => {
+      throw new Error('error reporter failed');
+    });
+    const onUnavailable = vi.fn();
+    const laterStyleListener = vi.fn();
+    const controller = createBaseStyleController({
+      map: map as unknown as MapLibreMap,
+      initialTheme: 'light',
+      local: localStyle,
+      remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+      fetch: () => Promise.resolve(remoteStyle('dark')),
+      onThemeApplied: () => {
+        throw hostFailure;
+      },
+      reportError,
+      timeoutMs: 250,
+      online: () => true,
+      isInteractionActive: () => false,
+      onUnavailable,
+    });
+    map.on('style.load', laterStyleListener);
+    let settled = false;
+    const request = controller.request('dark').then(() => {
+      settled = true;
+    });
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(remoteStyle('dark')));
+
+    let dispatchError: unknown;
+    try {
+      map.settleStyle({ rebuilt: true });
+    } catch (error) {
+      dispatchError = error;
+    }
+    const settledBeforeDeadline = await Promise.race([
+      request.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 20)),
+    ]);
+    controller.dispose();
+    await request;
+
+    expect(dispatchError).toBeUndefined();
+    expect(settledBeforeDeadline).toBe(true);
+    expect(settled).toBe(true);
+    expect(laterStyleListener).toHaveBeenCalledOnce();
+    expect(map.style.layers[0]?.id).toBe('remote-dark');
+    expect(map.pendingStyle).toBeUndefined();
+    expect(map.styles.map((style) => style.layers[0]?.id)).toEqual(['local-light', 'remote-dark']);
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(hostFailure);
+    expect(onUnavailable).not.toHaveBeenCalled();
+  });
+
+  it('contains a synchronous theme callback failure without rolling back the applied style', async () => {
+    const map = new FakeMap({
+      container: {},
+      center: [0, 0],
+      zoom: 1,
+      style: localStyle('light'),
+    } as MapOptions);
+    map.diffStyleBehavior = 'synchronous';
+    const hostFailure = new Error('host theme failed');
+    const reportError = vi.fn();
+    const onUnavailable = vi.fn();
+    const controller = createBaseStyleController({
+      map: map as unknown as MapLibreMap,
+      initialTheme: 'light',
+      local: localStyle,
+      remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+      fetch: () => Promise.resolve(remoteStyle('dark')),
+      onThemeApplied: () => {
+        throw hostFailure;
+      },
+      reportError,
+      timeoutMs: 250,
+      online: () => true,
+      isInteractionActive: () => false,
+      onUnavailable,
+    });
+    let settled = false;
+    const request = controller.request('dark').then(() => {
+      settled = true;
+    });
+    await vi.waitFor(() => expect(map.style.layers[0]?.id).toBe('remote-dark'));
+    const settledBeforeDeadline = await Promise.race([
+      request.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 20)),
+    ]);
+    const pendingBeforeDisposal = map.pendingStyle;
+    controller.dispose();
+    await request;
+
+    expect(settledBeforeDeadline).toBe(true);
+    expect(settled).toBe(true);
+    expect(pendingBeforeDisposal).toBeUndefined();
+    expect(map.style.layers[0]?.id).toBe('remote-dark');
+    expect(map.styles.map((style) => style.layers[0]?.id)).toEqual(['local-light', 'remote-dark']);
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(hostFailure);
+    expect(onUnavailable).not.toHaveBeenCalled();
+  });
+
   it('publishes a rebuilt local theme before later style listeners restore host layers', async () => {
     const map = new FakeMap({
       container: {},
@@ -24,6 +131,7 @@ describe('createBaseStyleController', () => {
       timeoutMs: 250,
       online: () => true,
       isInteractionActive: () => false,
+      reportError: vi.fn(),
       onUnavailable: vi.fn(),
     });
     map.on('style.load', () => {
@@ -70,6 +178,7 @@ describe('createBaseStyleController', () => {
       timeoutMs: 250,
       online: () => true,
       isInteractionActive: () => false,
+      reportError: vi.fn(),
       onUnavailable,
     });
 
@@ -112,6 +221,7 @@ describe('createBaseStyleController', () => {
       timeoutMs: 250,
       online: () => true,
       isInteractionActive: () => false,
+      reportError: vi.fn(),
       onUnavailable,
     });
     let settled = false;
@@ -149,6 +259,7 @@ describe('createBaseStyleController', () => {
       timeoutMs: 250,
       online: () => true,
       isInteractionActive: () => false,
+      reportError: vi.fn(),
       onUnavailable: vi.fn(),
     });
 
@@ -181,6 +292,7 @@ describe('createBaseStyleController', () => {
       timeoutMs: 250,
       online: () => true,
       isInteractionActive: () => false,
+      reportError: vi.fn(),
       onUnavailable: vi.fn(),
     });
 
@@ -210,6 +322,7 @@ describe('createBaseStyleController', () => {
       timeoutMs: 250,
       online: () => true,
       isInteractionActive: () => false,
+      reportError: vi.fn(),
       onUnavailable: vi.fn(),
     });
 
@@ -241,6 +354,7 @@ describe('createBaseStyleController', () => {
       timeoutMs: 250,
       online: () => true,
       isInteractionActive: () => false,
+      reportError: vi.fn(),
       onUnavailable,
     });
 

@@ -243,7 +243,8 @@ export async function startEmbedMap(options: EmbedMapRuntimeOptions): Promise<vo
         }
         restoreEmbedOverlay(map, features, scheme);
       },
-      onUnavailable: (error) => console.error('[transitmapper embed]', error),
+      reportError: (error) => console.error('[transitmapper embed] map runtime', error),
+      onUnavailable: (error) => console.error('[transitmapper embed] background map', error),
     });
     const onStyleLoad = () => restoreEmbedOverlay(map, features, activeScheme);
     map.on('style.load', onStyleLoad);
