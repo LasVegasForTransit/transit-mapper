@@ -126,17 +126,6 @@
 * {
   box-sizing: border-box;
 }
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-}
-body {
-  color: var(--md-sys-color-on-surface);
-  background: var(--md-sys-color-surface);
-  -webkit-font-smoothing: antialiased;
-}
 /* A bare <button> has no CSS border/background reset elsewhere in this file —
    every button class below assumes native OS chrome (2px outset border,
    gray fill) is already gone. Missing this is what caused real native

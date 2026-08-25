@@ -11,6 +11,9 @@
 // `interpret` finds a transpiler registered for it, and none is; adding one for
 // a single file costs more than it returns. `check-config.ts` allows `.mjs`
 // under the same exemption Prettier uses.
+const eagerAppRootModules =
+  '^(apps/web/src/(main\\.tsx|app/.*|build-info\\.ts|perf/(field-sampling|field-sampling-policy|startup-marks)\\.ts|theme/font\\.css)|packages/core/src/performance/contract\\.ts)$';
+
 export default {
   forbidden: [
     {
@@ -35,12 +38,14 @@ export default {
       name: 'app-root-eager-closure-is-shell-only',
       severity: 'error',
       comment:
-        'The initial application closure may parse routes, report global errors, and render the ' +
-        'loading shell. Editor, viewer, renderer, persistence, import, simulation, installation, ' +
-        'and PWA implementations must enter through a route-host dynamic import.',
-      from: { path: '^apps/web/src/(main\\.tsx|app/)' },
+        'Every static internal edge from the initial application closure stays inside this ' +
+        'shell-safe allowlist. This inductive boundary rejects editor, viewer, map, persistence, ' +
+        'import, simulation, installation, PWA, UI-host, and renderer implementations even when ' +
+        'a shell-safe intermediary imports them. Route hosts enter through a dynamic import.',
+      from: { path: eagerAppRootModules },
       to: {
-        path: '^(apps/web/src/(editor|viewer|map|storage|import|sim|pwa)/|packages/(renderer|pwa-updater)/)',
+        path: '^(apps/web/src/|packages/)',
+        pathNot: eagerAppRootModules,
         dependencyTypesNot: ['dynamic-import', 'type-only'],
       },
     },

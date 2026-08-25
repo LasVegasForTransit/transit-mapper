@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act, type ComponentType } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -35,6 +37,20 @@ afterEach(() => {
 });
 
 describe('AppRoot', () => {
+  it('establishes viewport geometry before the route host resolves', () => {
+    container.id = 'root';
+    const style = document.createElement('style');
+    style.textContent = readFileSync(resolve(process.cwd(), 'src/app/app-root.css'), 'utf8');
+    document.head.append(style);
+
+    expect(getComputedStyle(document.documentElement).height).toBe('100%');
+    expect(getComputedStyle(document.body).height).toBe('100%');
+    expect(getComputedStyle(document.body).margin).toBe('0px');
+    expect(getComputedStyle(container).height).toBe('100%');
+
+    style.remove();
+  });
+
   it('commits the application shell before the route host resolves', async () => {
     let resolveHost: ((module: { default: ComponentType<RouteHostProps> }) => void) | undefined;
     const loadHost: RouteHostLoader = () =>

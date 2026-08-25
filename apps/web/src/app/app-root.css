@@ -1,5 +1,18 @@
 @import '../theme/tokens.css';
 
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  color: var(--md-sys-color-on-surface);
+  background: var(--md-sys-color-surface);
+  -webkit-font-smoothing: antialiased;
+}
+
 .application-loading-shell {
   min-height: 100%;
   margin: 0;
