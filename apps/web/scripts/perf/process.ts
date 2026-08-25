@@ -66,6 +66,10 @@ export function previewUrl(port: number): string {
   return `http://127.0.0.1:${port}`;
 }
 
+export function performancePublicBuildArguments(): string[] {
+  return ['exec', 'turbo', 'run', 'build', '--filter=@transitmapper/web...', '--concurrency=2'];
+}
+
 export function performancePreviewArguments(
   artifact: PerformancePreviewArtifact,
   port: number,
@@ -112,7 +116,7 @@ export async function buildPerformanceApp(): Promise<void> {
   // proofs cannot change the files the network ledger measures.
   const publicBuildEnvironment = { ...process.env };
   delete publicBuildEnvironment.VITE_PERF_BUILD;
-  await runCommand('pnpm', ['run', 'build'], publicBuildEnvironment);
+  await runCommand('pnpm', performancePublicBuildArguments(), publicBuildEnvironment);
   await runCommand(
     'pnpm',
     ['exec', 'vite', 'build', '--outDir', PERFORMANCE_HARNESS_OUTPUT_DIRECTORY],
