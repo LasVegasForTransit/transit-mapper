@@ -7,23 +7,29 @@ import {
 import type { BuildManifest } from '../../src/perf/pwaPrecache';
 
 const manifest: BuildManifest = {
-  'index.html': {
+  'manifest-node:main': {
     file: 'assets/main.js',
     name: 'main',
     isEntry: true,
     imports: ['_shared.js'],
-    dynamicImports: ['src/dialog.ts'],
+    dynamicImports: ['manifest-node:optional-feature'],
     css: ['assets/main.css'],
   },
   '_shared.js': {
     file: 'assets/shared.js',
     css: ['assets/shared.css'],
   },
-  'src/dialog.ts': {
+  'manifest-node:optional-feature': {
     file: 'assets/dialog.js',
     assets: ['assets/dialog-icon.svg'],
   },
-  'embed.html': {
+  'offline-editor-entry': {
+    file: 'assets/offline-editor.js',
+    name: 'offline-editor',
+    isEntry: true,
+    imports: ['_shared.js'],
+  },
+  'manifest-node:embed': {
     file: 'assets/embed.js',
     name: 'embed',
     isEntry: true,
@@ -41,6 +47,7 @@ describe('adaptive offline build assets', () => {
         revision: 'projection-worker',
       },
       { url: 'assets/main.js', size: 100, revision: 'main' },
+      { url: 'assets/offline-editor.js', size: 100, revision: 'offline-editor' },
       { url: 'assets/shared.js', size: 50, revision: 'shared' },
       { url: 'favicon.svg', size: 10, revision: 'favicon' },
       { url: 'index.html', size: 20, revision: 'document' },

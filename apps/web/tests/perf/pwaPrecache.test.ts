@@ -13,15 +13,15 @@ import {
 } from '../../src/perf/pwaPrecache';
 
 const manifest: BuildManifest = {
-  'index.html': {
+  'manifest-node:main': {
     file: 'assets/main.js',
     isEntry: true,
     name: 'main',
     imports: ['_shared.js'],
-    dynamicImports: ['src/Dialog.tsx'],
+    dynamicImports: ['_adaptive-feature.js'],
     css: ['assets/main.css'],
   },
-  'embed.html': {
+  'manifest-node:embed': {
     file: 'assets/embed.js',
     isEntry: true,
     name: 'embed',
@@ -31,7 +31,13 @@ const manifest: BuildManifest = {
     file: 'assets/shared.js',
     css: ['assets/shared.css'],
   },
-  'src/Dialog.tsx': {
+  'offline-editor-entry': {
+    file: 'assets/offline-editor.js',
+    isEntry: true,
+    name: 'offline-editor',
+    imports: ['_shared.js'],
+  },
+  '_adaptive-feature.js': {
     file: 'assets/dialog.js',
     assets: ['assets/dialog-icon.svg'],
   },
@@ -66,6 +72,37 @@ const offlineRuntimeFiles = [
   'assets/feature-projection-worker-entry-a1b2c3.js',
   'assets/storage-deserializer-worker-a1b2c3.js',
 ];
+
+const offlineEditorEntryKey = 'offline-editor-entry';
+const offlineEditorOutputs = {
+  entry: 'emitted:offline-editor',
+  runtime: 'emitted:runtime',
+  runtimeStyles: 'emitted:runtime-styles',
+  nestedRuntime: 'emitted:nested-runtime',
+  optionalFeature: 'emitted:optional-feature',
+} as const;
+
+const offlineEditorManifest: BuildManifest = {
+  ...manifest,
+  [offlineEditorEntryKey]: {
+    file: offlineEditorOutputs.entry,
+    isEntry: true,
+    name: 'offline-editor',
+    imports: ['manifest-node:runtime'],
+    dynamicImports: ['manifest-node:optional-feature'],
+  },
+  'manifest-node:runtime': {
+    file: offlineEditorOutputs.runtime,
+    css: [offlineEditorOutputs.runtimeStyles],
+    imports: ['manifest-node:nested-runtime'],
+  },
+  'manifest-node:nested-runtime': {
+    file: offlineEditorOutputs.nestedRuntime,
+  },
+  'manifest-node:optional-feature': {
+    file: offlineEditorOutputs.optionalFeature,
+  },
+};
 
 describe('PWA precache output', () => {
   it('keeps the complete extension for referenced WOFF2 assets', () => {
@@ -112,6 +149,19 @@ describe('PWA precache output', () => {
     expect(offlineRuntimeFiles.some((file) => adaptive.includes(file))).toBe(false);
   });
 
+  it('precaches emitted files from the offline editor static graph', () => {
+    const precached = new Set(
+      editorOfflinePrecacheFiles(offlineEditorManifest, installIcons, offlineRuntimeFiles),
+    );
+
+    expect(precached.has(offlineEditorEntryKey)).toBe(false);
+    expect(precached.has(offlineEditorOutputs.entry)).toBe(true);
+    expect(precached.has(offlineEditorOutputs.runtime)).toBe(true);
+    expect(precached.has(offlineEditorOutputs.runtimeStyles)).toBe(true);
+    expect(precached.has(offlineEditorOutputs.nestedRuntime)).toBe(true);
+    expect(precached.has(offlineEditorOutputs.optionalFeature)).toBe(false);
+  });
+
   it('classifies lazy features and install artwork as adaptive assets', () => {
     expect(editorAdaptiveFiles(manifest, installIcons)).toEqual([
       'apple-touch-icon.png',
@@ -132,7 +182,7 @@ describe('PWA precache output', () => {
   });
 
   it('reports a missing shell asset and any eager adaptive or embed asset', () => {
-    const expected = editorPrecacheFiles(manifest, installIcons);
+    const expected = editorOfflinePrecacheFiles(manifest, installIcons, []);
     const precached = expected
       .filter((file) => file !== 'assets/main.js')
       .concat('assets/dialog.js', 'assets/embed.js');

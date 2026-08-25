@@ -15,7 +15,7 @@ import {
   performanceChunkFileName,
   performanceChunkName,
 } from './src/perf/chunkPolicy';
-import { OFFLINE_GLYPH_RANGE_FILES } from './src/perf/pwaPrecache';
+import { OFFLINE_EDITOR_ENTRY_NAME, OFFLINE_GLYPH_RANGE_FILES } from './src/perf/pwaPrecache';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const distDirectory = resolveBuildOutputDirectory(
@@ -147,15 +147,18 @@ export default defineConfig({
     // other emitted JavaScript chunk above 500 kB.
     chunkSizeWarningLimit: MAP_ENGINE_MAXIMUM_RAW_BYTES / 1_000,
     rollupOptions: {
-      // Three entries, not one. embed.html is the read-only map that gets
+      // Four entries, not one. embed.html is the read-only map that gets
       // iframed into other people's pages (/e/:id) — it deliberately shares
       // no bundle with the editor, so an embed downloads MapLibre and the
       // feature builder and none of the editing UI. privacy.html is semantic
       // HTML with no script at all and cannot join either JavaScript graph.
+      // The offline editor entry gives Workbox a semantic root for the runtime
+      // it must install without coupling the precache policy to a source file.
       input: {
         main: 'index.html',
         embed: 'embed.html',
         privacy: 'privacy.html',
+        [OFFLINE_EDITOR_ENTRY_NAME]: resolve(import.meta.dirname, 'src/pwa/offline-editor.ts'),
       },
       output: {
         // Assign only the explicitly named cooperative-renderer modules to

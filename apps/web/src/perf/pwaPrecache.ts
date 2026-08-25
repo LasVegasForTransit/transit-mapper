@@ -64,6 +64,9 @@ const EDITOR_ADAPTIVE_PUBLIC_ASSETS = [
   'favicon-dark-32x32.png',
 ] as const;
 
+const EDITOR_DOCUMENT_FILE = 'index.html';
+const EMBED_DOCUMENT_FILE = 'embed.html';
+
 /** Vite emits these workers as asset URLs rather than manifest imports. The
  * editor needs them to read a saved system, lay it out, and project map
  * features after the network disappears. */
@@ -73,12 +76,12 @@ const OFFLINE_EDITOR_WORKER_PREFIXES = [
   'assets/storage-deserializer-worker-',
 ] as const;
 
-function entryKey(manifest: BuildManifest, name: 'main' | 'embed'): string {
-  const match = Object.entries(manifest).find(
-    ([key, entry]) =>
-      entry?.isEntry &&
-      (entry.name === name || (name === 'main' ? key === 'index.html' : key === 'embed.html')),
-  );
+export const OFFLINE_EDITOR_ENTRY_NAME = 'offline-editor';
+
+type BuildEntryName = 'main' | 'embed' | typeof OFFLINE_EDITOR_ENTRY_NAME;
+
+function entryKey(manifest: BuildManifest, name: BuildEntryName): string {
+  const match = Object.entries(manifest).find(([, entry]) => entry?.isEntry && entry.name === name);
   if (!match) throw new Error(`Vite manifest has no ${name} entry.`);
   return match[0];
 }
@@ -108,11 +111,11 @@ function collectManifestGraph(key: string, context: ManifestGraphContext): void 
 
 function entryGraph(
   manifest: BuildManifest,
-  name: 'main' | 'embed',
+  name: BuildEntryName,
   includeDynamicImports: boolean,
 ): Set<string> {
   const key = entryKey(manifest, name);
-  const files = new Set<string>([key]);
+  const files = new Set<string>();
   collectManifestGraph(key, {
     manifest,
     files,
@@ -132,7 +135,11 @@ export function editorPrecacheFiles(
   manifest: BuildManifest,
   _installIcons: readonly string[],
 ): string[] {
-  return [...entryGraph(manifest, 'main', false), ...EDITOR_ESSENTIAL_PUBLIC_ASSETS].sort();
+  return [
+    EDITOR_DOCUMENT_FILE,
+    ...entryGraph(manifest, 'main', false),
+    ...EDITOR_ESSENTIAL_PUBLIC_ASSETS,
+  ].sort();
 }
 
 function offlineEditorWorkerFiles(files: readonly string[]): string[] {
@@ -146,9 +153,9 @@ function offlineEditorWorkerFiles(files: readonly string[]): string[] {
     .sort();
 }
 
-/** The editor shell and the workers that load a saved document into an
- * editable map. Import, export, and preview workers remain adaptive because
- * offline map startup never invokes them. */
+/** The editor shell, the declared offline editor runtime, and the workers that
+ * load a saved document into an editable map. Import, export, and preview
+ * workers remain adaptive because offline map startup never invokes them. */
 export function editorOfflinePrecacheFiles(
   manifest: BuildManifest,
   installIcons: readonly string[],
@@ -157,6 +164,7 @@ export function editorOfflinePrecacheFiles(
   return [
     ...new Set([
       ...editorPrecacheFiles(manifest, installIcons),
+      ...entryGraph(manifest, OFFLINE_EDITOR_ENTRY_NAME, false),
       ...offlineEditorWorkerFiles(outputFiles),
     ]),
   ].sort();
@@ -177,10 +185,12 @@ export function editorAdaptiveFiles(
 
 export function embedOnlyFiles(manifest: BuildManifest, installIcons: readonly string[]): string[] {
   const editorFiles = new Set([
-    ...editorPrecacheFiles(manifest, installIcons),
+    ...editorOfflinePrecacheFiles(manifest, installIcons, []),
     ...editorAdaptiveFiles(manifest, installIcons),
   ]);
-  return [...entryGraph(manifest, 'embed', true)].filter((file) => !editorFiles.has(file)).sort();
+  return [EMBED_DOCUMENT_FILE, ...entryGraph(manifest, 'embed', true)]
+    .filter((file) => !editorFiles.has(file))
+    .sort();
 }
 
 export function verifyPrecacheOutput(options: VerifyPrecacheOutputOptions): string[] {
