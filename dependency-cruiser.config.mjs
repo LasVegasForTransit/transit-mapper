@@ -32,6 +32,19 @@ export default {
       to: { path: '^apps/web/src/editor/store/commands/' },
     },
     {
+      name: 'app-root-eager-closure-is-shell-only',
+      severity: 'error',
+      comment:
+        'The initial application closure may parse routes, report global errors, and render the ' +
+        'loading shell. Editor, viewer, renderer, persistence, import, simulation, installation, ' +
+        'and PWA implementations must enter through a route-host dynamic import.',
+      from: { path: '^apps/web/src/(main\\.tsx|app/)' },
+      to: {
+        path: '^(apps/web/src/(editor|viewer|map|storage|import|sim|pwa)/|packages/(renderer|pwa-updater)/)',
+        dependencyTypesNot: ['dynamic-import', 'type-only'],
+      },
+    },
+    {
       name: 'editor-command-groups-do-not-import-the-public-entry',
       severity: 'error',
       comment:

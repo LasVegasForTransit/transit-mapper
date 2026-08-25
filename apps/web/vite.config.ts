@@ -35,7 +35,7 @@ export default defineConfig({
       // `prompt`, not `autoUpdate`: the whole point is a visible "a new
       // version is available" banner the user acts on, not a version swapped
       // out from under them. See @transitmapper/pwa-updater's useAppUpdate for
-      // the React side (used from App.tsx).
+      // the React side (used from App.tsx's provider-dependent editor session).
       registerType: 'prompt',
       // Registration happens with the native Service Worker API, only from
       // the editor startup lifecycle — never auto-injected, which would

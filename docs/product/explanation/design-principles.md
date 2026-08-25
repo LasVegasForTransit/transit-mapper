@@ -145,14 +145,20 @@ may never gate a control. Disabling a button on a signal that lies
 invents a block out of nothing and stops the request that would have
 worked.
 
-In practice: `apps/web/src/App.tsx` has no branch for "not loaded yet" and
-renders the map, workbench, and toolbars unconditionally; every wait and
-every failure is a banner over a working editor, decided by
-`resolveAppBanner` in `apps/web/src/ui/app-banner.ts`. What can't be
-allowed yet is refused at one seam rather than hidden — the editor store's
-runtime uses `documentStatus` to turn away document-changing command results
-while the saved one is still arriving, and deliberately changes no chrome, so
-nothing moves when it clears. `attachInitialStyleFallback` in
+In practice: `apps/web/src/app/app-root.tsx` shows a small application shell
+while the accepted route host downloads. That shell tells the truth because
+the editor code is not in memory yet. Once `EditorApplication` loads, it
+renders the map, Workbench, and toolbars before it reads a document. Every
+document wait and failure is then a banner over that working editor, decided
+by `resolveAppBanner` in `apps/web/src/ui/app-banner.ts`. The editor bootstrap
+returns no document for failed shares, unavailable storage, or disposed
+sessions, so none of those paths can install or autosave a replacement.
+
+What cannot be allowed yet is refused at one seam rather than hidden. The
+editor store's runtime uses `documentStatus` to turn away document-changing
+command results while the saved one is still arriving. It deliberately
+changes no chrome, so nothing moves when the status clears.
+`attachInitialStyleFallback` in
 `apps/web/src/map/initialStyleFallback.ts` is the older instance of the
 same rule: a basemap that does not answer within 1.5 seconds is swapped
 for a bundled blank style and mentioned in a banner, rather than being

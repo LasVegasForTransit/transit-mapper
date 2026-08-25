@@ -27,7 +27,9 @@ describe('performance chunk policy', () => {
         String.raw`C:\repo\node_modules\.pnpm\scheduler@0.23.2\node_modules\scheduler\index.js`,
       ),
     ).toBe('react-runtime');
-    expect(performanceChunkName('/repo/apps/web/src/App.tsx')).toBeUndefined();
+    expect(
+      performanceChunkName('/repo/apps/web/src/editor/editor-application.tsx'),
+    ).toBeUndefined();
   });
 
   it('keeps the cooperative renderer in a normal budgeted cache chunk', () => {
@@ -66,7 +68,7 @@ describe('performance chunk policy', () => {
     expect(
       performanceChunkKind('assets/map-engine-AbCd1234.js', [
         mapLibreModule,
-        '/repo/apps/web/src/App.tsx',
+        '/repo/apps/web/src/editor/editor-application.tsx',
       ]),
     ).toBe('standard');
     expect(performanceChunkKind('assets/main-AbCd1234.js', [mapLibreModule])).toBe('standard');
@@ -82,7 +84,7 @@ describe('performance chunk policy', () => {
         '/repo/packages/core/src/render/buildFeatures.ts',
       ]),
     ).toBe('assets/transit-rendering-[hash].js');
-    expect(performanceChunkFileName(['/repo/apps/web/src/App.tsx'])).toBe(
+    expect(performanceChunkFileName(['/repo/apps/web/src/editor/editor-application.tsx'])).toBe(
       'assets/[name]-[hash].js',
     );
   });

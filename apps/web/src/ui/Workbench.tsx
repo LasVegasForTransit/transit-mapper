@@ -253,7 +253,7 @@ export interface WorkbenchProps {
  * Callers hand this component fully-formed pieces (a toolbar, a view
  * switcher, …); it never reaches back into what any of them mean.
  *
- * Deliberately NOT given the map itself as a prop: App.tsx's Hide-UI toggle
+ * Deliberately NOT given the map itself as a prop: EditorSession's Hide-UI toggle
  * fades this whole component out (see its own data-ui-state wrapper), and
  * the map must never be part of that — it stays fully visible/interactive
  * with the chrome hidden, not fade with it. So the map renders as this

@@ -223,6 +223,18 @@ with the runtime libraries and output behavior it needs.
 and installable PWA. It depends on core for domain decisions and on the PWA
 updater for activation state.
 
+#### Application host
+
+This component diagram shows `apps/web/src/app` ownership:
+
+```mermaid
+flowchart LR
+  Main --> Root[AppRoot shell]
+  Root --> Intent[Route intent]
+  Root -. lazy .-> Editor[Editor and providers]
+  Editor --> Bootstrap[Bootstrap]
+```
+
 #### Editing
 
 `apps/web/src/editor` owns the Zustand store, undo history, grouped editor

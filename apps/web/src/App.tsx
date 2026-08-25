@@ -1,23 +1,19 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ErrorBoundary } from './ui/ErrorBoundary';
+import type { RouteIntent } from './app/route-intent';
+import { useEditor, useEditorCommands, useEditorStore } from './editor/EditorProvider';
+import { resolveEditorBootstrap } from './editor/editor-bootstrap';
 import { getMap } from './map/mapRef';
 import { StagedMapCanvas } from './map/staged-map';
-import { useEditor, useEditorCommands, useEditorStore } from './editor/EditorProvider';
-import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import { fetchShare } from './share/api';
-import {
-  listLibrary,
-  loadSystemEntry,
-  migrateLegacySingleSlot,
-  saveToLibrary,
-  type SaveOutcome,
-} from './storage/browserLibrary';
-import { getActiveId, hasSeenOnboarding, setActiveId } from './storage/localStore';
+import { useOnlineStatus } from './network/useOnlineStatus';
+import { useStartupLifecycle } from './perf/startup-lifecycle';
+import { useInstall } from './pwa/InstallProvider';
+import { shouldShowInstallBanner } from './pwa/install';
+import { saveToLibrary, type SaveOutcome } from './storage/browserLibrary';
+import { hasSeenOnboarding, setActiveId } from './storage/localStore';
 import {
   attachPersistenceCoordinator,
   type PersistenceCoordinator,
 } from './storage/persistenceCoordinator';
-import { resolveLibraryBootstrap } from './storage/bootstrapLibrary';
 import { AppBanner } from './ui/AppBanner';
 import {
   resolveAppBanner,
@@ -25,29 +21,26 @@ import {
   type BootstrapOutcome,
   type NoticeCause,
 } from './ui/app-banner';
-import { useOnlineStatus } from './network/useOnlineStatus';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import { ImportProgressPill } from './ui/ImportProgressPill';
-import { MapContextMenu } from './ui/MapContextMenu';
 import { Inspector, useSupplementalContent } from './ui/Inspector';
+import { InstallBanner } from './ui/InstallBanner';
+import { MapContextMenu } from './ui/MapContextMenu';
+import { useSaveStatus } from './ui/SaveStatusProvider';
 import { SidebarPanel } from './ui/SidebarPanel';
 import { SimControls, SimControlsCompact } from './ui/SimControls';
 import { Toolbar } from './ui/Toolbar';
 import { TopBarActions, TopBarBrand, ViewSwitch, ViewSwitchCompact } from './ui/TopBar';
-import { useSaveStatus } from './ui/SaveStatusProvider';
 import { useUi } from './ui/UiProvider';
-import { Workbench } from './ui/Workbench';
 import { useMapViewStore } from './ui/ViewProvider';
-import { InstallBanner } from './ui/InstallBanner';
-import { useInstall } from './pwa/InstallProvider';
-import { shouldShowInstallBanner } from './pwa/install';
-import { useStartupLifecycle } from './perf/startup-lifecycle';
+import { Workbench } from './ui/Workbench';
 import './ui/app.css';
 
 // Lazy-loaded: pulls in fflate + the GTFS parsing pipeline (packages/core's
 // model/gtfsImport.ts), used nowhere else in the app's eager import graph —
-// no reason to ship that in the main bundle for the common case where this
-// dialog is never opened. App already renders it conditionally below, the
-// shape React.lazy wants.
+// no reason to ship that in the editor-host chunk for the common case where
+// this dialog is never opened. EditorSession already renders it conditionally
+// below, which is the shape React.lazy wants.
 const GtfsImportDialog = lazy(() =>
   import('./ui/GtfsImportDialog').then((m) => ({ default: m.GtfsImportDialog })),
 );
@@ -80,8 +73,6 @@ const FirstRunDialogs = lazy(() =>
 const AboutDialog = lazy(() =>
   import('./ui/about-dialog').then((m) => ({ default: m.AboutDialog })),
 );
-
-const SHARE_PREFIX = '/s/';
 
 /** How long a document may take to arrive before the silence is worth
  *  explaining. Long enough that a healthy local read never trips it, short
@@ -131,7 +122,11 @@ function LazyDialog({ children, onFailure }: LazyDialogProps) {
   );
 }
 
-export function App() {
+interface EditorSessionProps {
+  routeIntent: RouteIntent;
+}
+
+export function EditorSession({ routeIntent }: EditorSessionProps) {
   const store = useEditorStore();
   const mapViewStore = useMapViewStore();
   const {
@@ -171,58 +166,29 @@ export function App() {
   const online = useOnlineStatus();
   const { installState, recordUndoableEdit, setEditable } = useInstall();
 
-  // Bootstrap: shared link → read-only load; otherwise local autosave or fresh.
+  // Bootstrap resolves the accepted route once. This host applies the outcome
+  // only while this mounted editor session still owns the request.
   useEffect(() => {
-    const path = window.location.pathname;
-    if (path.startsWith(SHARE_PREFIX)) {
-      const controller = new AbortController();
-      const id = path.slice(SHARE_PREFIX.length).replace(/\/$/, '');
-      fetchShare(id, { signal: controller.signal })
-        .then((system) => setSystem(system, { readOnly: true }))
-        .catch((error: unknown) => {
-          if (!(error instanceof Error) || error.name !== 'AbortError') {
-            setBootstrap({ kind: 'share-failed' });
-          }
-        });
-      // No "finished" flag to set either way. A share that loads calls
-      // setSystem, which is what ends the wait; a share that doesn't leaves the
-      // placeholder locked, so an empty canvas can't be mistaken for the shared
-      // system — or quietly autosaved into this browser's library as if it were
-      // a new one, which is what used to happen.
-      return () => controller.abort();
-    }
-    // Load whichever system was last open; migrate the old single-slot
-    // autosave if this is the first run since the library existed; fall back
-    // to any saved system if the active-id pointer is stale; otherwise start
-    // a brand-new one (and only then default the tool to Way, matching the
-    // very first run's old behavior).
-    //
-    // A record that exists but won't parse is called out rather than skipped.
-    // Falling through to a fresh empty system is the right *recovery* — there
-    // is nothing else to show — but doing it silently means the user opens the
-    // app to a blank canvas and concludes their work is gone. The bytes are
-    // still in storage; saying so is the difference between a bug report we
-    // can act on and someone quietly leaving.
-    let disposed = false;
+    const controller = new AbortController();
     void (async () => {
-      const result = await resolveLibraryBootstrap({
-        activeId: getActiveId(),
-        library: {
-          load: loadSystemEntry,
-          list: listLibrary,
-          migrateLegacySingleSlot,
-        },
-        createSystem: createEmptySystem,
-      });
-      if (disposed) return;
-      if (result.status === 'unavailable') {
+      const outcome = await resolveEditorBootstrap(routeIntent, controller.signal);
+      if (outcome.kind === 'aborted') return;
+      if (outcome.kind === 'share-failed') {
+        setBootstrap({ kind: 'share-failed' });
+        return;
+      }
+      if (outcome.kind === 'storage-unavailable') {
         // Do not create a blank replacement or change activeId. IndexedDB may
         // contain the only copy of an agency-scale document and recover on
         // the next attempt.
         setBootstrap({ kind: 'storage-unavailable' });
         return;
       }
-      const { system, isBrandNew } = result;
+      if (outcome.source === 'shared-system') {
+        setSystem(outcome.system, { readOnly: true });
+        return;
+      }
+      const { system, isBrandNew } = outcome;
       // The user got here first — they took the "Start a new system" way out
       // of a failed attempt, and this attempt then succeeded. Their document
       // stays. Replacing what somebody is already working in would be the same
@@ -233,13 +199,13 @@ export function App() {
         setNotice('saved-system-arrived');
         return;
       }
-      if (result.encounteredCorruption) setNotice('corrupt-system');
+      if (outcome.encounteredCorruption) setNotice('corrupt-system');
       // A loaded system is already durable, and legacy reads migrate as part
       // of loading. Only a genuinely new document needs a bootstrap write;
       // rewriting an RTC-sized system here would delay first paint for no
       // additional safety.
       if (isBrandNew) report(await saveToLibrary(system));
-      if (disposed) return;
+      if (controller.signal.aborted) return;
       setBootstrap({ kind: 'ok' });
       setActiveId(system.id);
       setSystem(system, { readOnly: false });
@@ -255,10 +221,17 @@ export function App() {
       if (isBrandNew) openNewSystemLocation('importIntoActive');
       else if (!hasSeenOnboarding()) openDialog('onboarding');
     })();
-    return () => {
-      disposed = true;
-    };
-  }, [store, report, openDialog, openNewSystemLocation, bootstrapAttempt, setSystem, setTool]);
+    return () => controller.abort();
+  }, [
+    store,
+    report,
+    openDialog,
+    openNewSystemLocation,
+    bootstrapAttempt,
+    routeIntent,
+    setSystem,
+    setTool,
+  ]);
 
   // A wait nobody noticed does not need announcing, and a message that flashes
   // for 40ms on every single load is worse than silence. Only a wait somebody

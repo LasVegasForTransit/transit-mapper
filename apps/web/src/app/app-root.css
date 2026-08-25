@@ -1,0 +1,33 @@
+@import '../theme/tokens.css';
+
+.application-loading-shell {
+  min-height: 100%;
+  margin: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  color: var(--md-sys-color-on-surface);
+  background: var(--md-sys-color-surface);
+  font-family: 'Public Sans', system-ui, sans-serif;
+}
+
+.application-loading-shell p {
+  max-width: 34rem;
+  margin: 0;
+  padding: 0 24px;
+  color: var(--md-sys-color-on-surface-variant);
+  text-align: center;
+}
+
+.application-loading-mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--md-sys-color-on-primary);
+  background: var(--md-sys-color-primary);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+}

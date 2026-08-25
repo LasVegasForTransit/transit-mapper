@@ -1,0 +1,90 @@
+import {
+  Component,
+  lazy,
+  Suspense,
+  useMemo,
+  type ComponentType,
+  type ErrorInfo,
+  type ReactNode,
+} from 'react';
+import { parseRouteIntent, type RouteIntent } from './route-intent';
+import './app-root.css';
+
+export interface RouteHostProps {
+  routeIntent: RouteIntent;
+}
+
+export type RouteHostLoader = () => Promise<{ default: ComponentType<RouteHostProps> }>;
+
+export interface AppRootProps {
+  pathname?: string;
+  loadEditorApplication?: RouteHostLoader;
+}
+
+interface RouteErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface RouteErrorBoundaryState {
+  failed: boolean;
+}
+
+class RouteErrorBoundary extends Component<RouteErrorBoundaryProps, RouteErrorBoundaryState> {
+  override state: RouteErrorBoundaryState = { failed: false };
+
+  static getDerivedStateFromError(): RouteErrorBoundaryState {
+    return { failed: true };
+  }
+
+  override componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error('The application failed to load:', error, info.componentStack);
+  }
+
+  override render(): ReactNode {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <main className="application-loading-shell" role="alert">
+        <p>TransitMapper couldn’t open. Reload the page to try again.</p>
+      </main>
+    );
+  }
+}
+
+function ApplicationLoadingShell() {
+  return (
+    <main
+      className="application-loading-shell"
+      data-application-shell=""
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <span className="application-loading-mark" aria-hidden="true">
+        TM
+      </span>
+      <p>Loading TransitMapper…</p>
+    </main>
+  );
+}
+
+const loadConcreteEditorApplication: RouteHostLoader = () => import('../editor/editor-application');
+
+/** Render the stable application shell before loading the accepted route host. */
+export function AppRoot({
+  pathname,
+  loadEditorApplication = loadConcreteEditorApplication,
+}: AppRootProps) {
+  const routeIntent = useMemo(
+    () => parseRouteIntent(pathname ?? window.location.pathname),
+    [pathname],
+  );
+  const RouteHost = useMemo(() => lazy(loadEditorApplication), [loadEditorApplication]);
+
+  return (
+    <RouteErrorBoundary>
+      <Suspense fallback={<ApplicationLoadingShell />}>
+        <RouteHost routeIntent={routeIntent} />
+      </Suspense>
+    </RouteErrorBoundary>
+  );
+}

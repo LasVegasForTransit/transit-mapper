@@ -77,9 +77,6 @@
     }
   },
   "src/App.tsx": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    },
     "max-lines-per-function": {
       "count": 1
     }
