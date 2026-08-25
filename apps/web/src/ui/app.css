@@ -445,7 +445,6 @@ input[type='range'] {
 .app-banner-content {
   width: min(560px, calc(100vw - 24px));
   max-width: 560px;
-  pointer-events: auto;
 }
 .app-banner-action {
   display: flex;

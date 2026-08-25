@@ -156,7 +156,9 @@ export function Workbench(props: WorkbenchProps) {
         <div
           className={`workspace-application-notice is-${props.slots.applicationNotices.placement}`}
         >
-          {props.slots.applicationNotices.content}
+          <div className="workspace-application-notice-content">
+            {props.slots.applicationNotices.content}
+          </div>
         </div>
       )}
       {compact ? (

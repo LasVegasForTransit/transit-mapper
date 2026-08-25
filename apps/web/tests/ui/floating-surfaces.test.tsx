@@ -92,18 +92,13 @@ afterEach(() => {
 });
 
 describe('floating surfaces', () => {
-  it('caps centered application notices without blocking the map around them', () => {
-    const wrapper = document.createElement('div');
-    wrapper.style.pointerEvents = 'none';
+  it('caps centered application notices at 560px', () => {
     const content = document.createElement('div');
     content.className = 'app-banner-content';
-    wrapper.append(content);
-    document.body.append(wrapper);
+    document.body.append(content);
 
-    expect(getComputedStyle(wrapper).pointerEvents).toBe('none');
-    expect(getComputedStyle(content).pointerEvents).toBe('auto');
     expect(getComputedStyle(content).maxWidth).toBe('560px');
-    wrapper.remove();
+    content.remove();
   });
 
   it('leaves a closed menu trigger clickable', () => {

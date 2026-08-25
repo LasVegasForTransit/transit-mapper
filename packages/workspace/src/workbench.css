@@ -317,6 +317,9 @@
   width: var(--panel-w);
   pointer-events: auto;
 }
+.workspace-application-notice-content {
+  pointer-events: auto;
+}
 
 .zen-restore {
   position: absolute;

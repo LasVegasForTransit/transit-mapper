@@ -49,7 +49,9 @@ function workspaceSlots(placement: 'centered' | 'panel-aligned' = 'centered'): W
     applicationNotices: {
       content:
         placement === 'centered' ? (
-          <div style={{ maxWidth: 560, pointerEvents: 'auto' }} data-slot="application-notices" />
+          <button type="button" data-slot="application-notices">
+            Notice action
+          </button>
         ) : (
           slot('application-notices')
         ),
@@ -127,10 +129,10 @@ describe('standalone Workbench CSS', () => {
     expect(getComputedStyle(notice).position).toBe('absolute');
     expect(getComputedStyle(notice).justifyContent).toBe('center');
     expect(getComputedStyle(notice).pointerEvents).toBe('none');
-    const content = notice.firstElementChild;
-    expect(content).toBeInstanceOf(HTMLElement);
-    if (!(content instanceof HTMLElement)) throw new Error('Expected notice content');
+    const content = element('.workspace-application-notice-content');
     expect(getComputedStyle(content).pointerEvents).toBe('auto');
-    expect(getComputedStyle(content).maxWidth).toBe('560px');
+    expect(getComputedStyle(element('[data-slot="application-notices"]')).pointerEvents).toBe(
+      'auto',
+    );
   });
 });
