@@ -1304,16 +1304,20 @@ export function attachInteractions(
    * street the moment you press Enter and nothing warned you — a preview has
    * to say what the commit will do.
    */
+  let sharingPreviewVisible = false;
   const setSharingPreview = (runs: LngLat[][], color: string) => {
+    const features = runs
+      .filter((coords) => coords.length >= 2)
+      .map((coords) => ({
+        type: 'Feature' as const,
+        properties: { color },
+        geometry: { type: 'LineString' as const, coordinates: coords },
+      }));
+    if (features.length === 0 && !sharingPreviewVisible) return;
+    sharingPreviewVisible = features.length > 0;
     map.getSource<GeoJSONSource>(SRC_SHARING)?.setData({
       type: 'FeatureCollection',
-      features: runs
-        .filter((coords) => coords.length >= 2)
-        .map((coords) => ({
-          type: 'Feature',
-          properties: { color },
-          geometry: { type: 'LineString', coordinates: coords },
-        })),
+      features,
     });
   };
 
@@ -1351,7 +1355,10 @@ export function attachInteractions(
     demolish?: boolean;
   }
 
+  let previewVisible = false;
   const setPreview = (coords: LngLat[] | null, properties: PreviewProperties = {}) => {
+    if (coords === null && !previewVisible) return;
+    previewVisible = coords !== null;
     map.getSource<GeoJSONSource>(SRC_PREVIEW)?.setData({
       type: 'FeatureCollection',
       features: coords
@@ -1368,7 +1375,10 @@ export function attachInteractions(
 
   // See onHoverMove: the "clicking here resumes/extends this way" ring,
   // shown at an open endpoint the Way tool is currently hovering near.
+  let endpointHintVisible = false;
   const setEndpointHint = (coord: LngLat | null) => {
+    if (coord === null && !endpointHintVisible) return;
+    endpointHintVisible = coord !== null;
     map.getSource<GeoJSONSource>(SRC_ENDPOINT_HINT)?.setData({
       type: 'FeatureCollection',
       features: coord

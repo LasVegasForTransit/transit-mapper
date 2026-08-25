@@ -21,6 +21,8 @@ import {
   LYR_STATIONS,
   LYR_WAYS_SOLID,
   SRC_ENDPOINT_HINT,
+  SRC_PREVIEW,
+  SRC_SHARING,
 } from '@transitmapper/renderer/layers';
 import { attachInteractions, type AttachInteractionsOptions } from '../../src/map/interactions';
 import { attachTouchGestures } from '../../src/map/touch-gestures';
@@ -236,6 +238,7 @@ function createMap(initialFeatures: MapGeoJSONFeature | MapGeoJSONFeature[] | nu
     : [];
   const handlers = new Map<string, Set<(event: unknown) => void>>();
   const sourceData = new Map<string, unknown>();
+  const sourceUploadCounts = new Map<string, number>();
   const panCalls: unknown[][] = [];
   let renderedFeatureQueries = 0;
   let projectedCoordinates = 0;
@@ -253,9 +256,11 @@ function createMap(initialFeatures: MapGeoJSONFeature | MapGeoJSONFeature[] | nu
     getSource: (id: string) => ({
       setData(data: unknown) {
         sourceData.set(id, data);
+        sourceUploadCounts.set(id, (sourceUploadCounts.get(id) ?? 0) + 1);
       },
     }),
     sourceData,
+    sourceUploadCount: (id: string) => sourceUploadCounts.get(id) ?? 0,
     setFeatures(next: MapGeoJSONFeature | MapGeoJSONFeature[] | null) {
       features = next ? (Array.isArray(next) ? next : [next]) : [];
     },
@@ -2047,6 +2052,24 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
+  it('does not re-upload empty drawing overlays during ordinary pointer movement', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.commands.document.setSystem(createEmptySystem());
+    const map = createMap();
+    const detach = attach(map, store);
+
+    for (const x of [100, 120, 140]) {
+      map.fire('mousemove', mouseEvent(map, { x, y: 100 }));
+      scheduler.pump();
+    }
+
+    expect(map.sourceUploadCount(SRC_PREVIEW)).toBe(0);
+    expect(map.sourceUploadCount(SRC_SHARING)).toBe(0);
+    expect(map.sourceUploadCount(SRC_ENDPOINT_HINT)).toBe(0);
+    detach();
+  });
+
   it('clears the cursor badge when the target leaves or the tool changes', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
@@ -2683,10 +2706,7 @@ describe('closing a way back onto its own start', () => {
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
 
-    expect(map.sourceData.get(SRC_ENDPOINT_HINT)).toEqual({
-      type: 'FeatureCollection',
-      features: [],
-    });
+    expect(map.sourceData.get(SRC_ENDPOINT_HINT)).toBeUndefined();
     detach();
   });
 
