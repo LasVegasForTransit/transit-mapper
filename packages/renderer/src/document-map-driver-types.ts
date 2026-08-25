@@ -7,7 +7,7 @@ import type { AcceptedSceneUpdate } from './accepted-scene-store';
 import type { SourceFeatureProjectionAccounting } from './committed-feature-projection';
 import type { DiagramLayoutWorkerClient } from './diagram-layout-worker';
 import type { FeatureProjectionClient } from './feature-projection-worker';
-import type { LiveMapRenderer } from './live-map-renderer';
+import type { LiveMapRenderer, SceneTargetResolver } from './live-map-renderer';
 import type { RendererStatsCollector } from './renderer-stats';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 import type { SourceUploadTransition } from './sourceUploadPlan';
@@ -63,6 +63,8 @@ export interface DocumentMapSession {
 }
 
 export interface DocumentMapSessionAttachment {
+  synchronizeInteractionState?(targets?: SceneTargetResolver): void;
+  refreshInteractionPreviews?(): void;
   dispose(): void;
 }
 

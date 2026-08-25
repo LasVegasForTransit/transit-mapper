@@ -90,7 +90,9 @@ export interface LiveMapRendererHost extends SourceBankSettlementHost {
   cancelFrame(handle: number): void;
 }
 
-type SceneTargetResolver = (domainIdentity: RenderDomainIdentity) => readonly SceneFeatureTarget[];
+export type SceneTargetResolver = (
+  domainIdentity: RenderDomainIdentity,
+) => readonly SceneFeatureTarget[];
 
 export interface LiveMapRendererOptions {
   readonly host: LiveMapRendererHost;

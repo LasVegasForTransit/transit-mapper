@@ -442,6 +442,35 @@ describe('document map driver', () => {
     attachment.dispose();
   });
 
+  it('synchronizes extension interaction state when a scene becomes accepted', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem()));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const synchronizeInteractionState = vi.fn();
+    const refreshInteractionPreviews = vi.fn();
+    let session: DocumentMapSession | null = null;
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, createProjectionWorker(), {
+        attachSession: (attached) => {
+          session = attached;
+          return {
+            dispose() {},
+            synchronizeInteractionState,
+            refreshInteractionPreviews,
+          };
+        },
+      }),
+    );
+
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+    await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
+
+    expect(synchronizeInteractionState.mock.calls[0]?.[0]).toEqual(expect.any(Function));
+    expect(synchronizeInteractionState).toHaveBeenCalledWith();
+    expect(refreshInteractionPreviews).toHaveBeenCalled();
+    attachment.dispose();
+  });
+
   it('does not project a metadata-only document snapshot', async () => {
     const initial = createReadySystem();
     const source = new TestDocumentSource(readySnapshot(initial));

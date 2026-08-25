@@ -292,6 +292,23 @@ class DocumentMapDriver implements MapDriver {
         projectionAccounting: this.options.projectionAccounting,
         rendererStats: this.options.rendererStats,
         instrumentationEnabled: this.options.instrumentationEnabled,
+        synchronizeInteractionState: (targets) => {
+          if (!acceptsWork()) return;
+          try {
+            if (targets) extension?.synchronizeInteractionState?.(targets);
+            else extension?.synchronizeInteractionState?.();
+          } catch (error) {
+            reportSafely(attachOptions, error);
+          }
+        },
+        refreshInteractionPreviews: () => {
+          if (!acceptsWork()) return;
+          try {
+            extension?.refreshInteractionPreviews?.();
+          } catch (error) {
+            reportSafely(attachOptions, error);
+          }
+        },
         onError: (error) => {
           if (!disposed && !attachOptions.signal.aborted && !styleRecovery?.isPending()) {
             reportSafely(attachOptions, error);

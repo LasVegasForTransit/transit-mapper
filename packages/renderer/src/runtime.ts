@@ -3,6 +3,7 @@ export {
   createLiveMapRenderer,
   type LiveMapRenderer,
   type LiveMapRendererHost,
+  type SceneTargetResolver,
 } from './live-map-renderer';
 export type { RenderSceneSourceUpdateResult } from './render-scene-source-updater';
 export { createSourceBankController, type SourceBankDiagnostics } from './source-bank';
