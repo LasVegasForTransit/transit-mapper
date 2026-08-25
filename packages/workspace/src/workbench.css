@@ -34,6 +34,15 @@
   overflow: hidden;
 }
 
+.workspace-map-surface {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
 .workspace-overlay {
   position: absolute;
   inset: var(--overlay-gap);
