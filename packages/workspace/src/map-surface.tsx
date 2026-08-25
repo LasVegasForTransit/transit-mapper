@@ -31,6 +31,7 @@ export interface MapSurfaceProps<ThemeId extends string> {
 interface MountedRuntime<ThemeId extends string> {
   runtime: MapRuntime<ThemeId>;
   theme: ThemeId;
+  themeRequestGeneration: number;
 }
 
 interface MapSurfaceMountOptions<ThemeId extends string> {
@@ -140,7 +141,11 @@ function mountMapSurfaceRuntime<ThemeId extends string>(
   });
   const attachment: AttachmentSlot = {};
   let disposed = false;
-  options.mountedRuntimeRef.current = { runtime, theme: options.initialTheme };
+  options.mountedRuntimeRef.current = {
+    runtime,
+    theme: options.initialTheme,
+    themeRequestGeneration: 0,
+  };
   publishRuntimeChange(runtime, options.runtimeChangeRef.current, runtime);
   startDriverAttachment({
     surface: options,
@@ -178,6 +183,8 @@ function requestRuntimeTheme<ThemeId extends string>(
   const mountedRuntime = mountedRuntimeRef.current;
   if (mountedRuntime === null || mountedRuntime.theme === theme) return;
   mountedRuntime.theme = theme;
+  mountedRuntime.themeRequestGeneration += 1;
+  const requestGeneration = mountedRuntime.themeRequestGeneration;
   let themeRequest: Promise<void> | undefined;
   try {
     themeRequest = mountedRuntime.runtime.requestTheme(theme);
@@ -185,7 +192,10 @@ function requestRuntimeTheme<ThemeId extends string>(
     reportRuntimeError(mountedRuntime.runtime, error);
   }
   void themeRequest?.catch((error: unknown) => {
-    if (mountedRuntimeRef.current?.runtime === mountedRuntime.runtime) {
+    if (
+      mountedRuntimeRef.current?.runtime === mountedRuntime.runtime &&
+      mountedRuntime.themeRequestGeneration === requestGeneration
+    ) {
       reportRuntimeError(mountedRuntime.runtime, error);
     }
   });
