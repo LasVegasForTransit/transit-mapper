@@ -4,6 +4,7 @@ import {
   parseMapViewState,
   parseMapViewStateJson,
   parseSavedView,
+  parseSavedViewJson,
 } from '../src/index';
 
 const VALID_STATE = {
@@ -100,5 +101,18 @@ describe('parseSavedView', () => {
         state: VALID_STATE,
       }),
     ).toThrow('shared-system');
+  });
+
+  it('rejects an oversized complete saved View before parsing it', () => {
+    const json = JSON.stringify({
+      schemaVersion: 1,
+      id: 'view-1',
+      title: 'A'.repeat(MAX_NAMED_VIEW_JSON_BYTES),
+      map: { kind: 'shared-system', id: 'share-1' },
+      state: VALID_STATE,
+    });
+
+    expect(json.length).toBeGreaterThan(MAX_NAMED_VIEW_JSON_BYTES);
+    expect(() => parseSavedViewJson(json)).toThrow('32 KiB');
   });
 });

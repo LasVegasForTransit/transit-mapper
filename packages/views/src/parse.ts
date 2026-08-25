@@ -186,3 +186,15 @@ export function parseSavedView(value: unknown): SavedViewV1 {
   }
   return parsed;
 }
+
+export function parseSavedViewJson(json: string): SavedViewV1 {
+  if (utf8ByteLength(json) > MAX_NAMED_VIEW_JSON_BYTES) {
+    throw new ViewParseError('Named View JSON may contain at most 32 KiB');
+  }
+  try {
+    return parseSavedView(JSON.parse(json));
+  } catch (error) {
+    if (error instanceof ViewParseError) throw error;
+    throw new ViewParseError('Named View JSON must contain valid JSON');
+  }
+}
