@@ -39,11 +39,13 @@ export function ShortcutsDialog({ onClose }: ShortcutsDialogProps) {
     const order: string[] = [];
     const byGroup = new Map<string, typeof bindings>();
     for (const b of bindings) {
-      if (!byGroup.has(b.group)) {
-        byGroup.set(b.group, []);
+      let groupBindings = byGroup.get(b.group);
+      if (groupBindings === undefined) {
+        groupBindings = [];
+        byGroup.set(b.group, groupBindings);
         order.push(b.group);
       }
-      byGroup.get(b.group)!.push(b);
+      groupBindings.push(b);
     }
     return order.map((name) => ({ name, bindings: byGroup.get(name)! }));
   }, []);

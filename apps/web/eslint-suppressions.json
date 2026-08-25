@@ -363,7 +363,7 @@
   },
   "src/ui/ShortcutsDialog.tsx": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
+      "count": 1
     }
   },
   "src/ui/SidebarPanel.tsx": {
