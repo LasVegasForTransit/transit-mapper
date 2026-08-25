@@ -29,10 +29,11 @@ const config: KnipConfig = {
     },
     'apps/web': {
       entry: [
-        // Two products, two HTML entries, two bundles — see the rollup input
-        // in vite.config.ts. The embed deliberately shares no bundle with the
-        // editor, so its entry is reachable only through embed.html.
+        // Vite owns these inputs outside the TypeScript import graph. The embed
+        // starts from embed.html, while the service worker follows the named
+        // offline editor entry through the generated manifest.
         'src/embed/main.ts',
+        'src/pwa/offline-editor.ts',
         'perf.config.ts',
         'scripts/**/*.ts',
       ],
