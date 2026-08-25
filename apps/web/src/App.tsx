@@ -4,7 +4,7 @@ import type { RouteIntent } from './app/route-intent';
 import { useEditor, useEditorCommands, useEditorStore } from './editor/EditorProvider';
 import { resolveEditorBootstrap } from './editor/editor-bootstrap';
 import { getMap } from './map/mapRef';
-import { StagedMapCanvas } from './map/staged-map';
+import { EditorMapSurface } from './map/editor-map-surface';
 import { useOnlineStatus } from './network/useOnlineStatus';
 import { useStartupLifecycle } from './perf/startup-lifecycle';
 import { useInstall } from './pwa/InstallProvider';
@@ -395,7 +395,7 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
     <>
       <MapWorkspace
         mapSurface={
-          <StagedMapCanvas
+          <EditorMapSurface
             onBasemapUnavailable={() => setNotice('basemap-unavailable')}
             vehiclePaintingSuspended={activeDialog === 'onboarding'}
           />

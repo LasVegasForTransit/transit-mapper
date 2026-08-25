@@ -103,17 +103,6 @@
       "count": 1
     }
   },
-  "src/map/MapCanvas.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 4
-    }
-  },
   "src/map/gestureLayerMask.ts": {
     "complexity": {
       "count": 1
