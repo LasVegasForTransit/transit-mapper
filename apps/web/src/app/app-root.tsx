@@ -43,33 +43,16 @@ class RouteErrorBoundary extends Component<RouteErrorBoundaryProps, RouteErrorBo
   override render(): ReactNode {
     if (!this.state.failed) return this.props.children;
     return (
-      <main className="application-loading-shell" role="alert">
+      <main className="application-error-shell" role="alert">
         <p>TransitMapper couldn’t open. Reload the page to try again.</p>
       </main>
     );
   }
 }
 
-function ApplicationLoadingShell() {
-  return (
-    <main
-      className="application-loading-shell"
-      data-application-shell=""
-      role="status"
-      aria-live="polite"
-      aria-busy="true"
-    >
-      <span className="application-loading-mark" aria-hidden="true">
-        TM
-      </span>
-      <p>Loading TransitMapper…</p>
-    </main>
-  );
-}
-
 const loadConcreteEditorApplication: RouteHostLoader = () => import('../editor/editor-application');
 
-/** Render the stable application shell before loading the accepted route host. */
+/** Resolve the route before mounting its lazy application host. */
 export function AppRoot({
   pathname,
   loadEditorApplication = loadConcreteEditorApplication,
@@ -82,7 +65,7 @@ export function AppRoot({
 
   return (
     <RouteErrorBoundary>
-      <Suspense fallback={<ApplicationLoadingShell />}>
+      <Suspense fallback={null}>
         <RouteHost routeIntent={routeIntent} />
       </Suspense>
     </RouteErrorBoundary>

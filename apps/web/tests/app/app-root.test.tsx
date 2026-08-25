@@ -51,7 +51,7 @@ describe('AppRoot', () => {
     style.remove();
   });
 
-  it('commits the application shell before the route host resolves', async () => {
+  it('does not block the page with a loading screen while the route host resolves', async () => {
     let resolveHost: ((module: { default: ComponentType<RouteHostProps> }) => void) | undefined;
     const loadHost: RouteHostLoader = () =>
       new Promise((resolve) => {
@@ -60,16 +60,15 @@ describe('AppRoot', () => {
 
     act(() => root.render(<AppRoot pathname="/" loadEditorApplication={loadHost} />));
 
-    const shell = container.querySelector('[data-application-shell]');
-    expect(shell?.getAttribute('role')).toBe('status');
-    expect(shell?.textContent).toContain('Loading TransitMapper');
+    expect(container.childElementCount).toBe(0);
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(container.textContent).not.toContain('Loading TransitMapper');
 
     await act(async () => {
       resolveHost?.({ default: ({ routeIntent }) => <div>{routeIntent.kind}</div> });
       await Promise.resolve();
     });
 
-    expect(container.querySelector('[data-application-shell]')).toBeNull();
     expect(container.textContent).toBe('editor');
   });
 
