@@ -130,7 +130,7 @@ function attach(map: ReturnType<typeof createMap>, store: ReturnType<typeof crea
   const noop: AttachInteractionsOptions = {
     openShortcuts() {},
     toggleUi() {},
-    sim: { togglePaused() {}, stepSpeed() {} },
+    attachKeyboard: () => () => {},
     isDiagramMode: () => false,
     isNetworkMode: () => false, // Demolish only ever runs in Infrastructure view
     focusFootprint() {},
@@ -251,7 +251,7 @@ describe('the Demolish tool', () => {
     const noop: AttachInteractionsOptions = {
       openShortcuts() {},
       toggleUi() {},
-      sim: { togglePaused() {}, stepSpeed() {} },
+      attachKeyboard: () => () => {},
       isDiagramMode: () => false,
       isNetworkMode: () => true,
       focusFootprint() {},

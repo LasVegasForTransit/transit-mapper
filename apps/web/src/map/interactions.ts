@@ -1,6 +1,5 @@
 import type { Map as MLMap, MapMouseEvent, MapGeoJSONFeature, GeoJSONSource } from 'maplibre-gl';
 import type { EditorState, EditorStore, MultiSelectItem } from '../editor/store';
-import { attachKeyboard, type SimCommands } from '../editor/keymap';
 import type { InputTuning } from '../editor/input-tuning';
 import { attachTouchGestures } from './touch-gestures';
 import {
@@ -176,9 +175,7 @@ export interface TerminusConnectionChoice {
 export interface AttachInteractionsOptions {
   openShortcuts: () => void;
   toggleUi: () => void;
-  /** Run/pause and speed-step the simulated clock, for the keymap's transport
-   *  shortcuts — see keymap.ts's SimCommands. */
-  sim: SimCommands;
+  attachKeyboard(context: EditorKeyboardContext): () => void;
   /** True while the Diagram view is active — a schematic, read-only
    *  projection (see model/diagramLayout.ts). Gated exactly like `readOnly`
    *  below: pan/zoom still work, nothing else does, since every coordinate
@@ -250,6 +247,15 @@ export interface AttachInteractionsOptions {
   /** Turns a physical bank suffix back into the stable logical identity used
    * by selection and gesture dispatch. */
   logicalLayerId?: (physicalLayerId: string) => string;
+  isAttachmentActive?: () => boolean;
+}
+
+export interface EditorKeyboardContext {
+  readonly map: MLMap;
+  readonly editor: EditorStore;
+  setPanKeyHeld(held: boolean): void;
+  openShortcuts(): void;
+  toggleUi(): void;
 }
 
 /**
@@ -284,6 +290,65 @@ export function attachInteractions(
 ): () => void {
   const canvas = map.getCanvas();
   const commands = store.commands;
+  const attachmentCleanup: Array<() => void> = [];
+  let abortGestureForCleanup: (() => void) | null = null;
+  const cleanupAttachmentSetup = () => {
+    if (abortGestureForCleanup) {
+      try {
+        abortGestureForCleanup();
+      } catch {
+        // Listener cleanup must continue even when gesture rollback fails.
+      }
+      abortGestureForCleanup = null;
+    }
+    for (const release of attachmentCleanup.splice(0).reverse()) {
+      try {
+        release();
+      } catch {
+        // A failed cleanup cannot strand resources registered before it.
+      }
+    }
+  };
+  const attachmentRemainsActive = () => opts.isAttachmentActive?.() !== false;
+  const stopIfAttachmentEnded = () => {
+    if (attachmentRemainsActive()) return;
+    cleanupAttachmentSetup();
+    throw new Error('The editor interaction attachment ended during setup.');
+  };
+  const registerListener = (attach: () => void, detach: () => void) => {
+    try {
+      stopIfAttachmentEnded();
+      attach();
+      if (!attachmentRemainsActive()) {
+        try {
+          detach();
+        } finally {
+          stopIfAttachmentEnded();
+        }
+      }
+      attachmentCleanup.push(detach);
+    } catch (error) {
+      cleanupAttachmentSetup();
+      throw error;
+    }
+  };
+  const registerExtension = (attach: () => (() => void) | undefined) => {
+    try {
+      stopIfAttachmentEnded();
+      const detach = attach();
+      if (detach && !attachmentRemainsActive()) {
+        try {
+          detach();
+        } finally {
+          stopIfAttachmentEnded();
+        }
+      }
+      if (detach) attachmentCleanup.push(detach);
+    } catch (error) {
+      cleanupAttachmentSetup();
+      throw error;
+    }
+  };
   // Destructured once per attachment, not read per event: swapping tolerances
   // underneath a drag already in progress would change what the gesture means
   // halfway through it.
@@ -341,7 +406,7 @@ export function attachInteractions(
   // progress. Escape (see the capture-phase listener below) calls whichever
   // one is live — this is what makes Escape actually stop the operation the
   // user is mid-way through, not just a committed store-level state.
-  let cancelActiveGesture: (() => void) | null = null;
+  let cancelActiveGesture: ((revert: boolean) => void) | null = null;
 
   const lngLatOf = (e: MapMouseEvent): LngLat => [e.lngLat.lng, e.lngLat.lat];
 
@@ -795,11 +860,11 @@ export function attachInteractions(
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
     beginGesture(
-      () => {
+      (revert) => {
         throttled.cancel();
         map.off('mousemove', onMove);
         map.off('mouseup', onUp);
-        if (original) commands.ways.moveWayPoint(wayId, index, original); // revert the live edit
+        if (revert && original) commands.ways.moveWayPoint(wayId, index, original);
       },
       { wayPoints: [{ wayId, pointIndex: index }] },
     );
@@ -870,11 +935,11 @@ export function attachInteractions(
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
     beginGesture(
-      () => {
+      (revert) => {
         throttled.cancel();
         map.off('mousemove', onMove);
         map.off('mouseup', onUp);
-        if (originalCoord) commands.stops.moveStop(id, originalCoord, originalAnchor); // revert
+        if (revert && originalCoord) commands.stops.moveStop(id, originalCoord, originalAnchor);
       },
       { stopIds: [id] },
     );
@@ -898,12 +963,12 @@ export function attachInteractions(
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
     beginGesture(
-      () => {
+      (revert) => {
         throttled.cancel();
         map.off('mousemove', onMove);
         map.off('mouseup', onUp);
-        if (original && !Array.isArray(original[0]))
-          commands.facilities.moveFacility(id, original as LngLat); // revert
+        if (revert && original && !Array.isArray(original[0]))
+          commands.facilities.moveFacility(id, original as LngLat);
       },
       { facilityIds: [id] },
     );
@@ -1124,13 +1189,19 @@ export function attachInteractions(
     map.once('mouseup', onUp);
     const selected = store.getState().multiSelection;
     beginGesture(
-      () => {
+      (revert) => {
         map.off('mousemove', onMove);
         map.off('mouseup', onUp);
         if (frame !== null) cancelAnimationFrame(frame);
-        flush(); // apply whatever hadn't been flushed yet, so `total` matches the store
-        if (totalDx !== 0 || totalDy !== 0)
-          commands.selection.nudgeMultiSelection(-totalDx, -totalDy); // revert
+        frame = null;
+        if (revert) {
+          flush(); // apply whatever had not flushed, so `total` matches the store
+          if (totalDx !== 0 || totalDy !== 0)
+            commands.selection.nudgeMultiSelection(-totalDx, -totalDy);
+        } else {
+          pendingDx = 0;
+          pendingDy = 0;
+        }
       },
       {
         wayIds: selected.filter((item) => item.kind === 'way').map((item) => item.id),
@@ -1177,11 +1248,11 @@ export function attachInteractions(
       map.on('mousemove', onMove);
       map.once('mouseup', onUp);
       beginGesture(
-        () => {
+        (revert) => {
           throttled.cancel();
           map.off('mousemove', onMove);
           map.off('mouseup', onUp);
-          if (original) apply(original);
+          if (revert && original) apply(original);
         },
         { groupIds: [groupId] },
       );
@@ -1214,11 +1285,11 @@ export function attachInteractions(
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
     beginGesture(
-      () => {
+      (revert) => {
         throttled.cancel();
         map.off('mousemove', onMove);
         map.off('mouseup', onUp);
-        if (original) apply(original);
+        if (revert && original) apply(original);
       },
       { stationIds: [stationId] },
     );
@@ -1506,11 +1577,11 @@ export function attachInteractions(
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
     beginGesture(
-      () => {
+      (revert) => {
         moveThrottle.cancel();
         map.off('mousemove', onMove);
         map.off('mouseup', onUp);
-        if (started) commands.ways.deleteWay(wayId); // discard whatever was sampled so far
+        if (revert && started) commands.ways.deleteWay(wayId);
       },
       { discoverNewWay: true },
     );
@@ -1964,6 +2035,7 @@ export function attachInteractions(
     }
     onHoverMoveImpl(ev, pointerIntent);
   });
+  attachmentCleanup.push(() => hoverThrottle.cancel());
   const onHoverMove = (ev: MapMouseEvent) => {
     // Retain the pointer immediately for stationary key transitions, but defer
     // every rendered-feature query and presentation update to the frame.
@@ -2031,7 +2103,7 @@ export function attachInteractions(
     );
   };
 
-  function beginGesture(cancel: () => void, targets: EditGestureTargets = {}) {
+  function beginGesture(cancel: (revert: boolean) => void, targets: EditGestureTargets = {}) {
     cancelActiveGesture = cancel;
     opts.onDirectManipulationStart?.();
     opts.onEditGestureStart?.(targets);
@@ -2246,12 +2318,12 @@ export function attachInteractions(
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
-    beginGesture(() => {
+    beginGesture((revert) => {
       throttled.cancel();
       map.off('mousemove', onMove);
       map.off('mouseup', onUp);
       activeTerminusSource = null;
-      commands.selection.clearArmedTerminus();
+      if (revert) commands.selection.clearArmedTerminus();
       clearPreviews();
       setEndpointHint(null);
     }, {});
@@ -2889,18 +2961,32 @@ export function attachInteractions(
    * one. Escape and an interrupted touch both need exactly this, and kept
    * their own copies of it until they didn't.
    */
-  const abortActiveGesture = (): boolean => {
+  const abortActiveGesture = (revert = true): boolean => {
     if (!cancelActiveGesture) return false;
     const cancel = cancelActiveGesture;
     cancelActiveGesture = null;
-    cancel(); // cleans up live handlers/previews and any gesture-local state
-    commands.history.cancelHistoryCheckpoint(); // restores the exact pre-gesture system
-    opts.onEditGestureEnd?.();
-    opts.onDirectManipulationEnd?.();
+    const cleanupSteps = [
+      () => cancel(revert),
+      () => commands.history.cancelHistoryCheckpoint(),
+      () => opts.onEditGestureEnd?.(),
+      () => opts.onDirectManipulationEnd?.(),
+    ];
+    for (const cleanup of cleanupSteps) {
+      try {
+        cleanup();
+      } catch {
+        // One failed rollback port cannot strand the remaining gesture owners.
+      }
+    }
     lockedPrimaryOperation = undefined;
-    clearPointerIntent();
+    try {
+      clearPointerIntent();
+    } catch {
+      // Pointer presentation cannot interrupt gesture rollback.
+    }
     return true;
   };
+  abortGestureForCleanup = () => void abortActiveGesture();
 
   const onEscapeCapture = (e: KeyboardEvent) => {
     if (e.key !== 'Escape') return;
@@ -2922,27 +3008,31 @@ export function attachInteractions(
       cancelStationBoundaryDraft();
     }
   };
-  window.addEventListener('keydown', onEscapeCapture, true);
+  registerListener(
+    () => window.addEventListener('keydown', onEscapeCapture, true),
+    () => window.removeEventListener('keydown', onEscapeCapture, true),
+  );
 
   // All discrete keyboard commands live in the declarative keymap. Here we only
   // supply it the context and let it drive the space-hold pan modifier.
-  const detachKeyboard = attachKeyboard({
-    map,
-    editor: store,
-    openShortcuts: opts.openShortcuts,
-    toggleUi: opts.toggleUi,
-    sim: opts.sim,
-    setPanKeyHeld: (held) => {
-      spaceHeld = held;
-      if (lastPointer)
-        publishPointerIntent(
-          lastPointer,
-          { ...modifierState(lastPointer.originalEvent), pan: held },
-          false,
-        );
-      else canvas.style.cursor = held ? 'grab' : cursorFor();
-    },
-  });
+  registerExtension(() =>
+    opts.attachKeyboard({
+      map,
+      editor: store,
+      openShortcuts: opts.openShortcuts,
+      toggleUi: opts.toggleUi,
+      setPanKeyHeld: (held) => {
+        spaceHeld = held;
+        if (lastPointer)
+          publishPointerIntent(
+            lastPointer,
+            { ...modifierState(lastPointer.originalEvent), pan: held },
+            false,
+          );
+        else canvas.style.cursor = held ? 'grab' : cursorFor();
+      },
+    }),
+  );
 
   // Modifier key transitions occur independently of pointer movement. Reuse
   // the last real map hit so a held Shift/Alt/Ctrl immediately updates the
@@ -2951,9 +3041,15 @@ export function attachInteractions(
     if (!lastPointer) return;
     publishPointerIntent(lastPointer, modifierState(event));
   };
-  window.addEventListener('keydown', onModifierChange);
-  window.addEventListener('keyup', onModifierChange);
-  const unregisterPointerIntentRefresh = opts.registerPointerIntentRefresh?.(refreshPointerIntent);
+  registerListener(
+    () => window.addEventListener('keydown', onModifierChange),
+    () => window.removeEventListener('keydown', onModifierChange),
+  );
+  registerListener(
+    () => window.addEventListener('keyup', onModifierChange),
+    () => window.removeEventListener('keyup', onModifierChange),
+  );
+  registerExtension(() => opts.registerPointerIntentRefresh?.(refreshPointerIntent));
 
   function cursorFor(): string {
     // Hover presentation and press dispatch share resolvePointerIntent. The
@@ -3053,30 +3149,50 @@ export function attachInteractions(
   const ignoringCompatMouse = () =>
     !dispatchingSynthetic && ignoreCompatMouseUntil > 0 && Date.now() < ignoreCompatMouseUntil;
 
-  const detachTouch = attachTouchGestures(map, {
-    dispatch(type, event) {
-      dispatchingSynthetic = true;
-      try {
-        map.fire(type, event);
-      } finally {
-        dispatchingSynthetic = false;
-      }
-    },
-    startPan: (at) => startPan(at, false),
-    abortGesture: () => void abortActiveGesture(),
-    publishIntent: (at) => publishPointerIntent(at, undefined, false),
-    dragPx,
-    armCompatSuppression() {
-      ignoreCompatMouseUntil = Date.now() + 700;
-    },
-  });
+  registerExtension(() =>
+    attachTouchGestures(map, {
+      dispatch(type, event) {
+        dispatchingSynthetic = true;
+        try {
+          map.fire(type, event);
+        } finally {
+          dispatchingSynthetic = false;
+        }
+      },
+      startPan: (at) => startPan(at, false),
+      abortGesture: () => void abortActiveGesture(),
+      publishIntent: (at) => publishPointerIntent(at, undefined, false),
+      dragPx,
+      armCompatSuppression() {
+        ignoreCompatMouseUntil = Date.now() + 700;
+      },
+    }),
+  );
 
-  map.on('mousedown', onMouseDown);
-  map.on('mouseup', onPointerUp);
-  map.on('mousemove', onHoverMove);
-  map.on('mouseout', onPointerOut);
-  map.on('click', onClick);
-  map.on('dblclick', onDblClick);
+  registerListener(
+    () => map.on('mousedown', onMouseDown),
+    () => map.off('mousedown', onMouseDown),
+  );
+  registerListener(
+    () => map.on('mouseup', onPointerUp),
+    () => map.off('mouseup', onPointerUp),
+  );
+  registerListener(
+    () => map.on('mousemove', onHoverMove),
+    () => map.off('mousemove', onHoverMove),
+  );
+  registerListener(
+    () => map.on('mouseout', onPointerOut),
+    () => map.off('mouseout', onPointerOut),
+  );
+  registerListener(
+    () => map.on('click', onClick),
+    () => map.off('click', onClick),
+  );
+  registerListener(
+    () => map.on('dblclick', onDblClick),
+    () => map.off('dblclick', onDblClick),
+  );
   const delegatedHandleLayers = [
     LYR_STATIONS,
     LYR_HANDLES,
@@ -3085,65 +3201,66 @@ export function attachInteractions(
     LYR_PHYSICAL_HANDLES,
   ].flatMap(eventLayerIds);
   for (const layerId of delegatedHandleLayers) {
-    map.on('mouseenter', layerId, onEnterHandle);
-    map.on('mouseleave', layerId, onLeaveFeature);
+    registerListener(
+      () => map.on('mouseenter', layerId, onEnterHandle),
+      () => map.off('mouseenter', layerId, onEnterHandle),
+    );
+    registerListener(
+      () => map.on('mouseleave', layerId, onLeaveFeature),
+      () => map.off('mouseleave', layerId, onLeaveFeature),
+    );
   }
-  canvas.addEventListener('contextmenu', onContextMenu);
+  registerListener(
+    () => canvas.addEventListener('contextmenu', onContextMenu),
+    () => canvas.removeEventListener('contextmenu', onContextMenu),
+  );
 
   let lastTool = store.getState().tool;
   let lastActive = store.getState().activeWayId;
   let lastReadOnly = store.getState().readOnly;
-  const unsubTool = store.subscribe((s) => {
-    if (s.tool !== lastTool) {
-      lastTool = s.tool;
-      canvas.style.cursor = cursorFor();
-      clearPointerIntent();
-      opts.setActionAnchor?.(null);
-      if (s.tool !== 'way') {
-        clearPreviews();
-        setEndpointHint(null);
+  let lastSystemId = store.getState().system.id;
+  registerExtension(() =>
+    store.subscribe((s) => {
+      if (s.system.id !== lastSystemId) {
+        lastSystemId = s.system.id;
+        abortActiveGesture(false);
       }
-      if (s.tool !== 'facility') facilityBoundaryDraft = null;
-    }
-    if (s.activeWayId !== lastActive) {
-      lastActive = s.activeWayId;
-      if (!s.activeWayId) {
-        clearPreviews(); // clear rubber-band when a draw ends
-        activeExtendAtStart = false;
+      if (s.tool !== lastTool) {
+        lastTool = s.tool;
+        canvas.style.cursor = cursorFor();
         clearPointerIntent();
+        opts.setActionAnchor?.(null);
+        if (s.tool !== 'way') {
+          clearPreviews();
+          setEndpointHint(null);
+        }
+        if (s.tool !== 'facility') facilityBoundaryDraft = null;
       }
-    }
-    if (s.readOnly !== lastReadOnly) {
-      lastReadOnly = s.readOnly;
-      // A transition to a shared snapshot invalidates a previously editable
-      // hover even when the active tool happened to remain Select.
-      clearPointerIntent();
-      canvas.style.cursor = cursorFor();
-    }
-  });
-  canvas.style.cursor = cursorFor();
+      if (s.activeWayId !== lastActive) {
+        lastActive = s.activeWayId;
+        if (!s.activeWayId) {
+          clearPreviews(); // clear rubber-band when a draw ends
+          activeExtendAtStart = false;
+          clearPointerIntent();
+        }
+      }
+      if (s.readOnly !== lastReadOnly) {
+        lastReadOnly = s.readOnly;
+        // A transition to a shared snapshot invalidates a previously editable
+        // hover even when the active tool happened to remain Select.
+        clearPointerIntent();
+        canvas.style.cursor = cursorFor();
+      }
+    }),
+  );
+  try {
+    canvas.style.cursor = cursorFor();
+  } catch (error) {
+    cleanupAttachmentSetup();
+    throw error;
+  }
 
-  return () => {
-    hoverThrottle.cancel();
-    detachTouch();
-    map.off('mousedown', onMouseDown);
-    map.off('mouseup', onPointerUp);
-    map.off('mousemove', onHoverMove);
-    map.off('mouseout', onPointerOut);
-    map.off('click', onClick);
-    map.off('dblclick', onDblClick);
-    for (const layerId of delegatedHandleLayers) {
-      map.off('mouseenter', layerId, onEnterHandle);
-      map.off('mouseleave', layerId, onLeaveFeature);
-    }
-    canvas.removeEventListener('contextmenu', onContextMenu);
-    window.removeEventListener('keydown', onEscapeCapture, true);
-    window.removeEventListener('keydown', onModifierChange);
-    window.removeEventListener('keyup', onModifierChange);
-    unregisterPointerIntentRefresh?.();
-    detachKeyboard();
-    unsubTool();
-  };
+  return cleanupAttachmentSetup;
 
   // Constrain a dragged control point so its segment to a neighbor snaps to 45°.
   function constrainToNeighbor(wayId: string, index: number, coord: LngLat): LngLat {

@@ -15,6 +15,7 @@ import {
   LYR_FACILITIES,
   LYR_GESTURE_POINT,
   LYR_HANDLES,
+  LYR_PHYSICAL_HANDLES,
   LYR_SERVICE_TERMINI_HIT,
   LYR_SERVICES_HIT,
   LYR_STATIONS,
@@ -22,6 +23,8 @@ import {
   SRC_ENDPOINT_HINT,
 } from '@transitmapper/renderer/layers';
 import { attachInteractions, type AttachInteractionsOptions } from '../../src/map/interactions';
+import { attachTouchGestures } from '../../src/map/touch-gestures';
+import { attachKeyboard } from '../../src/editor/keymap';
 import {
   COARSE_POINTER_TUNING,
   FINE_POINTER_TUNING,
@@ -208,6 +211,19 @@ function facilityFeature(id: string): MapGeoJSONFeature {
     source: 'tm-facilities',
     sourceLayer: '',
     layer: { id: LYR_FACILITIES, type: 'circle', source: 'tm-facilities' },
+    state: {},
+  } as unknown as MapGeoJSONFeature;
+}
+
+function groupFootprintHandle(groupId: string, index: number): MapGeoJSONFeature {
+  return {
+    type: 'Feature',
+    id: `group-footprint-${groupId}-${index}`,
+    properties: { kind: 'groupFootprint', groupId, index },
+    geometry: { type: 'Point', coordinates: [-115.2, 36.1] },
+    source: 'tm-physical-handles',
+    sourceLayer: '',
+    layer: { id: LYR_PHYSICAL_HANDLES, type: 'circle', source: 'tm-physical-handles' },
     state: {},
   } as unknown as MapGeoJSONFeature;
 }
@@ -433,7 +449,7 @@ function attach(
   return attachInteractions(map as unknown as MLMap, store, {
     openShortcuts() {},
     toggleUi() {},
-    sim: { togglePaused() {}, stepSpeed() {} },
+    attachKeyboard,
     isDiagramMode: () => false,
     isNetworkMode: () => networkMode,
     focusFootprint() {},
@@ -2195,6 +2211,73 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
+  it('continues gesture cancellation after a local rollback throws', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const stopId = required(store.commands.stops.addStop([-115.2, 36.1]));
+    const original = store.getState().system.stops[0].coord;
+    const moveStop = store.commands.stops.moveStop.bind(store.commands.stops);
+    vi.spyOn(store.commands.stops, 'moveStop').mockImplementation((id, coord, anchor) => {
+      if (coord === original) throw new Error('local rollback');
+      moveStop(id, coord, anchor);
+    });
+    const map = createMap(stopFeature(stopId));
+    const lifecycle: string[] = [];
+    const detach = attach(map, store, {
+      gesture: {
+        onStart: () => lifecycle.push('edit-start'),
+        onEnd: () => lifecycle.push('edit-end'),
+      },
+      directManipulation: {
+        onStart: () => lifecycle.push('direct-start'),
+        onEnd: () => lifecycle.push('direct-end'),
+      },
+    });
+    map.fire('mousedown', mouseEvent(map, { x: 1000, y: 1000 }));
+    map.fire('mousemove', mouseEvent(map, { x: 1060, y: 1000 }));
+    scheduler.pump();
+    expect(store.getState().system.stops[0].coord).not.toEqual(original);
+
+    expect(() => scheduler.fireKey('keydown', { key: 'Escape' })).not.toThrow();
+
+    expect(store.getState().system.stops[0].coord).toEqual(original);
+    expect(lifecycle).toEqual(['direct-start', 'edit-start', 'edit-end', 'direct-end']);
+    detach();
+  });
+
+  it('does not apply captured physical geometry to a replacement document', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const footprint: [number, number][] = [
+      [-115.21, 36.09],
+      [-115.19, 36.09],
+      [-115.19, 36.11],
+      [-115.21, 36.11],
+    ];
+    const groupId = required(store.commands.groups.createFacilityComplex(footprint));
+    const originalGroup = store.getState().system.groups[0];
+    const map = createMap(groupFootprintHandle(groupId, 0));
+    const detach = attach(map, store, { networkMode: false });
+    map.fire('mousedown', mouseEvent(map, { x: 1000, y: 1000 }));
+    map.fire('mousemove', mouseEvent(map, { x: 1060, y: 1000 }));
+    scheduler.pump();
+    expect(store.getState().system.groups[0].footprint?.[0]).not.toEqual(footprint[0]);
+    const replacementPoint: [number, number] = [-73.9857, 40.7484];
+    const replacement = {
+      ...createEmptySystem(),
+      id: 'replacement',
+      groups: [{ ...originalGroup, footprint: [replacementPoint, ...footprint.slice(1)] }],
+    };
+
+    store.commands.document.setSystem(replacement);
+    map.fire('mousemove', mouseEvent(map, { x: 1120, y: 1000 }));
+    map.fire('mouseup', mouseEvent(map, { x: 1120, y: 1000 }));
+
+    expect(store.getState().system.id).toBe('replacement');
+    expect(store.getState().system.groups[0].footprint?.[0]).toEqual(replacementPoint);
+    detach();
+  });
+
   it('reports the exact boundary around a camera drag', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
@@ -2223,6 +2306,34 @@ describe('pointer work coalescing', () => {
 });
 
 describe('touch gestures', () => {
+  it('rolls back earlier touch listeners when setup fails', () => {
+    const listeners = new Map<string, Set<(event: unknown) => void>>();
+    const map = {
+      on(type: string, listener: (event: unknown) => void) {
+        if (type === 'touchmove') throw new Error('touch setup');
+        const current = listeners.get(type) ?? new Set();
+        current.add(listener);
+        listeners.set(type, current);
+      },
+      off(type: string, listener: (event: unknown) => void) {
+        listeners.get(type)?.delete(listener);
+      },
+    };
+
+    expect(() =>
+      attachTouchGestures(map as unknown as MLMap, {
+        dispatch() {},
+        startPan() {},
+        abortGesture() {},
+        publishIntent() {},
+        dragPx: 5,
+        armCompatSuppression() {},
+      }),
+    ).toThrow('touch setup');
+
+    expect([...listeners.values()].every((registered) => registered.size === 0)).toBe(true);
+  });
+
   it('draws with one finger, using the tool rather than the camera', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();

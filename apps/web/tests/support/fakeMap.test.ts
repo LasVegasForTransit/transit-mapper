@@ -4,6 +4,7 @@
 // DOM.
 import { vi } from 'vitest';
 import { FINE_POINTER_TUNING } from '../../src/editor/input-tuning';
+import { attachKeyboard } from '../../src/editor/keymap';
 
 export interface FakePoint {
   x: number;
@@ -126,7 +127,7 @@ export function attachOpts(networkMode: boolean) {
     tuning: FINE_POINTER_TUNING,
     openShortcuts() {},
     toggleUi() {},
-    sim: { togglePaused() {}, stepSpeed() {} },
+    attachKeyboard,
     isDiagramMode: () => false,
     isNetworkMode: () => networkMode,
     focusFootprint() {},

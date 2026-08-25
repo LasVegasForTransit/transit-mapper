@@ -104,6 +104,86 @@ interface LiveGesture {
   startedAt: number;
 }
 
+interface TouchListeners {
+  readonly touchstart: (event: MapTouchEvent) => void;
+  readonly touchmove: (event: MapTouchEvent) => void;
+  readonly touchend: (event: MapTouchEvent) => void;
+  readonly touchcancel: () => void;
+}
+
+interface TapHistory {
+  endedAt: number;
+  point: ScreenPoint | null;
+}
+
+interface FinishTouchOptions {
+  readonly map: MLMap;
+  readonly host: TouchGestureHost;
+  readonly event: MapTouchEvent;
+  readonly live: LiveGesture | null;
+  readonly tap: TapHistory;
+}
+
+function attachTouchListeners(map: MLMap, listeners: TouchListeners): () => void {
+  const cleanup: Array<() => void> = [];
+  const releaseAll = () => {
+    for (const release of cleanup.splice(0).reverse()) {
+      try {
+        release();
+      } catch {
+        // One MapLibre listener failure cannot strand the listeners before it.
+      }
+    }
+  };
+  const register = <EventName extends keyof TouchListeners>(
+    type: EventName,
+    listener: TouchListeners[EventName],
+  ) => {
+    try {
+      map.on(type, listener);
+      cleanup.push(() => map.off(type, listener));
+    } catch (error) {
+      releaseAll();
+      throw error;
+    }
+  };
+  register('touchstart', listeners.touchstart);
+  register('touchmove', listeners.touchmove);
+  register('touchend', listeners.touchend);
+  register('touchcancel', listeners.touchcancel);
+  return releaseAll;
+}
+
+function finishTouch(options: FinishTouchOptions): void {
+  const { map, host, event, live, tap } = options;
+  if (live === null) return;
+  if (live.kind === 'pending') {
+    const doubleTap =
+      tap.point !== null &&
+      live.startedAt - tap.endedAt < DOUBLE_TAP_MS &&
+      Math.hypot(live.point.x - tap.point.x, live.point.y - tap.point.y) < host.dragPx;
+    const detail = doubleTap ? 2 : 1;
+    host.dispatch('mousedown', asMouseEvent(map, live.event, live.point, 0, detail));
+    host.dispatch('mouseup', asMouseEvent(map, live.event, live.point, 0));
+    host.dispatch('click', asMouseEvent(map, live.event, live.point, 0, detail));
+    if (doubleTap) {
+      host.dispatch('dblclick', asMouseEvent(map, live.event, live.point, 0, 2));
+      tap.endedAt = 0;
+      tap.point = null;
+    } else {
+      tap.endedAt = touchTime(event);
+      tap.point = live.point;
+    }
+    host.armCompatSuppression();
+    return;
+  }
+  // `touchend` carries only the touches that remain, so use the last known
+  // point when the released finger was the final touch.
+  const point = event.points.length > 0 ? event.point : live.point;
+  host.dispatch('mouseup', asMouseEvent(map, event, point, live.kind === 'actions' ? 2 : 0));
+  host.armCompatSuppression();
+}
+
 /** When a touch happened, as the browser recorded it. */
 function touchTime(e: MapTouchEvent): number {
   return typeof e.originalEvent?.timeStamp === 'number' ? e.originalEvent.timeStamp : Date.now();
@@ -153,9 +233,7 @@ export function attachTouchGestures(map: MLMap, host: TouchGestureHost): () => v
   const { dispatch, dragPx } = host;
   let gesture: LiveGesture | null = null;
   let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-  /** When the previous tap's finger left the glass, and where. */
-  let lastTapEndedAt = 0;
-  let lastTapPoint: ScreenPoint | null = null;
+  const tap: TapHistory = { endedAt: 0, point: null };
 
   const cancelLongPress = () => {
     if (longPressTimer === null) return;
@@ -221,38 +299,7 @@ export function attachTouchGestures(map: MLMap, host: TouchGestureHost): () => v
     // A pinch releasing one finger at a time ends the camera gesture on the
     // first release; the remaining finger must not become a new draw.
     gesture = null;
-    if (live === null) return;
-
-    if (live.kind === 'pending') {
-      const doubleTap =
-        lastTapPoint !== null &&
-        live.startedAt - lastTapEndedAt < DOUBLE_TAP_MS &&
-        Math.hypot(live.point.x - lastTapPoint.x, live.point.y - lastTapPoint.y) < dragPx;
-      // detail 2 marks the second press of a double tap, which is what the
-      // dispatch reads to keep the Way tool from placing one more point before
-      // the dblclick finishes the line.
-      dispatch('mousedown', asMouseEvent(map, live.event, live.point, 0, doubleTap ? 2 : 1));
-      dispatch('mouseup', asMouseEvent(map, live.event, live.point, 0));
-      dispatch('click', asMouseEvent(map, live.event, live.point, 0, doubleTap ? 2 : 1));
-      if (doubleTap) {
-        dispatch('dblclick', asMouseEvent(map, live.event, live.point, 0, 2));
-        // A third tap must not pair with the second: a double tap is two taps,
-        // not the start of a run.
-        lastTapEndedAt = 0;
-        lastTapPoint = null;
-      } else {
-        lastTapEndedAt = touchTime(e);
-        lastTapPoint = live.point;
-      }
-      host.armCompatSuppression();
-      return;
-    }
-
-    // `touchend` carries only the touches that REMAIN, so the released position
-    // comes from the last known one rather than from e.point.
-    const point = e.points.length > 0 ? e.point : live.point;
-    dispatch('mouseup', asMouseEvent(map, e, point, live.kind === 'actions' ? 2 : 0));
-    host.armCompatSuppression();
+    finishTouch({ map, host, event: e, live, tap });
   };
 
   // The system interrupted the gesture (an incoming call, a system edge swipe).
@@ -264,16 +311,14 @@ export function attachTouchGestures(map: MLMap, host: TouchGestureHost): () => v
     gesture = null;
   };
 
-  map.on('touchstart', onTouchStart);
-  map.on('touchmove', onTouchMove);
-  map.on('touchend', onTouchEnd);
-  map.on('touchcancel', onTouchCancel);
-
+  const releaseListeners = attachTouchListeners(map, {
+    touchstart: onTouchStart,
+    touchmove: onTouchMove,
+    touchend: onTouchEnd,
+    touchcancel: onTouchCancel,
+  });
   return () => {
     cancelLongPress();
-    map.off('touchstart', onTouchStart);
-    map.off('touchmove', onTouchMove);
-    map.off('touchend', onTouchEnd);
-    map.off('touchcancel', onTouchCancel);
+    releaseListeners();
   };
 }
