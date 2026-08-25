@@ -7,6 +7,18 @@ export function editorDocumentLayersForScheme(scheme: ColorScheme): LayerSpecifi
   return sourceBankLayerSpecs(layerSpecsForScheme(scheme));
 }
 
+export function documentOverlayIsRetained(
+  style: StyleSpecification,
+  sourceIds: Iterable<string>,
+  documentLayers: readonly LayerSpecification[],
+): boolean {
+  const retainedLayerIds = new Set(style.layers.map((layer) => layer.id));
+  for (const sourceId of sourceIds) {
+    if (!(sourceId in style.sources)) return false;
+  }
+  return documentLayers.every((layer) => retainedLayerIds.has(layer.id));
+}
+
 /** Preserve the accepted document scene while replacing only the base map. */
 export function carryDocumentStyle(
   previous: StyleSpecification | undefined,

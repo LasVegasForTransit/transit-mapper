@@ -41,6 +41,48 @@ describe('createBaseStyleController', () => {
     await request;
   });
 
+  it('keeps transition identity when host carry returns a fresh style', async () => {
+    const map = new FakeMap({
+      container: {},
+      center: [0, 0],
+      zoom: 1,
+      style: localStyle('light'),
+    } as MapOptions);
+    map.diffStyleBehavior = 'synchronous';
+    const onUnavailable = vi.fn();
+    const controller = createBaseStyleController({
+      map: map as unknown as MapLibreMap,
+      initialTheme: 'light',
+      local: localStyle,
+      remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+      fetch: () => Promise.resolve(remoteStyle('dark')),
+      carry: (_previous, next) => ({
+        version: 8,
+        sources: { ...next.sources },
+        layers: [...next.layers],
+      }),
+      timeoutMs: 250,
+      online: () => true,
+      isInteractionActive: () => false,
+      onUnavailable,
+    });
+    let settled = false;
+
+    const request = controller.request('dark').then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.waitFor(() => expect(map.style.layers[0]?.id).toBe('remote-dark'));
+
+    expect(settled).toBe(true);
+    expect(onUnavailable).not.toHaveBeenCalled();
+
+    controller.dispose();
+    await request;
+  });
+
   it('treats an embed starting on a remote style as already usable', async () => {
     const map = new FakeMap({
       container: {},

@@ -3,6 +3,10 @@ import {
   type BaseStyleController,
   type BaseStyleControllerOptions,
 } from '@transitmapper/map';
+import type { StyleSpecification } from 'maplibre-gl';
+import type { ColorScheme } from '../theme/systemColorScheme';
+import { documentOverlayIsRetained } from '../map/document-style-carry';
+import { EMBED_SOURCE_IDS, embedLayerSpecsForScheme } from './config';
 
 export type EmbedStyleControllerOptions<ThemeId extends string> = Omit<
   BaseStyleControllerOptions<ThemeId>,
@@ -16,4 +20,8 @@ export function createEmbedStyleController<ThemeId extends string>(
   options: EmbedStyleControllerOptions<ThemeId>,
 ): BaseStyleController<ThemeId> {
   return createBaseStyleController({ ...options, initialStyle: 'remote' });
+}
+
+export function embedOverlayIsRetained(style: StyleSpecification, scheme: ColorScheme): boolean {
+  return documentOverlayIsRetained(style, EMBED_SOURCE_IDS, embedLayerSpecsForScheme(scheme));
 }

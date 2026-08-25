@@ -25,7 +25,7 @@ import { basemapStyleForScheme, localBlankStyleForScheme } from '../map/mapTheme
 import { renderPresentationForFittedMap } from '../map/static-render-features';
 import { carryDocumentStyle } from '../map/document-style-carry';
 import type { EmbedMapRuntimeOptions } from './embed-bootstrap';
-import { createEmbedStyleController } from './embed-style-controller';
+import { createEmbedStyleController, embedOverlayIsRetained } from './embed-style-controller';
 
 const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
 
@@ -229,8 +229,7 @@ export async function startEmbedMap(options: EmbedMapRuntimeOptions): Promise<vo
       remoteUrl: basemapStyleForScheme,
       carry: (previous, next, scheme) =>
         carryDocumentStyle(previous, next, embedLayerSpecsForScheme(scheme)),
-      isDocumentStateRetained: () =>
-        [...EMBED_SOURCE_IDS].every((sourceId) => Boolean(map.getSource(sourceId))),
+      isDocumentStateRetained: () => embedOverlayIsRetained(map.getStyle(), activeScheme),
       timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
       isInteractionActive: () => false,
       recoverDocumentLayers: (scheme, fullRebuild) => {

@@ -129,7 +129,11 @@ import { attachVehicleAnimation } from '../sim/vehicles';
 import { createVehicleAnimationGateController } from '../sim/vehicle-animation-gate';
 import { clearArmedTerminusForViewChange } from './viewEditorState';
 import { basemapStyleForScheme, layerSpecsForScheme, localBlankStyleForScheme } from './mapTheme';
-import { carryDocumentStyle, editorDocumentLayersForScheme } from './document-style-carry';
+import {
+  carryDocumentStyle,
+  documentOverlayIsRetained,
+  editorDocumentLayersForScheme,
+} from './document-style-carry';
 import { attachMapStyleRecovery, recoverMapStyleState } from './styleRecovery';
 import { createMapStyleFeatureDataRecovery } from './styleRecovery';
 import {
@@ -177,6 +181,10 @@ import {
   type SceneTargetResolver,
 } from './editor-feature-state';
 const OWN_LAYER_IDS = new Set(sourceBankLayerSpecs(LAYER_SPECS).map((layer) => layer.id));
+const EDITOR_DOCUMENT_SOURCE_IDS = physicalRenderSourceIds([
+  ...ALL_SYSTEM_FEATURE_SOURCES,
+  SRC_HIT_FEATURES,
+]);
 const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
 
 function recordSourceUploads(counts: ProjectionOperationCounts, sourceUploadCount: number): void {
@@ -859,9 +867,10 @@ export function MapCanvas({
     });
     liveRenderer = renderer;
     isDocumentStateRetained = () =>
-      renderer.hasAcceptedScene() &&
-      physicalRenderSourceIds([...ALL_SYSTEM_FEATURE_SOURCES, SRC_HIT_FEATURES]).every((sourceId) =>
-        Boolean(map.getSource(sourceId)),
+      documentOverlayIsRetained(
+        map.getStyle(),
+        EDITOR_DOCUMENT_SOURCE_IDS,
+        editorDocumentLayersForScheme(activeMapScheme),
       );
     editorFeatureState = createEditorFeatureState({
       map,

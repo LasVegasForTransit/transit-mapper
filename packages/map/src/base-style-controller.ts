@@ -35,7 +35,14 @@ type StyleRequestResult =
   | { kind: 'timeout' };
 
 type StyleSettlement =
-  { kind: 'loaded' } | { kind: 'failed'; error: unknown } | { kind: 'cancelled' };
+  | { kind: 'loaded'; fullRebuild: boolean }
+  | { kind: 'failed'; error: unknown }
+  | { kind: 'cancelled' };
+
+interface CarriedStyleTransition {
+  previous: StyleSpecification;
+  carried: StyleSpecification;
+}
 
 const STYLE_TRANSITION_METADATA_KEY = 'transitmapper:base-style-transition';
 
@@ -233,7 +240,7 @@ class BaseStyleControllerImplementation<
 
   private async applyLocalBootstrap(theme: ThemeId, requestGeneration: number): Promise<void> {
     if (theme === this.currentTheme && this.appliedRemoteTheme === undefined) return;
-    const localStyle = this.options.local(theme);
+    const { carried: localStyle } = this.carryStyle(theme, this.options.local(theme));
     const result = await this.applyStyle(
       localStyle,
       (markedStyle) => this.options.map.setStyle(markedStyle, { diff: true }),
@@ -256,23 +263,15 @@ class BaseStyleControllerImplementation<
     next: StyleSpecification,
     requestGeneration: number,
   ): Promise<boolean> {
-    const carry = this.options.carry ?? ((_previous, incoming) => incoming);
-    // MapLibre can omit sources and layers added after the bootstrap style from
-    // transformStyle's previous value. Snapshot the live style before the
-    // transition so application-owned sources remain paired with their layers.
-    const previous = this.options.map.getStyle();
+    const { previous, carried } = this.carryStyle(theme, next);
     if (!this.hasRemoteTransitionBaseline) {
       this.lastUsableStyle = previous;
       this.lastUsableTheme = this.currentTheme;
       this.hasRemoteTransitionBaseline = true;
     }
     const result = await this.applyStyle(
-      next,
-      (markedStyle) =>
-        this.options.map.setStyle(markedStyle, {
-          diff: true,
-          transformStyle: (_mapPrevious, incoming) => carry(previous, incoming, theme),
-        }),
+      carried,
+      (markedStyle) => this.options.map.setStyle(markedStyle, { diff: true }),
       requestGeneration,
     );
     if (result.kind === 'cancelled') return false;
@@ -283,11 +282,20 @@ class BaseStyleControllerImplementation<
     }
     this.lastUsableStyle = this.options.map.getStyle();
     this.lastUsableTheme = theme;
-    const fullRebuild = this.options.isDocumentStateRetained
-      ? !this.options.isDocumentStateRetained()
-      : false;
+    const fullRebuild =
+      result.fullRebuild ||
+      (this.options.isDocumentStateRetained ? !this.options.isDocumentStateRetained() : false);
     this.options.recoverDocumentLayers?.(theme, fullRebuild);
     return true;
+  }
+
+  private carryStyle(theme: ThemeId, next: StyleSpecification): CarriedStyleTransition {
+    const previous = this.options.map.getStyle();
+    const carry = this.options.carry ?? ((_previous, incoming) => incoming);
+    // MapLibre can omit runtime-added sources from transformStyle's previous
+    // value. Carry the live snapshot before stamping it so a host that returns
+    // a fresh style cannot discard the transition identity either.
+    return { previous, carried: carry(previous, next, theme) };
   }
 
   private applyStyle(
@@ -321,7 +329,7 @@ class BaseStyleControllerImplementation<
         }
         if (!styleHasTransitionMarker(this.options.map.getStyle(), marker)) return;
         cleanup();
-        resolve({ kind: 'loaded' });
+        resolve({ kind: 'loaded', fullRebuild: true });
       };
       this.activeTransitionCancel = cancel;
       this.options.map.on('style.load', onStyleLoad);
@@ -332,7 +340,7 @@ class BaseStyleControllerImplementation<
         // marker distinguishes both from stale events and unrelated errors.
         if (styleHasTransitionMarker(this.options.map.getStyle(), marker)) {
           cleanup();
-          resolve({ kind: 'loaded' });
+          resolve({ kind: 'loaded', fullRebuild: false });
         }
       } catch (error) {
         cleanup();

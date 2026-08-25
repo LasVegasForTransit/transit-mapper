@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Map as MapLibreMap, StyleSpecification } from 'maplibre-gl';
-import { createEmbedStyleController } from '../../src/embed/embed-style-controller';
+import {
+  createEmbedStyleController,
+  embedOverlayIsRetained,
+} from '../../src/embed/embed-style-controller';
+import { EMBED_SOURCE_IDS, embedLayerSpecsForScheme } from '../../src/embed/config';
 
 const style = (id: string): StyleSpecification => ({
   version: 8,
@@ -34,6 +38,24 @@ class EmbedMapFake {
 afterEach(() => vi.useRealTimers());
 
 describe('createEmbedStyleController', () => {
+  it('recognizes an empty embed overlay when every source and layer remains', () => {
+    const emptyOverlay: StyleSpecification = {
+      version: 8,
+      sources: Object.fromEntries(
+        [...EMBED_SOURCE_IDS].map((sourceId) => [
+          sourceId,
+          {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] },
+          },
+        ]),
+      ),
+      layers: embedLayerSpecsForScheme('light'),
+    };
+
+    expect(embedOverlayIsRetained(emptyOverlay, 'light')).toBe(true);
+  });
+
   it('keeps the working remote style when a later theme fetch fails', async () => {
     const map = new EmbedMapFake();
     const onUnavailable = vi.fn();

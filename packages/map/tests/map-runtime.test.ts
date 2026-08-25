@@ -136,7 +136,7 @@ describe('createMapRuntime', () => {
       expect.any(AbortSignal),
     );
     expect(map.style).toEqual(remoteStyle('light'));
-    expect(recoverDocumentLayers).toHaveBeenCalledWith('light', false);
+    expect(recoverDocumentLayers).toHaveBeenCalledWith('light', true);
   });
 
   it('waits for MapLibre to load a replacement before applying its theme or recovery mode', async () => {
@@ -152,7 +152,7 @@ describe('createMapRuntime', () => {
     await runtime.flushTheme();
 
     expect(map.style).toEqual(remoteStyle('light'));
-    expect(recoverDocumentLayers).toHaveBeenCalledWith('light', false);
+    expect(recoverDocumentLayers).toHaveBeenCalledWith('light', true);
   });
 
   it('does not treat an ordinary MapLibre error as a failed style replacement', async () => {
@@ -185,7 +185,7 @@ describe('createMapRuntime', () => {
     await runtime.flushTheme();
 
     expect(map.style).toEqual(remoteStyle('light'));
-    expect(recoverDocumentLayers).toHaveBeenCalledWith('light', false);
+    expect(recoverDocumentLayers).toHaveBeenCalledWith('light', true);
   });
 
   it('restores the last usable style when a replacement never reaches style.load', async () => {
@@ -278,7 +278,7 @@ describe('createMapRuntime', () => {
     await current;
 
     expect(map.style).toEqual(remoteStyle('dark'));
-    expect(recoverDocumentLayers.mock.calls).toEqual([['dark', false]]);
+    expect(recoverDocumentLayers.mock.calls).toEqual([['dark', true]]);
   });
 
   it('never records an unsettled replacement as the rollback style', async () => {
@@ -312,7 +312,7 @@ describe('createMapRuntime', () => {
     expect(map.style).toEqual(localStyle('light'));
   });
 
-  it('reports a full recovery only after MapLibre settles without the carried document state', async () => {
+  it('reports a full recovery after MapLibre rebuilds the carried document state', async () => {
     const recoverDocumentLayers = vi.fn();
     const { runtime, map } = createHarness({
       style: {
@@ -343,7 +343,60 @@ describe('createMapRuntime', () => {
     map.settleStyle({ rebuilt: true });
     await runtime.flushTheme();
 
-    expect(map.style.sources).not.toHaveProperty('tm-stations');
+    expect(map.style.sources).toHaveProperty('tm-stations');
+    expect(recoverDocumentLayers).toHaveBeenCalledWith('light', true);
+  });
+
+  it('reports a full rebuild when an earlier style listener recreates document state', async () => {
+    const recoverDocumentLayers = vi.fn();
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: () => Promise.resolve(remoteStyle('light')),
+        carry: (_previous, next) => ({
+          ...next,
+          sources: {
+            ...next.sources,
+            'tm-stations': {
+              type: 'geojson',
+              data: { type: 'FeatureCollection', features: [] },
+            },
+          },
+          layers: [...next.layers, { id: 'tm-stations', type: 'circle', source: 'tm-stations' }],
+        }),
+        isDocumentStateRetained: () =>
+          Boolean(map.getStyle().sources['tm-stations']) &&
+          map.getStyle().layers.some((layer) => layer.id === 'tm-stations'),
+        recoverDocumentLayers,
+        timeoutMs: 1_500,
+        online: () => true,
+        isInteractionActive: () => false,
+        onBaseStyleUnavailable: vi.fn(),
+      },
+    });
+    map.on('style.load', () => {
+      map.style = {
+        ...map.getStyle(),
+        sources: {
+          ...map.getStyle().sources,
+          'tm-stations': {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] },
+          },
+        },
+        layers: [
+          ...map.getStyle().layers.filter((layer) => layer.id !== 'tm-stations'),
+          { id: 'tm-stations', type: 'circle', source: 'tm-stations' },
+        ],
+      };
+    });
+
+    runtime.milestones.contentCommitted();
+    await vi.waitFor(() => expect(map.pendingStyle).toBeDefined());
+    map.settleStyle({ rebuilt: true });
+    await runtime.flushTheme();
+
     expect(recoverDocumentLayers).toHaveBeenCalledWith('light', true);
   });
 
@@ -411,10 +464,15 @@ describe('createMapRuntime', () => {
     expect(map.style).toEqual(remoteStyle('dark'));
   });
 
-  it('changes the pre-content bootstrap without document carry or recovery', async () => {
-    const carry = vi.fn(
-      (_previous: StyleSpecification | undefined, next: StyleSpecification) => next,
-    );
+  it('carries no document layer into a pre-content theme before its source exists', async () => {
+    const carry = (previous: StyleSpecification | undefined, next: StyleSpecification) => ({
+      ...next,
+      metadata: { hostCarried: true },
+      sources: { ...next.sources, ...previous?.sources },
+      layers: previous?.sources['tm-stations']
+        ? [...next.layers, { id: 'tm-stations', type: 'circle' as const, source: 'tm-stations' }]
+        : next.layers,
+    });
     const recoverDocumentLayers = vi.fn();
     const { runtime, map } = createHarness({
       style: {
@@ -431,16 +489,68 @@ describe('createMapRuntime', () => {
     });
 
     const request = runtime.requestTheme('dark');
-    await vi.waitFor(() => expect(map.pendingStyle).toEqual(localStyle('dark')));
+    await vi.waitFor(() => expect(map.pendingStyle).toBeDefined());
 
-    expect(carry).not.toHaveBeenCalled();
+    expect(map.pendingStyle?.metadata).toEqual({ hostCarried: true });
+    expect(map.pendingStyle?.layers).toEqual(localStyle('dark').layers);
     expect(recoverDocumentLayers).not.toHaveBeenCalled();
 
     map.settleStyle();
     await request;
 
-    expect(map.style).toEqual(localStyle('dark'));
-    expect(carry).not.toHaveBeenCalled();
+    expect(map.style.metadata).toEqual({ hostCarried: true });
+    expect(map.style.layers).toEqual(localStyle('dark').layers);
+    expect(recoverDocumentLayers).not.toHaveBeenCalled();
+  });
+
+  it('carries existing document state through a pre-content theme change', async () => {
+    const recoverDocumentLayers = vi.fn();
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: () => Promise.resolve(remoteStyle('dark')),
+        carry: (previous, next) => ({
+          ...next,
+          sources: { ...next.sources, ...previous?.sources },
+          layers: [
+            ...next.layers,
+            ...(previous?.layers.filter((layer) => layer.id.startsWith('tm-')) ?? []),
+          ],
+        }),
+        recoverDocumentLayers,
+        timeoutMs: 1_500,
+        online: () => true,
+        isInteractionActive: () => false,
+        onBaseStyleUnavailable: vi.fn(),
+      },
+    });
+    map.style = {
+      ...localStyle('light'),
+      sources: {
+        'tm-stations': {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        },
+      },
+      layers: [
+        ...localStyle('light').layers,
+        { id: 'tm-stations', type: 'circle', source: 'tm-stations' },
+      ],
+    };
+
+    const request = runtime.requestTheme('dark');
+    await vi.waitFor(() => expect(map.pendingStyle).toBeDefined());
+
+    expect(map.pendingStyle?.sources).toHaveProperty('tm-stations');
+    expect(map.pendingStyle?.layers.map((layer) => layer.id)).toContain('tm-stations');
+    expect(recoverDocumentLayers).not.toHaveBeenCalled();
+
+    map.settleStyle();
+    await request;
+
+    expect(map.style.sources).toHaveProperty('tm-stations');
+    expect(map.style.layers.map((layer) => layer.id)).toContain('tm-stations');
     expect(recoverDocumentLayers).not.toHaveBeenCalled();
   });
 
