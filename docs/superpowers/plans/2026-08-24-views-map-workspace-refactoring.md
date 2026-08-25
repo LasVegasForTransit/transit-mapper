@@ -391,7 +391,7 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - [ ] Keep editing gestures, handles, termini, route previews, and simulation painting in `apps/web/src/editor/editor-map-attachment.ts`.
 - [ ] Reduce `MapCanvas.tsx` to a compatibility wrapper while callers move to `MapSurface`.
 - [ ] Prove with dependency tests that `workspace`, `map`, and `renderer` import no editor provider or editor command.
-- [ ] Allow `MapSurface` to remount its MapLibre runtime when the driver or content identity changes.
+- [x] Allow `MapSurface` to remount its MapLibre runtime when the driver or content identity changes.
 - [ ] Keep the application shell and Workbench structure mounted during that remount.
 - [ ] Preserve source-bank rollback, accepted-scene recovery, gesture settlement, style recovery, and startup milestones.
 - [ ] Replace path-regex renderer chunks with package-owned `views`, `map`, `workspace`, and `renderer` cache chunks. Keep MapLibre and React in their current stable vendor chunks.
