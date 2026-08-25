@@ -17,7 +17,7 @@ import {
   SRC_WAYS,
   SRC_WAY_LABELS,
 } from '@transitmapper/renderer/layers';
-import { LAYER_SPECS } from './layers';
+import { LAYER_SPECS } from './layers/layerSpecs';
 
 export interface GestureFilterExclusion {
   property: string;
