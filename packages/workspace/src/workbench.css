@@ -1,3 +1,98 @@
+@property --map-pad-top {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+@property --map-pad-bottom {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+@property --map-pad-left {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+@property --map-pad-right {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+.workspace-root {
+  --panel-w: 280px;
+  --overlay-gap: 8px;
+  --controls-clearance: calc(120px + env(safe-area-inset-bottom, 0px));
+  --motion-chrome-curve: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --map-pad-top: 64px;
+  --map-pad-bottom: 88px;
+  --map-pad-left: calc(var(--panel-w) + 2 * var(--overlay-gap));
+  --map-pad-right: var(--overlay-gap);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.workspace-overlay {
+  position: absolute;
+  inset: var(--overlay-gap);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto 1fr var(--controls-clearance);
+  gap: var(--overlay-gap);
+  pointer-events: none;
+}
+.workspace-menu-card-slot {
+  grid-area: 1 / 1 / 5 / 2;
+  display: flex;
+  align-self: stretch;
+  justify-self: start;
+  pointer-events: auto;
+}
+.workspace-supplemental {
+  grid-column: 3;
+  grid-row: 3;
+  display: flex;
+  align-self: stretch;
+  justify-self: end;
+  pointer-events: auto;
+}
+.workspace-top-row {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--overlay-gap);
+  pointer-events: none;
+}
+.workspace-top-row-spacer {
+  flex: 1 1 0;
+  min-width: var(--panel-w);
+}
+.workspace-top-card {
+  min-width: 0;
+  pointer-events: auto;
+}
+.workspace-actions-slot {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0;
+  justify-content: flex-end;
+}
+.workspace-dock-slot {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--overlay-gap);
+  pointer-events: none;
+}
+.workspace-interactive {
+  pointer-events: auto;
+}
+
 /* Workbench owns the chrome motion because its explicit chromeHidden state
    keeps visual hiding and DOM inertness on the same component boundary. */
 .zen-label,
@@ -57,10 +152,19 @@
   pointer-events: none;
 }
 
-.panel-left {
-  align-self: stretch;
+.workspace-menu-card {
+  width: var(--panel-w);
+  max-height: calc(100dvh - 2 * var(--overlay-gap));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--md-sys-color-surface);
+  border: 1px solid var(--md-sys-color-surface-container-highest);
+  border-radius: 12px;
+  box-shadow: var(--md-sys-elevation-level2);
+  transition: width 220ms var(--motion-chrome-curve);
 }
-.panel-brand {
+.workspace-menu-card-header {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -68,34 +172,31 @@
   padding: 12px 8px 8px;
   border-bottom: 1px solid var(--md-sys-color-surface-container-highest);
 }
-.panel-brand-row {
+.workspace-menu-card-header-row {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: nowrap;
 }
-[data-zen] .panel-brand-row,
-[data-zen] .panel-brand {
+[data-zen] .workspace-menu-card-header-row,
+[data-zen] .workspace-menu-card-header {
   align-self: flex-start;
 }
-.panel-brand .system-name {
+.workspace-menu-card-header .system-name {
   flex: 1 1 128px;
   max-width: 320px;
 }
-[data-zen] .panel-brand .system-name {
+[data-zen] .workspace-menu-card-header .system-name {
   flex: 0 1 140px;
 }
-.menu-card {
-  transition: width 220ms var(--motion-chrome-curve);
-}
-[data-zen] .menu-card,
-[data-zen] .menu-card-slot {
+[data-zen] .workspace-menu-card,
+[data-zen] .workspace-menu-card-slot {
   align-self: flex-start;
 }
-[data-zen] .menu-card {
+[data-zen] .workspace-menu-card {
   width: auto;
 }
-.collapsible {
+.workspace-menu-card-content {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -104,16 +205,41 @@
   overflow: hidden;
   transition: max-height 220ms var(--motion-chrome-curve);
 }
-[data-zen] .collapsible {
+[data-zen] .workspace-menu-card-content {
   max-height: 0;
   max-width: 0;
 }
-.collapsible-inner {
+.workspace-menu-card-content-inner {
   flex: 1;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.workspace-interface-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  appearance: none;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font: inherit;
+  cursor: pointer;
+}
+.workspace-interface-toggle:hover {
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+}
+.workspace-interface-toggle:focus-visible {
+  outline: 2px solid var(--md-sys-color-on-surface);
+  outline-offset: 2px;
 }
 
 .sheet-handle {
@@ -169,31 +295,27 @@
   left: 0;
 }
 
-.app-banner-slot {
-  top: 68px;
+.workspace-application-notice {
+  z-index: 20;
+  display: flex;
+  pointer-events: auto;
 }
-@media (max-width: 767px), (max-height: 500px) {
-  .app-banner-slot {
-    top: 136px;
-  }
-}
-[data-zen] .app-banner-slot {
-  top: 12px;
-}
-
-/* Hosts may supply a contextual notice instead of a global banner. It aligns
-   with the right panel without entering the hideable Workbench subtree. */
-.install-banner-slot {
+.workspace-application-notice.is-centered {
   position: absolute;
-  top: 64px;
-  right: var(--overlay-gap);
-  z-index: 1;
-  width: var(--panel-w);
+  top: 60px;
+  inset-inline: 0;
+  justify-content: center;
+  pointer-events: none;
 }
-@media (max-width: 767px), (max-height: 500px) {
-  .install-banner-slot {
-    display: none;
-  }
+[data-zen] .workspace-application-notice.is-centered {
+  top: 4px;
+}
+.workspace-application-notice.is-panel-aligned {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: end;
+  width: var(--panel-w);
+  pointer-events: auto;
 }
 
 .zen-restore {
@@ -211,6 +333,7 @@
   background: var(--md-sys-color-surface);
   color: var(--md-sys-color-on-surface-variant);
   box-shadow: var(--md-sys-elevation-level2);
+  pointer-events: auto;
 }
 .compact-top-bar {
   position: absolute;
@@ -219,6 +342,8 @@
   z-index: 6;
   background: var(--md-sys-color-surface);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  padding-top: env(safe-area-inset-top, 0px);
+  pointer-events: auto;
 }
 .compact-top-bar-row {
   display: flex;
@@ -253,6 +378,7 @@
   transition:
     max-height 200ms var(--motion-chrome-curve),
     opacity 200ms var(--motion-chrome-curve);
+  pointer-events: auto;
 }
 .compact-workbench.is-half {
   max-height: min(46dvh, calc(100dvh - 96px));
@@ -319,8 +445,37 @@
     justify-content: center;
     gap: 12px;
   }
-  :root {
+  .workspace-root {
     --map-pad-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 860px) {
+  .workspace-root {
+    --controls-clearance: calc(140px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 767px), (max-height: 500px) {
+  .workspace-root {
+    --map-pad-top: calc(48px + env(safe-area-inset-top, 0px));
+    --map-pad-bottom: calc(168px + env(safe-area-inset-bottom, 0px));
+    --map-pad-left: 0px;
+    --map-pad-right: 0px;
+  }
+  .workspace-overlay {
+    inset: 0;
+    display: block;
+  }
+  .workspace-application-notice.is-centered {
+    top: 136px;
+    padding-inline: 12px;
+  }
+  [data-zen] .workspace-application-notice.is-centered {
+    top: 12px;
+  }
+  .workspace-application-notice.is-panel-aligned {
+    display: none;
   }
 }
 

@@ -56,7 +56,7 @@ export async function preventRemoteBasemap(context: BrowserContext): Promise<voi
 export async function settleCapturePixels(page: Page): Promise<void> {
   await page.addStyleTag({
     content:
-      '[data-renderer-capture-exclude="true"],.app-banner-slot,.zen-restore,.maplibregl-ctrl{visibility:hidden!important}' +
+      '[data-renderer-capture-exclude="true"],.workspace-application-notice,.zen-restore,.maplibregl-ctrl{visibility:hidden!important}' +
       '.app[data-renderer-capture-bare] > :not(.maplibregl-map){visibility:hidden!important}' +
       '.app[data-renderer-capture-bare] .maplibregl-map{background-image:none!important}',
   });

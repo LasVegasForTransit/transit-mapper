@@ -70,7 +70,7 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement,
   ) {
-    if (!this.classList.contains('menu-card')) return DOMRect.fromRect();
+    if (!this.classList.contains('workspace-menu-card')) return DOMRect.fromRect();
     const inlineWidth = Number.parseFloat(this.style.width);
     const hidden = this.closest('[data-zen]')?.getAttribute('data-zen') === 'true';
     const width =
@@ -92,7 +92,7 @@ afterEach(() => {
 describe('Workbench chrome motion', () => {
   it('paints both width endpoints before animating the menu card', () => {
     renderWorkbench(false);
-    const card = container.querySelector<HTMLElement>('.menu-card');
+    const card = container.querySelector<HTMLElement>('.workspace-menu-card');
     renderWorkbench(true);
     expect(card?.style.width).toBe('280px');
     flushAnimationFrame();

@@ -101,15 +101,15 @@ never rise above the top bar.
 ## What the chrome covers
 
 The map is full-bleed behind the chrome, so it has no idea any of it is there.
-Four custom properties in `apps/web/src/ui/app.css` say what it covers:
+Four custom properties in `packages/workspace/src/workbench.css` say what it covers:
 
 ```
 --map-pad-top  --map-pad-bottom  --map-pad-left  --map-pad-right
 ```
 
-They are declared beside the rules that create the chrome — the base values in
-`:root` describe the docked layout, and the compact and short-viewport blocks
-override them — so there is one source and two readers.
+They are declared beside the rules that create the chrome. The base values on
+`.workspace-root` describe the docked layout. The compact and short-viewport
+blocks override them, so there is one source and two readers.
 
 `MapCanvas` reads them and calls `map.setPadding()`, which makes every camera
 operation frame inside the visible band. Without it, `fitBounds` centres on the

@@ -304,7 +304,10 @@ selection.
 These modules may read the editor store and invoke grouped commands but do not
 duplicate domain rules.
 
-`packages/workspace/src/workbench.tsx` owns responsive chrome placement.
+`packages/workspace/src/workbench.tsx` owns responsive chrome placement. Its
+stylesheet supplies the package's structural styles and layout variables, while
+the web host supplies the shared Material theme tokens. Application notices
+choose either centered or panel-aligned placement as part of their named slot.
 `apps/web/src/ui/workspace-adapter.ts` maps editor representations and content
 to package labels and detents. See [The compact layout](../explanation/compact-layout.md).
 

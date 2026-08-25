@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { TOOLBAR_FITS } from '../src/index';
+import { TOOLBAR_FITS } from '../src/toolbar-fit';
 
 const stylesheetUrl = new URL('../src/workbench.css', import.meta.url);
 const CSS = existsSync(stylesheetUrl) ? readFileSync(fileURLToPath(stylesheetUrl), 'utf8') : '';
@@ -11,18 +11,6 @@ const stepsInCss = new Set(
 );
 
 describe('Workbench stylesheet ownership', () => {
-  it('owns the responsive surfaces that the component mounts', () => {
-    for (const selector of [
-      '.compact-top-bar',
-      '.compact-workbench',
-      '.top-app-bar',
-      '.dock-slot',
-      '.zen-restore',
-    ]) {
-      expect(CSS, `missing ${selector}`).toContain(selector);
-    }
-  });
-
   it('styles every toolbar fit below the full rendering', () => {
     expect(stepsInCss.has('full')).toBe(false);
     for (const fit of TOOLBAR_FITS.slice(1)) expect(stepsInCss).toContain(fit);

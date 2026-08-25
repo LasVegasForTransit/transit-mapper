@@ -240,7 +240,7 @@ interface MapErrorLike {
  * see. MapLibre takes that as padding: a camera told about it centres and fits
  * inside the visible band instead of the whole canvas.
  *
- * Read from CSS rather than measured. app.css declares `--map-pad-*` beside the
+ * Read from CSS rather than measured. Workbench CSS declares `--map-pad-*` beside the
  * rules that create the chrome, which makes one source for two readers — this,
  * and the rule that lifts MapLibre's own controls off the bottom bar. Measuring
  * the rendered chrome instead is what an earlier version did, via a

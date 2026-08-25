@@ -5,18 +5,15 @@
    is a utility class in the editor. Excluding the false positives removes
    2.4 kB of CSS. Remove a name here before adopting that utility in markup. */
 @source not inline('collapse invisible visible isolate container contents table transform zoom-0 resize text-justify lowercase outline filter select-all');
-@source '../../../../packages/workspace/src';
 
 /* THE layout condition, and the only one that decides which component tree
    mounts. Written out in full wherever it is used:
 
        @media (max-width: 767px), (max-height: 500px)
 
-   It matches useCompactLayout()'s COMPACT_LAYOUT_QUERY in
-   device/capabilities.ts character for character — the two are a matched
-   pair, and moving one alone puts the CSS and the component tree on
-   different sides of the same screen. That comment carries the reasoning for
-   both halves; this one only says where the copies live. Grep this file for
+   It matches useCompactLayout()'s COMPACT_LAYOUT_QUERY in the workspace
+   package character for character. Moving one alone puts the CSS and the
+   component tree on different sides of the same screen. Grep this file for
    `max-height: 500px` to find them all.
 
    Tailwind's `md:` cannot express the height half, so `md:` utilities are NOT
@@ -34,92 +31,8 @@
   --breakpoint-md: 768px;
 }
 
-/* Registered, not merely declared, so `getComputedStyle` resolves them.
-   An unregistered custom property hands back its raw token stream —
-   `getPropertyValue('--map-pad-top')` returns the literal string
-   "calc(48px + 0px)" — and `parseFloat` on that is NaN. The camera read four
-   NaNs, fell back to zero, and held no padding at all while every value here
-   looked correct in devtools. Declaring a syntax makes each one compute to a
-   real length before anyone reads it. */
-@property --map-pad-top {
-  syntax: '<length>';
-  inherits: true;
-  initial-value: 0px;
-}
-@property --map-pad-bottom {
-  syntax: '<length>';
-  inherits: true;
-  initial-value: 0px;
-}
-@property --map-pad-left {
-  syntax: '<length>';
-  inherits: true;
-  initial-value: 0px;
-}
-@property --map-pad-right {
-  syntax: '<length>';
-  inherits: true;
-  initial-value: 0px;
-}
-
 :root {
-  /* Floor for readable panel content — below the width this needs, Workbench
-     switches to the bottom sheet instead of squeezing this narrower. Wide
-     enough for the brand row's icon buttons at their real 34px size (brand
-     mark + "TransitMapper" + Hide-UI + File-menu all on one row) — this used
-     to be 220px, sized for those buttons at their old, too-small 24px.
-     240px (the value before this) was too tight for a list row that has to
-     fit a dot + name + right-aligned mode tag without eliding — 280px gives
-     that room without the panel reading as oversized against the map. */
-  --panel-w: 280px;
   --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Menlo', monospace;
-  /* App chrome uses one curve in either direction so hiding a surface feels
-     like the exact reverse of showing it. */
-  --motion-chrome-curve: cubic-bezier(0.2, 0.7, 0.3, 1);
-  /* The shared margin every floating overlay card keeps from the viewport
-     edge AND from its neighbors — the one number .app-chrome's grid (below)
-     derives every gap from, instead of each panel hand-computing its own
-     top/left/right/bottom against its neighbors' sizes (how the panel/topbar
-     gap bug happened: one panel's offset silently drifted out of sync with
-     another's real height). */
-  --overlay-gap: 8px;
-  /* Reserved height along the viewport's bottom-right — MapLibre's own
-     NavigationControl + compact AttributionControl live there (see
-     .maplibregl-ctrl-bottom-right below), outside this app's own DOM/grid
-     entirely, so the grid can't sense their real size the way it can for
-     its own cells. This is that footprint, named once so every reference to
-     it (the grid's own bottom row here, the 860px-breakpoint override near
-     the bottom of this file) shares one source instead of three
-     independently-guessed pixel values. */
-  /* Plus the home-indicator / gesture-bar inset, which is 0 everywhere it
-     doesn't apply. MapLibre's controls sit at the viewport's bottom edge, and
-     with viewport-fit=cover that edge is now UNDER the indicator rather than
-     above it. */
-  --controls-clearance: calc(120px + env(safe-area-inset-bottom, 0px));
-  /* ---- what the chrome covers ----
-
-     The map is full-bleed behind the chrome, so it has no idea any of this is
-     here. Two things need to be told, and both read these four numbers:
-     MapLibre's own controls, which must not sit under the bottom bar, and the
-     CAMERA, which until now centred everything on the whole canvas instead of
-     the part you can see. Every fitBounds in MapCanvas passed one symmetric
-     number — 60, 100, 120 — so zooming to a line put it a quarter of the
-     chrome's height off centre with its ends behind the bars.
-
-     Declared here because layout owns them, and read by the camera rather
-     than measured. Measuring the rendered chrome is what the deleted
-     `--workbench-h` did: a ResizeObserver writing a pixel height onto
-     document.documentElement so one CSS line could read it back.
-
-     Deliberately conservative where the chrome's height varies. The compact
-     workbench grows by the simulation strip's ~40px when a service has a
-     schedule, and these keep clear of it either way: too much clearance puts
-     the zoom buttons slightly higher over the map, which costs nothing, while
-     too little puts them inside the workbench. */
-  --map-pad-top: 64px;
-  --map-pad-bottom: 88px;
-  --map-pad-left: calc(var(--panel-w) + 2 * var(--overlay-gap));
-  --map-pad-right: var(--overlay-gap);
   font-family: 'Public Sans', system-ui, sans-serif;
   letter-spacing: -0.006em;
 }
@@ -528,6 +441,11 @@ input[type='range'] {
 .app-banner-update {
   background: var(--md-sys-color-primary-container);
   color: var(--md-sys-color-primary);
+}
+.app-banner-content {
+  width: min(560px, calc(100vw - 24px));
+  max-width: 560px;
+  pointer-events: auto;
 }
 .app-banner-action {
   display: flex;
@@ -3599,22 +3517,6 @@ button.chip-removable-label:hover {
    The sheet is full-bleed and hands the panel every pixel of the screen; it
    was the 280px panel that refused them. See .panel's own compact rule. */
 
-/* 860px: the tool dock's widest state stops clearing the full-height right
-   panel's column. */
-@media (max-width: 860px) {
-  /* Only panel-right still stretches full-height in its own row (panel-left
-     is auto-height, see its rule above) — the bottom-center tool dock
-     (which can grow wide — e.g. the way-tool's options row) and this
-     full-height panel only miss each other by luck on wide screens; below
-     this width their columns can still overflow into each other, so the
-     panel gives up more of its own height than the zoom-control clearance
-     alone requires, the same mitigation as before just expressed as the
-     shared --controls-clearance var instead of a one-off bottom value. */
-  :root {
-    --controls-clearance: calc(140px + env(safe-area-inset-bottom, 0px));
-  }
-}
-
 /* 620px: the top bar's button labels and the system-name input stop fitting
    beside each other. */
 @media (max-width: 620px) {
@@ -3800,26 +3702,6 @@ button.chip-removable-label:hover {
    rules dodge is mounted by useCompactLayout(), which now also answers yes to
    a short viewport. */
 @media (max-width: 767px), (max-height: 500px) {
-  /* The compact chrome's own footprint — see the base values in :root. Both
-     bars run the full width here, so the map loses height at top and bottom
-     and nothing at the sides.
-
-     The bottom figure clears the workbench at rest with its simulation strip
-     showing, which is the tallest it gets without someone opening the panel.
-     A panel the user opened is expected to cover the map; that is what
-     opening it means.
-
-     168 is measured at 390x844, not estimated: a 37px drag handle over a
-     125px rail (a 56px tool row and the 34px simulation strip), plus borders.
-     Re-measure it if the rail's contents change — an estimate was 152 here
-     first, and left the zoom buttons 15px inside the workbench. */
-  :root {
-    --map-pad-top: calc(48px + env(safe-area-inset-top, 0px));
-    --map-pad-bottom: calc(168px + env(safe-area-inset-bottom, 0px));
-    --map-pad-left: 0px;
-    --map-pad-right: 0px;
-  }
-
   /* Icon-only tools — Figma-style compact dock on phones. The standard
      width above is for the label-bearing desktop button; icon-only mobile
      buttons go back to sizing themselves to their (identical) icon. */

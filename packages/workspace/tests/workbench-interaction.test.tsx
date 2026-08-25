@@ -3,7 +3,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { stepDetent, Workbench, type WorkspaceState } from '../src/index';
+import { stepDetent } from '../src/sheet-handle';
+import { Workbench, type WorkspaceState } from '../src/index';
 import { matchMediaFor } from './support/media-environment.test';
 
 let container: HTMLDivElement;

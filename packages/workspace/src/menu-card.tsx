@@ -45,7 +45,7 @@ function useAnimatedMenuCardWidth(chromeHidden: boolean) {
       return;
     }
 
-    const brandElement = element.querySelector('.panel-brand');
+    const brandElement = element.querySelector('.workspace-menu-card-header');
     let observer: ResizeObserver | null = null;
     let targetFrame = 0;
     const startFrame = requestAnimationFrame(() => {
@@ -86,13 +86,13 @@ export function MenuCard({
   const cardRef = useAnimatedMenuCardWidth(chromeHidden);
 
   return (
-    <aside ref={cardRef} className="panel panel-left menu-card" aria-label={representationLabel}>
-      <div className="panel-brand">
-        <div className="panel-brand-row">
+    <aside ref={cardRef} className="workspace-menu-card" aria-label={representationLabel}>
+      <div className="workspace-menu-card-header">
+        <div className="workspace-menu-card-header-row">
           {brand}
           <button
             type="button"
-            className="btn btn-plain icon-only"
+            className="workspace-interface-toggle"
             title={chromeHidden ? 'Show interface' : 'Hide interface'}
             aria-label={chromeHidden ? 'Show interface' : 'Hide interface'}
             onClick={onToggleInterface}
@@ -101,8 +101,8 @@ export function MenuCard({
           </button>
         </div>
       </div>
-      <div className="collapsible">
-        <div className="collapsible-inner">{children}</div>
+      <div className="workspace-menu-card-content">
+        <div className="workspace-menu-card-content-inner">{children}</div>
       </div>
     </aside>
   );

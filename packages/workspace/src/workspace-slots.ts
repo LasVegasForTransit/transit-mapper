@@ -2,6 +2,11 @@ import type { ReactNode } from 'react';
 
 export type WorkbenchDetent = 'closed' | 'half' | 'full';
 
+export interface ApplicationNoticeSlot {
+  content: ReactNode;
+  placement: 'centered' | 'panel-aligned';
+}
+
 export interface WorkspaceSlots {
   brand: ReactNode;
   primaryActions: ReactNode;
@@ -13,10 +18,10 @@ export interface WorkspaceSlots {
   supplementalPanel: ReactNode;
   toolDock: ReactNode;
   importStatus?: ReactNode;
-  applicationNotices?: ReactNode;
+  applicationNotices?: ApplicationNoticeSlot;
 }
 
-export type WorkbenchSlots = Omit<WorkspaceSlots, 'applicationNotices'>;
+export type WorkbenchSlots = WorkspaceSlots;
 
 export interface WorkspaceState {
   representationLabel: string;

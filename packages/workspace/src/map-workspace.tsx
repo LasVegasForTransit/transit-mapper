@@ -11,17 +11,15 @@ export interface MapWorkspaceProps {
 }
 
 export function MapWorkspace({ mapSurface, mapOverlay, slots, state, actions }: MapWorkspaceProps) {
-  const { applicationNotices, ...workbenchSlots } = slots;
   return (
     <div
-      className="app"
+      className="app workspace-root"
       data-zen={state.chromeHidden || undefined}
       data-document-status={state.contentStatus}
     >
       {mapSurface}
       {mapOverlay}
-      {applicationNotices}
-      <Workbench slots={workbenchSlots} state={state} actions={actions} />
+      <Workbench slots={slots} state={state} actions={actions} />
     </div>
   );
 }

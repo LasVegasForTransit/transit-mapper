@@ -1,3 +1,7 @@
+// @vitest-environment jsdom
+
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as workspace from '../src/index';
@@ -9,6 +13,11 @@ vi.mock('react', async () => {
 });
 
 const { MapWorkspace } = workspace;
+
+class ResizeObserverStub {
+  observe() {}
+  disconnect() {}
+}
 
 function renderMapWorkspace(narrow: boolean, chromeHidden = false): string {
   vi.stubGlobal('window', { matchMedia: matchMediaFor({ narrow }) });
@@ -28,7 +37,10 @@ function renderMapWorkspace(narrow: boolean, chromeHidden = false): string {
         supplementalPanel: slot('supplemental-panel'),
         toolDock: slot('tool-dock'),
         importStatus: slot('import-status'),
-        applicationNotices: slot('application-notices'),
+        applicationNotices: {
+          content: slot('application-notices'),
+          placement: 'centered',
+        },
       }}
       state={{
         representationLabel: 'Network',
@@ -52,7 +64,7 @@ describe('MapWorkspace composition', () => {
   it('keeps one map surface beside one Workbench tree', () => {
     const markup = renderMapWorkspace(false);
 
-    expect(markup).toContain('class="app"');
+    expect(markup).toContain('class="app workspace-root"');
     expect(occurrences(markup, 'data-slot="map"')).toBe(1);
     expect(occurrences(markup, 'data-workbench')).toBe(1);
     expect(markup.indexOf('data-slot="map"')).toBeLessThan(markup.indexOf('data-workbench'));
@@ -65,7 +77,8 @@ describe('MapWorkspace composition', () => {
     expect(markup).toContain('data-document-status="ready"');
     expect(occurrences(markup, 'data-slot="map"')).toBe(1);
     expect(occurrences(markup, 'data-slot="application-notices"')).toBe(1);
-    expect(markup.indexOf('data-slot="application-notices"')).toBeLessThan(
+    expect(markup).toContain('workspace-application-notice is-centered');
+    expect(markup.indexOf('data-slot="application-notices"')).toBeGreaterThan(
       markup.indexOf('data-workbench'),
     );
   });
@@ -76,5 +89,49 @@ describe('MapWorkspace composition', () => {
 
     expect(occurrences(markup, 'data-slot="map-overlay"')).toBe(1);
     expect(workbench).not.toContain('data-slot="map-overlay"');
+  });
+
+  it('preserves the exact canvas node while chrome visibility changes', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: matchMediaFor({ narrow: false }),
+    });
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    const render = (chromeHidden: boolean) =>
+      root.render(
+        <MapWorkspace
+          mapSurface={<canvas data-slot="map" />}
+          slots={{
+            brand: null,
+            primaryActions: null,
+            representationControls: null,
+            compactRepresentationControls: null,
+            simulationControls: null,
+            compactSimulationControls: null,
+            mainPanel: null,
+            supplementalPanel: null,
+            toolDock: null,
+          }}
+          state={{
+            representationLabel: 'Network',
+            hasSupplementalContent: false,
+            initialSupplementalDetent: null,
+            chromeHidden,
+            contentStatus: 'ready',
+          }}
+          actions={{ onToggleInterface: () => {}, onDismissSupplemental: () => {} }}
+        />,
+      );
+
+    act(() => render(false));
+    const canvas = container.querySelector('canvas');
+    act(() => render(true));
+
+    expect(container.querySelector('canvas')).toBe(canvas);
+    expect(container.querySelector('.app')?.getAttribute('data-zen')).toBe('true');
+    act(() => root.unmount());
   });
 });

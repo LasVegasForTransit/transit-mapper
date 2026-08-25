@@ -40,8 +40,9 @@ import {
  * 280px columns stop leaving a map between them". Every phone in landscape is
  * under it; no tablet or laptop in normal use is.
  *
- * ui/app.css mirrors this exactly. The two must move together — grep for the
- * comment that names this constant.
+ * The workspace stylesheet uses the same query for its compact geometry. The
+ * media-query module owns the shared value, while CSS keeps a literal copy
+ * because browsers cannot import a TypeScript constant into a media rule.
  */
 /**
  * The primary pointer cannot be precise. Decides hit tolerance — see

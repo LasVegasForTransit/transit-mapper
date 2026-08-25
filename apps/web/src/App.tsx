@@ -373,15 +373,14 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
     readOnly,
     appNoticeShowing: descriptor !== null,
   });
-  const applicationNotices = banner ? (
-    <div className="app-banner-slot pointer-events-none absolute inset-x-0 z-20 flex justify-center px-3">
-      <div className="pointer-events-auto max-w-[560px]">{banner}</div>
-    </div>
-  ) : installBannerShowing ? (
-    <div className="install-banner-slot pointer-events-auto">
-      <InstallBanner />
-    </div>
-  ) : undefined;
+  const applicationNotices = banner
+    ? {
+        content: <div className="app-banner-content">{banner}</div>,
+        placement: 'centered' as const,
+      }
+    : installBannerShowing
+      ? { content: <InstallBanner />, placement: 'panel-aligned' as const }
+      : undefined;
 
   // There is deliberately no branch here for "not loaded yet". Everything below
   // is already in memory before the first byte is read from storage — the HTML,

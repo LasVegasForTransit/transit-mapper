@@ -92,6 +92,20 @@ afterEach(() => {
 });
 
 describe('floating surfaces', () => {
+  it('caps centered application notices without blocking the map around them', () => {
+    const wrapper = document.createElement('div');
+    wrapper.style.pointerEvents = 'none';
+    const content = document.createElement('div');
+    content.className = 'app-banner-content';
+    wrapper.append(content);
+    document.body.append(wrapper);
+
+    expect(getComputedStyle(wrapper).pointerEvents).toBe('none');
+    expect(getComputedStyle(content).pointerEvents).toBe('auto');
+    expect(getComputedStyle(content).maxWidth).toBe('560px');
+    wrapper.remove();
+  });
+
   it('leaves a closed menu trigger clickable', () => {
     render(
       <DropdownMenu trigger={<button aria-label="Actions">Actions</button>}>

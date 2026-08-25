@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keyboardInsetFrom } from '../src/index';
+import { keyboardInsetFrom } from '../src/keyboard-inset';
 
 describe('keyboard inset', () => {
   it('reports nothing while no keyboard is open', () => {
