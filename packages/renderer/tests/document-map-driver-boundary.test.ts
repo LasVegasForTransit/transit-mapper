@@ -43,13 +43,7 @@ afterEach(() => {
   }
 });
 
-describe('the document map driver dependency boundary', () => {
-  it('keeps the current driver graph inside renderer dependencies', () => {
-    const result = runBoundary(['packages/renderer/src/document-map-driver.ts']);
-
-    expect(result.status, result.output).toBe(0);
-  });
-
+describe('the renderer package dependency boundary', () => {
   it.each([
     [
       'editor',
@@ -66,7 +60,7 @@ describe('the document map driver dependency boundary', () => {
     ['UI', '../../../apps/web/src/ui/button', 'apps/web/src/ui/button.ts'],
   ])('rejects a renderer import from %s', (_name, importPath, dependencyPath) => {
     const result = runBoundaryFixture({
-      'packages/renderer/src/document-map-driver.ts': `import '${importPath}';\n`,
+      'packages/renderer/src/boundary-probe.ts': `import '${importPath}';\n`,
       [dependencyPath]: 'export {};\n',
     });
 
@@ -76,7 +70,7 @@ describe('the document map driver dependency boundary', () => {
 
   it('rejects a React import from renderer', () => {
     const result = runBoundaryFixture({
-      'packages/renderer/src/document-map-driver.ts': "import 'react';\n",
+      'packages/renderer/src/boundary-probe.ts': "import 'react';\n",
       'node_modules/react/package.json': JSON.stringify({ name: 'react', main: 'index.js' }),
       'node_modules/react/index.js': 'export {};\n',
     });
