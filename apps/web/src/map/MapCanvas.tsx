@@ -113,9 +113,9 @@ import {
 } from '@transitmapper/map';
 import {
   attachInitialMapReady,
-  publishAcceptedMapStartup,
+  publishDocumentMapStartup,
+  resumeInitialReadyDocument,
   shouldProjectInitialDocument,
-  shouldScheduleInitialReadyDocument,
 } from './initial-map-ready';
 import { attachPerfHarness } from '../perf';
 import {
@@ -447,6 +447,7 @@ export function MapCanvas({
     let activeMapScheme = initialColorScheme;
     let liveRenderer: LiveMapRenderer | null = null;
     let recoverDocumentLayers = (_scheme: ColorScheme, _fullRebuild: boolean) => {};
+    let isDocumentStateRetained = () => false;
     let styleInteractionActive = () => false;
     let handleRuntimeResize = () => {};
     const runtime = createMapRuntime<ColorScheme>({
@@ -458,6 +459,7 @@ export function MapCanvas({
         remoteUrl: basemapStyleForScheme,
         carry: (previous, next, scheme) =>
           carryDocumentStyle(previous, next, editorDocumentLayersForScheme(scheme)),
+        isDocumentStateRetained: () => isDocumentStateRetained(),
         recoverDocumentLayers: (scheme, fullRebuild) => recoverDocumentLayers(scheme, fullRebuild),
         timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
         isInteractionActive: () => styleInteractionActive(),
@@ -856,6 +858,11 @@ export function MapCanvas({
       },
     });
     liveRenderer = renderer;
+    isDocumentStateRetained = () =>
+      renderer.hasAcceptedScene() &&
+      physicalRenderSourceIds([...ALL_SYSTEM_FEATURE_SOURCES, SRC_HIT_FEATURES]).every((sourceId) =>
+        Boolean(map.getSource(sourceId)),
+      );
     editorFeatureState = createEditorFeatureState({
       map,
       renderer,
@@ -914,7 +921,10 @@ export function MapCanvas({
       traceStartup(
         `milestones:${renderer.hasAcceptedScene() ? 'accepted' : 'empty'}:${styleInteractionActive() ? 'busy' : 'idle'}`,
       );
-      publishAcceptedMapStartup({
+      const system = store.getState().system;
+      publishDocumentMapStartup({
+        documentReady: store.getState().documentStatus === 'ready',
+        documentHasContent: systemBounds(system) !== null,
         hasAcceptedScene: renderer.hasAcceptedScene(),
         interactionsAttached: detachInteractions !== null,
         milestones: runtime.milestones,
@@ -1706,8 +1716,16 @@ export function MapCanvas({
     };
     recoverDocumentLayers = (scheme, fullRebuild) => {
       activeMapScheme = scheme;
-      if (fullRebuild) pendingStyleHeal = true;
-      else recoverMapStyle();
+      if (fullRebuild) {
+        pendingStyleHeal = true;
+        // The persistent style.load listener runs before the transition
+        // controller can accept the new scheme. Replace those temporary
+        // old-theme layers before the full source/data recovery.
+        for (const layerId of OWN_LAYER_IDS) {
+          if (map.getLayer(layerId)) map.removeLayer(layerId);
+        }
+      }
+      recoverMapStyle();
     };
 
     attachInitialMapReady(map, () => {
@@ -1745,7 +1763,10 @@ export function MapCanvas({
         };
         map.on('render', initialPaintListener);
       }
-      if (shouldProjectInitialDocument(store.getState().documentStatus)) {
+      if (
+        shouldProjectInitialDocument(store.getState().documentStatus) &&
+        systemBounds(store.getState().system) !== null
+      ) {
         schedulePushData('all');
       }
       scheduleSelectionUpdate();
@@ -1969,6 +1990,9 @@ export function MapCanvas({
         state.documentStatus === 'ready' &&
         lastRenderedSystemId === null;
       if (initialDocumentReady) traceStartup('document-ready');
+      if (initialDocumentReady && systemBounds(state.system) === null) {
+        publishStartupMilestones();
+      }
       const selectionUpdate = planSelectionRenderUpdate(previous, state);
       if (documentChanged && !gestureActive) {
         stopSettlement.invalidate();
@@ -1979,13 +2003,15 @@ export function MapCanvas({
         forceAll: documentChanged,
       });
       const editorSystemRefresh = editorSourcesNeedSystemRefresh(changedSources, documentChanged);
-      scheduleSystemRender({
-        state,
-        previous,
-        documentChanged,
-        initialDocumentReady,
-        changedSources,
-      });
+      if (!(initialDocumentReady && systemBounds(state.system) === null)) {
+        scheduleSystemRender({
+          state,
+          previous,
+          documentChanged,
+          initialDocumentReady,
+          changedSources,
+        });
+      }
       if (
         map.getSource(activeRenderSourceId(SRC_SERVICES)) &&
         (selectionUpdate.updateEditorSources ||
@@ -2060,14 +2086,13 @@ export function MapCanvas({
     // If that ready transition lands between editor setup and subscription,
     // the subscription cannot replay it. The queue coalesces same-frame
     // startup requests, so this cannot produce a second preparation attempt.
-    if (
-      shouldScheduleInitialReadyDocument(
-        store.getState().documentStatus,
-        renderer.hasAcceptedScene(),
-      )
-    ) {
-      schedulePushData('all');
-    }
+    resumeInitialReadyDocument({
+      documentStatus: store.getState().documentStatus,
+      documentHasContent: systemBounds(store.getState().system) !== null,
+      hasAcceptedScene: renderer.hasAcceptedScene(),
+      scheduleProjection: () => schedulePushData('all'),
+      publishStartup: publishStartupMilestones,
+    });
 
     // A leading refresh prepares adjacent tiers; bounded trailing work commits
     // the exact viewport without projecting on every raw camera event.

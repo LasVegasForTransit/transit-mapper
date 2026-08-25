@@ -44,4 +44,26 @@ describe('carryDocumentStyle', () => {
       expect.arrayContaining([expect.objectContaining({ id: 'tm-ways-solid', source: 'tm-ways' })]),
     );
   });
+
+  it('does not install editor layers before their document sources exist', () => {
+    const localLight: StyleSpecification = {
+      version: 8,
+      sources: {},
+      layers: [{ id: 'local-light', type: 'background' }],
+    };
+    const localDark: StyleSpecification = {
+      version: 8,
+      sources: {},
+      layers: [{ id: 'local-dark', type: 'background' }],
+    };
+
+    const carried = carryDocumentStyle(
+      localLight,
+      localDark,
+      editorDocumentLayersForScheme('dark'),
+    );
+
+    expect(carried.sources).toEqual({});
+    expect(carried.layers).toEqual([{ id: 'local-dark', type: 'background' }]);
+  });
 });

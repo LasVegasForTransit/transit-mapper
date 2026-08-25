@@ -17,9 +17,15 @@ export function carryDocumentStyle(
   for (const [id, source] of Object.entries(previous?.sources ?? {})) {
     if (id.startsWith('tm-')) sources[id] = source;
   }
+  const availableDocumentLayers = documentLayers.filter(
+    (layer) => !('source' in layer) || typeof layer.source !== 'string' || layer.source in sources,
+  );
   return {
     ...next,
     sources,
-    layers: [...next.layers.filter((layer) => !layer.id.startsWith('tm-')), ...documentLayers],
+    layers: [
+      ...next.layers.filter((layer) => !layer.id.startsWith('tm-')),
+      ...availableDocumentLayers,
+    ],
   };
 }

@@ -1,5 +1,7 @@
+/* eslint-disable max-lines -- Style lifecycle cases share one asynchronous MapLibre fake. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { StyleSpecification } from 'maplibre-gl';
+import type { ObservableMapStartupMilestones } from '../src/index';
 import {
   createHarness,
   deferred,
@@ -42,6 +44,27 @@ describe('createMapRuntime', () => {
     expect(map.removed).toBe(true);
     expect(map.listeners.get('moveend')?.size ?? 0).toBe(0);
     expect(map.listeners.get('resize')?.size ?? 0).toBe(0);
+  });
+
+  it('settles every public operation without changing state after disposal', async () => {
+    const { runtime, map, observer, fetchStyle, recoverDocumentLayers } = createHarness();
+    const milestones = runtime.milestones as ObservableMapStartupMilestones;
+    const initialPaddingCount = map.paddings.length;
+
+    runtime.dispose();
+    await expect(runtime.requestTheme('dark')).resolves.toBeUndefined();
+    milestones.contentCommitted();
+    milestones.interactive();
+    await expect(runtime.flushTheme()).resolves.toBeUndefined();
+    runtime.refreshPadding();
+    observer.notify();
+
+    expect(milestones.getSnapshot()).toEqual({ contentCommitted: false, interactive: false });
+    expect(fetchStyle).not.toHaveBeenCalled();
+    expect(recoverDocumentLayers).not.toHaveBeenCalled();
+    expect(map.pendingStyle).toBeUndefined();
+    expect(map.paddings).toHaveLength(initialPaddingCount);
+    expect(map.resizeCount).toBe(0);
   });
 
   it('resizes the map and refreshes chrome padding when its container changes', () => {
@@ -104,6 +127,8 @@ describe('createMapRuntime', () => {
     const { runtime, map, fetchStyle, recoverDocumentLayers } = createHarness();
 
     runtime.milestones.contentCommitted();
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(remoteStyle('light')));
+    map.settleStyle();
     await runtime.flushTheme();
 
     expect(fetchStyle).toHaveBeenCalledWith(
@@ -112,6 +137,242 @@ describe('createMapRuntime', () => {
     );
     expect(map.style).toEqual(remoteStyle('light'));
     expect(recoverDocumentLayers).toHaveBeenCalledWith('light', false);
+  });
+
+  it('waits for MapLibre to load a replacement before applying its theme or recovery mode', async () => {
+    const { runtime, map, recoverDocumentLayers } = createHarness();
+
+    runtime.milestones.contentCommitted();
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(remoteStyle('light')));
+
+    expect(map.style).toEqual(localStyle('light'));
+    expect(recoverDocumentLayers).not.toHaveBeenCalled();
+
+    map.settleStyle();
+    await runtime.flushTheme();
+
+    expect(map.style).toEqual(remoteStyle('light'));
+    expect(recoverDocumentLayers).toHaveBeenCalledWith('light', false);
+  });
+
+  it('does not treat an ordinary MapLibre error as a failed style replacement', async () => {
+    const onBaseStyleUnavailable = vi.fn();
+    const recoverDocumentLayers = vi.fn();
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: () => Promise.resolve(remoteStyle('light')),
+        timeoutMs: 1_500,
+        online: () => true,
+        isInteractionActive: () => false,
+        recoverDocumentLayers,
+        onBaseStyleUnavailable,
+      },
+    });
+
+    runtime.milestones.contentCommitted();
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(remoteStyle('light')));
+    map.emit('error', { error: new Error('sprite image is missing') });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(map.pendingStyle).toEqual(remoteStyle('light'));
+    expect(onBaseStyleUnavailable).not.toHaveBeenCalled();
+    expect(recoverDocumentLayers).not.toHaveBeenCalled();
+
+    map.settleStyle();
+    await runtime.flushTheme();
+
+    expect(map.style).toEqual(remoteStyle('light'));
+    expect(recoverDocumentLayers).toHaveBeenCalledWith('light', false);
+  });
+
+  it('restores the last usable style when a replacement never reaches style.load', async () => {
+    vi.useFakeTimers();
+    const onBaseStyleUnavailable = vi.fn();
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: () => Promise.resolve(remoteStyle('light')),
+        timeoutMs: 250,
+        online: () => true,
+        isInteractionActive: () => false,
+        onBaseStyleUnavailable,
+      },
+    });
+
+    runtime.milestones.contentCommitted();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(map.pendingStyle).toEqual(remoteStyle('light'));
+
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(map.pendingStyle).toEqual(localStyle('light'));
+    expect(onBaseStyleUnavailable).toHaveBeenCalledOnce();
+
+    map.settleStyle();
+    await runtime.flushTheme();
+    expect(map.style).toEqual(localStyle('light'));
+  });
+
+  it('restores the last usable remote style when a later replacement never loads', async () => {
+    vi.useFakeTimers();
+    const onBaseStyleUnavailable = vi.fn();
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: (url) => Promise.resolve(remoteStyle(url.includes('/dark.json') ? 'dark' : 'light')),
+        timeoutMs: 250,
+        online: () => true,
+        isInteractionActive: () => false,
+        onBaseStyleUnavailable,
+      },
+    });
+
+    runtime.milestones.contentCommitted();
+    await vi.advanceTimersByTimeAsync(0);
+    map.settleStyle();
+    await runtime.flushTheme();
+
+    const darkRequest = runtime.requestTheme('dark');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(map.pendingStyle).toEqual(remoteStyle('dark'));
+    map.failStyle(new Error('dark style failed'));
+    await vi.advanceTimersByTimeAsync(250);
+    expect(map.pendingStyle).toEqual(remoteStyle('light'));
+    map.settleStyle();
+    await darkRequest;
+
+    expect(map.style).toEqual(remoteStyle('light'));
+    expect(onBaseStyleUnavailable).toHaveBeenCalledOnce();
+  });
+
+  it('lets only the current transition settle from a later style.load event', async () => {
+    const recoverDocumentLayers = vi.fn();
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: (url) => Promise.resolve(remoteStyle(url.includes('/dark.json') ? 'dark' : 'light')),
+        timeoutMs: 1_500,
+        online: () => true,
+        isInteractionActive: () => false,
+        recoverDocumentLayers,
+        onBaseStyleUnavailable: vi.fn(),
+      },
+    });
+
+    runtime.milestones.contentCommitted();
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(remoteStyle('light')));
+    const current = runtime.requestTheme('dark');
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(remoteStyle('dark')));
+
+    map.emit('style.load');
+    await Promise.resolve();
+    expect(recoverDocumentLayers).not.toHaveBeenCalled();
+
+    map.settleStyle();
+    await current;
+
+    expect(map.style).toEqual(remoteStyle('dark'));
+    expect(recoverDocumentLayers.mock.calls).toEqual([['dark', false]]);
+  });
+
+  it('never records an unsettled replacement as the rollback style', async () => {
+    vi.useFakeTimers();
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: (url) => Promise.resolve(remoteStyle(url.includes('/dark.json') ? 'dark' : 'light')),
+        timeoutMs: 250,
+        online: () => true,
+        isInteractionActive: () => false,
+        onBaseStyleUnavailable: vi.fn(),
+      },
+    });
+
+    runtime.milestones.contentCommitted();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(map.pendingStyle).toEqual(remoteStyle('light'));
+    map.style = remoteStyle('unsettled-light');
+
+    const current = runtime.requestTheme('dark');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(map.pendingStyle).toEqual(remoteStyle('dark'));
+    map.failStyle(new Error('dark style failed'));
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(map.pendingStyle).toEqual(localStyle('light'));
+    map.settleStyle();
+    await current;
+    expect(map.style).toEqual(localStyle('light'));
+  });
+
+  it('reports a full recovery only after MapLibre settles without the carried document state', async () => {
+    const recoverDocumentLayers = vi.fn();
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: () => Promise.resolve(remoteStyle('light')),
+        carry: (_previous, next) => ({
+          ...next,
+          sources: {
+            ...next.sources,
+            'tm-stations': {
+              type: 'geojson',
+              data: { type: 'FeatureCollection', features: [] },
+            },
+          },
+        }),
+        isDocumentStateRetained: () => false,
+        recoverDocumentLayers,
+        timeoutMs: 1_500,
+        online: () => true,
+        isInteractionActive: () => false,
+        onBaseStyleUnavailable: vi.fn(),
+      },
+    });
+
+    runtime.milestones.contentCommitted();
+    await vi.waitFor(() => expect(map.pendingStyle).toBeDefined());
+    map.settleStyle({ rebuilt: true });
+    await runtime.flushTheme();
+
+    expect(map.style.sources).not.toHaveProperty('tm-stations');
+    expect(recoverDocumentLayers).toHaveBeenCalledWith('light', true);
+  });
+
+  it('restores the local bootstrap after the initial remote replacement fails asynchronously', async () => {
+    vi.useFakeTimers();
+    const onBaseStyleUnavailable = vi.fn();
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: () => Promise.resolve(remoteStyle('light')),
+        timeoutMs: 250,
+        online: () => true,
+        isInteractionActive: () => false,
+        onBaseStyleUnavailable,
+      },
+    });
+
+    runtime.milestones.contentCommitted();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(map.pendingStyle).toEqual(remoteStyle('light'));
+    map.failStyle(new Error('style source failed'));
+    await vi.advanceTimersByTimeAsync(250);
+    expect(map.pendingStyle).toEqual(localStyle('light'));
+    map.settleStyle();
+    await runtime.flushTheme();
+
+    expect(map.style).toEqual(localStyle('light'));
+    expect(onBaseStyleUnavailable).toHaveBeenCalledOnce();
   });
 
   it('defers a theme request until content commits', async () => {
@@ -130,12 +391,17 @@ describe('createMapRuntime', () => {
       },
     });
 
-    await runtime.requestTheme('dark');
+    const localRequest = runtime.requestTheme('dark');
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(localStyle('dark')));
+    map.settleStyle();
+    await localRequest;
 
     expect(fetchStyle).not.toHaveBeenCalled();
     expect(map.style).toEqual(localStyle('dark'));
 
     runtime.milestones.contentCommitted();
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(remoteStyle('dark')));
+    map.settleStyle();
     await runtime.flushTheme();
 
     expect(fetchStyle).toHaveBeenCalledWith(
@@ -143,6 +409,39 @@ describe('createMapRuntime', () => {
       expect.any(AbortSignal),
     );
     expect(map.style).toEqual(remoteStyle('dark'));
+  });
+
+  it('changes the pre-content bootstrap without document carry or recovery', async () => {
+    const carry = vi.fn(
+      (_previous: StyleSpecification | undefined, next: StyleSpecification) => next,
+    );
+    const recoverDocumentLayers = vi.fn();
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: () => Promise.resolve(remoteStyle('dark')),
+        carry,
+        recoverDocumentLayers,
+        timeoutMs: 1_500,
+        online: () => true,
+        isInteractionActive: () => false,
+        onBaseStyleUnavailable: vi.fn(),
+      },
+    });
+
+    const request = runtime.requestTheme('dark');
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(localStyle('dark')));
+
+    expect(carry).not.toHaveBeenCalled();
+    expect(recoverDocumentLayers).not.toHaveBeenCalled();
+
+    map.settleStyle();
+    await request;
+
+    expect(map.style).toEqual(localStyle('dark'));
+    expect(carry).not.toHaveBeenCalled();
+    expect(recoverDocumentLayers).not.toHaveBeenCalled();
   });
 
   it('keeps the local grid without requesting a style while offline', async () => {
@@ -229,6 +528,37 @@ describe('createMapRuntime', () => {
     expect(map.style).toEqual(localStyle('light'));
   });
 
+  it('ignores a rejected reachability probe after disposal without an unhandled rejection', async () => {
+    vi.useFakeTimers();
+    const pendingStyle = deferred<StyleSpecification>();
+    const pendingProbe = deferred<boolean>();
+    const onBaseStyleUnavailable = vi.fn();
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: () => pendingStyle.promise,
+        probe: () => pendingProbe.promise,
+        timeoutMs: 250,
+        online: () => true,
+        isInteractionActive: () => false,
+        onBaseStyleUnavailable,
+      },
+    });
+
+    runtime.milestones.contentCommitted();
+    await vi.advanceTimersByTimeAsync(250);
+    runtime.dispose();
+    pendingProbe.reject(new Error('probe failed'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    await expect(runtime.requestTheme('dark')).resolves.toBeUndefined();
+    await expect(runtime.flushTheme()).resolves.toBeUndefined();
+    expect(map.pendingStyle).toBeUndefined();
+    expect(onBaseStyleUnavailable).not.toHaveBeenCalled();
+  });
+
   it('reports an unavailable base style and preserves the local grid', async () => {
     const fetchStyle = vi.fn(() => Promise.reject(new Error('unavailable')));
     const reportError = vi.fn();
@@ -282,39 +612,12 @@ describe('createMapRuntime', () => {
     const stale = runtime.flushTheme();
     const current = runtime.requestTheme('dark');
     second.resolve(remoteStyle('dark'));
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(remoteStyle('dark')));
+    map.settleStyle();
     await Promise.all([stale, current]);
 
     expect(map.style).toEqual(remoteStyle('dark'));
     expect(map.styles).not.toContainEqual(remoteStyle('light'));
-  });
-
-  it('preserves the accepted scene and invokes full recovery when diffing fails', async () => {
-    const carry = vi.fn((_previous: StyleSpecification | undefined, next: StyleSpecification) => ({
-      ...next,
-      metadata: { acceptedScene: true },
-    }));
-    const recoverDocumentLayers = vi.fn();
-    const { runtime, map } = createHarness({
-      style: {
-        local: localStyle,
-        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
-        fetch: () => Promise.resolve(remoteStyle('light')),
-        carry,
-        recoverDocumentLayers,
-        timeoutMs: 1_500,
-        online: () => true,
-        isInteractionActive: () => false,
-        onBaseStyleUnavailable: vi.fn(),
-      },
-    });
-    map.failDifferentialStyle = true;
-
-    runtime.milestones.contentCommitted();
-    await runtime.flushTheme();
-
-    expect(carry).toHaveBeenCalledOnce();
-    expect(map.style.metadata).toEqual({ acceptedScene: true });
-    expect(recoverDocumentLayers).toHaveBeenCalledWith('light', true);
   });
 
   it('carries the current runtime style when MapLibre omits it from the transform callback', async () => {
@@ -345,6 +648,8 @@ describe('createMapRuntime', () => {
     map.omitTransformPrevious = true;
 
     runtime.milestones.contentCommitted();
+    await vi.waitFor(() => expect(map.pendingStyle).toBeDefined());
+    map.settleStyle();
     await runtime.flushTheme();
 
     expect(map.style.sources).toHaveProperty('tm-stations');

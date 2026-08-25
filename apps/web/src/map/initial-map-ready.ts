@@ -23,7 +23,29 @@ export function shouldScheduleInitialReadyDocument(
   return documentStatus === 'ready' && !hasRenderedSystem;
 }
 
-interface PublishAcceptedMapStartupOptions {
+interface ResumeInitialReadyDocumentOptions {
+  documentStatus: DocumentStatus;
+  documentHasContent: boolean;
+  hasAcceptedScene: boolean;
+  scheduleProjection(): void;
+  publishStartup(): void;
+}
+
+/** Catch up the document transition when it completed before the map installed
+ * its store subscription. Empty documents have no projection to schedule, but
+ * they still release the remote base-style request. */
+export function resumeInitialReadyDocument(options: ResumeInitialReadyDocumentOptions): void {
+  if (!shouldScheduleInitialReadyDocument(options.documentStatus, options.hasAcceptedScene)) return;
+  if (options.documentHasContent) {
+    options.scheduleProjection();
+    return;
+  }
+  options.publishStartup();
+}
+
+interface PublishDocumentMapStartupOptions {
+  documentReady: boolean;
+  documentHasContent: boolean;
   hasAcceptedScene: boolean;
   interactionsAttached: boolean;
   milestones: MapStartupMilestones;
@@ -33,8 +55,12 @@ interface PublishAcceptedMapStartupOptions {
 /** An accepted scene can settle through an empty follow-up batch. Publish the
  * startup state from both paths so a style request deferred during renderer
  * publication does not remain queued until the next editor gesture. */
-export function publishAcceptedMapStartup(options: PublishAcceptedMapStartupOptions): void {
-  if (!options.hasAcceptedScene) return;
+export function publishDocumentMapStartup(options: PublishDocumentMapStartupOptions): void {
+  if (!options.documentReady) return;
+  // An empty document has no renderer scene to wait for. Its installed empty
+  // overlay is already the complete document state, so blocking the base map
+  // on an accepted source bank leaves a new user's map on the bootstrap grid.
+  if (options.documentHasContent && !options.hasAcceptedScene) return;
   options.milestones.contentCommitted();
   if (options.interactionsAttached) options.milestones.interactive();
   options.flushTheme();

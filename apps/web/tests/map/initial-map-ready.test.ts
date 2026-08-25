@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   attachInitialMapReady,
-  publishAcceptedMapStartup,
+  publishDocumentMapStartup,
+  resumeInitialReadyDocument,
   shouldScheduleInitialReadyDocument,
   shouldProjectInitialDocument,
 } from '../../src/map/initial-map-ready';
@@ -64,7 +65,9 @@ describe('initial map readiness', () => {
     const interactive = vi.fn();
     const flushTheme = vi.fn();
 
-    publishAcceptedMapStartup({
+    publishDocumentMapStartup({
+      documentReady: true,
+      documentHasContent: true,
       hasAcceptedScene: true,
       interactionsAttached: true,
       milestones: { contentCommitted, interactive },
@@ -74,6 +77,46 @@ describe('initial map readiness', () => {
     expect(contentCommitted).toHaveBeenCalledOnce();
     expect(interactive).toHaveBeenCalledOnce();
     expect(flushTheme).toHaveBeenCalledOnce();
+  });
+
+  it('requests the remote style for the production empty document', () => {
+    const remoteUrl = 'https://tiles.openfreemap.org/styles/liberty';
+    const requestRemoteStyle = vi.fn();
+
+    publishDocumentMapStartup({
+      documentReady: true,
+      documentHasContent: false,
+      hasAcceptedScene: false,
+      interactionsAttached: true,
+      milestones: {
+        contentCommitted: () => {
+          requestRemoteStyle(remoteUrl);
+        },
+        interactive: vi.fn(),
+      },
+      flushTheme: vi.fn(),
+    });
+
+    expect(requestRemoteStyle).toHaveBeenCalledWith(remoteUrl);
+  });
+
+  it('requests the remote style when an empty document was ready before subscription', () => {
+    const remoteUrl = 'https://tiles.openfreemap.org/styles/liberty';
+    const requestRemoteStyle = vi.fn();
+    const scheduleProjection = vi.fn();
+
+    resumeInitialReadyDocument({
+      documentStatus: 'ready',
+      documentHasContent: false,
+      hasAcceptedScene: false,
+      scheduleProjection,
+      publishStartup: () => {
+        requestRemoteStyle(remoteUrl);
+      },
+    });
+
+    expect(scheduleProjection).not.toHaveBeenCalled();
+    expect(requestRemoteStyle).toHaveBeenCalledWith(remoteUrl);
   });
 
   it('starts the editor when the fallback style becomes usable', () => {

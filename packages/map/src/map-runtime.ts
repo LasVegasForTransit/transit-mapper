@@ -11,7 +11,11 @@ import maplibregl, {
 import type { MapRuntimeHost } from './map-driver';
 import type { MapViewStore } from './map-view-store';
 import { createBaseStyleController } from './base-style-controller';
-import { createMapStartupMilestones, type MapStartupMilestones } from './startup-milestones';
+import {
+  createMapStartupMilestones,
+  type MapStartupMilestones,
+  type ObservableMapStartupMilestones,
+} from './startup-milestones';
 
 export const INITIAL_STYLE_FALLBACK_TIMEOUT_MS = 1_500;
 
@@ -54,6 +58,7 @@ export interface MapRuntimeStyleOptions<ThemeId extends string> {
     next: StyleSpecification,
     theme: ThemeId,
   ) => StyleSpecification;
+  isDocumentStateRetained?: () => boolean;
   recoverDocumentLayers?: (theme: ThemeId, fullRebuild: boolean) => void;
   timeoutMs: number;
   online?: () => boolean;
@@ -224,29 +229,46 @@ export function createMapRuntime<ThemeId extends string>(
     ...options.style,
     map,
     initialTheme: options.initialTheme,
+    initialStyle: 'local',
     onUnavailable: (error) => options.style.onBaseStyleUnavailable(error),
   });
   let currentThemeRequest: Promise<void> = Promise.resolve();
   let desiredTheme = options.initialTheme;
   let contentCommitted = false;
+  let disposed = false;
   const startThemeRequest = (theme: ThemeId) => {
     currentThemeRequest = styleController.request(theme);
     return currentThemeRequest;
   };
   const requestTheme = (theme: ThemeId) => {
+    if (disposed) return Promise.resolve();
     desiredTheme = theme;
     if (contentCommitted) return startThemeRequest(theme);
-    styleController.selectLocal(theme);
-    return Promise.resolve();
+    return styleController.selectLocal(theme);
   };
-  const milestones = createMapStartupMilestones({
+  const startupMilestones = createMapStartupMilestones({
     onContentCommitted: () => {
+      if (disposed) return;
       contentCommitted = true;
       void startThemeRequest(desiredTheme);
     },
   });
-  const host: MapRuntimeHost = { map, reportError: (error) => options.reportError(error) };
-  let disposed = false;
+  const milestones: ObservableMapStartupMilestones = {
+    contentCommitted: () => {
+      if (!disposed) startupMilestones.contentCommitted();
+    },
+    interactive: () => {
+      if (!disposed) startupMilestones.interactive();
+    },
+    getSnapshot: () => startupMilestones.getSnapshot(),
+    subscribe: (listener) => (disposed ? () => {} : startupMilestones.subscribe(listener)),
+  };
+  const host: MapRuntimeHost = {
+    map,
+    reportError: (error) => {
+      if (!disposed) options.reportError(error);
+    },
+  };
 
   return {
     host,
@@ -254,10 +276,13 @@ export function createMapRuntime<ThemeId extends string>(
     milestones,
     requestTheme,
     async flushTheme() {
+      if (disposed) return;
       await currentThemeRequest;
       await styleController.flush();
     },
-    refreshPadding: () => resize.refreshPadding(),
+    refreshPadding: () => {
+      if (!disposed) resize.refreshPadding();
+    },
     dispose() {
       if (disposed) return;
       disposed = true;

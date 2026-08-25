@@ -15,7 +15,28 @@ import {
   type MapRuntimeResizeObserver,
 } from '../../src/index';
 
-type MapEvent = 'moveend' | 'resize';
+type MapEvent = 'moveend' | 'resize' | 'style.load' | 'error';
+
+const STYLE_TRANSITION_METADATA_KEY = 'transitmapper:base-style-transition';
+
+function publicStyle(style: StyleSpecification | undefined): StyleSpecification | undefined {
+  if (!style) return undefined;
+  const styleMetadata =
+    style.metadata !== null && typeof style.metadata === 'object' && !Array.isArray(style.metadata)
+      ? (style.metadata as Record<string, unknown>)
+      : undefined;
+  if (!styleMetadata || !(STYLE_TRANSITION_METADATA_KEY in styleMetadata)) return style;
+  const metadata = Object.fromEntries(
+    Object.entries(styleMetadata).filter(([key]) => key !== STYLE_TRANSITION_METADATA_KEY),
+  );
+  if (Object.keys(metadata).length > 0) return { ...style, metadata };
+  const { metadata: _metadata, ...styleWithoutMetadata } = style;
+  return styleWithoutMetadata;
+}
+
+interface MapEventPayload {
+  error?: unknown;
+}
 
 interface RotationHandler {
   disableRotation: () => void;
@@ -34,7 +55,7 @@ export const remoteStyle = (theme: string): StyleSpecification => ({
 });
 
 export class FakeMap {
-  readonly listeners = new Map<MapEvent, Set<() => void>>();
+  readonly listeners = new Map<MapEvent, Set<(event: MapEventPayload) => void>>();
   readonly controls: Array<{ control: IControl; position?: ControlPosition }> = [];
   readonly paddings: PaddingOptions[] = [];
   readonly styles: StyleSpecification[] = [];
@@ -43,33 +64,50 @@ export class FakeMap {
   resizeCount = 0;
   center: [number, number];
   zoom: number;
-  style: StyleSpecification;
-  failDifferentialStyle = false;
-  failFullStyle = false;
+  private styleState: StyleSpecification;
+  private pendingStyleState: StyleSpecification | undefined;
+  private pendingIncomingStyleState: StyleSpecification | undefined;
   omitTransformPrevious = false;
+  diffStyleBehavior: 'synchronous' | 'rebuild' = 'rebuild';
   readonly touchZoomRotate: RotationHandler = { disableRotation: vi.fn() };
 
   constructor(readonly options: MapOptions) {
     this.center = options.center as [number, number];
     this.zoom = options.zoom ?? 0;
-    this.style = options.style as StyleSpecification;
-    this.styles.push(this.style);
+    this.styleState = options.style as StyleSpecification;
+    this.styles.push(this.styleState);
   }
 
-  on(event: MapEvent, listener: () => void): this {
+  get style(): StyleSpecification {
+    return publicStyle(this.styleState) ?? this.styleState;
+  }
+
+  set style(style: StyleSpecification) {
+    this.styleState = style;
+  }
+
+  get pendingStyle(): StyleSpecification | undefined {
+    return publicStyle(this.pendingStyleState);
+  }
+
+  get pendingIncomingStyle(): StyleSpecification | undefined {
+    return publicStyle(this.pendingIncomingStyleState);
+  }
+
+  on(event: MapEvent, listener: (event: MapEventPayload) => void): this {
     const listeners = this.listeners.get(event) ?? new Set();
     listeners.add(listener);
     this.listeners.set(event, listeners);
     return this;
   }
 
-  off(event: MapEvent, listener: () => void): this {
+  off(event: MapEvent, listener: (event: MapEventPayload) => void): this {
     this.listeners.get(event)?.delete(listener);
     return this;
   }
 
-  emit(event: MapEvent): void {
-    for (const listener of this.listeners.get(event) ?? []) listener();
+  emit(event: MapEvent, payload: MapEventPayload = {}): void {
+    for (const listener of [...(this.listeners.get(event) ?? [])]) listener(payload);
   }
 
   addControl(control: IControl, position?: ControlPosition): this {
@@ -99,7 +137,7 @@ export class FakeMap {
   }
 
   getStyle(): StyleSpecification {
-    return this.style;
+    return this.styleState;
   }
 
   setStyle(
@@ -112,15 +150,36 @@ export class FakeMap {
       ) => StyleSpecification;
     },
   ): this {
-    if (options?.diff && this.failDifferentialStyle) {
-      this.failDifferentialStyle = false;
-      throw new Error('diff failed');
+    this.pendingIncomingStyleState = next;
+    this.pendingStyleState =
+      options?.transformStyle?.(this.omitTransformPrevious ? undefined : this.styleState, next) ??
+      next;
+    if (options?.diff === true && this.diffStyleBehavior === 'synchronous') {
+      this.styleState = this.pendingStyleState;
+      this.pendingStyleState = undefined;
+      this.pendingIncomingStyleState = undefined;
+      this.styles.push(this.styleState);
     }
-    if (options?.diff === false && this.failFullStyle) throw new Error('full failed');
-    this.style =
-      options?.transformStyle?.(this.omitTransformPrevious ? undefined : this.style, next) ?? next;
-    this.styles.push(this.style);
     return this;
+  }
+
+  settleStyle(options: { rebuilt?: boolean } = {}): void {
+    if (!this.pendingStyleState || !this.pendingIncomingStyleState) {
+      throw new Error('No style transition is pending.');
+    }
+    this.styleState = options.rebuilt ? this.pendingIncomingStyleState : this.pendingStyleState;
+    this.pendingStyleState = undefined;
+    this.pendingIncomingStyleState = undefined;
+    this.styles.push(this.styleState);
+    this.emit('style.load');
+  }
+
+  failStyle(error: unknown = new Error('style failed')): void {
+    if (!this.pendingStyleState) throw new Error('No style transition is pending.');
+    this.styleState = this.pendingStyleState;
+    this.pendingStyleState = undefined;
+    this.pendingIncomingStyleState = undefined;
+    this.emit('error', { error });
   }
 
   resize(): this {
@@ -149,7 +208,7 @@ export class FakeResizeObserver implements MapRuntimeResizeObserver {
   }
 
   notify(): void {
-    this.listener();
+    if (!this.disconnected) this.listener();
   }
 }
 

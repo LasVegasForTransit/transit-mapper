@@ -1,6 +1,6 @@
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { createBaseStyleController, INITIAL_STYLE_FALLBACK_TIMEOUT_MS } from '@transitmapper/map';
+import { INITIAL_STYLE_FALLBACK_TIMEOUT_MS } from '@transitmapper/map';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
 import { buildFeatures, type ViewOptions } from '@transitmapper/core/render/buildFeatures';
@@ -25,6 +25,7 @@ import { basemapStyleForScheme, localBlankStyleForScheme } from '../map/mapTheme
 import { renderPresentationForFittedMap } from '../map/static-render-features';
 import { carryDocumentStyle } from '../map/document-style-carry';
 import type { EmbedMapRuntimeOptions } from './embed-bootstrap';
+import { createEmbedStyleController } from './embed-style-controller';
 
 const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
 
@@ -221,18 +222,25 @@ export async function startEmbedMap(options: EmbedMapRuntimeOptions): Promise<vo
     updateEmbedLabels(options.id, system);
     await drawSystem({ map, features, scheme: initialScheme, runtime: options });
     let activeScheme = initialScheme;
-    const styleSwitcher = createBaseStyleController({
+    const styleSwitcher = createEmbedStyleController({
       map,
       initialTheme: initialScheme,
       local: localBlankStyleForScheme,
       remoteUrl: basemapStyleForScheme,
       carry: (previous, next, scheme) =>
         carryDocumentStyle(previous, next, embedLayerSpecsForScheme(scheme)),
+      isDocumentStateRetained: () =>
+        [...EMBED_SOURCE_IDS].every((sourceId) => Boolean(map.getSource(sourceId))),
       timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
       isInteractionActive: () => false,
       recoverDocumentLayers: (scheme, fullRebuild) => {
         activeScheme = scheme;
-        if (!fullRebuild) restoreEmbedOverlay(map, features, scheme);
+        if (fullRebuild) {
+          for (const layer of [...embedLayerSpecsForScheme(scheme)].reverse()) {
+            if (map.getLayer(layer.id)) map.removeLayer(layer.id);
+          }
+        }
+        restoreEmbedOverlay(map, features, scheme);
       },
       onUnavailable: (error) => console.error('[transitmapper embed]', error),
     });
