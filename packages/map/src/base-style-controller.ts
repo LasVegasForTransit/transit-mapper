@@ -21,6 +21,7 @@ export interface BaseStyleControllerOptions<ThemeId extends string> {
     theme: ThemeId,
   ) => StyleSpecification;
   isDocumentStateRetained?: () => boolean;
+  onThemeApplied?: (theme: ThemeId) => void;
   recoverDocumentLayers?: (theme: ThemeId, fullRebuild: boolean) => void;
   timeoutMs: number;
   online?: () => boolean;
@@ -256,6 +257,7 @@ class BaseStyleControllerImplementation<
     this.appliedRemoteTheme = undefined;
     this.lastUsableTheme = theme;
     this.lastUsableStyle = this.options.map.getStyle();
+    this.options.onThemeApplied?.(theme);
   }
 
   private async commit(
@@ -285,6 +287,7 @@ class BaseStyleControllerImplementation<
     const fullRebuild =
       result.fullRebuild ||
       (this.options.isDocumentStateRetained ? !this.options.isDocumentStateRetained() : false);
+    this.options.onThemeApplied?.(theme);
     this.options.recoverDocumentLayers?.(theme, fullRebuild);
     return true;
   }
@@ -356,6 +359,7 @@ class BaseStyleControllerImplementation<
       requestGeneration,
     );
     if (result.kind !== 'loaded') return;
+    this.options.onThemeApplied?.(this.lastUsableTheme);
     this.options.recoverDocumentLayers?.(this.lastUsableTheme, true);
   }
 

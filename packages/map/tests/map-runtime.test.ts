@@ -220,11 +220,14 @@ describe('createMapRuntime', () => {
   it('restores the last usable remote style when a later replacement never loads', async () => {
     vi.useFakeTimers();
     const onBaseStyleUnavailable = vi.fn();
+    const events: string[] = [];
     const { runtime, map } = createHarness({
       style: {
         local: localStyle,
         remoteUrl: (theme) => `https://styles.test/${theme}.json`,
         fetch: (url) => Promise.resolve(remoteStyle(url.includes('/dark.json') ? 'dark' : 'light')),
+        onThemeApplied: (theme) => events.push(`theme:${theme}`),
+        recoverDocumentLayers: (theme) => events.push(`recovery:${theme}`),
         timeoutMs: 250,
         online: () => true,
         isInteractionActive: () => false,
@@ -248,6 +251,7 @@ describe('createMapRuntime', () => {
 
     expect(map.style).toEqual(remoteStyle('light'));
     expect(onBaseStyleUnavailable).toHaveBeenCalledOnce();
+    expect(events).toEqual(['theme:light', 'recovery:light', 'theme:light', 'recovery:light']);
   });
 
   it('lets only the current transition settle from a later style.load event', async () => {
@@ -462,6 +466,61 @@ describe('createMapRuntime', () => {
       expect.any(AbortSignal),
     );
     expect(map.style).toEqual(remoteStyle('dark'));
+  });
+
+  it('reports a pre-content local theme without recovering document layers', async () => {
+    const events: string[] = [];
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: () => Promise.resolve(remoteStyle('dark')),
+        onThemeApplied: (theme) => events.push(`theme:${theme}`),
+        recoverDocumentLayers: (theme) => events.push(`recovery:${theme}`),
+        timeoutMs: 1_500,
+        online: () => true,
+        isInteractionActive: () => false,
+        onBaseStyleUnavailable: vi.fn(),
+      },
+    });
+
+    const request = runtime.requestTheme('dark');
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(localStyle('dark')));
+    map.settleStyle();
+    await request;
+
+    expect(events).toEqual(['theme:dark']);
+  });
+
+  it('keeps the applied host theme when content commits offline', async () => {
+    let appliedTheme = 'light';
+    const fetchStyle = vi.fn();
+    const { runtime, map } = createHarness({
+      style: {
+        local: localStyle,
+        remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+        fetch: fetchStyle,
+        onThemeApplied: (theme) => {
+          appliedTheme = theme;
+        },
+        timeoutMs: 1_500,
+        online: () => false,
+        isInteractionActive: () => false,
+        onBaseStyleUnavailable: vi.fn(),
+      },
+    });
+
+    const localRequest = runtime.requestTheme('dark');
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(localStyle('dark')));
+    map.settleStyle();
+    await localRequest;
+
+    runtime.milestones.contentCommitted();
+    await runtime.flushTheme();
+
+    expect(appliedTheme).toBe('dark');
+    expect(map.style).toEqual(localStyle('dark'));
+    expect(fetchStyle).not.toHaveBeenCalled();
   });
 
   it('carries no document layer into a pre-content theme before its source exists', async () => {

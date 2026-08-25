@@ -454,6 +454,7 @@ export function MapCanvas({
 
     let activeMapScheme = initialColorScheme;
     let liveRenderer: LiveMapRenderer | null = null;
+    let applyMapTheme = (_scheme: ColorScheme) => {};
     let recoverDocumentLayers = (_scheme: ColorScheme, _fullRebuild: boolean) => {};
     let isDocumentStateRetained = () => false;
     let styleInteractionActive = () => false;
@@ -468,6 +469,7 @@ export function MapCanvas({
         carry: (previous, next, scheme) =>
           carryDocumentStyle(previous, next, editorDocumentLayersForScheme(scheme)),
         isDocumentStateRetained: () => isDocumentStateRetained(),
+        onThemeApplied: (scheme) => applyMapTheme(scheme),
         recoverDocumentLayers: (scheme, fullRebuild) => recoverDocumentLayers(scheme, fullRebuild),
         timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
         isInteractionActive: () => styleInteractionActive(),
@@ -495,6 +497,10 @@ export function MapCanvas({
       onResize: () => handleRuntimeResize(),
     });
     const map = runtime.map;
+    applyMapTheme = (scheme) => {
+      activeMapScheme = scheme;
+      registerMapIcons(map, scheme);
+    };
     mapRuntimeRef.current = runtime;
     setMap(map);
     const startupTrace: string[] = [];
@@ -1723,8 +1729,7 @@ export function MapCanvas({
         state.routeDraft !== null
       );
     };
-    recoverDocumentLayers = (scheme, fullRebuild) => {
-      activeMapScheme = scheme;
+    recoverDocumentLayers = (_scheme, fullRebuild) => {
       if (fullRebuild) {
         pendingStyleHeal = true;
         // The persistent style.load listener runs before the transition

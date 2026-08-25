@@ -230,10 +230,12 @@ export async function startEmbedMap(options: EmbedMapRuntimeOptions): Promise<vo
       carry: (previous, next, scheme) =>
         carryDocumentStyle(previous, next, embedLayerSpecsForScheme(scheme)),
       isDocumentStateRetained: () => embedOverlayIsRetained(map.getStyle(), activeScheme),
+      onThemeApplied: (scheme) => {
+        activeScheme = scheme;
+      },
       timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
       isInteractionActive: () => false,
       recoverDocumentLayers: (scheme, fullRebuild) => {
-        activeScheme = scheme;
         if (fullRebuild) {
           for (const layer of [...embedLayerSpecsForScheme(scheme)].reverse()) {
             if (map.getLayer(layer.id)) map.removeLayer(layer.id);

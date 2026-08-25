@@ -59,6 +59,7 @@ export interface MapRuntimeStyleOptions<ThemeId extends string> {
     theme: ThemeId,
   ) => StyleSpecification;
   isDocumentStateRetained?: () => boolean;
+  onThemeApplied?: (theme: ThemeId) => void;
   recoverDocumentLayers?: (theme: ThemeId, fullRebuild: boolean) => void;
   timeoutMs: number;
   online?: () => boolean;
