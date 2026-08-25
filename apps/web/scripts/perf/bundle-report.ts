@@ -91,7 +91,6 @@ export const PRODUCTION_WORKER_BOUNDARIES = [
   { identity: 'osm-import-worker', outputFilePrefix: 'osm-import-worker' },
   { identity: 'previewWorkerEntry', outputFilePrefix: 'previewWorkerEntry' },
   { identity: 'svgWorkerEntry', outputFilePrefix: 'svgWorkerEntry' },
-  { identity: 'storageSerializerWorker', outputFilePrefix: 'storageSerializerWorker' },
   {
     identity: 'storage-deserializer-worker',
     outputFilePrefix: 'storage-deserializer-worker',

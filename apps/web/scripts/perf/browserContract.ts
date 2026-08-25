@@ -18,7 +18,6 @@ export const PERF_STORAGE_CONTRACT = {
   databaseVersion: 1,
   documentStore: INDEXED_DB_DOCUMENT_STORE,
   libraryStore: INDEXED_DB_INDEX_STORE,
-  serializerWorkerName: 'transitmapper-storage-serializer',
   activeIdKey: 'transitmapper:activeId',
   onboardingSeenKey: 'transitmapper:onboardingSeen',
   indexedDbHistoryKey: 'transitmapper:indexedDbLibrary',
@@ -34,8 +33,8 @@ export interface BrowserMetricState {
 }
 
 export interface BrowserProductionPersistenceCycle {
-  workerStartedAt: number;
-  workerCompletedAt: number | null;
+  serializationStartedAt: number;
+  serializationCompletedAt: number | null;
   indexedDbStartedAt: number | null;
   indexedDbCompletedAt: number | null;
 }

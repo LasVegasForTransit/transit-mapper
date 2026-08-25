@@ -54,7 +54,6 @@ const productionWorkerIdentities = [
   'osm-import-worker',
   'previewWorkerEntry',
   'svgWorkerEntry',
-  'storageSerializerWorker',
   'storage-deserializer-worker',
 ] as const;
 
@@ -331,7 +330,7 @@ describe('bundle report delivery graphs', () => {
     );
   });
 
-  it('reports the nine production Worker boundaries by source-output identity', () => {
+  it('reports every declared production Worker boundary by source-output identity', () => {
     const workerReferences = productionWorkerIdentities.map(
       (identity) =>
         `new Worker(new URL("/assets/${identity}-abcdefgh.js",import.meta.url),` +
@@ -349,7 +348,7 @@ describe('bundle report delivery graphs', () => {
     expect(graphs.workers.boundaries.map((boundary) => boundary.identity).sort()).toEqual(
       [...productionWorkerIdentities].sort(),
     );
-    expect(graphs.workers.boundaries).toHaveLength(9);
+    expect(graphs.workers.boundaries).toHaveLength(productionWorkerIdentities.length);
   });
 
   it('fails explicitly when a production Worker uses unsupported equivalent syntax', () => {

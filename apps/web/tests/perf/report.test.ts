@@ -210,7 +210,7 @@ describe('performance reports', () => {
       const measured = sample(run, 10);
       measured.persistence.production = {
         saveMs: 450 + run,
-        workerSerializationMs: 10 + run,
+        serializationMs: 10 + run,
         indexedDbWriteMs: 2 + run,
       };
       return measured;
@@ -225,7 +225,7 @@ describe('performance reports', () => {
 
     expect(report.scenarios[0].persistence.productionSampleCount).toBe(5);
     expect(report.scenarios[0].persistence.productionSaveMs.median).toBe(453);
-    expect(report.scenarios[0].persistence.productionWorkerSerializationMs.p95).toBe(15);
+    expect(report.scenarios[0].persistence.productionSerializationMs.p95).toBe(15);
     expect(report.scenarios[0].persistence.productionIndexedDbWriteMs.max).toBe(7);
   });
 

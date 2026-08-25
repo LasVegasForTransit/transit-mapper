@@ -137,11 +137,9 @@ function summarizeScenario(scenario: PerfScenario, samples: PerfSample[]): PerfS
           sample.persistence.production ? [sample.persistence.production.saveMs] : [],
         ),
       ),
-      productionWorkerSerializationMs: summarizeMetric(
+      productionSerializationMs: summarizeMetric(
         scenarioSamples.flatMap((sample) =>
-          sample.persistence.production
-            ? [sample.persistence.production.workerSerializationMs]
-            : [],
+          sample.persistence.production ? [sample.persistence.production.serializationMs] : [],
         ),
       ),
       productionIndexedDbWriteMs: summarizeMetric(

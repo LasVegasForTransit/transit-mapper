@@ -158,8 +158,8 @@ export type PerfStorageWriteOutcome = 'stored' | 'quota-exceeded' | 'unavailable
 export interface PerfProductionPersistenceProbe {
   /** Draw commit through the durable IndexedDB transaction completing. */
   saveMs: number;
-  /** The named storage serialization Worker's measured request/response lane. */
-  workerSerializationMs: number;
+  /** The bounded cooperative document serialization lane. */
+  serializationMs: number;
   /** The production read-write transaction against the document stores. */
   indexedDbWriteMs: number;
 }
@@ -232,7 +232,7 @@ export interface PerfScenarioSummary {
   persistence: {
     productionSampleCount: number;
     productionSaveMs: PerfMetricSummary;
-    productionWorkerSerializationMs: PerfMetricSummary;
+    productionSerializationMs: PerfMetricSummary;
     productionIndexedDbWriteMs: PerfMetricSummary;
     serializedBytes: number;
     parseMs: PerfMetricSummary;

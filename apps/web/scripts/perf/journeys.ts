@@ -410,8 +410,8 @@ async function performDrawAndPersistenceProof(
       (committedAt) =>
         (window as PerfPageWindow).__perfProductionPersistence?.cycles.some(
           (cycle) =>
-            cycle.workerStartedAt >= committedAt &&
-            cycle.workerCompletedAt !== null &&
+            cycle.serializationStartedAt >= committedAt &&
+            cycle.serializationCompletedAt !== null &&
             cycle.indexedDbStartedAt !== null &&
             cycle.indexedDbCompletedAt !== null,
         ) === true,
@@ -432,14 +432,14 @@ async function performDrawAndPersistenceProof(
         .reverse()
         .find(
           (candidate) =>
-            candidate.workerStartedAt >= expected.committedAt &&
-            candidate.workerCompletedAt !== null &&
+            candidate.serializationStartedAt >= expected.committedAt &&
+            candidate.serializationCompletedAt !== null &&
             candidate.indexedDbStartedAt !== null &&
             candidate.indexedDbCompletedAt !== null,
         );
       if (
         !cycle ||
-        cycle.workerCompletedAt === null ||
+        cycle.serializationCompletedAt === null ||
         cycle.indexedDbStartedAt === null ||
         cycle.indexedDbCompletedAt === null
       ) {
@@ -490,7 +490,8 @@ async function performDrawAndPersistenceProof(
   return {
     persistence: {
       saveMs: durable.cycle.indexedDbCompletedAt! - commitRequestedAt,
-      workerSerializationMs: durable.cycle.workerCompletedAt! - durable.cycle.workerStartedAt,
+      serializationMs:
+        durable.cycle.serializationCompletedAt! - durable.cycle.serializationStartedAt,
       indexedDbWriteMs: durable.cycle.indexedDbCompletedAt! - durable.cycle.indexedDbStartedAt!,
     },
   };

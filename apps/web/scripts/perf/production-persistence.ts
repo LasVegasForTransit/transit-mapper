@@ -13,7 +13,7 @@ export function combineProductionPersistence({
   if (!cold || !warm) return cold ?? warm ?? undefined;
   return {
     saveMs: Math.max(cold.saveMs, warm.saveMs),
-    workerSerializationMs: Math.max(cold.workerSerializationMs, warm.workerSerializationMs),
+    serializationMs: Math.max(cold.serializationMs, warm.serializationMs),
     indexedDbWriteMs: Math.max(cold.indexedDbWriteMs, warm.indexedDbWriteMs),
   };
 }

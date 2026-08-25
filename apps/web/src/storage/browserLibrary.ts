@@ -20,7 +20,7 @@ import {
   setIndexedDbLibraryHistory,
   type SaveOutcome,
 } from './localStore';
-import { serializeSystemOffThread } from './serializeSystem';
+import { serializeSystemCooperatively } from './cooperative-serialization';
 import { deserializeSystemOffThread } from './deserialize-system';
 
 export type { LibraryEntry, SaveOutcome } from './localStore';
@@ -59,7 +59,7 @@ function getBrowserStore(): LibraryStore {
       hasDatabaseHistory: hasIndexedDbLibraryHistory,
       setDatabaseHistory: setIndexedDbLibraryHistory,
     },
-    serialize: serializeSystemOffThread,
+    serialize: serializeSystemCooperatively,
     deserialize: deserializeSystemOffThread,
   });
   return browserStore;

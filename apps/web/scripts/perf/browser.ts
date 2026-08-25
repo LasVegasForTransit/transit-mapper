@@ -4,6 +4,10 @@ import type { Browser, BrowserContext, CDPSession, Page } from 'playwright-core'
 import { summarizeDisplayCadence } from '../../src/perf/calibration';
 import { classifyPersistence } from '../../src/perf/persistencePolicy';
 import { FIRST_SYSTEM_MAP_PAINT_MARK } from '../../src/perf/mapPaintMark';
+import {
+  STORAGE_SERIALIZATION_END_MARK,
+  STORAGE_SERIALIZATION_START_MARK,
+} from '../../src/storage/cooperative-serialization';
 import type {
   PerfCalibration,
   PerfMemorySnapshot,
@@ -15,7 +19,6 @@ import type {
 } from '../../src/perf/types';
 import {
   type BrowserMetricState,
-  type BrowserProductionPersistenceCycle,
   type BrowserProductionPersistenceState,
   type PerfPageWindow,
   PERF_STORAGE_CONTRACT,
@@ -219,97 +222,106 @@ export async function seedLegacyFixture(
 }
 
 export async function installPerformanceInstrumentation(page: Page): Promise<void> {
-  await page.addInitScript((storage) => {
-    (window as PerfPageWindow).__TRANSITMAPPER_PERF_RUN__ = true;
+  await page.addInitScript(
+    ({ storage, serializationMarks }) => {
+      (window as PerfPageWindow).__TRANSITMAPPER_PERF_RUN__ = true;
 
-    const state: BrowserMetricState = {
-      largestContentfulPaintMs: 0,
-      cumulativeLayoutShift: 0,
-      longTaskTotalMs: 0,
-      firstMapCanvasMs: null,
-    };
-    (window as Window & { __transitMapperPerf?: BrowserMetricState }).__transitMapperPerf = state;
+      const state: BrowserMetricState = {
+        largestContentfulPaintMs: 0,
+        cumulativeLayoutShift: 0,
+        longTaskTotalMs: 0,
+        firstMapCanvasMs: null,
+      };
+      (window as Window & { __transitMapperPerf?: BrowserMetricState }).__transitMapperPerf = state;
 
-    new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        state.largestContentfulPaintMs = Math.max(state.largestContentfulPaintMs, entry.startTime);
-      }
-    }).observe({ type: 'largest-contentful-paint', buffered: true });
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          state.largestContentfulPaintMs = Math.max(
+            state.largestContentfulPaintMs,
+            entry.startTime,
+          );
+        }
+      }).observe({ type: 'largest-contentful-paint', buffered: true });
 
-    new PerformanceObserver((list) => {
-      for (const entry of list.getEntries() as LayoutShiftEntry[]) {
-        if (!entry.hadRecentInput) state.cumulativeLayoutShift += entry.value;
-      }
-    }).observe({ type: 'layout-shift', buffered: true });
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries() as LayoutShiftEntry[]) {
+          if (!entry.hadRecentInput) state.cumulativeLayoutShift += entry.value;
+        }
+      }).observe({ type: 'layout-shift', buffered: true });
 
-    new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) state.longTaskTotalMs += entry.duration;
-    }).observe({ type: 'longtask', buffered: true });
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) state.longTaskTotalMs += entry.duration;
+      }).observe({ type: 'longtask', buffered: true });
 
-    const persistence: BrowserProductionPersistenceState = { cycles: [] };
-    (window as PerfPageWindow).__perfProductionPersistence = persistence;
+      const persistence: BrowserProductionPersistenceState = { cycles: [] };
+      (window as PerfPageWindow).__perfProductionPersistence = persistence;
 
-    if (typeof Worker !== 'undefined') {
-      const nativeWorker = Worker;
-      const nativePostMessage = Worker.prototype.postMessage;
-      window.Worker = new Proxy(nativeWorker, {
-        construct(target, argumentsList, newTarget) {
-          const worker = Reflect.construct(target, argumentsList, newTarget) as Worker;
-          const options = argumentsList[1] as WorkerOptions | undefined;
-          if (options?.name !== storage.serializerWorkerName) return worker;
-          let cycle: BrowserProductionPersistenceCycle | null = null;
-          worker.postMessage = new Proxy(nativePostMessage, {
-            apply(postTarget, thisArgument, postArguments) {
-              cycle = {
-                workerStartedAt: performance.now(),
-                workerCompletedAt: null,
-                indexedDbStartedAt: null,
-                indexedDbCompletedAt: null,
-              };
-              persistence.cycles.push(cycle);
-              return Reflect.apply(postTarget, thisArgument, postArguments);
-            },
-          });
-          worker.addEventListener('message', () => {
-            if (cycle) cycle.workerCompletedAt = performance.now();
-          });
-          return worker;
-        },
-      });
-    }
-
-    if (typeof IDBDatabase !== 'undefined') {
-      const nativeTransaction = IDBDatabase.prototype.transaction;
-      IDBDatabase.prototype.transaction = new Proxy(nativeTransaction, {
+      const nativeMark = Performance.prototype.mark;
+      Performance.prototype.mark = new Proxy(nativeMark, {
         apply(target, thisArgument, argumentsList) {
-          const transaction = Reflect.apply(target, thisArgument, argumentsList) as IDBTransaction;
-          const stores =
-            typeof argumentsList[0] === 'string'
-              ? [argumentsList[0]]
-              : Array.from(argumentsList[0] as Iterable<string>);
-          if (argumentsList[1] === 'readwrite' && stores.includes(storage.documentStore)) {
+          const name = argumentsList[0] as unknown;
+          if (name === serializationMarks.start) {
+            persistence.cycles.push({
+              serializationStartedAt: performance.now(),
+              serializationCompletedAt: null,
+              indexedDbStartedAt: null,
+              indexedDbCompletedAt: null,
+            });
+          } else if (name === serializationMarks.end) {
             const cycle = [...persistence.cycles]
               .reverse()
-              .find(
-                (candidate) =>
-                  candidate.workerCompletedAt !== null && candidate.indexedDbStartedAt === null,
-              );
-            if (cycle) {
-              cycle.indexedDbStartedAt = performance.now();
-              transaction.addEventListener(
-                'complete',
-                () => {
-                  cycle.indexedDbCompletedAt = performance.now();
-                },
-                { once: true },
-              );
-            }
+              .find((candidate) => candidate.serializationCompletedAt === null);
+            if (cycle) cycle.serializationCompletedAt = performance.now();
           }
-          return transaction;
+          return Reflect.apply(target, thisArgument, argumentsList);
         },
       });
-    }
-  }, PERF_STORAGE_CONTRACT);
+
+      if (typeof IDBDatabase !== 'undefined') {
+        const nativeTransaction = IDBDatabase.prototype.transaction;
+        IDBDatabase.prototype.transaction = new Proxy(nativeTransaction, {
+          apply(target, thisArgument, argumentsList) {
+            const transaction = Reflect.apply(
+              target,
+              thisArgument,
+              argumentsList,
+            ) as IDBTransaction;
+            const stores =
+              typeof argumentsList[0] === 'string'
+                ? [argumentsList[0]]
+                : Array.from(argumentsList[0] as Iterable<string>);
+            if (argumentsList[1] === 'readwrite' && stores.includes(storage.documentStore)) {
+              const cycle = [...persistence.cycles]
+                .reverse()
+                .find(
+                  (candidate) =>
+                    candidate.serializationCompletedAt !== null &&
+                    candidate.indexedDbStartedAt === null,
+                );
+              if (cycle) {
+                cycle.indexedDbStartedAt = performance.now();
+                transaction.addEventListener(
+                  'complete',
+                  () => {
+                    cycle.indexedDbCompletedAt = performance.now();
+                  },
+                  { once: true },
+                );
+              }
+            }
+            return transaction;
+          },
+        });
+      }
+    },
+    {
+      storage: PERF_STORAGE_CONTRACT,
+      serializationMarks: {
+        start: STORAGE_SERIALIZATION_START_MARK,
+        end: STORAGE_SERIALIZATION_END_MARK,
+      },
+    },
+  );
 }
 
 export async function configureSurfaceRoutes(
