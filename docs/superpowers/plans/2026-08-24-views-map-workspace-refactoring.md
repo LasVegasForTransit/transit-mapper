@@ -345,7 +345,7 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - [x] Give the initial runtime packages repository-standard `build` scripts with `dist/**` output. Point production and type resolution at `dist`. Add a `development` export condition that lets Vite development consume `src` without requiring a package watcher.
 - [x] Keep dependency versions in the workspace catalog. Use peer dependencies for React and MapLibre only when the consuming application must provide the runtime singleton.
 - [x] Let every application build depend on the production builds of its workspace dependencies through the existing `^build` Turbo edge.
-- [ ] Enforce package dependency direction with the repository's dependency rules. Do not add another package build orchestrator or cache wrapper.
+- [x] Enforce package dependency direction with the repository's dependency rules. Do not add another package build orchestrator or cache wrapper.
 - [ ] Add characterization tests for shell-before-document behavior, camera persistence, current share camera capture, representation switching, filters, selection, forking, and embed startup ordering.
 - [x] Add the View contract and hostile-input parser to `@transitmapper/views`.
 - [ ] Rename the internal `ViewMode` type to `RepresentationId`. Keep Network, Infrastructure, and Diagram labels unchanged.
@@ -379,12 +379,12 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - Modify `apps/web/vite.config.ts`, `apps/web/src/perf/chunkPolicy.ts`, its tests, and the bundle-report tests.
 - Update `docs/development/reference/project-structure.md`, `docs/product/explanation/design-principles.md`, and `docs/development/how-to/measure-performance.md` as each ownership and cache boundary lands.
 
-- [ ] Move pathname parsing into the pure `route-intent.ts` module.
-- [ ] Make `AppRoot` render the shell first and dynamically import the accepted route host. The initial entry must import no editor, viewer, document renderer, persistence, import, simulation, or PWA implementation.
-- [ ] Move local-library bootstrap, persistence, editor dialogs, imports, simulation, installation, and PWA updates into `EditorApplication`.
-- [ ] Move Workbench's responsive layout into `@transitmapper/workspace`. Replace its direct editor, UI-provider, and View-provider imports with explicit state and slot props.
-- [ ] Make `MapWorkspace` render the map and Workbench as siblings.
-- [ ] Define explicit Workbench slot interfaces for brand, primary actions, representation controls, simulation controls, main panel, supplemental panel, tool dock, import status, and application notices.
+- [x] Move pathname parsing into the pure `route-intent.ts` module.
+- [x] Make `AppRoot` render the shell first and dynamically import the accepted route host. The initial entry must import no editor, viewer, document renderer, persistence, import, simulation, or PWA implementation.
+- [x] Move local-library bootstrap, persistence, editor dialogs, imports, simulation, installation, and PWA updates into `EditorApplication`.
+- [x] Move Workbench's responsive layout into `@transitmapper/workspace`. Replace its direct editor, UI-provider, and View-provider imports with explicit state and slot props.
+- [x] Make `MapWorkspace` render the map and Workbench as siblings.
+- [x] Define explicit Workbench slot interfaces for brand, primary actions, representation controls, simulation controls, main panel, supplemental panel, tool dock, import status, and application notices.
 - [ ] Move MapLibre construction, disposal, resize observation, theme switching, base-style recovery, and common camera publication into `@transitmapper/map`.
 - [ ] Move `LiveMapRenderer`, document projection, source banks, layer definitions, and their workers into `@transitmapper/renderer` without changing their accepted-scene contracts.
 - [ ] Implement `DocumentMapDriver` over `TransitSystem` and `LiveMapRenderer`. Pass document snapshots through an attachment port instead of importing `EditorStore`.
