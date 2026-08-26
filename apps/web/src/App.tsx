@@ -3,6 +3,7 @@ import { MapWorkspace, useMapViewStore } from '@transitmapper/workspace';
 import type { RouteIntent } from './app/route-intent';
 import { useEditor, useEditorCommands, useEditorStore } from './editor/EditorProvider';
 import { resolveEditorBootstrap } from './editor/editor-bootstrap';
+import { createEditorSelectionController } from './editor/editor-selection';
 import { getMap } from './map/mapRef';
 import { EditorMapSurface } from './map/editor-map-surface';
 import { useOnlineStatus } from './network/useOnlineStatus';
@@ -131,6 +132,7 @@ interface EditorSessionProps {
 export function EditorSession({ routeIntent }: EditorSessionProps) {
   const store = useEditorStore();
   const mapViewStore = useMapViewStore();
+  const [selection] = useState(() => createEditorSelectionController(store));
   const {
     document: { newSystem, setSystem },
     selection: { select: clearSelection },
@@ -396,6 +398,7 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
       <MapWorkspace
         mapSurface={
           <EditorMapSurface
+            selection={selection}
             onBasemapUnavailable={() => setNotice('basemap-unavailable')}
             vehiclePaintingSuspended={activeDialog === 'onboarding'}
           />

@@ -18,7 +18,6 @@ import {
 } from '@transitmapper/workspace';
 import { SRC_ACTION_ANCHOR } from '@transitmapper/renderer/layers';
 import { useEditorStore } from '../editor/EditorProvider';
-import { createEditorSelectionController } from '../editor/editor-selection';
 import { DOCUMENT_MAP_DEFINITION } from '@transitmapper/renderer/presentation';
 import { initializeDocumentCamera } from '../editor/document-view-adapter';
 import { inputTuningFor } from '../editor/input-tuning';
@@ -81,6 +80,7 @@ export function EditorMapSurfaceFrame({
 }
 
 export interface EditorMapSurfaceProps {
+  selection: SelectionController;
   onBasemapUnavailable?: () => void;
   vehiclePaintingSuspended?: boolean;
 }
@@ -143,6 +143,7 @@ function createInitialStyleBridge(
  */
 // eslint-disable-next-line max-lines-per-function -- One React owner keeps the deferred driver, runtime, and editor overlays stable across document loads.
 export function EditorMapSurface({
+  selection,
   onBasemapUnavailable,
   vehiclePaintingSuspended = false,
 }: EditorMapSurfaceProps) {
@@ -174,7 +175,6 @@ export function EditorMapSurface({
   const styleRef = useRef<EditorMapStyleBridge>(
     createInitialStyleBridge(runtimeRef, activeThemeRef),
   );
-  const [selection] = useState(() => createEditorSelectionController(store));
   const [vehicleGate] = useState(() =>
     createVehicleAnimationGateController(() => {
       const state = viewStore.getSnapshot();
