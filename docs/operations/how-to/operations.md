@@ -47,6 +47,13 @@ set `TRANSITMAPPER_PERFORMANCE_ORDINARY_BASIS_POINTS` and
 a new web build and deployment. The client still refuses local, untagged, or
 wrong-origin builds and honors GPC/DNT regardless of these values.
 
+When a release must proceed while a known performance regression remains, run
+the production workflow manually with **Continue after failed performance
+gates** enabled and provide a nonblank reason. The workflow still runs every
+performance job and keeps each failure visible. It records the reason in the
+run summary before Release Please runs. Push-triggered releases cannot use this
+override, and a failed `Validate` job always blocks the release.
+
 [`deploy-production.yml`](../../../.github/workflows/deploy-production.yml)
 attaches the deployment archive and its Sigstore bundle to every GitHub
 release. To verify a downloaded archive was built by this repository's GitHub
@@ -99,8 +106,9 @@ Check which step failed before anything else; they fail for unrelated reasons.
 - **Validate** — a real test or type failure. Fix it on a branch.
 - **Release performance gates** — one of the RTC, public first-session, or
   onboarding production-build smokes failed. Fix the browser journey or build
-  problem before Release Please runs. The check names in the ruleset and
-  `.github/workflows/performance.yml` must remain aligned.
+  problem before Release Please runs. A maintainer may use the documented
+  manual override when shipping a known regression is safer than holding the
+  release. The override does not hide the failed jobs or change their budgets.
 - **Prepare or publish release** — Release Please could not update its release
   pull request or create the tag and GitHub release. Check the job's repository
   permissions and default-branch rules. Repository Actions settings must allow

@@ -4,6 +4,16 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      override_performance:
+        description: Continue after failed performance gates
+        required: false
+        default: false
+        type: boolean
+      override_reason:
+        description: Reason for continuing after failed performance gates
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -36,6 +46,19 @@ jobs:
   release:
     name: Prepare or publish release
     needs: [validate, performance]
+    if: >-
+      ${{
+        always() &&
+        needs.validate.result == 'success' &&
+        (
+          needs.performance.result == 'success' ||
+          (
+            github.event_name == 'workflow_dispatch' &&
+            inputs.override_performance == true &&
+            inputs.override_reason != ''
+          )
+        )
+      }}
     permissions:
       actions: write
       contents: write
@@ -46,6 +69,25 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      - name: Record performance gate override
+        if: needs.performance.result != 'success'
+        env:
+          OVERRIDE_REASON: ${{ inputs.override_reason }}
+          PERFORMANCE_RESULT: ${{ needs.performance.result }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OVERRIDE_REASON//[[:space:]]/}" ]; then
+            echo "A nonblank override reason is required." >&2
+            exit 1
+          fi
+          {
+            echo "## Performance gate override"
+            echo
+            echo "The manual release continued after the performance workflow reported \`$PERFORMANCE_RESULT\`."
+            echo
+            echo "Reason: $OVERRIDE_REASON"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Run Release Please
         id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
