@@ -729,6 +729,10 @@ function scenarioReadyDiagnostics(page: Page, selector: string) {
   );
 }
 
+export function scenarioIdentitySelector(scenario: PerfScenario): string | undefined {
+  return scenario.surface === 'share' ? scenario.readySelector : undefined;
+}
+
 export async function waitForScenarioReady(
   page: Page,
   scenario: PerfScenario,
@@ -768,7 +772,11 @@ export async function waitForScenarioReady(
       throw new Error(`${scenario.id} fixture did not become the active system.`);
     }
   } else if (scenario.surface === 'share') {
-    if ((await page.locator('.ro-name').textContent())?.trim() !== expectedName) {
+    const identitySelector = scenarioIdentitySelector(scenario);
+    if (
+      !identitySelector ||
+      (await page.locator(identitySelector).first().textContent())?.trim() !== expectedName
+    ) {
       throw new Error(`${scenario.id} share did not render the expected system.`);
     }
   } else {
