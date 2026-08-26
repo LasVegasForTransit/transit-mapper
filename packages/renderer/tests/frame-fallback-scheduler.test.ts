@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFrameFallbackScheduler } from '@transitmapper/renderer/driver';
+import { createFrameFallbackScheduler } from '../src/frame-fallback-scheduler';
 
 interface ScheduledCallback {
   callback: (time: number) => void;
