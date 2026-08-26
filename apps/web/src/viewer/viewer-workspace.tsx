@@ -225,13 +225,20 @@ function ViewerActions({ system, viewStore, onFork, onCopyLink }: ViewerActionsP
   return (
     <>
       <ViewerLayers store={viewStore} definition={DOCUMENT_MAP_DEFINITION} />
-      <button type="button" className="btn" data-viewer-action="copy" onClick={onCopyLink}>
+      <button
+        type="button"
+        className="btn"
+        data-viewer-action="copy"
+        aria-label="Copy link to this view"
+        onClick={onCopyLink}
+      >
         <Icon name="share" size={18} /> <span className="btn-label">Copy link to this view</span>
       </button>
       <button
         type="button"
         className="primary-btn"
         data-viewer-action="fork"
+        aria-label="Fork & edit"
         onClick={() => onFork(system)}
       >
         <Icon name="copy" size={18} /> <span className="btn-label">Fork &amp; edit</span>

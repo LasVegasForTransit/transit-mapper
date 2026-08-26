@@ -101,6 +101,8 @@ describe('ViewerApplication', () => {
       'button[data-viewer-action="copy"]',
     );
     if (!forkButton || !copyButton) throw new Error('The reader actions did not render.');
+    expect(forkButton.getAttribute('aria-label')).toBe('Fork & edit');
+    expect(copyButton.getAttribute('aria-label')).toBe('Copy link to this view');
     act(() => {
       forkButton.click();
       copyButton.click();
