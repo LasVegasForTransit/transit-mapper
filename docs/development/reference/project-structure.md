@@ -182,51 +182,34 @@ replacing an editing session without consent.
 
 ### Contribution tooling
 
-The organization-wide issue forms and pull request template live in
-`LasVegasForTransit/.github`. TransitMapper intentionally carries no local
-copy, because any local issue-template directory would shadow the complete
-organization default.
-
-The pinned `lvbt-contributions` plugin supplies the portable contribution
-skill, creation helper, and action guards. `.lvbt/repository-tooling.json`
-records its release and checksum; `check:repository-tooling` rejects drift.
-Production code does not import this tooling.
+TransitMapper inherits organization issue and pull request templates. The
+pinned contribution plugin supplies agent tooling, and
+`.lvbt/repository-tooling.json` records the verified release.
 
 ### ESLint baseline
 
-`packages/config-eslint` owns the rule set itself, as two functions a
-repository calls from its `eslint.config.ts`. `defineTypeAwareConfig` takes the
-directory holding that config and returns the baseline with every rule that
-needs a type checker; `defineConfig` returns the syntax-only subset for a
-repository with no project covering each file.
+`packages/config-eslint` exports the type-aware and syntax-only organization
+rule sets consumed by the root lint configuration.
 
 #### Baseline rules
 
-The baseline is the org's, not this repository's, and carries nothing that
-names a path here. Repository-specific scoping is passed in as extra config
-objects and lands after the baseline and before the Prettier reset. Departures
-from the upstream presets are recorded in the module beside the count of
-findings that justified each one.
+The baseline contains no repository paths. Root configuration adds local
+scope and records any departure from upstream presets.
 
 ### ESLint plugin
 
-`packages/eslint-plugin` owns static rules for repository invariants that
-TypeScript cannot express reliably.
+`packages/eslint-plugin` owns static repository invariants that TypeScript
+cannot express.
 
 #### Repository rules
 
-Rules protect runtime and module boundaries, including the ban on browser-only
-globals in core. A rule belongs here only when it can identify violations
-mechanically without rejecting valid code. The root lint configuration owns
-where each rule applies. See
-[The enforcement model](../explanation/enforcement-model.md).
+Rules protect runtime and module boundaries. The root configuration decides
+where each rule applies. See [the enforcement model](../explanation/enforcement-model.md).
 
 ### TypeScript configuration
 
-`packages/tsconfig` owns shared compiler policy for the workspace. It exposes
-configuration rather than runtime source, so it is exempt from package scripts
-that would otherwise perform no work. Each source package extends that policy
-with the runtime libraries and output behavior it needs.
+`packages/tsconfig` owns shared compiler policy. Each source package adds its
+runtime libraries and output behavior.
 
 ## Applications
 
@@ -261,6 +244,13 @@ workspace and document map driver without constructing editor state.
 The separate embed entry owns `/e/:id` and `/embed/:id`. It imports neither
 React nor editor code. `/e/:id` applies the same synthetic default View as
 `/s/:id`; `/embed/:id` restores the same published state as `/v/:id`.
+
+#### Viewer
+
+`apps/web/src/viewer` resolves shared-system and published-View sessions. It
+composes reader controls around `MapWorkspace`, attaches the document driver,
+and resolves selected feature details. It may lazy-load the editor persistence
+path only after someone chooses Fork and edit.
 
 #### Editing
 
@@ -466,10 +456,19 @@ after 90.
 
 ## Repository support
 
+### Tests
+
 Each package or application owns a `tests/` tree at its root. Test paths mirror
 production modules. Shared fixtures remain explicit test-only exports.
-Repository checks live under `scripts/`; package
-scaffolding lives under `turbo/`. See
+
+### Generators and checks
+
+Repository checks live under `scripts/`; package scaffolding lives under
+`turbo/`. See
 [the enforcement model](../explanation/enforcement-model.md) for check
-ownership and [operations](../../operations/how-to/operations.md) for release,
-deployment, migration, and recovery behavior.
+ownership.
+
+### Performance tooling
+
+Browser scenarios, baselines, and renderer captures live under `apps/web`.
+Generated evidence stays ignored until maintainers promote an approved fixture.
