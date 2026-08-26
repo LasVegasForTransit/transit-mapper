@@ -1,7 +1,7 @@
 import type { Map as MLMap } from 'maplibre-gl';
 import { FACILITY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
 import { facilityRender } from '@transitmapper/core/style/catalogStyle';
-import type { ColorScheme } from '../../theme/systemColorScheme';
+import type { ColorScheme } from '../../theme/color-scheme';
 import { ensureIcon } from '../icons';
 import { MAP_THEMES } from '../mapTheme';
 import { HANDLE_INK } from '@transitmapper/renderer/layers';

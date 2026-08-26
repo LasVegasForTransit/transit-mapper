@@ -1,5 +1,5 @@
 import type { StyleSpecification } from 'maplibre-gl';
-import type { ColorScheme } from '../theme/systemColorScheme';
+import type { ColorScheme } from '../theme/color-scheme';
 import { createLayerSpecs } from './layers/layerSpecs';
 import { MAP_THEMES } from './mapThemePalette';
 

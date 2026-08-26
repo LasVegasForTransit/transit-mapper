@@ -14,7 +14,7 @@ import {
   logicalRenderLayerId,
   sourceBankLayerSpecs,
 } from '@transitmapper/renderer/layers';
-import type { ColorScheme } from '../theme/systemColorScheme';
+import type { ColorScheme } from '../theme/color-scheme';
 import {
   DOCUMENT_VIEW_FILTER_IDS,
   DOCUMENT_MAP_DEFINITION,

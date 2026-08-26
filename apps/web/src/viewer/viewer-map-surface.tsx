@@ -21,7 +21,8 @@ import {
   type MapSurfaceAttachmentScheduler,
   type MapSurfaceRuntimeFactory,
 } from '@transitmapper/workspace';
-import { useSystemColorScheme, type ColorScheme } from '../theme/systemColorScheme';
+import type { ColorScheme } from '../theme/color-scheme';
+import { useSystemColorScheme } from '../theme/systemColorScheme';
 import {
   carryDocumentStyle,
   documentLayersForScheme,

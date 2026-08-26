@@ -1,4 +1,4 @@
-import type { ColorScheme } from '../theme/systemColorScheme';
+import type { ColorScheme } from '../theme/color-scheme';
 
 export interface MapTheme {
   basemapStyle: string;

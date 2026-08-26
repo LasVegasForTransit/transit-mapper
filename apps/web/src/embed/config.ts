@@ -6,7 +6,7 @@ import {
   SRC_STATIONS,
   SRC_WAYS,
 } from '@transitmapper/renderer/layers';
-import type { ColorScheme } from '../theme/systemColorScheme';
+import type { ColorScheme } from '../theme/color-scheme';
 import { layerSpecsForScheme } from '../map/mapTheme';
 
 /** The read-only schematic never writes editor previews, handles, lanes,

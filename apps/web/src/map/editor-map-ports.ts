@@ -11,7 +11,7 @@ import type { PointerIntent } from '../editor/pointerIntent';
 import type { EditorStore } from '../editor/store';
 import type { VehicleAnimationGateController } from '../sim/vehicle-animation-gate';
 import type { SimClock } from '../sim/simClock';
-import type { ColorScheme } from '../theme/systemColorScheme';
+import type { ColorScheme } from '../theme/color-scheme';
 import type { TerminusConnectionChoice } from './interactions';
 
 export interface EditorMapStyleBridge {

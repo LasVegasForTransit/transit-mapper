@@ -8,7 +8,7 @@ import { registerMapIcons } from '../../map/layers';
 import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
 import { renderPresentationForFittedMap } from '../../map/fitted-map-presentation';
 import { layerSpecsForScheme, localBlankStyleForScheme } from '../../map/mapTheme';
-import type { ColorScheme } from '../../theme/systemColorScheme';
+import type { ColorScheme } from '../../theme/color-scheme';
 import {
   ONBOARDING_DRAW_SYSTEM,
   ONBOARDING_FIXTURE_SYSTEM,

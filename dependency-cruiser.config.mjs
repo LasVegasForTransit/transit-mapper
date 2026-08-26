@@ -266,7 +266,10 @@ export default {
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {
       exportsFields: ['exports'],
-      conditionNames: ['import', 'require', 'node', 'default', 'types'],
+      // Cruise the same source graph in a clean checkout and after package
+      // builds. Without the development condition, existing dist files hide
+      // workspace edges locally while CI falls back to TypeScript source.
+      conditionNames: ['development', 'import', 'require', 'node', 'default', 'types'],
       extensions: ['.ts', '.tsx', '.js', '.jsx'],
     },
   },
