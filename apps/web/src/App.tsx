@@ -4,6 +4,7 @@ import type { RouteIntent } from './app/route-intent';
 import { useEditor, useEditorCommands, useEditorStore } from './editor/EditorProvider';
 import { resolveEditorBootstrap } from './editor/editor-bootstrap';
 import { createEditorSelectionController } from './editor/editor-selection';
+import { useDocumentView } from './editor/document-view-controls';
 import { getMap } from './map/mapRef';
 import { EditorMapSurface } from './map/editor-map-surface';
 import { useOnlineStatus } from './network/useOnlineStatus';
@@ -34,7 +35,6 @@ import { SimControls, SimControlsCompact } from './ui/SimControls';
 import { Toolbar } from './ui/Toolbar';
 import { TopBarActions, TopBarBrand, ViewSwitch, ViewSwitchCompact } from './ui/TopBar';
 import { useUi } from './ui/UiProvider';
-import { useView } from './ui/ViewProvider';
 import { representationLabel, supplementalDetent } from './ui/workspace-adapter';
 import './ui/app.css';
 import '@transitmapper/workspace/workbench.css';
@@ -152,7 +152,7 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
     newSystemLocationMode,
     openNewSystemLocation,
   } = useUi();
-  const { viewMode } = useView();
+  const { viewMode } = useDocumentView();
   // Whether the document on screen is the one the app went looking for. Owned
   // by the store, because that is where it decides which changes to accept —
   // mirroring it into local state here would let the two disagree.

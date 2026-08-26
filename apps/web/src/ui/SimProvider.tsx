@@ -16,7 +16,7 @@ import { attachSimulationKeyboard } from '../sim/simulation-shortcuts';
 // ownership of the one SimClock instance everything else is handed.
 //
 // Settings live in React context rather than the editor store for the same
-// reason ViewProvider's do: presentation state, not part of the transit system
+// reason map View state does: presentation state, not part of the transit system
 // model, so not saved, shared, or undoable. Like every other view setting they
 // also don't survive a reload, which keeps one obvious rule ("view state is
 // per-session") rather than one preference quietly behaving differently.

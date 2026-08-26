@@ -61,7 +61,7 @@ describe('the editor document map dependency boundary', () => {
           source.endsWith('/react') ||
           source.includes('/react/') ||
           source.endsWith('/EditorProvider.tsx') ||
-          source.endsWith('/ViewProvider.tsx'),
+          source.endsWith('/map-view-provider.tsx'),
       );
 
     expect(forbidden).toEqual([]);
@@ -80,7 +80,7 @@ describe('the editor document map dependency boundary', () => {
           source.includes('/react/') ||
           source.endsWith('/App.tsx') ||
           source.endsWith('/EditorProvider.tsx') ||
-          source.endsWith('/ViewProvider.tsx') ||
+          source.endsWith('/map-view-provider.tsx') ||
           source.includes('/src/import/') ||
           source.includes('/src/pwa/') ||
           source.includes('/src/storage/'),

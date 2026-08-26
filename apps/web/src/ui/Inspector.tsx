@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
+import type { DocumentRepresentationId } from '@transitmapper/renderer/presentation';
 import { useEditor } from '../editor/EditorProvider';
+import { useDocumentView } from '../editor/document-view-controls';
 import type { Selection, Tool } from '../editor/store';
 import { Panel } from './Panel';
 import { useDelayedUnmount } from './useDelayedUnmount';
-import { useView, type DocumentRepresentationId } from './ViewProvider';
 import { ToolDraftInspector } from './inspector/drafts';
 import { loadSelectionInspectorContent } from './inspector/selection-content-loader';
 
@@ -77,7 +78,7 @@ export function useSupplementalContent(): SupplementalContent {
   const readOnly = useEditor((s) => s.readOnly);
   const selection = useEditor((s) => s.selection);
   const multiSelection = useEditor((s) => s.multiSelection);
-  const { viewMode } = useView();
+  const { viewMode } = useDocumentView();
   return supplementalContentFor({
     tool,
     readOnly,

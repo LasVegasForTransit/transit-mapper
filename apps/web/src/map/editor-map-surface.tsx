@@ -13,19 +13,23 @@ import {
 import {
   MapSurface,
   scheduleMapAttachmentAfterFirstPaint,
+  useMapViewStore,
   type MapSurfaceAttachmentScheduler,
   type MapSurfaceRuntimeFactory,
 } from '@transitmapper/workspace';
 import { SRC_ACTION_ANCHOR } from '@transitmapper/renderer/layers';
 import { useEditorStore } from '../editor/EditorProvider';
-import { DOCUMENT_MAP_DEFINITION } from '@transitmapper/renderer/presentation';
+import { useDocumentView } from '../editor/document-view-controls';
+import {
+  DOCUMENT_MAP_DEFINITION,
+  type DocumentRepresentationId,
+} from '@transitmapper/renderer/presentation';
 import { initializeDocumentCamera } from '../editor/document-view-adapter';
 import { inputTuningFor } from '../editor/input-tuning';
 import type { PointerIntent } from '../editor/pointerIntent';
 import { useCoarsePointer } from '../device/capabilities';
 import { useSim, useSimClock } from '../ui/SimProvider';
 import { useContextMenu, useUi } from '../ui/UiProvider';
-import { useMapViewStore, useView } from '../ui/ViewProvider';
 import { useSystemColorScheme, type ColorScheme } from '../theme/systemColorScheme';
 import { createVehicleAnimationGateController } from '../sim/vehicle-animation-gate';
 import type { TerminusConnectionChoice } from './interactions';
@@ -150,7 +154,7 @@ export function EditorMapSurface({
   const store = useEditorStore();
   const viewStore = useMapViewStore();
   const colorScheme = useSystemColorScheme();
-  const { viewMode, setViewMode } = useView();
+  const { viewMode, setViewMode } = useDocumentView();
   const { openShortcuts, toggleUi } = useUi();
   const { contextMenuAt, openContextMenu, closeContextMenu } = useContextMenu();
   const simClock = useSimClock();
@@ -179,7 +183,7 @@ export function EditorMapSurface({
     createVehicleAnimationGateController(() => {
       const state = viewStore.getSnapshot();
       return {
-        viewMode: state.representationId as ReturnType<typeof useView>['viewMode'],
+        viewMode: state.representationId as DocumentRepresentationId,
         visibleModes: new Set(state.filters.modes as string[]),
         visibleWayTypes: new Set(state.filters['way-types'] as string[]),
       };

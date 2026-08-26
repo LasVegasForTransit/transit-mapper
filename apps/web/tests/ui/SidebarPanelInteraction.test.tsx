@@ -4,21 +4,27 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { aPattern, aRoad, aService, aStop, aSystem } from '@transitmapper/core/testing/fixtures';
+import { createMapViewStore } from '@transitmapper/map';
+import { MapViewProvider } from '@transitmapper/workspace';
 import { EditorProvider } from '../../src/editor/EditorProvider';
+import { createDocumentPresentationState } from '../../src/editor/document-view-adapter';
 import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { SidebarPanel } from '../../src/ui/SidebarPanel';
-import { ViewProvider, type DocumentRepresentationId } from '../../src/ui/ViewProvider';
+import type { DocumentRepresentationId } from '@transitmapper/renderer/presentation';
 
 let container: HTMLDivElement;
 let root: Root;
 
 function renderSidebar(store: EditorStore, viewMode: DocumentRepresentationId = 'network'): void {
+  const viewStore = createMapViewStore(
+    createDocumentPresentationState({ representationId: viewMode }),
+  );
   act(() => {
     root.render(
       <EditorProvider store={store}>
-        <ViewProvider initialViewMode={viewMode}>
+        <MapViewProvider store={viewStore}>
           <SidebarPanel />
-        </ViewProvider>
+        </MapViewProvider>
       </EditorProvider>,
     );
   });

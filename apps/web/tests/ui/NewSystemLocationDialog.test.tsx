@@ -81,8 +81,8 @@ vi.mock('../../src/storage/localStore', () => ({ setActiveId: () => undefined })
 vi.mock('../../src/ui/UiProvider', () => ({
   useImportProgress: () => ({ importProgress: null, setImportProgress: vi.fn() }),
 }));
-vi.mock('../../src/ui/ViewProvider', () => ({
-  useView: () => ({ setViewMode: (mode: string) => calls.setViewMode.push(mode) }),
+vi.mock('../../src/editor/document-view-controls', () => ({
+  useDocumentView: () => ({ setViewMode: (mode: string) => calls.setViewMode.push(mode) }),
 }));
 vi.mock('../../src/import/background-osm-import', () => ({
   beginBackgroundOsmImport: (options: unknown) => calls.background.push(options),

@@ -291,8 +291,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     group: 'Export',
     keys: ['c'],
     description: 'Capture PNG',
-    // No live view-filter context is reachable from the keymap (that lives in
-    // React's ViewProvider) — a quick keyboard capture shows the whole system
+    // No live View store is reachable from the keymap — a quick keyboard capture shows the whole system
     // with everything visible, network view, same "show something of
     // substance" default as the quick-export menu.
     run: (c) => void exportNetworkPng(c.editor.getState().system),

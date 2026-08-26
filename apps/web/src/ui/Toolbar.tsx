@@ -1,4 +1,5 @@
 import { useEditor, useEditorCommands } from '../editor/EditorProvider';
+import { useDocumentView } from '../editor/document-view-controls';
 import { useInertRef } from '@transitmapper/workspace/inert-ref';
 import type { SelectVariant } from '../editor/store';
 import {
@@ -21,7 +22,6 @@ import {
 } from './DropdownMenu';
 import { Icon, type IconName } from './Icon';
 import { useUi } from './UiProvider';
-import { useView } from './ViewProvider';
 interface PassengerPlaceToolPresentation {
   label: 'Stop' | 'Station';
   icon: IconName;
@@ -79,7 +79,7 @@ export function Toolbar() {
     setDraftFacilityType,
     setDraftFacilityComplexMode,
   } = useEditorCommands().tools;
-  const { viewMode } = useView();
+  const { viewMode } = useDocumentView();
   const { uiHidden } = useUi();
   const dockRef = useInertRef<HTMLDivElement>(uiHidden);
   // Diagram is schematic, so its marks cannot become document edits (see

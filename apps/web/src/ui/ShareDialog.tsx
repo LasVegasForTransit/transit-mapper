@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useMapViewStore } from '@transitmapper/workspace';
 import { useEditor } from '../editor/EditorProvider';
 import { getOrCreateShare, stopSharing } from '../share/api';
 import { getMyShare } from '../share/myShares';
@@ -6,7 +7,6 @@ import { withDocumentCamera } from '../editor/document-view-adapter';
 import { useOnlineStatus } from '../network/useOnlineStatus';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
-import { useMapViewStore } from './ViewProvider';
 
 interface ShareDialogProps {
   onClose: () => void;

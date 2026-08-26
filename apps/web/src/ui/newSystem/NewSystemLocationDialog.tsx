@@ -5,13 +5,13 @@ import type { DrivingSide, LngLat } from '@transitmapper/core/model/system';
 import type { ImportBBox } from '@transitmapper/core/model/import';
 import { importAreaKm2, tileImportArea } from '@transitmapper/core/model/import-area';
 import { useEditorStore } from '../../editor/EditorProvider';
+import { useDocumentView } from '../../editor/document-view-controls';
 import { beginBackgroundOsmImport } from '../../import/background-osm-import';
 import { searchPlaces } from '../../network/search-places';
 import { setActiveId } from '../../storage/localStore';
 import { Icon } from '../Icon';
 import { Modal } from '../Modal';
 import { useImportProgress } from '../UiProvider';
-import { useView } from '../ViewProvider';
 import { LocationPickerMap, type LocationPickerMapHandle } from './LocationPickerMap';
 import { drivingSideForCountry } from './driving-side-for-country';
 
@@ -42,7 +42,7 @@ interface NewSystemLocationDialogProps {
 export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDialogProps) {
   const store = useEditorStore();
   const { setImportProgress, importProgress } = useImportProgress();
-  const { setViewMode } = useView();
+  const { setViewMode } = useDocumentView();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PlaceResult[]>([]);
   const [searching, setSearching] = useState(false);

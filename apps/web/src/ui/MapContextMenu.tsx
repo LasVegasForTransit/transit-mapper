@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useRef } from 'react';
 import { useSelectionActions } from '../editor/useSelectionActions';
 import { useEditor } from '../editor/EditorProvider';
+import { useDocumentView } from '../editor/document-view-controls';
 import { useContextMenu } from './UiProvider';
-import { useView } from './ViewProvider';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from './DropdownMenu';
 import { shouldCloseMapContextMenu } from './mapContextMenuLifecycle';
 
@@ -22,7 +22,7 @@ import { shouldCloseMapContextMenu } from './mapContextMenuLifecycle';
 export function MapContextMenu() {
   const { contextMenuAt, closeContextMenu } = useContextMenu();
   const tool = useEditor((state) => state.tool);
-  const { viewMode } = useView();
+  const { viewMode } = useDocumentView();
   const { actions } = useSelectionActions(
     contextMenuAt?.at,
     contextMenuAt?.serviceHit,

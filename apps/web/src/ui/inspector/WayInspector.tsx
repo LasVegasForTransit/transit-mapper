@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
+import { useDocumentView } from '../../editor/document-view-controls';
 import { GRADES, LANE_KINDS, WAY_FAMILIES, wayType } from '@transitmapper/core/model/catalog';
 import { estimateWayCapitalCost, formatUsdCompact } from '@transitmapper/core/model/cost';
 import { bearingDegrees, formatBearing, wayLengthMeters } from '@transitmapper/core/model/geo';
@@ -11,7 +12,6 @@ import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
 import { Panel } from '../Panel';
 import { blurOnEnter } from '../formUtils';
 import { Icon } from '../Icon';
-import { useView } from '../ViewProvider';
 import { useUnitPreference } from '../../services/userPreferences';
 import { GEOMETRY_OPTIONS, GradeChips, EmptyInspector, ServicesOnWay, Stat } from './shared';
 
@@ -107,7 +107,7 @@ export function WayInspector({ id }: WayInspectorProps) {
     network: { separateCarriageways, combineCarriageways, mergeWays: mergeWaysAction },
     selection: { select },
   } = useEditorCommands();
-  const { viewMode } = useView();
+  const { viewMode } = useDocumentView();
   const [tab, setTab] = useState<string>(viewMode === 'infrastructure' ? 'lanes' : 'identity');
 
   if (!way) return <EmptyInspector />;

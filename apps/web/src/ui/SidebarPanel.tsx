@@ -12,6 +12,7 @@ import { FACILITY_TYPES, MODES } from '@transitmapper/core/model/catalog';
 import type { Facility, Station, Stop } from '@transitmapper/core/model/system';
 import type { EditorCommands, EditorState, Selection } from '../editor/store';
 import { useEditor, useEditorCommands } from '../editor/EditorProvider';
+import { useDocumentView, type ViewMode } from '../editor/document-view-controls';
 import { Icon } from './Icon';
 import {
   infrastructureOutlineProjection,
@@ -27,7 +28,6 @@ import {
   type LimitedSidebarItems,
 } from './sidebarOutline';
 import { useListboxKeyboardNav } from './useListboxKeyboardNav';
-import { useView, type ViewMode } from './ViewProvider';
 const LIST_CAP = 150;
 
 interface OutlinePresentationState {
@@ -166,7 +166,7 @@ export function SidebarPanel() {
   const system = useEditor((state) => state.system);
   const selection = useEditor((state) => state.selection);
   const { selectAndFocus, setOutlineHover } = useEditorCommands().selection;
-  const { viewMode } = useView();
+  const { viewMode } = useDocumentView();
   const [presentationByView, setPresentationByView] = useState<
     Record<ViewMode, OutlinePresentationState>
   >(() => ({

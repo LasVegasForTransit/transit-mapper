@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { createMapViewStore } from '@transitmapper/map';
+import { MapViewProvider } from '@transitmapper/workspace';
 import { EditorSession } from '../App';
 import type { RouteIntent } from '../app/route-intent';
 import { InstallProvider } from '../pwa/InstallProvider';
@@ -7,7 +8,6 @@ import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { SaveStatusProvider } from '../ui/SaveStatusProvider';
 import { SimProvider } from '../ui/SimProvider';
 import { UiProvider } from '../ui/UiProvider';
-import { ViewProvider } from '../ui/ViewProvider';
 import { createDocumentPresentationState, currentDocumentCamera } from './document-view-adapter';
 import { EditorProvider } from './EditorProvider';
 import { createEditorStore } from './store';
@@ -33,11 +33,11 @@ export default function EditorApplication({ routeIntent }: EditorApplicationProp
         <InstallProvider enabled={routeIntent.kind === 'editor'}>
           <UiProvider>
             <SaveStatusProvider>
-              <ViewProvider store={mapViewStore}>
+              <MapViewProvider store={mapViewStore}>
                 <SimProvider>
                   <EditorSession routeIntent={routeIntent} />
                 </SimProvider>
-              </ViewProvider>
+              </MapViewProvider>
             </SaveStatusProvider>
           </UiProvider>
         </InstallProvider>

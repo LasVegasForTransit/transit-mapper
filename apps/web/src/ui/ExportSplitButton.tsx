@@ -1,9 +1,9 @@
 import { useEditorStore } from '../editor/EditorProvider';
+import { useDocumentView } from '../editor/document-view-controls';
 import { exportQuickSystem, preloadQuickExport } from '../share/quick-export';
 import { DropdownMenu, DropdownMenuItem } from './DropdownMenu';
 import { Icon } from './Icon';
 import { useUi } from './UiProvider';
-import { useView } from './ViewProvider';
 
 /** MD3 split (compound) button: the main segment opens the full export
  *  dialog (format + view + layer-visibility settings); the trailing caret
@@ -15,7 +15,7 @@ export function ExportSplitButton() {
   // inside quickExport's click handler, never rendered, so subscribing would
   // just re-render this on every store mutation for no visible benefit.
   const store = useEditorStore();
-  const { viewMode, visibleModes, visibleWayTypes } = useView();
+  const { viewMode, visibleModes, visibleWayTypes } = useDocumentView();
   const { openDialog } = useUi();
 
   const quickExport = (format: 'png' | 'svg') => {

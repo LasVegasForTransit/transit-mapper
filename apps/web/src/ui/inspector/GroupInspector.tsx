@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
+import { useDocumentView } from '../../editor/document-view-controls';
 import {
   FACILITY_TYPE_ORDER,
   FACILITY_TYPES,
@@ -12,7 +13,6 @@ import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
 import { Panel } from '../Panel';
 import { blurOnEnter } from '../formUtils';
 import { Icon } from '../Icon';
-import { useView } from '../ViewProvider';
 import { EmptyInspector, Stat } from './shared';
 // A group member can be a stop, facility, public Line, or technical Service
 // — resolve both its display name AND its real
@@ -180,7 +180,7 @@ interface GroupFootprintProps {
 function GroupFootprint({ groupId, readOnly }: GroupFootprintProps) {
   const group = useEditor((s) => s.system.groups.find((g) => g.id === groupId));
   const { addGroupFootprint, deleteGroupFootprint } = useEditorCommands().groups;
-  const { setViewMode } = useView();
+  const { setViewMode } = useDocumentView();
   if (!group) return null;
 
   // Same reasoning as StopFootprint's drawFootprint — a group footprint

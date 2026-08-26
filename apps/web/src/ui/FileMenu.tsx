@@ -1,4 +1,5 @@
 import { useEditor, useEditorStore } from '../editor/EditorProvider';
+import { useMapViewStore } from '@transitmapper/workspace';
 import { withDocumentCamera } from '../editor/document-view-adapter';
 import { exportSystemJson } from '../share/jsonExport';
 import {
@@ -9,7 +10,6 @@ import {
 } from './DropdownMenu';
 import { Icon } from './Icon';
 import { useUi } from './UiProvider';
-import { useMapViewStore } from './ViewProvider';
 
 /** Figma-style application menu: whole-document actions plus project identity,
  *  tucked behind one trigger in

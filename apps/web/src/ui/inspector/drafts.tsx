@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
+import { useDocumentView } from '../../editor/document-view-controls';
 import {
   FACILITY_TYPES,
   WAY_FAMILIES,
@@ -11,7 +12,6 @@ import {
 import type { Tool } from '../../editor/store';
 import { ColorField } from '../ColorField';
 import { Panel } from '../Panel';
-import { useView } from '../ViewProvider';
 import { GEOMETRY_OPTIONS, GradeChips } from './shared';
 /**
  * When a drawing tool is armed (anything but Select), the sidebar shows
@@ -70,7 +70,7 @@ function WayDraftInspector() {
     setDraftServiceEnabled,
     addPaletteColor,
   } = useEditorCommands().tools;
-  const { viewMode } = useView();
+  const { viewMode } = useDocumentView();
 
   const type = wayType(draftWayTypeId);
   const compatibleModes = modesForWayType(draftWayTypeId);
@@ -235,7 +235,7 @@ function WayDraftInspector() {
 /** One shortcut, two explicit place concepts: Network places a Stop;
  * Infrastructure draws a Station boundary. */
 function StopDraftInspector() {
-  const { viewMode } = useView();
+  const { viewMode } = useDocumentView();
   return (
     <Panel slot="right" aria-label="Drawing options">
       <div className="insp-head">

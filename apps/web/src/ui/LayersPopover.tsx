@@ -1,7 +1,7 @@
 import { MODE_ORDER, MODES, WAY_TYPE_ORDER, WAY_TYPES } from '@transitmapper/core/model/catalog';
+import { useDocumentView } from '../editor/document-view-controls';
 import { IconButton } from './IconButton';
 import { Popover } from './Popover';
-import { useView } from './ViewProvider';
 
 /**
  * Per-mode / per-way-type visibility, generated straight from the catalogs —
@@ -17,7 +17,7 @@ export function LayersPopover() {
     showAllWayTypes,
     showLandmarks,
     toggleLandmarks,
-  } = useView();
+  } = useDocumentView();
 
   const anyHidden =
     visibleModes.size < MODE_ORDER.length ||

@@ -14,7 +14,7 @@ import type {
   TransitSystem,
 } from '@transitmapper/core/model/system';
 import { patternStops } from '@transitmapper/core/sim/serviceStats';
-import type { DocumentRepresentationId } from './ViewProvider';
+import type { DocumentRepresentationId } from '@transitmapper/renderer/presentation';
 export interface SidebarStop {
   stopId: string;
   name: string;

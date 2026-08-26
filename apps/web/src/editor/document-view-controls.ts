@@ -11,15 +11,15 @@ export type ViewMode = DocumentRepresentationId;
 
 export interface DocumentViewControls {
   viewMode: DocumentRepresentationId;
-  setViewMode(mode: DocumentRepresentationId): void;
-  visibleModes: ReadonlySet<string>;
-  visibleWayTypes: ReadonlySet<string>;
-  toggleMode(id: string): void;
-  toggleWayType(id: string): void;
-  showAllModes(): void;
-  showAllWayTypes(): void;
+  setViewMode: (mode: DocumentRepresentationId) => void;
+  visibleModes: Set<string>;
+  visibleWayTypes: Set<string>;
+  toggleMode: (id: string) => void;
+  toggleWayType: (id: string) => void;
+  showAllModes: () => void;
+  showAllWayTypes: () => void;
   showLandmarks: boolean;
-  toggleLandmarks(): void;
+  toggleLandmarks: () => void;
 }
 
 interface ViewControlSnapshot {

@@ -74,7 +74,7 @@ export function exportQuickSystem(
   });
 }
 
-/** Keyboard capture has no ViewProvider, so it intentionally exports the
+/** Keyboard capture has no map View store, so it intentionally exports the
  * complete network with every catalog layer visible. */
 export function exportNetworkPng(system: TransitSystem): Promise<void> {
   return exportQuickSystem(

@@ -4,10 +4,12 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aSystem } from '@transitmapper/core/testing/fixtures';
+import { createMapViewStore } from '@transitmapper/map';
+import { MapViewProvider } from '@transitmapper/workspace';
 import { EditorProvider } from '../../src/editor/EditorProvider';
+import { createDocumentPresentationState } from '../../src/editor/document-view-adapter';
 import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { ExportSplitButton } from '../../src/ui/ExportSplitButton';
-import { ViewProvider } from '../../src/ui/ViewProvider';
 
 const { exportFullSystemSvg } = vi.hoisted(() => ({ exportFullSystemSvg: vi.fn() }));
 
@@ -43,9 +45,9 @@ describe('Export split button', () => {
     act(() => {
       root.render(
         <EditorProvider store={store}>
-          <ViewProvider>
+          <MapViewProvider store={createMapViewStore(createDocumentPresentationState())}>
             <ExportSplitButton />
-          </ViewProvider>
+          </MapViewProvider>
         </EditorProvider>,
       );
     });

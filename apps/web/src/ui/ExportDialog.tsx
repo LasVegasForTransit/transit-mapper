@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Map as MLMap } from 'maplibre-gl';
 import { useEditor } from '../editor/EditorProvider';
+import type { ViewMode } from '../editor/document-view-controls';
 import { MODE_ORDER, MODES, WAY_TYPE_ORDER, WAY_TYPES } from '@transitmapper/core/model/catalog';
 import { legendEntriesFor } from '../share/exportLegend';
 import { exportPngFromMap } from '../share/pngExport';
@@ -8,7 +9,6 @@ import { exportSvgFromMap } from '../share/svgExport';
 import { ExportPreviewMap, resetFraming } from './ExportPreviewMap';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
-import type { ViewMode } from './ViewProvider';
 
 type ExportFormat = 'png' | 'svg';
 const EXPORT_TIMEOUT_MS = 20_000;

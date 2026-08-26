@@ -1,4 +1,5 @@
 import { useEditor, useEditorCommands, useEditorStore } from '../editor/EditorProvider';
+import { useDocumentView, type ViewMode } from '../editor/document-view-controls';
 import { forkSystem } from '@transitmapper/core/model/serialize';
 import { useInertRef } from '@transitmapper/workspace/inert-ref';
 import { blurOnEnter } from './formUtils';
@@ -9,7 +10,6 @@ import { FileMenu } from './FileMenu';
 import { IconButton } from './IconButton';
 import { LayersPopover } from './LayersPopover';
 import { useUi } from './UiProvider';
-import { useView, type ViewMode } from './ViewProvider';
 import { Icon } from './Icon';
 const VIEW_MODES: { mode: ViewMode; label: string }[] = [
   { mode: 'network', label: 'Network' },
@@ -36,7 +36,7 @@ const MOD_LABEL = IS_MAC ? '⌘' : 'Ctrl';
  *  — there is no such card on mobile, which is why this class stays here
  *  on the control rather than moving up to the card. */
 export function ViewSwitch() {
-  const { viewMode, setViewMode } = useView();
+  const { viewMode, setViewMode } = useDocumentView();
   const { uiHidden } = useUi();
   const ref = useInertRef<HTMLDivElement>(uiHidden);
   return (
@@ -74,7 +74,7 @@ export function ViewSwitch() {
  * view is something you do once and then work inside.
  */
 export function ViewSwitchCompact() {
-  const { viewMode, setViewMode } = useView();
+  const { viewMode, setViewMode } = useDocumentView();
   const { uiHidden } = useUi();
   const ref = useInertRef<HTMLDivElement>(uiHidden);
   const current = VIEW_MODES.find((v) => v.mode === viewMode) ?? VIEW_MODES[0];

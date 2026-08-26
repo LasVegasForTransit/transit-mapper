@@ -5,12 +5,12 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aSystem } from '@transitmapper/core/testing/fixtures';
 import { createMapViewStore, type MapViewStore } from '@transitmapper/map';
+import { MapViewProvider } from '@transitmapper/workspace';
 import { EditorProvider } from '../../src/editor/EditorProvider';
 import { createDocumentPresentationState } from '../../src/editor/document-view-adapter';
 import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { FileMenu } from '../../src/ui/FileMenu';
 import { TopBarBrand } from '../../src/ui/TopBar';
-import { ViewProvider } from '../../src/ui/ViewProvider';
 
 const { exportSystemJson } = vi.hoisted(() => ({ exportSystemJson: vi.fn() }));
 
@@ -34,7 +34,7 @@ function renderWithEditor(children: ReactNode): void {
   act(() => {
     root.render(
       <EditorProvider store={store}>
-        <ViewProvider store={mapViewStore}>{children}</ViewProvider>
+        <MapViewProvider store={mapViewStore}>{children}</MapViewProvider>
       </EditorProvider>,
     );
   });

@@ -2,19 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { EditorProvider } from '../../src/editor/EditorProvider';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
+import { createMapViewStore } from '@transitmapper/map';
+import { MapViewProvider } from '@transitmapper/workspace';
+import type { DocumentRepresentationId } from '@transitmapper/renderer/presentation';
+import { createDocumentPresentationState } from '../../src/editor/document-view-adapter';
 import { SidebarPanel } from '../../src/ui/SidebarPanel';
 import {
   infrastructureOutlineProjection,
   sidebarSectionsForView,
 } from '../../src/ui/sidebarOutline';
-import { ViewProvider, type DocumentRepresentationId } from '../../src/ui/ViewProvider';
 
 function renderSidebar(viewMode: DocumentRepresentationId = 'network'): string {
+  const viewStore = createMapViewStore(
+    createDocumentPresentationState({ representationId: viewMode }),
+  );
   return renderToStaticMarkup(
     <EditorProvider>
-      <ViewProvider initialViewMode={viewMode}>
+      <MapViewProvider store={viewStore}>
         <SidebarPanel />
-      </ViewProvider>
+      </MapViewProvider>
     </EditorProvider>,
   );
 }
@@ -44,7 +50,7 @@ describe('SidebarPanel', () => {
     // Diagram is a schematic projection OF the network, so it shows the same
     // lines. It used to have a workspace of its own holding mode checkboxes
     // and a Landmarks toggle — the Layers control's, off the same
-    // ViewProvider state — and on a phone both copies were on screen at once.
+    // map View state — and on a phone both copies were on screen at once.
     const markup = renderSidebar('diagram');
 
     expect(markup).toContain('Diagram');
