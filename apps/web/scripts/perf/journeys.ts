@@ -658,7 +658,7 @@ export async function runMeasuredJourney(
   entity?: EditorEntity,
   simulationState: PerfGestureDiagnostics['simulationState'] = 'not-applicable',
 ): Promise<JourneySummary> {
-  if (scenario.surface !== 'embed') {
+  if (scenarioRequiresEditorProjectionCounts(scenario)) {
     await page.waitForFunction(
       () => typeof (window as PerfPageWindow).__mapProjectionCounts === 'function',
       undefined,
@@ -760,6 +760,10 @@ function scenarioReadyDiagnostics(page: Page, selector: string) {
 
 export function scenarioIdentitySelector(scenario: PerfScenario): string | undefined {
   return scenario.surface === 'share' ? scenario.readySelector : undefined;
+}
+
+export function scenarioRequiresEditorProjectionCounts(scenario: PerfScenario): boolean {
+  return scenario.surface === 'editor';
 }
 
 async function waitForReadySurface(
