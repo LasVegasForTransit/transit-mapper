@@ -219,6 +219,7 @@ class DocumentMapDriver implements MapDriver {
         previousView.visibleWayTypes,
       );
     const ensureOverlay = (): boolean => {
+      if (latestSnapshot.status !== 'ready') return false;
       try {
         this.options.setupStaticSources?.(map);
         for (const sourceId of physicalRenderSourceIds([
@@ -494,6 +495,14 @@ class DocumentMapDriver implements MapDriver {
       const previous = latestSnapshot;
       latestSnapshot = snapshot;
       if (snapshot.status !== 'ready') return;
+      if (!overlayReady) {
+        try {
+          if (!ensureOverlay()) return;
+        } catch (error) {
+          reportSafely(attachOptions, error);
+          return;
+        }
+      }
       const identityChanged = authoritativeSystemId(previous) !== snapshot.system.id;
       if (identityChanged) {
         cameraPreload.reset();

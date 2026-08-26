@@ -90,6 +90,29 @@ function driverOptions(
 }
 
 describe('document map driver', () => {
+  it('waits for a ready document before installing the map overlay', async () => {
+    const source = new TestDocumentSource({
+      status: 'loading',
+      system: aSystem({ id: 'loading' }),
+    });
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker();
+    const attachSession = vi.fn();
+    const driver = createDocumentMapDriver(driverOptions(source, clock, worker, { attachSession }));
+    const attachment = await driver.attach(createAttachOptions(map, [], []));
+
+    expect(map.sourceCount()).toBe(0);
+    expect(map.styleUpdates).toHaveLength(0);
+    expect(attachSession).not.toHaveBeenCalled();
+
+    source.publish(readySnapshot(createReadySystem()));
+
+    expect(map.sourceCount()).toBeGreaterThan(0);
+    expect(attachSession).toHaveBeenCalledOnce();
+    attachment.dispose();
+  });
+
   it('installs only the layers required by the current representation', async () => {
     const source = new TestDocumentSource(readySnapshot(aSystem({ id: 'empty' })));
     const map = new TestDocumentMap();
