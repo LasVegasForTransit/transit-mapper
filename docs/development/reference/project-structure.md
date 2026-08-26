@@ -237,8 +237,16 @@ flowchart LR
   Main --> Root[AppRoot shell]
   Root --> Intent[Route intent]
   Root -. lazy .-> Editor[Editor and providers]
+  Root -. lazy .-> Viewer[Viewer application]
   Editor --> Bootstrap[Bootstrap]
+  Viewer --> Session[Viewer session resolver]
 ```
+
+The editor owns `/`. The viewer owns both shared-system routes at `/s/:id` and
+published View routes at `/v/:id`. A shared-system route synthesizes default
+presentation state. A published View route loads its saved state and then
+loads the referenced shared system. Both routes mount the same viewer
+workspace and document map driver without constructing editor state.
 
 #### Editing
 

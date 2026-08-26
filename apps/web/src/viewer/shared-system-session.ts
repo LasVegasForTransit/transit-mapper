@@ -16,9 +16,15 @@ export interface SharedSystemSession {
 
 const browserSources: SharedSystemSessionSources = { fetchSharedSystem: fetchShare };
 
-function resolvedViewState(system: TransitSystem, fragmentValue?: string): MapViewStateV1 {
-  const fallback = createDocumentPresentationState({ camera: system.viewport });
-  if (fragmentValue === undefined) return fallback;
+export function resolveDocumentViewState(
+  system: TransitSystem,
+  baseState: MapViewStateV1 = createDocumentPresentationState({ camera: system.viewport }),
+  fragmentValue?: string,
+): MapViewStateV1 {
+  const fallback = resolveMapPresentationState(DOCUMENT_MAP_DEFINITION, baseState);
+  const resolvedFallback =
+    baseState.selection === undefined ? fallback : { ...fallback, selection: baseState.selection };
+  if (fragmentValue === undefined) return resolvedFallback;
   try {
     const decoded = decodeMapViewState(fragmentValue);
     const presentation = resolveMapPresentationState(DOCUMENT_MAP_DEFINITION, decoded);
@@ -26,7 +32,7 @@ function resolvedViewState(system: TransitSystem, fragmentValue?: string): MapVi
       ? presentation
       : { ...presentation, selection: decoded.selection };
   } catch (error) {
-    if (error instanceof ViewParseError) return fallback;
+    if (error instanceof ViewParseError) return resolvedFallback;
     throw error;
   }
 }
@@ -38,5 +44,5 @@ export async function resolveSharedSystemSession(
   sources: SharedSystemSessionSources = browserSources,
 ): Promise<SharedSystemSession> {
   const system = await sources.fetchSharedSystem(shareId, { signal });
-  return { system, state: resolvedViewState(system, fragmentValue) };
+  return { system, state: resolveDocumentViewState(system, undefined, fragmentValue) };
 }

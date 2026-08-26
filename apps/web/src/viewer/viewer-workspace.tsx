@@ -37,6 +37,7 @@ const resolveDocumentFeatureDetails: ViewerFeatureDetailsResolver = async (syste
 export interface ViewerWorkspaceProps {
   status: ViewerStatus;
   system: TransitSystem | null;
+  title?: string;
   viewStore: MapViewStore;
   selection: SelectionController;
   mapFailed: boolean;
@@ -242,6 +243,7 @@ function ViewerActions({ system, viewStore, onFork, onCopyLink }: ViewerActionsP
 export function ViewerWorkspace({
   status,
   system,
+  title,
   viewStore,
   selection,
   mapFailed,
@@ -277,7 +279,7 @@ export function ViewerWorkspace({
     <MapWorkspace
       mapSurface={mapSurface}
       slots={{
-        brand: <span className="viewer-brand">{system?.name ?? 'TransitMapper'}</span>,
+        brand: <span className="viewer-brand">{title ?? system?.name ?? 'TransitMapper'}</span>,
         primaryActions: (
           <ViewerActions
             system={system}

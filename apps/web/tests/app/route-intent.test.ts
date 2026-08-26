@@ -12,6 +12,14 @@ describe('application route intent', () => {
   });
 
   it.each([
+    ['/v/a', 'a'],
+    ['/v/view123', 'view123'],
+    ['/v/view123/', 'view123'],
+  ])('recognizes the published View path %s', (pathname, viewId) => {
+    expect(parseRouteIntent(pathname)).toEqual({ kind: 'published-view', viewId });
+  });
+
+  it.each([
     '/',
     '/editor',
     '/s/',
@@ -20,6 +28,9 @@ describe('application route intent', () => {
     `/s/${'a'.repeat(33)}`,
     '/s/abc123/details',
     '/s/abc123//',
+    '/v/',
+    '/v/VIEW123',
+    '/v/view-123',
   ])('keeps %s on the editor fallback', (pathname) => {
     expect(parseRouteIntent(pathname)).toEqual({ kind: 'editor' });
   });

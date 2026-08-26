@@ -54,7 +54,7 @@ export function AppRoot({
     [pathname],
   );
   const routeHostLoader =
-    routeIntent.kind === 'shared-system' ? loadViewerApplication : loadEditorApplication;
+    routeIntent.kind === 'editor' ? loadEditorApplication : loadViewerApplication;
   const RouteHost = useMemo(() => lazy(routeHostLoader), [routeHostLoader]);
 
   return (

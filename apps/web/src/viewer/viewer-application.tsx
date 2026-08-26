@@ -4,7 +4,7 @@ import { createMapViewStore, createSelectionController } from '@transitmapper/ma
 import type { RouteHostProps } from '../app/route-host';
 import { createDocumentPresentationState } from '../editor/document-view-adapter';
 import { attachViewLink, copyViewLink } from '../views/view-link';
-import { resolveSharedSystemSession, type SharedSystemSession } from './shared-system-session';
+import { resolveViewerSession, type ViewerSession } from './viewer-session';
 import {
   ViewerWorkspace,
   type ViewerFeatureDetailsResolver,
@@ -15,7 +15,7 @@ import '../ui/app.css';
 import '@transitmapper/workspace/workbench.css';
 import './viewer.css';
 
-export type ViewerSessionResolver = typeof resolveSharedSystemSession;
+export type ViewerSessionResolver = typeof resolveViewerSession;
 
 export interface ViewerApplicationProps extends RouteHostProps {
   resolveSession?: ViewerSessionResolver;
@@ -61,7 +61,7 @@ const renderDocumentMap: ViewerMapRenderer = (options) => (
 
 export function ViewerApplication({
   routeIntent,
-  resolveSession = resolveSharedSystemSession,
+  resolveSession = resolveViewerSession,
   fragmentValue = currentFragmentValue(),
   renderMap = renderDocumentMap,
   onFork = (system) => void forkIntoEditor(system),
@@ -72,17 +72,17 @@ export function ViewerApplication({
   const [selection] = useState(() => createSelectionController());
   const [status, setStatus] = useState<ViewerStatus>('loading');
   const [mapFailed, setMapFailed] = useState(false);
-  const [session, setSession] = useState<SharedSystemSession | null>(null);
+  const [session, setSession] = useState<ViewerSession | null>(null);
 
   useEffect(() => {
-    if (routeIntent.kind !== 'shared-system') {
+    if (routeIntent.kind === 'editor') {
       setStatus('error');
       return;
     }
     const controller = new AbortController();
     setStatus('loading');
     setMapFailed(false);
-    void resolveSession(routeIntent.shareId, fragmentValue, controller.signal).then(
+    void resolveSession(routeIntent, fragmentValue, controller.signal).then(
       (next) => {
         if (controller.signal.aborted) return;
         viewStore.replace(next.state);
@@ -106,6 +106,7 @@ export function ViewerApplication({
     <ViewerWorkspace
       status={status}
       system={session?.system ?? null}
+      title={session?.title}
       viewStore={viewStore}
       selection={selection}
       mapFailed={mapFailed}
