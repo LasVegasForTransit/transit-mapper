@@ -20,6 +20,7 @@ import type {
 } from '../../src/perf/types';
 import {
   type BrowserMetricState,
+  type BrowserProductionPersistenceCycle,
   type DirectJourneyMeasurements,
   type GestureCaptureState,
   type PerfPageWindow,
@@ -57,6 +58,18 @@ export interface EditorEntity {
 
 interface DrawPersistenceResult {
   persistence: PerfProductionPersistenceProbe;
+}
+
+type StopSnapshot = NonNullable<ReturnType<NonNullable<PerfPageWindow['__perfStopSnapshot']>>>;
+
+interface DrawCommit {
+  after: StopSnapshot;
+  commitRequestedAt: number;
+}
+
+interface DurableDraw {
+  cycle: BrowserProductionPersistenceCycle;
+  stored: { revision: number; wayCount: number } | null;
 }
 
 interface JourneySummary {
@@ -451,12 +464,7 @@ async function performCameraDrag(
   if (!changed) throw new Error('The deterministic pointer drag did not change the live camera.');
 }
 
-async function performDrawAndPersistenceProof(
-  page: Page,
-  scenario: PerfScenario,
-  canvas: CanvasGeometry,
-  entityId: string,
-): Promise<DrawPersistenceResult> {
+async function drawLine(page: Page, canvas: CanvasGeometry, entityId: string): Promise<DrawCommit> {
   const before = await page.evaluate((stopId) => {
     const snapshot = (window as PerfPageWindow).__perfStopSnapshot?.(stopId);
     if (!snapshot) throw new Error('The performance system seam is unavailable.');
@@ -485,7 +493,10 @@ async function performDrawAndPersistenceProof(
   if (!drawChangedSystem(before, after)) {
     throw new Error('The line draw did not advance the system revision and way count.');
   }
+  return { after, commitRequestedAt };
+}
 
+async function waitForProductionPersistence(page: Page, commitRequestedAt: number): Promise<void> {
   // Include validation and the shared content/camera persistence debounce.
   await page.waitForTimeout(550);
   try {
@@ -509,7 +520,14 @@ async function performDrawAndPersistenceProof(
       cause: error,
     });
   }
-  const durable = await page.evaluate(
+}
+
+function readDurableDraw(
+  page: Page,
+  scenario: PerfScenario,
+  commitRequestedAt: number,
+): Promise<DurableDraw> {
+  return page.evaluate(
     async ({ expected, storage }) => {
       const cycle = [...((window as PerfPageWindow).__perfProductionPersistence?.cycles ?? [])]
         .reverse()
@@ -567,6 +585,17 @@ async function performDrawAndPersistenceProof(
       storage: PERF_STORAGE_CONTRACT,
     },
   );
+}
+
+async function performDrawAndPersistenceProof(
+  page: Page,
+  scenario: PerfScenario,
+  canvas: CanvasGeometry,
+  entityId: string,
+): Promise<DrawPersistenceResult> {
+  const { after, commitRequestedAt } = await drawLine(page, canvas, entityId);
+  await waitForProductionPersistence(page, commitRequestedAt);
+  const durable = await readDurableDraw(page, scenario, commitRequestedAt);
   if (durable.stored?.revision !== after.revision || durable.stored.wayCount !== after.wayCount) {
     throw new Error('IndexedDB did not contain the committed line draw.');
   }
@@ -733,10 +762,9 @@ export function scenarioIdentitySelector(scenario: PerfScenario): string | undef
   return scenario.surface === 'share' ? scenario.readySelector : undefined;
 }
 
-export async function waitForScenarioReady(
+async function waitForReadySurface(
   page: Page,
   scenario: PerfScenario,
-  expectedName: string,
   loadPhase: 'cold' | 'warm',
 ): Promise<void> {
   try {
@@ -759,6 +787,13 @@ export async function waitForScenarioReady(
       { cause: error },
     );
   }
+}
+
+async function waitForScenarioIdentity(
+  page: Page,
+  scenario: PerfScenario,
+  expectedName: string,
+): Promise<void> {
   if (scenario.surface === 'editor') {
     // Wait for the document, not for the chrome. The editor renders its whole
     // shell before the saved system has been read, so the name field being on
@@ -777,7 +812,7 @@ export async function waitForScenarioReady(
     try {
       await page.waitForFunction(
         ({ selector, expected }) =>
-          document.querySelector(selector)?.textContent?.trim() === expected,
+          document.querySelector(selector)?.textContent.trim() === expected,
         { selector: identitySelector, expected: expectedName },
         { timeout: 60_000 },
       );
@@ -794,7 +829,13 @@ export async function waitForScenarioReady(
       { timeout: 60_000 },
     );
   }
+}
 
+async function waitForFirstSystemPaint(
+  page: Page,
+  scenario: PerfScenario,
+  loadPhase: 'cold' | 'warm',
+): Promise<void> {
   try {
     await page.waitForFunction(
       (markName) => performance.getEntriesByName(markName, 'mark').length > 0,
@@ -832,6 +873,17 @@ export async function waitForScenarioReady(
       { cause: error },
     );
   }
+}
+
+export async function waitForScenarioReady(
+  page: Page,
+  scenario: PerfScenario,
+  expectedName: string,
+  loadPhase: 'cold' | 'warm',
+): Promise<void> {
+  await waitForReadySurface(page, scenario, loadPhase);
+  await waitForScenarioIdentity(page, scenario, expectedName);
+  await waitForFirstSystemPaint(page, scenario, loadPhase);
   await waitForResponsePaint(page);
   await page.waitForTimeout(250);
 }
