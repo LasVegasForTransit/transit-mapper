@@ -22,6 +22,7 @@ import {
 import { runMeasuredJourney, waitForScenarioReady } from './journeys';
 import { networkEditStopCandidates } from './offline-edit-target';
 import { combineProductionPersistence } from './production-persistence';
+import { PERFORMANCE_HARNESS_OUTPUT_DIRECTORY } from './process';
 import { renderedNetworkStopId } from './rendered-network-stop';
 
 interface RunSampleOptions {
@@ -70,7 +71,9 @@ async function runSample(options: RunSampleOptions): Promise<PerfSample | undefi
     await seedIndexedDbFixture(page, serializedFixture, fixture);
     await installPerformanceInstrumentation(page);
     await session.send('Network.clearBrowserCache');
-    await configureSurfaceRoutes(page, options.scenario, serializedFixture);
+    await configureSurfaceRoutes(page, options.scenario, serializedFixture, {
+      embedHtmlPath: resolve(PERFORMANCE_HARNESS_OUTPUT_DIRECTORY, 'embed.html'),
+    });
     if (options.tracePath) {
       await startTrace(session);
       traceStarted = true;
