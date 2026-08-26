@@ -43,7 +43,6 @@ import type {
   DocumentMapDriverOptions,
   DocumentMapProjectionRequest,
   DocumentMapSceneAccepted,
-  DocumentMapScheduler,
   DocumentMapSession,
   DocumentMapSessionAttachment,
   DocumentMapSnapshot,
@@ -52,6 +51,7 @@ import {
   createDocumentMapStyleRecovery,
   type DocumentMapStyleRecovery,
 } from './document-map-style-recovery';
+import { createDocumentMapScheduler } from './document-map-scheduler';
 export type * from './document-map-driver-types';
 
 interface ActiveProjection {
@@ -60,16 +60,6 @@ interface ActiveProjection {
 }
 
 const emptyFeatureCollection = { type: 'FeatureCollection' as const, features: [] };
-
-function defaultScheduler(): DocumentMapScheduler {
-  return {
-    now: () => performance.now(),
-    scheduleFrame: (callback) => requestAnimationFrame(() => callback()),
-    cancelFrame: (handle) => cancelAnimationFrame(handle),
-    scheduleTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
-    cancelTimer: (handle) => window.clearTimeout(handle),
-  };
-}
 
 function reportSafely(options: MapDriverAttachOptions, error: unknown): void {
   try {
@@ -150,7 +140,7 @@ class DocumentMapDriver implements MapDriver {
       return Promise.resolve({ resolveFeature: () => Promise.resolve(null), dispose() {} });
     }
     const map = attachOptions.host.map;
-    const scheduler = this.options.scheduler ?? defaultScheduler();
+    const scheduler = this.options.scheduler ?? createDocumentMapScheduler();
     const ownsScheduler = this.options.scheduler === undefined;
     let latestSnapshot: DocumentMapSnapshot;
     let previousView: ReturnType<DocumentMapDriverOptions['resolvePresentation']>;
