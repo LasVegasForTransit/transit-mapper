@@ -77,6 +77,7 @@ const OFFLINE_EDITOR_WORKER_PREFIXES = [
 ] as const;
 
 export const OFFLINE_EDITOR_ENTRY_NAME = 'offline-editor';
+const EDITOR_APPLICATION_ENTRY_NAME = 'editor-application';
 
 type BuildEntryName = 'main' | 'embed' | typeof OFFLINE_EDITOR_ENTRY_NAME;
 
@@ -146,6 +147,27 @@ function offlineEditorGraph(manifest: BuildManifest): Set<string> {
   return files;
 }
 
+/** The route shell imports the editor host lazily. An installed release must
+ * retain that host and its static closure, or its cached shell can request a
+ * hashed startup chunk that the next deployment has already replaced. */
+function editorApplicationGraph(manifest: BuildManifest): Set<string> {
+  const mainKey = entryKey(manifest, 'main');
+  const main = manifest[mainKey];
+  if (!main) throw new Error(`Vite manifest import "${mainKey}" does not exist.`);
+  const editorKey = (main.dynamicImports ?? []).find(
+    (key) => manifest[key]?.name === EDITOR_APPLICATION_ENTRY_NAME,
+  );
+  if (!editorKey) throw new Error('Vite manifest has no editor application entry.');
+  const files = new Set<string>();
+  collectManifestGraph(editorKey, {
+    manifest,
+    files,
+    visited: new Set(),
+    includeDynamicImports: false,
+  });
+  return files;
+}
+
 export function manifestInstallIconFiles(manifest: WebAppManifest): string[] {
   return [
     ...new Set((manifest.icons ?? []).map((icon) => icon.src.replace(/^\/+/, '')).filter(Boolean)),
@@ -185,6 +207,7 @@ export function editorOfflinePrecacheFiles(
   return [
     ...new Set([
       ...editorPrecacheFiles(manifest, installIcons),
+      ...editorApplicationGraph(manifest),
       ...offlineEditorGraph(manifest),
       ...offlineEditorWorkerFiles(outputFiles),
     ]),

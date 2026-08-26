@@ -18,7 +18,7 @@ const manifest: BuildManifest = {
     isEntry: true,
     name: 'main',
     imports: ['_shared.js'],
-    dynamicImports: ['_adaptive-feature.js'],
+    dynamicImports: ['_editor-application.js'],
     css: ['assets/main.css'],
   },
   'manifest-node:embed': {
@@ -30,6 +30,12 @@ const manifest: BuildManifest = {
   '_shared.js': {
     file: 'assets/shared.js',
     css: ['assets/shared.css'],
+  },
+  '_editor-application.js': {
+    file: 'assets/editor-application.js',
+    name: 'editor-application',
+    imports: ['_shared.js'],
+    dynamicImports: ['_adaptive-feature.js'],
   },
   'offline-editor-entry': {
     file: 'assets/offline-editor.js',
@@ -160,6 +166,20 @@ describe('PWA precache output', () => {
     expect(precached.has(offlineEditorOutputs.runtimeStyles)).toBe(true);
     expect(precached.has(offlineEditorOutputs.nestedRuntime)).toBe(true);
     expect(precached.has(offlineEditorOutputs.optionalFeature)).toBe(false);
+  });
+
+  it('retains the lazy editor host required by the cached application shell', () => {
+    const precached = editorOfflinePrecacheFiles(
+      offlineEditorManifest,
+      installIcons,
+      offlineRuntimeFiles,
+    );
+    const adaptive = editorAdaptiveFiles(offlineEditorManifest, installIcons, offlineRuntimeFiles);
+    const editorHost = offlineEditorManifest['_editor-application.js']?.file;
+    if (!editorHost) throw new Error('The fixture has no editor application output.');
+
+    expect(precached).toContain(editorHost);
+    expect(adaptive).not.toContain(editorHost);
   });
 
   it('classifies lazy features and install artwork as adaptive assets', () => {
