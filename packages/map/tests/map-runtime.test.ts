@@ -139,6 +139,20 @@ describe('createMapRuntime', () => {
     expect(recoverDocumentLayers).toHaveBeenCalledWith('light', true);
   });
 
+  it('can settle the base style before document content attaches', async () => {
+    const { runtime, map, fetchStyle } = createHarness({
+      baseStyleTiming: 'before-content',
+    });
+
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(remoteStyle('light')));
+    map.settleStyle();
+    await runtime.flushTheme();
+    runtime.milestones.contentCommitted();
+
+    expect(fetchStyle).toHaveBeenCalledOnce();
+    expect(map.style).toEqual(remoteStyle('light'));
+  });
+
   it('waits for MapLibre to load a replacement before applying its theme or recovery mode', async () => {
     const { runtime, map, recoverDocumentLayers } = createHarness();
 

@@ -19,9 +19,9 @@ import type { RendererStatsCollector } from '@transitmapper/renderer/stats';
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { LayerSpecification, Map as MLMap } from 'maplibre-gl';
 import { attachPerfHarness, type PerfHarnessOptions } from '../perf';
-import { markFirstSystemMapPaint } from '../perf/mapPaintMark';
 import { attachSimDevHandle } from '../sim/devHandle';
 import type { EditorMapAttachment } from '../editor/editor-map-attachment';
+import { attachDocumentMapPaintProof } from './document-map-paint-proof';
 import type { EditorMapDriverPorts } from './editor-map-ports';
 import type { ProjectionOperationCounts } from './gestureProjection';
 import { recordFullProjection } from './gestureProjection';
@@ -140,35 +140,20 @@ function perfOptions(context: InstrumentationContext): PerfHarnessOptions {
 
 function attachPaintProof(context: InstrumentationContext, trace: string[]): () => void {
   const { session, ports, counts } = context;
-  let acceptedDocumentId: string | null = null;
-  const unsubscribe = session.subscribeAcceptedScene(({ snapshot, update }) => {
-    recordFullProjection(counts, update.sourceUploadCount);
-    if (snapshot.status === 'ready' && snapshot.system.id === ports.store.getState().system.id) {
-      trace.push('scene-accepted');
-      acceptedDocumentId = snapshot.system.id;
-      session.map.triggerRepaint();
-    }
-    if (ports.viewStore.getSnapshot().representationId === 'diagram') context.hideBasemap();
+  return attachDocumentMapPaintProof({
+    session,
+    currentDocumentId: () => {
+      const current = ports.store.getState();
+      return current.documentStatus === 'ready' ? current.system.id : null;
+    },
+    onSceneAccepted: ({ snapshot, update }) => {
+      recordFullProjection(counts, update.sourceUploadCount);
+      if (snapshot.status === 'ready' && snapshot.system.id === ports.store.getState().system.id) {
+        trace.push('scene-accepted');
+      }
+      if (ports.viewStore.getSnapshot().representationId === 'diagram') context.hideBasemap();
+    },
   });
-  const onRender = () => {
-    const current = ports.store.getState();
-    const sourceId = session.renderer.activeSourceId(SRC_STATIONS);
-    if (
-      acceptedDocumentId === null ||
-      current.documentStatus !== 'ready' ||
-      current.system.id !== acceptedDocumentId ||
-      !session.map.getSource(sourceId) ||
-      !session.map.isSourceLoaded(sourceId)
-    )
-      return;
-    session.map.off('render', onRender);
-    markFirstSystemMapPaint();
-  };
-  session.map.on('render', onRender);
-  return () => {
-    unsubscribe();
-    session.map.off('render', onRender);
-  };
 }
 
 export function attachEditorMapInstrumentation(context: InstrumentationContext): () => void {

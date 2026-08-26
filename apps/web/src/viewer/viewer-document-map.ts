@@ -23,6 +23,7 @@ import {
 import { landmarksFeatureCollection } from '../map/landmarks';
 import { registerMapIcons } from '../map/layers';
 import { layerSpecsForScheme } from '../map/mapTheme';
+import { attachDocumentMapPaintProof } from '../map/document-map-paint-proof';
 import { viewerFeatureReference } from './viewer-feature-reference';
 
 export interface ViewerDocumentMapStyle {
@@ -141,6 +142,10 @@ export function createViewerDocumentMap(options: CreateViewerDocumentMapOptions)
     attachSession: (session) => {
       options.onSessionChange?.(session);
       if (import.meta.env.DEV) window.__viewerDocumentSession = session;
+      const detachPaintProof = attachDocumentMapPaintProof({
+        session,
+        currentDocumentId: () => options.system.id,
+      });
       const detachPresentation = attachPresentation(session, options);
       const detachSelection = attachReaderSelection(session, options.selection);
       const onResize = () => session.scheduleProjection();
@@ -160,6 +165,7 @@ export function createViewerDocumentMap(options: CreateViewerDocumentMapOptions)
             delete window.__viewerDocumentSession;
           }
           session.map.off('resize', onResize);
+          detachPaintProof();
           detachSelection();
           detachPresentation();
         },

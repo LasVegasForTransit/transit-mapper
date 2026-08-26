@@ -74,6 +74,7 @@ export interface MapRuntimeOptions<ThemeId extends string> {
   style: MapRuntimeStyleOptions<ThemeId>;
   interaction: MapRuntimeInteractionOptions;
   controls: MapRuntimeControls;
+  baseStyleTiming?: 'before-content' | 'after-content';
   mapOptions?: Omit<
     MapOptions,
     | 'container'
@@ -234,7 +235,10 @@ export function createMapRuntime<ThemeId extends string>(
     reportError: (error) => options.reportError(error),
     onUnavailable: (error) => options.style.onBaseStyleUnavailable(error),
   });
-  let currentThemeRequest: Promise<void> = Promise.resolve();
+  const baseStyleBeforeContent = options.baseStyleTiming === 'before-content';
+  let currentThemeRequest: Promise<void> = baseStyleBeforeContent
+    ? styleController.request(options.initialTheme)
+    : Promise.resolve();
   let desiredTheme = options.initialTheme;
   let contentCommitted = false;
   let disposed = false;
@@ -245,14 +249,14 @@ export function createMapRuntime<ThemeId extends string>(
   const requestTheme = (theme: ThemeId) => {
     if (disposed) return Promise.resolve();
     desiredTheme = theme;
-    if (contentCommitted) return startThemeRequest(theme);
+    if (contentCommitted || baseStyleBeforeContent) return startThemeRequest(theme);
     return styleController.selectLocal(theme);
   };
   const startupMilestones = createMapStartupMilestones({
     onContentCommitted: () => {
       if (disposed) return;
       contentCommitted = true;
-      void startThemeRequest(desiredTheme);
+      if (!baseStyleBeforeContent) void startThemeRequest(desiredTheme);
     },
   });
   const milestones: ObservableMapStartupMilestones = {

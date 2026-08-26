@@ -18,7 +18,7 @@ import {
 import type { DocumentMapSession } from '@transitmapper/renderer/driver';
 import {
   MapSurface,
-  scheduleMapAttachmentAfterFirstPaint,
+  type MapSurfaceAttachmentScheduler,
   type MapSurfaceRuntimeFactory,
 } from '@transitmapper/workspace';
 import { useSystemColorScheme, type ColorScheme } from '../theme/systemColorScheme';
@@ -108,6 +108,7 @@ function viewerRuntimeFactory(ports: ViewerRuntimePorts): MapSurfaceRuntimeFacto
         navigation: { position: 'bottom-right', showCompass: false },
         attribution: { position: 'bottom-right', compact: true },
       },
+      baseStyleTiming: 'before-content',
       mapOptions: { fadeDuration: 0, refreshExpiredTiles: false },
       padding: chromePadding,
       reportError: (error) => {
@@ -151,6 +152,28 @@ export function ViewerMapSurface({ system, viewStore, selection, onError }: View
       reportError: (error) => onErrorRef.current(error),
     }),
   );
+  const [scheduleAttachment] = useState<MapSurfaceAttachmentScheduler>(
+    () => (start: () => void) => {
+      let cancelled = false;
+      const runtime = runtimeRef.current;
+      if (runtime === null) {
+        start();
+        return () => {};
+      }
+      void runtime.flushTheme().then(
+        () => {
+          if (!cancelled) start();
+        },
+        (error: unknown) => {
+          onErrorRef.current(error);
+          if (!cancelled) start();
+        },
+      );
+      return () => {
+        cancelled = true;
+      };
+    },
+  );
 
   return (
     <MapSurface
@@ -160,7 +183,7 @@ export function ViewerMapSurface({ system, viewStore, selection, onError }: View
       selection={selection}
       theme={colorScheme}
       createRuntime={createRuntime}
-      scheduleAttachment={scheduleMapAttachmentAfterFirstPaint}
+      scheduleAttachment={scheduleAttachment}
       onRuntimeChange={(runtime) => {
         runtimeRef.current = runtime;
         if (import.meta.env.DEV) window.__viewerMap = runtime?.map;

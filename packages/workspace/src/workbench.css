@@ -43,6 +43,13 @@
   touch-action: none;
 }
 
+/* MapLibre adds its own class to this same host node. Its one-class rule uses
+   relative positioning, so this two-class rule keeps workspace ownership of
+   the full-bleed map bounds regardless of stylesheet load order. */
+.workspace-map-surface.maplibregl-map {
+  position: absolute;
+}
+
 .workspace-overlay {
   position: absolute;
   inset: var(--overlay-gap);
