@@ -49,6 +49,17 @@ namespace_id = "1001"
   limit = 20
   period = 60
 
+# Publishing a View creates another caller-controlled D1 row. It uses its own
+# budget so a client cannot exhaust system sharing by creating View records,
+# or bypass this limit by alternating between the two resources.
+[[ratelimits]]
+name = "VIEW_CREATE_LIMITER"
+namespace_id = "1006"
+
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
 # Anonymous RUM is intentionally low-volume (one or five percent of sessions)
 # and every accepted body still becomes a D1 write. Ten samples per address
 # per minute leaves room for reloads and multiple tabs without offering an

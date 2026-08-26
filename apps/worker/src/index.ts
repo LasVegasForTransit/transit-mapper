@@ -13,7 +13,7 @@ import { checkPreviewPng, MAX_PREVIEW_BYTES } from '@transitmapper/core/render/p
 import { handleOpenStreetMapWays, handlePlaceSearch } from './osm-gateway';
 import { handlePerformanceSample } from './performance-samples';
 import { runScheduledMaintenance } from './performance-maintenance';
-import { apiV1 } from './api-v1';
+import { createApiV1 } from './api-v1';
 import {
   anonymousExpiry,
   randomEditToken,
@@ -23,6 +23,7 @@ import {
 
 type OptionalLocalBinding =
   | 'SHARE_CREATE_LIMITER'
+  | 'VIEW_CREATE_LIMITER'
   | 'PLACE_SEARCH_LIMITER'
   | 'PLACE_UPSTREAM_LIMITER'
   | 'OSM_TILE_LIMITER'
@@ -135,7 +136,19 @@ function withHtmlSecurityHeaders(response: Response, frameAncestors: string): Re
 
 const app = new Hono<{ Bindings: WorkerEnv }>();
 
-app.route(API_V1_PREFIX, apiV1);
+app.route(
+  API_V1_PREFIX,
+  createApiV1({
+    async getSharedSystem(db, id) {
+      const share = await getActiveShare(db, id);
+      return share
+        ? {
+            touch: () => touchExpiry(db, share),
+          }
+        : null;
+    },
+  }),
+);
 
 // Unhandled failures must not leak internals, and an /api client should get
 // JSON rather than a wall of text it can't parse.

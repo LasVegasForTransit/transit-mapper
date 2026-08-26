@@ -17,7 +17,8 @@ apps/web ────────┬──> packages/workspace ────> pac
                  ├──> packages/core
                  └──> packages/pwa-updater
 
-apps/worker ──────> packages/core
+apps/worker ──────┬──> packages/views
+                  └──> packages/core
 
 all TypeScript packages ──> packages/tsconfig
 repository linting ───────> packages/config-eslint ──> packages/eslint-plugin
@@ -56,6 +57,9 @@ turbo/            Turborepo generators and templates
 
 `packages/views` owns portable, versioned View values and hostile-input
 parsing. It imports no React, MapLibre, DOM, editor, or Worker framework code.
+The package also owns the create, update, and response contracts for published
+Views. The browser and Worker use those contracts without sharing HTTP or
+storage code.
 
 ### Map
 
@@ -377,8 +381,9 @@ Vite builds the editor, embed, and no-script privacy page.
 ### Worker
 
 `apps/worker` owns the Cloudflare deployment that serves the web build,
-publishes share resources, and persists snapshots. It imports core contracts
-and validation but never imports browser or editor modules.
+publishes shared systems and named Views, and persists their records. It
+imports portable core and View contracts but never imports browser or editor
+modules.
 
 #### HTTP delivery
 
@@ -386,15 +391,21 @@ The Worker routes API requests, shares, embeds, static assets, sampled reports,
 and maintenance. Stored text enters HTML through `HTMLRewriter`.
 
 `api-v1.ts` mounts new resources below `/api/v1`; legacy APIs remain
-unversioned. `gtfs-feeds.ts` owns reviewed metadata and R2 archive lookup.
+unversioned. `views-api.ts` owns public View creation, reads, edits, deletion,
+expiry, and edit-token checks. The main router injects shared-system lookup so
+a View read can keep its map alive without coupling the two route modules.
+`gtfs-feeds.ts` owns reviewed metadata and R2 archive lookup.
 
 `POST /api/performance-samples` accepts 8 KiB of same-origin JSON, honors
 GPC/DNT, validates it, and stores allowlisted columns.
 
 #### Persistence
 
-D1 stores shared systems, preview metadata, and short-lived sampled data. R2
-stores one current last-good GTFS archive per configured slug.
+D1 stores shared systems, named View records, preview metadata, and short-lived
+sampled data. A View stores validated presentation state and a mutable shared
+system ID. It has no foreign key because share expiry and cleanup must remain
+independent. A read deletes a View whose referenced system no longer exists.
+R2 stores one current last-good GTFS archive per configured slug.
 Migrations are append-only and Wrangler applies them in filename order. See
 [Operations](../../operations/how-to/operations.md).
 

@@ -294,6 +294,9 @@ importers:
       '@transitmapper/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@transitmapper/views':
+        specifier: workspace:*
+        version: link:../../packages/views
       hono:
         specifier: 'catalog:'
         version: 4.13.1

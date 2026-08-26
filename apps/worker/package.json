@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@transitmapper/core": "workspace:*",
+    "@transitmapper/views": "workspace:*",
     "hono": "catalog:"
   },
   "devDependencies": {
