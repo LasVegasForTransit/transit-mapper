@@ -4,68 +4,45 @@ import {
   discoverReferencedBuildAssets,
   filterEssentialPrecacheEntries,
 } from '../../scripts/adaptive-assets';
-import type { BuildManifest } from '../../src/perf/pwaPrecache';
+import { buildManifestFixture, createBuildManifestFixture } from '../support/build-manifest.test';
 
-const manifest: BuildManifest = {
-  'manifest-node:main': {
-    file: 'assets/main.js',
-    name: 'main',
-    isEntry: true,
-    imports: ['_shared.js'],
-    dynamicImports: ['manifest-node:editor-application'],
-    css: ['assets/main.css'],
-  },
-  '_shared.js': {
-    file: 'assets/shared.js',
-    css: ['assets/shared.css'],
-  },
-  'manifest-node:editor-application': {
-    file: 'assets/editor-application.js',
-    name: 'editor-application',
-    imports: ['_shared.js'],
-    dynamicImports: ['manifest-node:optional-feature'],
-  },
-  'manifest-node:optional-feature': {
-    file: 'assets/dialog.js',
-    assets: ['assets/dialog-icon.svg'],
-  },
-  'offline-editor-entry': {
-    file: 'assets/offline-editor.js',
-    name: 'offline-editor',
-    isEntry: true,
-    imports: ['_shared.js'],
-  },
-  'manifest-node:embed': {
-    file: 'assets/embed.js',
-    name: 'embed',
-    isEntry: true,
-    imports: ['_shared.js'],
-  },
-};
+const manifest = createBuildManifestFixture();
+const { files, offlineRuntimeFiles } = buildManifestFixture;
 
 describe('adaptive offline build assets', () => {
   it('filters Workbox input to the exact static editor shell', () => {
     const entries = [
-      { url: 'assets/dialog.js', size: 40, revision: 'dialog' },
+      { url: files.optionalFeatureScript, size: 40, revision: 'optional-feature' },
       {
-        url: 'assets/feature-projection-worker-entry-a1b2c3.js',
+        url: offlineRuntimeFiles[1],
         size: 100,
         revision: 'projection-worker',
       },
       {
-        url: 'assets/editor-application.js',
+        url: files.editorApplicationScript,
         size: 100,
         revision: 'editor-application',
       },
-      { url: 'assets/main.js', size: 100, revision: 'main' },
-      { url: 'assets/offline-editor.js', size: 100, revision: 'offline-editor' },
-      { url: 'assets/shared.js', size: 50, revision: 'shared' },
+      { url: files.mainScript, size: 100, revision: 'main' },
+      { url: files.offlineEditorScript, size: 100, revision: 'offline-editor' },
+      { url: files.sharedScript, size: 50, revision: 'shared' },
       { url: 'favicon.svg', size: 10, revision: 'favicon' },
       { url: 'index.html', size: 20, revision: 'document' },
       { url: 'manifest.json', size: 20, revision: 'manifest' },
     ];
 
-    expect(filterEssentialPrecacheEntries(entries, manifest)).toEqual(entries.slice(1));
+    expect(
+      filterEssentialPrecacheEntries(entries, manifest).map((entry) => entry.revision),
+    ).toEqual([
+      'projection-worker',
+      'editor-application',
+      'main',
+      'offline-editor',
+      'shared',
+      'favicon',
+      'document',
+      'manifest',
+    ]);
   });
 
   it('discovers Worker assets without pulling them into first install', async () => {

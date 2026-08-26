@@ -8,46 +8,16 @@ import {
   OFFLINE_GLYPH_RANGE_FILES,
   referencedBuildAssetFiles,
   verifyPrecacheOutput,
-  type BuildManifest,
   type WebAppManifest,
 } from '../../src/perf/pwaPrecache';
+import {
+  buildManifestFixture,
+  createBuildManifestFixture,
+  createOfflineEditorManifestFixture,
+} from '../support/build-manifest.test';
 
-const manifest: BuildManifest = {
-  'manifest-node:main': {
-    file: 'assets/main.js',
-    isEntry: true,
-    name: 'main',
-    imports: ['_shared.js'],
-    dynamicImports: ['_editor-application.js'],
-    css: ['assets/main.css'],
-  },
-  'manifest-node:embed': {
-    file: 'assets/embed.js',
-    isEntry: true,
-    name: 'embed',
-    imports: ['_shared.js'],
-  },
-  '_shared.js': {
-    file: 'assets/shared.js',
-    css: ['assets/shared.css'],
-  },
-  '_editor-application.js': {
-    file: 'assets/editor-application.js',
-    name: 'editor-application',
-    imports: ['_shared.js'],
-    dynamicImports: ['_adaptive-feature.js'],
-  },
-  'offline-editor-entry': {
-    file: 'assets/offline-editor.js',
-    isEntry: true,
-    name: 'offline-editor',
-    imports: ['_shared.js'],
-  },
-  '_adaptive-feature.js': {
-    file: 'assets/dialog.js',
-    assets: ['assets/dialog-icon.svg'],
-  },
-};
+const manifest = createBuildManifestFixture();
+const { files, keys, offlineRuntimeFiles } = buildManifestFixture;
 
 const webAppManifest: WebAppManifest = {
   icons: [
@@ -73,42 +43,7 @@ const webAppManifest: WebAppManifest = {
 };
 
 const installIcons = manifestInstallIconFiles(webAppManifest);
-const offlineRuntimeFiles = [
-  'assets/diagram-layout-worker-entry-a1b2c3.js',
-  'assets/feature-projection-worker-entry-a1b2c3.js',
-  'assets/storage-deserializer-worker-a1b2c3.js',
-];
-
-const offlineEditorEntryKey = 'offline-editor-entry';
-const offlineEditorOutputs = {
-  entry: 'emitted:offline-editor',
-  runtime: 'emitted:runtime',
-  runtimeStyles: 'emitted:runtime-styles',
-  nestedRuntime: 'emitted:nested-runtime',
-  optionalFeature: 'emitted:optional-feature',
-} as const;
-
-const offlineEditorManifest: BuildManifest = {
-  ...manifest,
-  [offlineEditorEntryKey]: {
-    file: offlineEditorOutputs.entry,
-    isEntry: true,
-    name: 'offline-editor',
-    dynamicImports: ['manifest-node:runtime'],
-  },
-  'manifest-node:runtime': {
-    file: offlineEditorOutputs.runtime,
-    css: [offlineEditorOutputs.runtimeStyles],
-    imports: ['manifest-node:nested-runtime'],
-    dynamicImports: ['manifest-node:optional-feature'],
-  },
-  'manifest-node:nested-runtime': {
-    file: offlineEditorOutputs.nestedRuntime,
-  },
-  'manifest-node:optional-feature': {
-    file: offlineEditorOutputs.optionalFeature,
-  },
-};
+const offlineEditorManifest = createOfflineEditorManifestFixture();
 
 describe('PWA precache output', () => {
   it('keeps the complete extension for referenced WOFF2 assets', () => {
@@ -135,10 +70,10 @@ describe('PWA precache output', () => {
     ]);
     expect(editorPrecacheFiles(manifest, installIcons)).toEqual(
       [
-        'assets/main.css',
-        'assets/main.js',
-        'assets/shared.css',
-        'assets/shared.js',
+        files.mainStyles,
+        files.mainScript,
+        files.sharedStyles,
+        files.sharedScript,
         'favicon.svg',
         'index.html',
         'manifest.json',
@@ -160,12 +95,12 @@ describe('PWA precache output', () => {
       editorOfflinePrecacheFiles(offlineEditorManifest, installIcons, offlineRuntimeFiles),
     );
 
-    expect(precached.has(offlineEditorEntryKey)).toBe(false);
-    expect(precached.has(offlineEditorOutputs.entry)).toBe(true);
-    expect(precached.has(offlineEditorOutputs.runtime)).toBe(true);
-    expect(precached.has(offlineEditorOutputs.runtimeStyles)).toBe(true);
-    expect(precached.has(offlineEditorOutputs.nestedRuntime)).toBe(true);
-    expect(precached.has(offlineEditorOutputs.optionalFeature)).toBe(false);
+    expect(precached.has(keys.offlineEditor)).toBe(false);
+    expect(precached.has(files.offlineEditorScript)).toBe(true);
+    expect(precached.has(files.offlineRuntimeScript)).toBe(true);
+    expect(precached.has(files.offlineRuntimeStyles)).toBe(true);
+    expect(precached.has(files.nestedOfflineRuntimeScript)).toBe(true);
+    expect(precached.has(files.optionalOfflineFeatureScript)).toBe(false);
   });
 
   it('retains the lazy editor host required by the cached application shell', () => {
@@ -175,42 +110,39 @@ describe('PWA precache output', () => {
       offlineRuntimeFiles,
     );
     const adaptive = editorAdaptiveFiles(offlineEditorManifest, installIcons, offlineRuntimeFiles);
-    const editorHost = offlineEditorManifest['_editor-application.js']?.file;
-    if (!editorHost) throw new Error('The fixture has no editor application output.');
-
-    expect(precached).toContain(editorHost);
-    expect(adaptive).not.toContain(editorHost);
+    expect(precached).toContain(files.editorApplicationScript);
+    expect(adaptive).not.toContain(files.editorApplicationScript);
   });
 
   it('classifies lazy features and install artwork as adaptive assets', () => {
-    expect(editorAdaptiveFiles(manifest, installIcons)).toEqual([
-      'apple-touch-icon.png',
-      'assets/dialog-icon.svg',
-      'assets/dialog.js',
-      'favicon-16x16.png',
-      'favicon-32x32.png',
-      'favicon-dark-16x16.png',
-      'favicon-dark-32x32.png',
-      'icons/app-icon-a1b2c3d4e5f6-192.png',
-      'icons/app-icon-a1b2c3d4e5f6.svg',
-      'icons/app-icon-maskable-a1b2c3d4e5f6-512.png',
-    ]);
+    expect(editorAdaptiveFiles(manifest, installIcons)).toEqual(
+      [
+        'apple-touch-icon.png',
+        files.optionalFeatureAsset,
+        files.optionalFeatureScript,
+        'favicon-16x16.png',
+        'favicon-32x32.png',
+        'favicon-dark-16x16.png',
+        'favicon-dark-32x32.png',
+        ...installIcons,
+      ].sort(),
+    );
   });
 
   it('excludes only assets unique to the embed graph', () => {
-    expect(embedOnlyFiles(manifest, installIcons)).toEqual(['assets/embed.js', 'embed.html']);
+    expect(embedOnlyFiles(manifest, installIcons)).toEqual([files.embedScript, 'embed.html']);
   });
 
   it('reports a missing shell asset and any eager adaptive or embed asset', () => {
     const expected = editorOfflinePrecacheFiles(manifest, installIcons, []);
     const precached = expected
-      .filter((file) => file !== 'assets/main.js')
-      .concat('assets/dialog.js', 'assets/embed.js');
+      .filter((file) => file !== files.mainScript)
+      .concat(files.optionalFeatureScript, files.embedScript);
 
     expect(verifyPrecacheOutput({ manifest, installIcons, precached })).toEqual([
-      'essential editor asset is not precached: assets/main.js',
-      'adaptive editor asset is precached during first install: assets/dialog.js',
-      'embed-only asset is precached: assets/embed.js',
+      `essential editor asset is not precached: ${files.mainScript}`,
+      `adaptive editor asset is precached during first install: ${files.optionalFeatureScript}`,
+      `embed-only asset is precached: ${files.embedScript}`,
     ]);
   });
 
@@ -228,8 +160,6 @@ describe('PWA precache output', () => {
         precached,
         offlineRuntimeFiles,
       }),
-    ).toEqual([
-      'essential editor asset is not precached: assets/diagram-layout-worker-entry-a1b2c3.js',
-    ]);
+    ).toEqual([`essential editor asset is not precached: ${offlineRuntimeFiles[0]}`]);
   });
 });
