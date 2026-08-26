@@ -71,7 +71,6 @@ export function GroupInspector({ id }: GroupInspectorProps) {
     selection: { selectAndFocus },
   } = useEditorCommands();
   const [tab, setTab] = useState<string>('members');
-
   if (!group) return <EmptyInspector />;
   const isComplex = !!group.footprint;
 

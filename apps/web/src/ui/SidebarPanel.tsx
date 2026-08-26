@@ -155,7 +155,6 @@ function sidebarTabIndexFor(tabStopKey: string | null) {
     return 0;
   };
 }
-
 const OUTLINE_TITLE: Record<ViewMode, string> = {
   network: 'Network outline',
   infrastructure: 'Infrastructure outline',

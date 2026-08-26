@@ -9,6 +9,7 @@ import { ExportSplitButton } from './ExportSplitButton';
 import { FileMenu } from './FileMenu';
 import { IconButton } from './IconButton';
 import { LayersPopover } from './LayersPopover';
+import { SavedViewsAction, SavedViewsMenuItem } from './saved-views-action';
 import { useUi } from './UiProvider';
 import { Icon } from './Icon';
 const VIEW_MODES: { mode: ViewMode; label: string }[] = [
@@ -28,12 +29,9 @@ const MOD_LABEL = IS_MAC ? '⌘' : 'Ctrl';
  *  Unlike sim controls (its neighbour in the top-center of the desktop
  *  row), this DOES collapse in zen mode — self-managed here via
  *  `.zen-collapse-cluster` + `inert` rather than threaded through
- *  Workbench, since it owns its own root element. That class shrinks its
- *  own max-width to 0 rather than fading and lifting like `.zen-cluster`,
- *  so the simulation bar slides into the freed width through ordinary flex
- *  reflow with no repositioning code. On desktop the card around this one
- *  has to collapse too, which is `.zen-collapse-bar`, applied by Workbench
- *  — there is no such card on mobile, which is why this class stays here
+ *  Workbench, since it owns its own root element. The class shrinks its width,
+ *  so the simulation bar reflows into the freed space. The desktop card
+ *  uses `.zen-collapse-bar`; mobile has no card, so this class stays here
  *  on the control rather than moving up to the card. */
 export function ViewSwitch() {
   const { viewMode, setViewMode } = useDocumentView();
@@ -222,15 +220,7 @@ export function TopBarActions() {
               label={`Redo (${MOD_LABEL}+Shift+Z)`}
             />
           </span>
-          <span className="act-secondary">
-            <button
-              className="ghost-btn saved-views-action"
-              onClick={() => openDialog('savedViews')}
-              title="Saved views"
-            >
-              <Icon name="platform" size={18} /> <span className="btn-label">Saved views</span>
-            </button>
-          </span>
+          <SavedViewsAction onOpen={() => openDialog('savedViews')} />
           <span className="act-secondary">
             <ExportSplitButton />
           </span>
@@ -250,11 +240,7 @@ export function TopBarActions() {
           }
         >
           {!readOnly && <DropdownMenuItem onSelect={redo}>Redo</DropdownMenuItem>}
-          {!readOnly && (
-            <DropdownMenuItem onSelect={() => openDialog('savedViews')}>
-              Saved views…
-            </DropdownMenuItem>
-          )}
+          {!readOnly && <SavedViewsMenuItem onOpen={() => openDialog('savedViews')} />}
           <DropdownMenuItem onSelect={() => openDialog('export')}>Export…</DropdownMenuItem>
           {!readOnly && (
             <DropdownMenuItem onSelect={() => openDialog('share')}>Share…</DropdownMenuItem>

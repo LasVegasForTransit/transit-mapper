@@ -26,10 +26,8 @@ export type DialogName =
   | 'about'
   | 'newSystemLocation';
 
-/** A background import's live status — surfaced as a small non-blocking
- *  indicator (see ImportProgressPill) rather than a modal, so a long import
- *  (GTFS: dozens of routes streamed in over several seconds) never traps the
- *  user behind a dialog they can't interact past. */
+/** A background import's live status. ImportProgressPill keeps long imports
+ *  visible without trapping the user behind a modal. */
 export interface ImportProgress {
   /** Identifies one run so an old cleanup timer cannot hide a newer import. */
   operationId: number;
@@ -105,7 +103,6 @@ interface ContextMenuState {
 }
 
 const ContextMenuContext = createContext<ContextMenuState | null>(null);
-
 interface UiProviderProps {
   children: ReactNode;
 }

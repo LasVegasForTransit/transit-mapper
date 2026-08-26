@@ -95,8 +95,7 @@ function WayDraftInspector() {
       </div>
       <div className="insp-kind">Drawing tool · options apply to what you draw next</div>
       {/* How to STOP drawing, which is the one thing you cannot work out by
-          trying. Both gestures already worked — interactions.ts has bound
-          double-click to finishWay since it was written, and the touch
+          trying. interactions.ts binds double-click to finishWay, and the touch
           adapter maps a double tap onto it — but nothing said so anywhere in
           the interface, so on a phone the only visible way to end a line was
           a key the device does not have. */}

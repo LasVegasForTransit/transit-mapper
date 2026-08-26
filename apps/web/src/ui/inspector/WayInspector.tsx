@@ -304,7 +304,7 @@ export function WayInspector({ id }: WayInspectorProps) {
             <Stat label="Points" value={String(way.points.length)} />
           </div>
 
-          {!readOnly && (mergeCandidate || canStraighten) && (
+          {!readOnly && (Boolean(mergeCandidate) || canStraighten) && (
             <div className="insp-actions">
               {mergeCandidate && (
                 <button

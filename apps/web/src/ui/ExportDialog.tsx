@@ -42,7 +42,6 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
   const [exportError, setExportError] = useState('');
   const mapRef = useRef<MLMap | null>(null);
   const exportController = useRef<AbortController | null>(null);
-
   useEffect(
     () => () => {
       const controller = exportController.current;

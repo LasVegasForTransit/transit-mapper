@@ -55,7 +55,7 @@ export function MapContextMenu() {
   }, [contextMenuAt]);
   useEffect(() => {
     const opened = openedFor.current;
-    if (!contextMenuAt || !opened || opened.menu !== contextMenuAt) return;
+    if (!contextMenuAt || opened?.menu !== contextMenuAt) return;
     if (
       shouldCloseMapContextMenu({
         actionCount: actions.length,

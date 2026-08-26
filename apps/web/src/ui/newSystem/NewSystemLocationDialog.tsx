@@ -55,7 +55,6 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
   // the authoritative visible rectangle and persisted editor camera.
   const settled = useRef<Promise<void>>(Promise.resolve());
   const started = useRef(false);
-
   useEffect(
     () => () => {
       searchAbort.current?.abort(new DOMException('Dialog closed.', 'AbortError'));

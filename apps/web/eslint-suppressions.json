@@ -324,9 +324,6 @@
     }
   },
   "src/ui/MapContextMenu.tsx": {
-    "@typescript-eslint/prefer-optional-chain": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -442,7 +439,7 @@
   },
   "src/ui/inspector/WayInspector.tsx": {
     "@typescript-eslint/prefer-nullish-coalescing": {
-      "count": 2
+      "count": 1
     },
     "complexity": {
       "count": 1
