@@ -14,6 +14,12 @@ import { handleOpenStreetMapWays, handlePlaceSearch } from './osm-gateway';
 import { handlePerformanceSample } from './performance-samples';
 import { runScheduledMaintenance } from './performance-maintenance';
 import { apiV1 } from './api-v1';
+import {
+  anonymousExpiry,
+  randomEditToken,
+  sha256Hex,
+  shouldTouchAnonymousExpiry,
+} from './anonymous-resource';
 
 type OptionalLocalBinding =
   | 'SHARE_CREATE_LIMITER'
@@ -27,8 +33,6 @@ type OptionalLocalBinding =
  * optional at the local/test boundary because requests without Cloudflare's
  * corresponding client metadata deliberately skip them. */
 type WorkerEnv = Omit<Env, OptionalLocalBinding> & Partial<Pick<Env, OptionalLocalBinding>>;
-
-const ANONYMOUS_SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days.
 
 // The iframe size we ask for when a consumer doesn't constrain us — wide
 // enough for a regional system to read, short enough to sit inside an article
@@ -198,13 +202,6 @@ async function getActiveShare(db: D1Database, id: string): Promise<ShareRow | nu
   };
 }
 
-// How far the stored expiry must have drifted from "a full TTL from now"
-// before a view is worth a write. Without this every read of a popular share
-// becomes a D1 write; with it, a share is touched at most once a day no
-// matter how often it's viewed, and still never gets within six days of
-// expiring while anyone is looking at it.
-const EXPIRY_TOUCH_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 1 day.
-
 /**
  * Slides a share's expiry forward on view. Fire-and-forget: the caller's
  * response must not wait on it, and a share that fails to be touched simply
@@ -219,33 +216,13 @@ function touchExpiry(
   db: D1Database,
   share: Pick<ShareRow, 'id' | 'expiresAt'>,
 ): Promise<unknown> | null {
-  if (share.expiresAt === null) return null; // account-owned: already permanent.
-  const target = Date.now() + ANONYMOUS_SHARE_TTL_MS;
-  if (target - share.expiresAt < EXPIRY_TOUCH_THRESHOLD_MS) return null;
+  const now = Date.now();
+  if (!shouldTouchAnonymousExpiry(share.expiresAt, now)) return null;
   return db
     .prepare('UPDATE systems SET expires_at = ? WHERE id = ?')
-    .bind(target, share.id)
+    .bind(anonymousExpiry(now), share.id)
     .run()
     .catch(() => undefined);
-}
-
-// Used both for the dedup content hash (so two requests only collide when
-// they'd have written byte-identical rows) and for edit tokens (so the DB
-// never holds the raw secret a browser presents to prove it owns a share).
-async function sha256Hex(data: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-// The secret returned once, at creation, to the browser that made a share.
-// Presenting it on PATCH/DELETE is what proves "the device that created this
-// share" without any account system — see edit_token_hash in the schema.
-function randomEditToken(): string {
-  return Array.from(crypto.getRandomValues(new Uint8Array(24)))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
 }
 
 // Deletes the cached preview.png entry for a share so a stale card doesn't
@@ -340,7 +317,7 @@ app.post('/api/systems', async (c) => {
   }
 
   const id = shortId(10);
-  const expiresAt = now + ANONYMOUS_SHARE_TTL_MS;
+  const expiresAt = anonymousExpiry(now);
   const editToken = randomEditToken();
   const editTokenHash = await sha256Hex(editToken);
   await c.env.DB.prepare(
@@ -419,7 +396,7 @@ app.patch('/api/systems/:id', async (c) => {
   // expiry forward a full TTL rather than going through touchExpiry's
   // once-a-day threshold (that threshold exists to stop *reads* from turning
   // into writes; this is already a write).
-  const expiresAt = Date.now() + ANONYMOUS_SHARE_TTL_MS;
+  const expiresAt = anonymousExpiry(Date.now());
 
   const result = await c.env.DB.prepare(
     `UPDATE systems
