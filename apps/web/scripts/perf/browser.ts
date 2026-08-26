@@ -36,6 +36,10 @@ interface TraceCompleteEvent {
   stream: string;
 }
 
+export interface SurfaceRouteOptions {
+  embedHtmlPath?: string;
+}
+
 interface TraceReadResult {
   data: string;
   base64Encoded?: boolean;
@@ -338,6 +342,7 @@ export async function configureSurfaceRoutes(
   page: Page,
   scenario: PerfScenario,
   serializedSystem: string,
+  options: SurfaceRouteOptions = {},
 ): Promise<void> {
   if (scenario.surface === 'editor') return;
   const shareId = scenario.surface === 'share' ? 'perfshare' : 'perfembed';
@@ -356,7 +361,10 @@ export async function configureSurfaceRoutes(
     });
   });
   if (scenario.surface === 'embed') {
-    const embedHtml = await readFile(resolve(APP_ROOT, 'dist/embed.html'), 'utf8');
+    const embedHtml = await readFile(
+      options.embedHtmlPath ?? resolve(APP_ROOT, 'dist/embed.html'),
+      'utf8',
+    );
     await page.route(`**${scenario.path}`, async (route) => {
       await route.fulfill({
         status: 200,
