@@ -6,6 +6,7 @@ import {
 } from '../../src/storage/indexedDbLibrary';
 import type { PerfPhaseCounters, PerfProductionPersistenceProbe } from '../../src/perf/types';
 import type { SourceUploadCount, SourceUploadTiming } from '../../src/perf/source-uploads';
+import { CURRENT_STORED_SYSTEM_FORMAT } from '../../src/storage/stored-record-provenance';
 import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
 import type {
   PerfRenderSourceBankSnapshot,
@@ -23,6 +24,7 @@ export const PERF_STORAGE_CONTRACT = {
   databaseVersion: 1,
   documentStore: INDEXED_DB_DOCUMENT_STORE,
   libraryStore: INDEXED_DB_INDEX_STORE,
+  currentStoredSystemFormat: CURRENT_STORED_SYSTEM_FORMAT,
   activeIdKey: 'transitmapper:activeId',
   onboardingSeenKey: 'transitmapper:onboardingSeen',
   indexedDbHistoryKey: 'transitmapper:indexedDbLibrary',

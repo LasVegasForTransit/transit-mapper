@@ -1,12 +1,17 @@
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { LibraryEntry, LoadResult, SaveOutcome } from './localStore';
+import {
+  provenanceForSerializedSystem,
+  readCurrentAppSave,
+  type StoredRecordProvenance,
+} from './stored-record-provenance';
 
 export interface StoredLibraryEntry extends LibraryEntry {
   supersededAuthoritativeSnapshotId?: string;
 }
 
-export interface StoredSystemRecord extends StoredLibraryEntry {
+export interface StoredSystemRecord extends StoredLibraryEntry, StoredRecordProvenance {
   serialized: string;
 }
 
@@ -78,9 +83,12 @@ export function createLibraryStore(dependencies: LibraryStoreDependencies): Libr
   const saveLanes = new Map<string, DocumentSaveLane>();
   const parseRecord = async (record: StoredSystemRecord): Promise<LoadResult> => {
     try {
-      const system = dependencies.deserialize
-        ? await dependencies.deserialize(record.serialized)
-        : parseSystem(JSON.parse(record.serialized));
+      const currentSave = await readCurrentAppSave(record);
+      const system =
+        currentSave ??
+        (dependencies.deserialize
+          ? await dependencies.deserialize(record.serialized)
+          : parseSystem(JSON.parse(record.serialized)));
       return { status: 'ok', system };
     } catch {
       return { status: 'corrupt' };
@@ -93,11 +101,13 @@ export function createLibraryStore(dependencies: LibraryStoreDependencies): Libr
     );
     try {
       const serialized = await dependencies.serialize(system);
+      const provenance = await provenanceForSerializedSystem(serialized);
       await dependencies.database.save({
         id: system.id,
         name: system.name,
         updatedAt: system.updatedAt,
         serialized,
+        ...provenance,
         ...(supersededAuthoritativeSnapshotId ? { supersededAuthoritativeSnapshotId } : {}),
       });
       dependencies.legacy.setDatabaseHistory(true);

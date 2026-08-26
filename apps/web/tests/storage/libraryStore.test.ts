@@ -141,6 +141,37 @@ describe('IndexedDB library store', () => {
     expect(legacy.systems.has(system.id)).toBe(true);
   });
 
+  it('loads an unchanged app save without reconstructing the model', async () => {
+    const { database, legacy, serialize, store } = setup();
+    const system = { ...createEmptySystem(), id: 'current-save', name: 'Current save' };
+    await expect(store.save(system)).resolves.toBe('saved');
+    const deserialize = vi.fn(async () => system);
+    const reloaded = createLibraryStore({ database, legacy, serialize, deserialize });
+
+    await expect(reloaded.load(system.id)).resolves.toEqual({ status: 'ok', system });
+
+    expect(deserialize).not.toHaveBeenCalled();
+  });
+
+  it('reconstructs an app save when its stored bytes no longer match', async () => {
+    const { database, legacy, serialize, store } = setup();
+    const system = { ...createEmptySystem(), id: 'changed-save', name: 'Before' };
+    await expect(store.save(system)).resolves.toBe('saved');
+    const record = database.systems.get(system.id);
+    if (!record) throw new Error('The test save did not reach IndexedDB.');
+    record.serialized = JSON.stringify({ ...system, name: 'After' });
+    const reconstructed = { ...system, name: 'After' };
+    const deserialize = vi.fn(async () => reconstructed);
+    const reloaded = createLibraryStore({ database, legacy, serialize, deserialize });
+
+    await expect(reloaded.load(system.id)).resolves.toEqual({
+      status: 'ok',
+      system: reconstructed,
+    });
+
+    expect(deserialize).toHaveBeenCalledWith(record.serialized);
+  });
+
   it('removes the localStorage copy after an IndexedDB save when cleanup succeeds', async () => {
     const { legacy, store } = setup();
     const system = { ...createEmptySystem(), id: 'migrated' };

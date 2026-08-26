@@ -79,6 +79,13 @@ Working documents live in browser-owned IndexedDB, with localStorage retained
 only for migration and close-time recovery. Browser quotas are finite, and the
 user can clear either store at any moment.
 
+Each current IndexedDB document carries a format marker and a SHA-256 digest of
+its serialized bytes. Startup can parse an unchanged record directly after it
+checks that digest and its current-schema envelope. Records from an older app,
+records without the marker, and records whose bytes changed still pass through
+the migration and validation parser. The digest detects stale or damaged local
+bytes. It does not authenticate browser storage.
+
 ### Organizational
 
 Maintenance is volunteer and intermittent. Anything needing regular manual
@@ -472,11 +479,11 @@ both its ends, and that retrims every other way meeting those junctions. An
 edit is never local to the thing edited.
 
 Autosave coalesces content and live-camera changes, serializes the latest
-snapshot in a Worker, and atomically commits the document and library row to
-IndexedDB. While a pointer or camera gesture is active, the simulated clock
-and vehicle painting continue against the last settled system. Transient edit
-snapshots therefore do not rebuild simulation geometry on every pointer move;
-the committed system is adopted once the gesture settles.
+snapshot in bounded main-thread slices, and atomically commits the document
+and library row to IndexedDB. While a pointer or camera gesture is active, the
+simulated clock and vehicle painting continue against the last settled system.
+Transient edit snapshots therefore do not rebuild simulation geometry on every
+pointer move; the committed system is adopted once the gesture settles.
 
 Browser termination cannot guarantee completion of an asynchronous IndexedDB
 transaction. On `visibilitychange`/`pagehide`, each still-undurable document

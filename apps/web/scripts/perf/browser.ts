@@ -159,6 +159,13 @@ export async function seedIndexedDbFixture(
       localStorage.setItem(storage.activeIdKey, seed.id);
       localStorage.setItem(storage.onboardingSeenKey, '1');
       localStorage.setItem(storage.indexedDbHistoryKey, '1');
+      const digest = await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(seed.serializedSystem),
+      );
+      const contentDigest = [...new Uint8Array(digest)]
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
       const database = await new Promise<IDBDatabase>((resolvePromise, reject) => {
         const request = indexedDB.open(storage.databaseName, storage.databaseVersion);
         request.onupgradeneeded = () => {
@@ -183,6 +190,8 @@ export async function seedIndexedDbFixture(
           name: seed.name,
           updatedAt: seed.updatedAt,
           serialized: seed.serializedSystem,
+          format: storage.currentStoredSystemFormat,
+          contentDigest,
         });
         transaction.objectStore(storage.libraryStore).put({
           id: seed.id,

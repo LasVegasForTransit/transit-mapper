@@ -351,8 +351,10 @@ harness never writes placeholder timings.
 
 ## Large-system persistence boundary
 
-The production save path serializes in a dedicated Worker, then atomically
-writes the complete document and its lightweight library row to IndexedDB.
+The production save path serializes in bounded main-thread slices, then
+atomically writes the complete document and its lightweight library row to
+IndexedDB. The saved record includes the current format marker and content
+digest that production startup uses for its unchanged-record fast path.
 `localStorage` remains a backward-compatible reader and a best-effort
 synchronous close-time fallback for documents small enough to fit its quota.
 Startup treats an unavailable IndexedDB library as unavailable; it never
@@ -361,9 +363,10 @@ replaces it with an empty document.
 Every sample also runs a diagnostic boundary probe on the real preview origin
 before the app loads. It reports JSON parse, main-thread stringify, and a real
 `localStorage` write as separate compatibility phases. This is not presented
-as end-to-end autosave latency. Editor fixtures are seeded into real IndexedDB,
-and every trusted draw must pass through the production serialization Worker
-and atomic IndexedDB transaction. The report separately records draw-commit to
+as end-to-end autosave latency. Editor fixtures are seeded into real IndexedDB
+with the same current-record metadata, and every trusted draw must pass through
+the production cooperative serializer and atomic IndexedDB transaction. The
+report separately records draw-commit to
 durable-save time, Worker serialization time, and IndexedDB write time, then
 reads the stored document back and verifies the committed revision and way
 count. The RTC fixture is about 5.9 MB of UTF-8 JSON, already past the report's
