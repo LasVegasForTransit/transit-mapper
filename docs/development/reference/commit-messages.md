@@ -134,12 +134,16 @@ own configuration, and those disagreed.
 
 `commit-msg` checks the shape of any footer it finds, because a malformed one
 is worse than none: it looks like attribution and parses as nothing.
+It also rejects OpenAI-domain addresses other than `noreply@openai.com`.
+GitHub can attach another OpenAI mailbox to an unrelated account even when the
+agent name looks correct, so agents must use the repository identity instead
+of guessing an address.
 
 ## What the hook will not catch
 
-It checks the subject and the shape of any attribution footer, and nothing
-else. A body that restates the diff, a `feat` with no body, and a wrong type
-all pass and get caught in review.
+It checks the subject, the shape of any attribution footer, and the declared
+OpenAI address. A body that restates the diff, a `feat` with no body, and a
+wrong type all pass and get caught in review.
 
 Attribution is split across both hooks, and the gap that remains is the
 environment itself. Both halves read `CODEX_SESSION_ID`, `AI_AGENT`, and

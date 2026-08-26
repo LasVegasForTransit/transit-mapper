@@ -105,4 +105,19 @@ if [ "$WRITTEN" -gt 0 ]; then
     printf '    see:  docs/development/reference/commit-messages.md\n\n' >&2
     exit 1
   fi
+
+  # OpenAI-domain attribution must use the repository's declared no-reply
+  # address. Accepting another mailbox can make GitHub credit an unrelated
+  # account even when the human-readable agent name looks correct.
+  UNDECLARED_OPENAI=$(printf '%s\n' "$BODY" | grep -i '^Co-Authored-By:' |
+    grep -iE '<[^ ]+@openai\.com>$' |
+    grep -viE '<noreply@openai\.com>$' || true)
+  if [ -n "$UNDECLARED_OPENAI" ]; then
+    printf '\n  Commit blocked: an undeclared OpenAI attribution address was used.\n\n' >&2
+    printf '%s\n' "$UNDECLARED_OPENAI" | while IFS= read -r line; do printf '    %s\n' "$line" >&2; done
+    printf '\n    Use the repository identity:\n\n' >&2
+    printf '      Co-Authored-By: Codex <noreply@openai.com>\n\n' >&2
+    printf '    see:  docs/development/reference/commit-messages.md\n\n' >&2
+    exit 1
+  fi
 fi
