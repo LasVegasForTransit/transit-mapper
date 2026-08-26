@@ -3,8 +3,8 @@
 TransitMapper has four shared map packages, a domain package, a browser
 application, and a Cloudflare Worker.
 
-Maintainers use this reference to place new code without reversing a package
-edge or adding application policy to a reusable map component.
+Use this reference to place code without reversing a package edge or adding
+application policy to a reusable map component.
 
 ## Workspace
 
@@ -466,60 +466,10 @@ after 90.
 
 ## Repository support
 
-### Tests
-
 Each package or application owns a `tests/` tree at its root. Test paths mirror
-production modules where practical, while shared fixture builders remain
-explicit test-only exports. Vitest cases are isolated; the older web and Worker
-verification suites are sequential because they intentionally mutate one
-module-scoped fixture.
-
-### Generators and checks
-
-Repository-wide checks and generated references live under `scripts/`.
-Package, migration, and lint-rule scaffolding lives under `turbo/`. Generators
-must leave their output compliant with the same package, filename,
-documentation, and structure contracts enforced in CI.
-
-`provision-gtfs-storage.ts` ensures the archive bucket exists;
-`refresh-gtfs-feeds.ts` validates and uploads feeds sequentially.
-
-Bootstrap holds the desired GitHub governance state as data and keeps API
-reads and confirmed mutations in its repository-governance phase. Doctor mode
-uses the same comparisons without taking a mutation path.
-
-### Releases and deployment provenance
-
-Release Please derives the next root version and changelog from conventional
-commits and maintains a release pull request. Merging that generated pull
-request creates the matching tag and GitHub release; no version, changelog, or
-release input is copied into workflow settings by hand.
-
-GitHub suppresses ordinary workflow events caused by its own workflow token,
-so the release job validates the generated pull request metadata itself,
-publishes the canonical metadata status, and explicitly dispatches the shared
-CI workflow against the generated branch. Both checks attach to the release
-commit and satisfy the same default-branch rules as a contributor-authored
-pull request without a personal token or manually maintained secret.
-
-The production workflow bundles the static application, Worker module,
-deployment configuration, and migrations once. It archives and attests that
-payload with GitHub's workload identity, attaches both the archive and
-attestation bundle to the release, then extracts the same archive for the D1
-migration and Cloudflare deployment steps. The Worker deploy disables
-rebundling so the deployed module cannot diverge from the attested subject.
-The production environment and smoke test record which workflow deployed the
-release and confirm that the public site serves its fingerprinted entry chunk.
-
-### Performance tooling
-
-The web application's browser scenarios, committed baselines, and production
-verification tools live beside that application. Repository commands
-coordinate them with builds and checks, while the policy they enforce remains
-owned by the web performance module. Renderer evidence is generated under the
-ignored `apps/web/artifacts/renderer/` tree so exploratory phases do not add
-binary weight to the repository. The capture manifest and contact sheet are
-the review boundary. Successful post-baseline phases require current source
-and deterministic-basemap provenance; `01-lod` also requires its complete
-current-only acceptance appendix. Approved final images may later be promoted
-explicitly to tracked visual-regression fixtures.
+production modules. Shared fixtures remain explicit test-only exports.
+Repository checks live under `scripts/`; package
+scaffolding lives under `turbo/`. See
+[the enforcement model](../explanation/enforcement-model.md) for check
+ownership and [operations](../../operations/how-to/operations.md) for release,
+deployment, migration, and recovery behavior.

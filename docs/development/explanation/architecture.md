@@ -12,11 +12,10 @@ public link.
 Las Vegans for Better Transit built it to model a better network for the Las
 Vegas Valley. Nothing in it is specific to one city or agency.
 
-Transit advocacy produces proposals nobody can evaluate. A line drawn on a
-screenshot says nothing about whether the street is wide enough, where the
-vehicle turns, or what happens at the intersection. The tools that answer
-those questions are professional GIS packages, priced and shaped for agency
-staff. TransitMapper answers them and can still be handed to a volunteer.
+Transit proposals need more than lines. They must show whether
+streets are wide enough, where vehicles turn, and what happens at
+intersections. TransitMapper supplies that detail without requiring a
+professional GIS package.
 
 ### Requirements overview
 
@@ -42,12 +41,9 @@ Ordered. Where two conflict, the higher-numbered goal yields.
 | 5        | Operating cost near zero                       | A volunteer nonprofit funds this                                |
 | 6        | Contributor onboarding                         | The contributor pool is small and intermittent                  |
 
-The order settles trade-offs. Progressive detail may postpone derived work,
-but never freezes input, hides feedback, or disables editing to improve a
-metric. Documents remain local even though a server would be easier to build.
-
-The interface starts with a centreline and a preset, then derives detail when
-it matters. It must remain approachable to advocates and credible to planners.
+Progressive detail may postpone derived work, but it never freezes input or
+hides feedback. Documents remain local. The interface starts with a centreline
+and preset, then derives detail when it matters.
 
 ## 2. Architecture Constraints
 
