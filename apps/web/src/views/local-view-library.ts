@@ -14,6 +14,7 @@ export interface LocalViewRecord {
   createdAt: number;
   updatedAt: number;
   publishedId?: string;
+  sharedSystemId?: string;
   editToken?: string;
 }
 
@@ -62,6 +63,7 @@ function parseStoredView(value: StoredLocalView): LocalViewRecord {
   };
   if (value.description !== undefined) parsed.description = value.description;
   if (value.publishedId !== undefined) parsed.publishedId = value.publishedId;
+  if (value.sharedSystemId !== undefined) parsed.sharedSystemId = value.sharedSystemId;
   if (value.editToken !== undefined) parsed.editToken = value.editToken;
   return parsed;
 }

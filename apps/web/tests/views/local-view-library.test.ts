@@ -129,10 +129,23 @@ describe('local View library', () => {
       new FakeIndexedDbFactory() as unknown as IDBFactory,
     );
     await library.put(localView('document-a', 'first', 20));
-    await library.put({ ...localView('document-a', 'first', 50), title: 'Renamed' });
+    await library.put({
+      ...localView('document-a', 'first', 50),
+      title: 'Renamed',
+      publishedId: 'published-1',
+      sharedSystemId: 'share-1',
+      editToken: 'secret',
+    });
 
     await expect(library.list('document-a')).resolves.toMatchObject([
-      { id: 'first', title: 'Renamed', updatedAt: 50 },
+      {
+        id: 'first',
+        title: 'Renamed',
+        publishedId: 'published-1',
+        sharedSystemId: 'share-1',
+        editToken: 'secret',
+        updatedAt: 50,
+      },
     ]);
     await library.delete('document-a', 'first');
     await expect(library.list('document-a')).resolves.toEqual([]);
