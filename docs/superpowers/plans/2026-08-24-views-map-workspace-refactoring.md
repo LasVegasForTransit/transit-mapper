@@ -346,7 +346,7 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - [x] Keep dependency versions in the workspace catalog. Use peer dependencies for React and MapLibre only when the consuming application must provide the runtime singleton.
 - [x] Let every application build depend on the production builds of its workspace dependencies through the existing `^build` Turbo edge.
 - [x] Enforce package dependency direction with the repository's dependency rules. Do not add another package build orchestrator or cache wrapper.
-- [ ] Add characterization tests for shell-before-document behavior, camera persistence, current share camera capture, representation switching, filters, selection, forking, and embed startup ordering.
+- [x] Add characterization tests for shell-before-document behavior, camera persistence, current share camera capture, representation switching, filters, selection, forking, and embed startup ordering.
 - [x] Add the View contract and hostile-input parser to `@transitmapper/views`.
 - [ ] Rename the internal `ViewMode` type to `RepresentationId`. Keep Network, Infrastructure, and Diagram labels unchanged.
 - [x] Implement `createMapViewStore()` in `@transitmapper/map` with camera, representation ID, and filters.
@@ -395,8 +395,8 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - [x] Keep the application shell and Workbench structure mounted during that remount.
 - [x] Preserve source-bank rollback, accepted-scene recovery, gesture settlement, style recovery, and startup milestones.
 - [x] Replace path-regex renderer chunks with package-owned `views`, `map`, `workspace`, and `renderer` cache chunks. Keep MapLibre and React in their current stable vendor chunks.
-- [ ] Keep editor-host and viewer-host code in separate dynamic chunks. Keep editor commands, persistence, imports, simulation, and PWA code out of the viewer and embed entry closures.
-- [ ] Add manifest tests that fail when an entry imports a forbidden package or when a stable package chunk disappears into an application chunk.
+- [x] Keep editor-host and viewer-host code in separate dynamic chunks. Keep editor commands, persistence, imports, simulation, and PWA code out of the viewer and embed entry closures.
+- [x] Add manifest tests that fail when an entry imports a forbidden package or when a stable package chunk disappears into an application chunk.
 - [ ] Add a two-build cache test. An editor-host-only source change must leave the content hashes of MapLibre, React, `views`, `map`, `workspace`, `renderer`, and embed chunks unchanged.
 - [x] Run focused renderer tests serially with `--maxWorkers=1 --no-file-parallelism`.
 - [ ] Compare the RTC screenshots and performance report with Phase 1.
@@ -418,22 +418,22 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - Create tests under `apps/web/tests/viewer/` and `apps/web/tests/views/`.
 - Modify `apps/web/src/app/app-root.tsx`, `apps/web/src/app/route-intent.ts`, `apps/web/src/share/api.ts`, `apps/web/src/ui/Inspector.tsx`, `apps/web/src/ui/ShareDialog.tsx`, and the reader-facing top-bar components.
 
-- [ ] Resolve every existing `/s/:id` as a synthetic View over `{ kind: 'shared-system', id }`.
-- [ ] Derive the synthetic View camera from `TransitSystem.viewport`.
-- [ ] Derive the synthetic View representation and filters from current defaults.
-- [ ] Implement `ViewerApplication` with its own View store and `SelectionController`.
-- [ ] Reuse common Workbench slots for layers, representation controls, selection details, attribution, and share actions.
-- [ ] Keep editing tools, history, persistence, imports, simulation, install behavior, and editor dialogs out of the reader graph.
-- [ ] Split reader feature facts from editing controls. Keep editing controls in the right-hand editor inspector.
-- [ ] Implement Fork as a viewer-host action that creates a new local document and navigates to the editor.
-- [ ] Encode transient View state as `#view=<base64url MapViewStateV1 JSON>`. Reject a fragment above 8 KiB after URL decoding. Do not encode document geometry or provider configuration.
-- [ ] Update fragment state with `history.replaceState` after `moveend`, filter changes, representation changes, and selection changes.
-- [ ] Add **Copy link to this view** without removing the existing **Share this system** action.
-- [ ] Validate the new reader through a development-only entry or harness before replacing `/s/:id`.
-- [ ] Add separate `viewer` performance and bundle scenarios. Do not reuse the current `share` allowance after the read-only editor is gone.
+- [x] Resolve every existing `/s/:id` as a synthetic View over `{ kind: 'shared-system', id }`.
+- [x] Derive the synthetic View camera from `TransitSystem.viewport`.
+- [x] Derive the synthetic View representation and filters from current defaults.
+- [x] Implement `ViewerApplication` with its own View store and `SelectionController`.
+- [x] Reuse common Workbench slots for layers, representation controls, selection details, attribution, and share actions.
+- [x] Keep editing tools, history, persistence, imports, simulation, install behavior, and editor dialogs out of the reader graph.
+- [x] Split reader feature facts from editing controls. Keep editing controls in the right-hand editor inspector.
+- [x] Implement Fork as a viewer-host action that creates a new local document and navigates to the editor.
+- [x] Encode transient View state as `#view=<base64url MapViewStateV1 JSON>`. Reject a fragment above 8 KiB after URL decoding. Do not encode document geometry or provider configuration.
+- [x] Update fragment state with `history.replaceState` after `moveend`, filter changes, representation changes, and selection changes.
+- [x] Add **Copy link to this view** without removing the existing **Share this system** action.
+- [x] Validate the new reader through a development-only entry or harness before replacing `/s/:id`.
+- [x] Add separate `viewer` performance and bundle scenarios. Do not reuse the current `share` allowance after the read-only editor is gone.
 - [ ] Cut `/s/:id` over only after screenshot, keyboard, accessibility, cache-boundary, bundle, and the launch performance gates pass. Parity with the current slow reader is not sufficient.
-- [ ] Preserve share expiry touches, edit tokens, previews, oEmbed, revocation, deduplication, and one-link-per-document behavior.
-- [ ] Use deployment rollback rather than a permanent runtime flag. No data change prevents the previous release from serving `/s/:id`.
+- [x] Preserve share expiry touches, edit tokens, previews, oEmbed, revocation, deduplication, and one-link-per-document behavior.
+- [x] Use deployment rollback rather than a permanent runtime flag. No data change prevents the previous release from serving `/s/:id`.
 
 **Exit gate:** `/s/:id` loads no editor store or editor command. A transient View link restores presentation state over the same shared system.
 
@@ -456,14 +456,14 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - Create matching tests under `apps/web/tests/views/` and `apps/web/tests/ui/`.
 - Modify `apps/web/src/embed/main.ts`, `apps/web/src/embed/embed-bootstrap.ts`, and `apps/web/src/embed/embed-map-runtime.ts`.
 
-- [ ] Approve a focused Views UX specification before writing UI. The specification must choose the visible name, placement, empty state, Save current view flow, Rename flow, Share flow, and Delete confirmation.
-- [ ] Store local named Views in IndexedDB by document ID.
-- [ ] Keep local View changes out of editor history and `TransitSystem.updatedAt`.
-- [ ] Publish a local View by calling the existing system-share flow first and then creating a View over the resulting share ID.
-- [ ] Add `POST /api/v1/views`, `GET /api/v1/views/:id`, `PATCH /api/v1/views/:id`, and `DELETE /api/v1/views/:id`.
-- [ ] Make each `POST` create a new View ID. Return its raw edit token once, and store only the SHA-256 token hash. Do not deduplicate Views because two authors may publish the same state with different names and ownership.
-- [ ] Make `GET` public. Make `PATCH` and `DELETE` require the existing `x-edit-token` header convention. Let `PATCH` change the title, description, and state, but not the View ID or shared-system reference.
-- [ ] Add this append-only table in `0009_views.sql`:
+- [x] Approve a focused Views UX specification before writing UI. The specification must choose the visible name, placement, empty state, Save current view flow, Rename flow, Share flow, and Delete confirmation.
+- [x] Store local named Views in IndexedDB by document ID.
+- [x] Keep local View changes out of editor history and `TransitSystem.updatedAt`.
+- [x] Publish a local View by calling the existing system-share flow first and then creating a View over the resulting share ID.
+- [x] Add `POST /api/v1/views`, `GET /api/v1/views/:id`, `PATCH /api/v1/views/:id`, and `DELETE /api/v1/views/:id`.
+- [x] Make each `POST` create a new View ID. Return its raw edit token once, and store only the SHA-256 token hash. Do not deduplicate Views because two authors may publish the same state with different names and ownership.
+- [x] Make `GET` public. Make `PATCH` and `DELETE` require the existing `x-edit-token` header convention. Let `PATCH` change the title, description, and state, but not the View ID or shared-system reference.
+- [x] Add this append-only table in `0009_views.sql`:
 
 ```sql
 CREATE TABLE views (
@@ -491,22 +491,22 @@ CREATE INDEX idx_views_shared_system_id ON views (shared_system_id);
 CREATE INDEX idx_views_expires_at ON views (expires_at);
 ```
 
-- [ ] Keep `shared_system_id` free of a foreign key. Existing share expiry deletes system rows independently, and View reads will remove dangling references without making the current share cleanup order depend on another table.
-- [ ] Bound a View request to 32 KiB before parsing JSON. Validate it with the core contract, and reject `local-document` references at the Worker boundary.
-- [ ] Rate-limit View creation as a separate caller-controlled write path.
-- [ ] Give anonymous Views a seven-day sliding expiry. A successful `GET` or `PATCH` must slide the View expiry. Opening a View must also load the referenced shared system so its existing expiry touch still runs.
-- [ ] Return 404 for a View whose shared system has expired. Delete the dangling View during bounded maintenance or on access.
-- [ ] Add `/v/:id` as the canonical full reader route for a named View.
-- [ ] Reuse the referenced shared system's preview for initial View metadata. Do not add per-View browser rasterization in Version 1.
-- [ ] Keep the embed as a separate non-React Vite entry.
-- [ ] Share View parsing, representation/filter restoration, feature identity, and pure layer definitions with the embed.
-- [ ] Add `/embed/:viewId` for named Views.
-- [ ] Keep `/e/:shareId` working through the same synthetic View semantics used by `/s/:shareId`.
-- [ ] Do not require the embed to import the React workspace or the full document map driver when that would violate its bundle budget.
+- [x] Keep `shared_system_id` free of a foreign key. Existing share expiry deletes system rows independently, and View reads will remove dangling references without making the current share cleanup order depend on another table.
+- [x] Bound a View request to 32 KiB before parsing JSON. Validate it with the core contract, and reject `local-document` references at the Worker boundary.
+- [x] Rate-limit View creation as a separate caller-controlled write path.
+- [x] Give anonymous Views a seven-day sliding expiry. A successful `GET` or `PATCH` must slide the View expiry. Opening a View must also load the referenced shared system so its existing expiry touch still runs.
+- [x] Return 404 for a View whose shared system has expired. Delete the dangling View during bounded maintenance or on access.
+- [x] Add `/v/:id` as the canonical full reader route for a named View.
+- [x] Reuse the referenced shared system's preview for initial View metadata. Do not add per-View browser rasterization in Version 1.
+- [x] Keep the embed as a separate non-React Vite entry.
+- [x] Share View parsing, representation/filter restoration, feature identity, and pure layer definitions with the embed.
+- [x] Add `/embed/:viewId` for named Views.
+- [x] Keep `/e/:shareId` working through the same synthetic View semantics used by `/s/:shareId`.
+- [x] Do not require the embed to import the React workspace or the full document map driver when that would violate its bundle budget.
 - [ ] Prove that an editor-host-only change leaves the embed entry and every embed dependency hash unchanged.
-- [ ] Extend oEmbed for `/v/:id`.
-- [ ] Add `/v/*` and `/embed/*` to Worker-first routing and PWA navigation-fallback exclusions.
-- [ ] Keep the editor and full viewer unframeable. Allow cross-origin framing only on embed routes.
+- [x] Extend oEmbed for `/v/:id`.
+- [x] Add `/v/*` and `/embed/*` to Worker-first routing and PWA navigation-fallback exclusions.
+- [x] Keep the editor and full viewer unframeable. Allow cross-origin framing only on embed routes.
 
 **Exit gate:** Local and public named Views work. `/v/:id` and `/embed/:id` resolve the same View state. Existing `/s/:id` and `/e/:id` links remain valid.
 
@@ -525,19 +525,19 @@ CREATE INDEX idx_views_expires_at ON views (expires_at);
 - Delete compatibility modules only after production evidence identifies no caller.
 
 - [ ] Run the shared-system reader and named View reader in production for one stable release before cleanup.
-- [ ] Add a fixture driver that registers bounded map content and resolves feature details without constructing a `TransitSystem` or `EditorStore`.
-- [ ] Run the same workspace, View restoration, filter, selection, and responsive-chrome contract tests against the document and fixture drivers.
+- [x] Add a fixture driver that registers bounded map content and resolves feature details without constructing a `TransitSystem` or `EditorStore`.
+- [x] Run the same workspace, View restoration, filter, selection, and responsive-chrome contract tests against the document and fixture drivers.
 - [ ] Remove `readOnly` from `EditorState` after no reader constructs an editor store.
-- [ ] Remove the module-global camera after every session owns a View store.
-- [ ] Remove `ViewProvider` after every consumer uses `MapViewStore`.
-- [ ] Remove `MapCanvas` after every caller uses `MapSurface`.
-- [ ] Remove the embed's duplicate View parsing and filter defaults.
-- [ ] Add dependency rules that prevent workspace modules from importing editor modules.
-- [ ] Add dependency rules that prevent viewer modules from importing editor commands, persistence, imports, simulation, or PWA modules.
-- [ ] Add dependency rules that prevent embed modules from importing React or editor code.
-- [ ] Add package dependency rules that enforce `views -> map -> workspace` and `core + map -> renderer` without a reverse edge.
-- [ ] Update architecture documentation with the implemented ownership and route behavior.
-- [ ] Run `CI=1 pnpm check` with bounded package concurrency.
+- [x] Remove the module-global camera after every session owns a View store.
+- [x] Remove `ViewProvider` after every consumer uses `MapViewStore`.
+- [x] Remove `MapCanvas` after every caller uses `MapSurface`.
+- [x] Remove the embed's duplicate View parsing and filter defaults.
+- [x] Add dependency rules that prevent workspace modules from importing editor modules.
+- [x] Add dependency rules that prevent viewer modules from importing editor commands, persistence, imports, simulation, or PWA modules.
+- [x] Add dependency rules that prevent embed modules from importing React or editor code.
+- [x] Add package dependency rules that enforce `views -> map -> workspace` and `core + map -> renderer` without a reverse edge.
+- [x] Update architecture documentation with the implemented ownership and route behavior.
+- [x] Run `CI=1 pnpm check` with bounded package concurrency.
 - [ ] Run desktop and mobile performance audits for `rtc`, `share`, and `embed` against the checked baseline.
 - [ ] Run production smoke tests for `/`, `/s/:id`, `/v/:id`, `/e/:id`, `/embed/:id`, oEmbed, previews, offline editor startup, and View deletion.
 
