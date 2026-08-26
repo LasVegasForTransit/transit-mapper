@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PERF_SCENARIOS } from '../../../src/perf/scenarios';
 import {
+  scenarioCameraDragProof,
   scenarioIdentitySelector,
   scenarioRequiresEditorProjectionCounts,
 } from '../../../scripts/perf/journeys';
@@ -19,5 +20,11 @@ describe('performance journey readiness', () => {
     expect(scenarioRequiresEditorProjectionCounts(PERF_SCENARIOS.rtc)).toBe(true);
     expect(scenarioRequiresEditorProjectionCounts(PERF_SCENARIOS.viewer)).toBe(false);
     expect(scenarioRequiresEditorProjectionCounts(PERF_SCENARIOS.embed)).toBe(false);
+  });
+
+  it('proves camera movement through each surface-owned state boundary', () => {
+    expect(scenarioCameraDragProof(PERF_SCENARIOS.rtc)).toBe('editor-projection');
+    expect(scenarioCameraDragProof(PERF_SCENARIOS.viewer)).toBe('viewer-url');
+    expect(scenarioCameraDragProof(PERF_SCENARIOS.embed)).toBe('embed-camera');
   });
 });

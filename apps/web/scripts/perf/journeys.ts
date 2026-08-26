@@ -394,6 +394,14 @@ async function performEntityDrag(
   }
 }
 
+async function waitForViewerCameraLink(page: Page, previousUrl: string): Promise<void> {
+  await page.waitForFunction(
+    (before) => window.location.href !== before && window.location.hash.startsWith('#view='),
+    previousUrl,
+    { timeout: 5_000 },
+  );
+}
+
 async function performCameraDrag(
   page: Page,
   scenario: PerfScenario,
@@ -401,30 +409,33 @@ async function performCameraDrag(
   recorder: PaintedFrameRecorder,
   entityId?: string,
 ): Promise<void> {
+  const proof = scenarioCameraDragProof(scenario);
   const probeCoordinate =
-    scenario.surface === 'embed'
-      ? null
-      : await page.evaluate((stopId) => {
+    proof === 'editor-projection'
+      ? await page.evaluate((stopId) => {
           const snapshot = stopId ? (window as PerfPageWindow).__perfStopSnapshot?.(stopId) : null;
           if (!snapshot) throw new Error('The camera projection target is unavailable.');
           return snapshot.coord;
-        }, entityId);
+        }, entityId)
+      : null;
   const before =
-    scenario.surface === 'embed'
+    proof === 'embed-camera'
       ? await page.evaluate(() => {
           const snapshot = (window as PerfPageWindow).__perfCameraSnapshot?.();
           if (!snapshot) throw new Error('The embed camera seam is unavailable.');
           return snapshot;
         })
-      : await page.evaluate((coordinate) => {
-          const project = (window as PerfPageWindow).__perfProjectLngLat;
-          if (!coordinate || !project)
-            throw new Error('The camera projection seam is unavailable.');
-          return project(coordinate);
-        }, probeCoordinate);
+      : proof === 'editor-projection'
+        ? await page.evaluate((coordinate) => {
+            const project = (window as PerfPageWindow).__perfProjectLngLat;
+            if (!coordinate || !project)
+              throw new Error('The camera projection seam is unavailable.');
+            return project(coordinate);
+          }, probeCoordinate)
+        : page.url();
 
   const dragDistance = Math.min(120, canvas.width * 0.25);
-  const button = scenario.surface === 'embed' ? 'left' : 'right';
+  const button = proof === 'editor-projection' ? 'right' : 'left';
   await recorder.startAction();
   await page.mouse.move(canvas.centerX - dragDistance / 2, canvas.centerY);
   await page.mouse.down({ button });
@@ -439,28 +450,34 @@ async function performCameraDrag(
   await waitForResponsePaint(page);
   await recorder.stopAction();
 
+  if (proof === 'viewer-url') await waitForViewerCameraLink(page, before as string);
+
   const after =
-    scenario.surface === 'embed'
+    proof === 'embed-camera'
       ? await page.evaluate(() => {
           const snapshot = (window as PerfPageWindow).__perfCameraSnapshot?.();
           if (!snapshot) throw new Error('The embed camera seam disappeared.');
           return snapshot;
         })
-      : await page.evaluate((coordinate) => {
-          const project = (window as PerfPageWindow).__perfProjectLngLat;
-          if (!coordinate || !project) throw new Error('The camera projection seam disappeared.');
-          return project(coordinate);
-        }, probeCoordinate);
+      : proof === 'editor-projection'
+        ? await page.evaluate((coordinate) => {
+            const project = (window as PerfPageWindow).__perfProjectLngLat;
+            if (!coordinate || !project) throw new Error('The camera projection seam disappeared.');
+            return project(coordinate);
+          }, probeCoordinate)
+        : page.url();
   const changed =
-    scenario.surface === 'embed'
+    proof === 'embed-camera'
       ? cameraChanged(
           before as { center: LngLat; zoom: number },
           after as { center: LngLat; zoom: number },
         )
-      : projectedPointChanged(
-          before as { x: number; y: number },
-          after as { x: number; y: number },
-        );
+      : proof === 'editor-projection'
+        ? projectedPointChanged(
+            before as { x: number; y: number },
+            after as { x: number; y: number },
+          )
+        : before !== after;
   if (!changed) throw new Error('The deterministic pointer drag did not change the live camera.');
 }
 
@@ -760,6 +777,13 @@ function scenarioReadyDiagnostics(page: Page, selector: string) {
 
 export function scenarioIdentitySelector(scenario: PerfScenario): string | undefined {
   return scenario.surface === 'share' ? scenario.readySelector : undefined;
+}
+
+export type ScenarioCameraDragProof = 'editor-projection' | 'viewer-url' | 'embed-camera';
+
+export function scenarioCameraDragProof(scenario: PerfScenario): ScenarioCameraDragProof {
+  if (scenario.surface === 'editor') return 'editor-projection';
+  return scenario.surface === 'share' ? 'viewer-url' : 'embed-camera';
 }
 
 export function scenarioRequiresEditorProjectionCounts(scenario: PerfScenario): boolean {
