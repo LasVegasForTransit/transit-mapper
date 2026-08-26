@@ -409,6 +409,16 @@ the existing `^build` edges.
 - [x] Run focused renderer tests serially with `--maxWorkers=1 --no-file-parallelism`.
 - [ ] Compare the RTC screenshots and performance report with Phase 1.
 
+The August 26, 2026 pull request audit at `c3c73890` completed five desktop
+RTC runs. The gate reported 22,533 milliseconds to the first map canvas,
+20,409 milliseconds of long tasks, and 3,864 milliseconds from input to the
+next paint. The limits are 7,500, 3,500, and 50 milliseconds. The embed closure
+measured 413,134 gzip bytes against a 360,223-byte limit. The main closure
+measured 620,038 gzip bytes against a 567,238-byte limit. Phase 1 contains no
+RTC samples, so the branch cannot produce the planned phase-to-phase comparison
+after the fact. The required RTC check remains failed. This refactor pass will
+not weaken the gate or replace its five-run result with a one-run smoke result.
+
 **Exit gate:** The production editor is a concrete `MapWorkspace` host. No user-visible behavior changes. The common workspace contains no read-only or geography-specific branch. Package builds restore independently. Editor-only delivery changes do not invalidate stable shared chunks or the embed entry.
 
 **Rollback:** `App.tsx` can render the compatibility `MapCanvas` through the previous provider tree. No API or data migration exists.
