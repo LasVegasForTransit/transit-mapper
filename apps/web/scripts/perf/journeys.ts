@@ -773,11 +773,16 @@ export async function waitForScenarioReady(
     }
   } else if (scenario.surface === 'share') {
     const identitySelector = scenarioIdentitySelector(scenario);
-    if (
-      !identitySelector ||
-      (await page.locator(identitySelector).first().textContent())?.trim() !== expectedName
-    ) {
-      throw new Error(`${scenario.id} share did not render the expected system.`);
+    if (!identitySelector) throw new Error(`${scenario.id} has no viewer identity element.`);
+    try {
+      await page.waitForFunction(
+        ({ selector, expected }) =>
+          document.querySelector(selector)?.textContent?.trim() === expected,
+        { selector: identitySelector, expected: expectedName },
+        { timeout: 60_000 },
+      );
+    } catch (error) {
+      throw new Error(`${scenario.id} share did not render the expected system.`, { cause: error });
     }
   } else {
     await page.waitForFunction(
