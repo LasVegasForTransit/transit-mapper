@@ -50,6 +50,34 @@ export default {
       },
     },
     {
+      name: 'editor-document-map-adapters-are-headless',
+      severity: 'error',
+      comment:
+        'Document map adapters translate editor state into map and renderer ports. React and ' +
+        'provider graphs must remain outside their complete dependency closure.',
+      from: {
+        path: '^apps/web/src/editor/(document-map-source|editor-selection|document-map)\\.ts$',
+      },
+      to: {
+        path: '(^|/)react(-dom)?(/|$)|^apps/web/src/editor/EditorProvider\\.tsx$|^packages/workspace/src/map-view-provider\\.tsx$',
+        reachable: true,
+      },
+    },
+    {
+      name: 'editor-map-attachment-has-no-application-lifecycle',
+      severity: 'error',
+      comment:
+        'Map attachment owns the connection between editor ports and the shared map. Its ' +
+        'dependency closure must not acquire providers, application startup, imports, PWA, or storage.',
+      from: {
+        path: '^apps/web/src/editor/editor-map-(attachment|gesture|projection|view)\\.ts$',
+      },
+      to: {
+        path: '(^|/)react(-dom)?(/|$)|^apps/web/src/(App\\.tsx$|editor/EditorProvider\\.tsx$|import/|pwa/|storage/)|^packages/workspace/src/map-view-provider\\.tsx$',
+        reachable: true,
+      },
+    },
+    {
       name: 'editor-command-groups-do-not-import-the-public-entry',
       severity: 'error',
       comment:
