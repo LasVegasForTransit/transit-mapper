@@ -16,7 +16,7 @@ import { FeatureDetails } from './feature-details';
 
 export type ViewerStatus = 'loading' | 'ready' | 'error';
 
-export interface ViewerMapRenderOptions {
+interface ViewerMapRenderOptions {
   system: TransitSystem;
   viewStore: MapViewStore;
   selection: SelectionController;

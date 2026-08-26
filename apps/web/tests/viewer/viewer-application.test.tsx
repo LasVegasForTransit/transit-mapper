@@ -30,6 +30,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  Reflect.deleteProperty(navigator, 'clipboard');
   Reflect.deleteProperty(document, 'execCommand');
   vi.unstubAllGlobals();
 });
@@ -68,11 +69,9 @@ describe('ViewerApplication', () => {
           renderMap={renderMap}
           onFork={onFork}
           onCopyLink={onCopy}
-          resolveFeatureDetails={async (_system, reference) => ({
-            reference,
-            title: 'Central',
-            fields: [],
-          })}
+          resolveFeatureDetails={(_system, reference) =>
+            Promise.resolve({ reference, title: 'Central', fields: [] })
+          }
         />,
       );
     });
@@ -167,11 +166,9 @@ describe('ViewerApplication', () => {
           resolveSession={resolveSession}
           fragmentValue={undefined}
           renderMap={() => <div role="region" aria-label="Map" />}
-          resolveFeatureDetails={async (_system, reference) => ({
-            reference,
-            title: 'Central',
-            fields: [],
-          })}
+          resolveFeatureDetails={(_system, reference) =>
+            Promise.resolve({ reference, title: 'Central', fields: [] })
+          }
         />,
       );
     });
@@ -234,15 +231,15 @@ describe('ViewerApplication', () => {
     });
 
     const writeText = vi.fn().mockRejectedValue(new DOMException('blocked', 'NotAllowedError'));
-    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     const copy = vi.fn().mockReturnValue(true);
     Object.defineProperty(document, 'execCommand', { configurable: true, value: copy });
     const copyButton = container.querySelector<HTMLButtonElement>(
       'button[data-viewer-action="copy"]',
     );
     if (!copyButton) throw new Error('The copy action did not render.');
-    await act(async () => copyButton.click());
+    act(() => copyButton.click());
+    await vi.waitFor(() => expect(copy).toHaveBeenCalledWith('copy'));
     expect(writeText).toHaveBeenCalledWith(window.location.href);
-    expect(copy).toHaveBeenCalledWith('copy');
   });
 });

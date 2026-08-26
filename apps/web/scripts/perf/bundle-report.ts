@@ -347,7 +347,7 @@ export function createDeliveryGraphs(options: CreateDeliveryGraphsOptions): Deli
     (entry): entry is [string, ViteManifestEntry] => entry[1] !== undefined,
   );
   const manifestEntries = allEntries.filter(
-    (entry): entry is [string, ViteManifestEntry] => entry[1]?.isEntry === true,
+    (entry): entry is [string, ViteManifestEntry] => entry[1].isEntry === true,
   );
   const routeHostEntries = allEntries.filter(
     ([key, entry]) => entry.isEntry !== true && deliveryEntryName(key, entry) === 'viewer',

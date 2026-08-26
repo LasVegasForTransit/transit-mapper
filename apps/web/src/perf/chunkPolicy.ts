@@ -34,8 +34,8 @@ function isMapEngineModule(moduleId: string): boolean {
 }
 
 function stablePackageChunk(moduleId: string): PerformanceChunkName | undefined {
-  const match = normalizedModuleId(moduleId).match(
-    /\/packages\/(views|map|workspace|renderer)\/(?:src|dist)\//,
+  const match = /\/packages\/(views|map|workspace|renderer)\/(?:src|dist)\//.exec(
+    normalizedModuleId(moduleId),
   );
   return match?.[1] as PerformanceChunkName | undefined;
 }

@@ -24,8 +24,8 @@ function base64UrlEncode(value: string): string {
   let output = '';
   for (let index = 0; index < bytes.length; index += 3) {
     const first = bytes[index];
-    const second = bytes[index + 1];
-    const third = bytes[index + 2];
+    const second = bytes.at(index + 1);
+    const third = bytes.at(index + 2);
     const block = (first << 16) | ((second ?? 0) << 8) | (third ?? 0);
     output += BASE64_ALPHABET[(block >>> 18) & 63];
     output += BASE64_ALPHABET[(block >>> 12) & 63];

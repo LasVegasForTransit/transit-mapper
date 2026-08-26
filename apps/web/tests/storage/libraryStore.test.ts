@@ -13,31 +13,36 @@ class MemoryDatabase implements LibraryDatabase {
   readonly systems = new Map<string, StoredSystemRecord>();
   fail: SaveOutcome | null = null;
 
-  async list(): Promise<StoredLibraryEntry[]> {
-    if (this.fail) throw storageError(this.fail);
-    return [...this.systems.values()].map(
-      ({ id, name, updatedAt, supersededAuthoritativeSnapshotId }) => ({
-        id,
-        name,
-        updatedAt,
-        ...(supersededAuthoritativeSnapshotId ? { supersededAuthoritativeSnapshotId } : {}),
-      }),
+  list(): Promise<StoredLibraryEntry[]> {
+    if (this.fail) return Promise.reject(storageError(this.fail));
+    return Promise.resolve(
+      [...this.systems.values()].map(
+        ({ id, name, updatedAt, supersededAuthoritativeSnapshotId }) => ({
+          id,
+          name,
+          updatedAt,
+          ...(supersededAuthoritativeSnapshotId ? { supersededAuthoritativeSnapshotId } : {}),
+        }),
+      ),
     );
   }
 
-  async load(id: string): Promise<StoredSystemRecord | null> {
-    if (this.fail) throw storageError(this.fail);
-    return this.systems.get(id) ?? null;
+  load(id: string): Promise<StoredSystemRecord | null> {
+    return this.fail
+      ? Promise.reject(storageError(this.fail))
+      : Promise.resolve(this.systems.get(id) ?? null);
   }
 
-  async save(record: StoredSystemRecord): Promise<void> {
-    if (this.fail) throw storageError(this.fail);
+  save(record: StoredSystemRecord): Promise<void> {
+    if (this.fail) return Promise.reject(storageError(this.fail));
     this.systems.set(record.id, record);
+    return Promise.resolve();
   }
 
-  async delete(id: string): Promise<void> {
-    if (this.fail) throw storageError(this.fail);
+  delete(id: string): Promise<void> {
+    if (this.fail) return Promise.reject(storageError(this.fail));
     this.systems.delete(id);
+    return Promise.resolve();
   }
 }
 
@@ -123,7 +128,7 @@ function storageError(outcome: SaveOutcome): Error {
 function setup() {
   const database = new MemoryDatabase();
   const legacy = new MemoryLegacyLibrary();
-  const serialize = vi.fn(async (system: TransitSystem) => JSON.stringify(system));
+  const serialize = vi.fn((system: TransitSystem) => Promise.resolve(JSON.stringify(system)));
   const store = createLibraryStore({ database, legacy, serialize });
   return { database, legacy, serialize, store };
 }
@@ -145,7 +150,7 @@ describe('IndexedDB library store', () => {
     const { database, legacy, serialize, store } = setup();
     const system = { ...createEmptySystem(), id: 'current-save', name: 'Current save' };
     await expect(store.save(system)).resolves.toBe('saved');
-    const deserialize = vi.fn(async () => system);
+    const deserialize = vi.fn(() => Promise.resolve(system));
     const reloaded = createLibraryStore({ database, legacy, serialize, deserialize });
 
     await expect(reloaded.load(system.id)).resolves.toEqual({ status: 'ok', system });
@@ -161,7 +166,7 @@ describe('IndexedDB library store', () => {
     if (!record) throw new Error('The test save did not reach IndexedDB.');
     record.serialized = JSON.stringify({ ...system, name: 'After' });
     const reconstructed = { ...system, name: 'After' };
-    const deserialize = vi.fn(async () => reconstructed);
+    const deserialize = vi.fn(() => Promise.resolve(reconstructed));
     const reloaded = createLibraryStore({ database, legacy, serialize, deserialize });
 
     await expect(reloaded.load(system.id)).resolves.toEqual({

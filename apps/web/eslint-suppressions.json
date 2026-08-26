@@ -567,9 +567,6 @@
     }
   },
   "tests/storage/libraryStore.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 5
-    },
     "max-lines": {
       "count": 1
     },

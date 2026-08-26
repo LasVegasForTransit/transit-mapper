@@ -13,7 +13,7 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
-export interface SharedSystemResource {
+interface SharedSystemResource {
   id: string;
   url: string;
 }

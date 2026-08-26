@@ -56,10 +56,11 @@ function currentSystemEnvelope(
 }
 
 async function sha256(serialized: string): Promise<string | null> {
-  const subtle = globalThis.crypto?.subtle;
-  if (!subtle) return null;
   try {
-    const digest = await subtle.digest('SHA-256', new TextEncoder().encode(serialized));
+    const digest = await globalThis.crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(serialized),
+    );
     return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
   } catch {
     // Provenance accelerates a load. It must never make a document unsavable

@@ -50,7 +50,7 @@ const EMBED_DEFAULT_HEIGHT = 500;
  *  id-shaped position is someone probing, not a real link. */
 export const SHARE_ID_PATTERN = /^[0-9a-z]{1,32}$/;
 
-export type EmbeddableTarget =
+type EmbeddableTarget =
   { kind: 'shared-system'; id: string } | { kind: 'published-view'; id: string };
 
 /**
@@ -58,7 +58,7 @@ export type EmbeddableTarget =
  * origin. Scoping to SITE_URL is what stops this from being an open oEmbed
  * endpoint that will describe (and lend our provider name to) arbitrary URLs.
  */
-export function embeddableTargetFromUrl(target: string, siteUrl: string): EmbeddableTarget | null {
+function embeddableTargetFromUrl(target: string, siteUrl: string): EmbeddableTarget | null {
   let url: URL;
   try {
     url = new URL(target);

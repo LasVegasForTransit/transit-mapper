@@ -20,7 +20,7 @@ import {
 
 const VIEW_ID_PATTERN = /^[0-9a-z]{1,32}$/;
 
-export interface ViewApiBindings {
+interface ViewApiBindings {
   DB: D1Database;
   VIEW_CREATE_LIMITER?: RateLimit;
 }
@@ -29,7 +29,7 @@ interface ViewApiEnv {
   Bindings: ViewApiBindings;
 }
 
-export interface ReferencedSharedSystem {
+interface ReferencedSharedSystem {
   touch(): Promise<unknown> | null;
 }
 
