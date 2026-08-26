@@ -118,7 +118,14 @@ export function waitForSourceBankLoad({
     (settle) => {
       const stopSourceData = host.onSourceData((sourceId) => {
         if (expected.has(sourceId)) observedData.add(sourceId);
-        if (loaded()) settle();
+        if (loaded()) {
+          settle();
+          return;
+        }
+        // MapLibre can acknowledge one hidden source before another source's
+        // worker cache becomes readable. Request a follow-up frame so the
+        // render fallback can observe the remaining source as loaded.
+        host.triggerRepaint();
       });
       // A worker acknowledgement is enough for a hidden source. When this
       // wait owns mutations, a resident source may still report loaded while

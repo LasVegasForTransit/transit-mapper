@@ -36,6 +36,7 @@ describe('the editor map gesture lifecycle', () => {
       } as never,
       getSnapshot: () => source.getSnapshot(),
       scheduleProjection: vi.fn(),
+      recoverStyle: vi.fn(),
       subscribeAcceptedScene: () => () => {},
     };
     const gesture = createEditorMapGesture(session, {

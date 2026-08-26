@@ -351,6 +351,7 @@ function createLoadedStyleBridge(
       previous.themeApplied(theme);
       registerMapIcons(session.map, theme);
     },
+    recover: () => session.recoverStyle(),
     interactionActive: () =>
       attachment.isInteractionActive() || session.renderer.publicationInProgress(),
     resized: () => session.scheduleProjection(),

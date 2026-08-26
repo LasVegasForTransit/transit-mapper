@@ -65,9 +65,10 @@ describe('render source bank settlement', () => {
     host.triggerRepaint();
     host.complete('ways--bank-b');
     host.triggerRepaint();
-    // The source waiter requests one ordinary follow-up render; it does not
+    // The source waiter requests follow-up renders as hidden workers report
+    // progress. It does not
     // suppress camera or animation repaint scheduling while the bank loads.
-    expect(host.repaint).toHaveBeenCalledTimes(3);
+    expect(host.repaint).toHaveBeenCalledTimes(4);
     let finished = false;
     void loaded.then(() => {
       finished = true;
@@ -93,14 +94,15 @@ describe('render source bank settlement', () => {
     const host = new SettlementHost();
     const loaded = waitForSourceBankLoad({
       host,
-      sourceIds: ['ways--bank-b'],
+      sourceIds: ['ways--bank-b', 'stations--bank-b'],
     });
 
     // MapLibre can announce new GeoJSON data before the following render has
     // finished rebuilding its source cache. The later render is the first
     // point at which `isSourceLoaded` becomes authoritative.
     host.sourceData('ways--bank-b');
-    host.markLoaded('ways--bank-b');
+    expect(host.repaint).toHaveBeenCalledTimes(2);
+    host.markLoaded('stations--bank-b');
     host.render();
 
     await expect(loaded).resolves.toBeUndefined();

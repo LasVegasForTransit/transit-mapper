@@ -149,11 +149,13 @@ export class LiveMapRenderer {
   private readonly backgroundPreparation: SourceBankBackgroundPreparation;
   private readonly sourcePublication: RendererSourcePublication;
   private readonly reportError: (error: unknown) => void;
+  private readonly triggerRepaint: () => void;
   private pendingEditorScene: SceneUpdate | null = null;
   private disposed = false;
 
   constructor(options: LiveMapRendererOptions) {
     this.reportError = (error) => options.onError?.(error);
+    this.triggerRepaint = () => options.host.triggerRepaint();
     this.scheduler =
       options.scheduler ??
       createCooperativeRenderJobScheduler({
@@ -373,7 +375,9 @@ export class LiveMapRenderer {
 
   restoreActiveLayers(): void {
     const activeBank = this.banks.activeBank();
-    if (activeBank) this.layers.restore(activeBank);
+    if (!activeBank) return;
+    this.layers.restore(activeBank);
+    this.triggerRepaint();
   }
 
   handleSourceError(event: RenderSourceErrorEvent): boolean {
@@ -381,6 +385,10 @@ export class LiveMapRenderer {
   }
 
   requestRecovery(sourceId?: string): void {
+    // A retained-scene heal and the speculative inactive-bank seed both own
+    // the same source plan. Recovery wins because a style change can discard
+    // the data that the accepted scene needs to remain visible.
+    this.cancelBackgroundPreparation();
     this.recovery.requestRecovery(sourceId);
   }
 

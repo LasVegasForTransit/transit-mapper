@@ -953,6 +953,38 @@ describe('document map driver', () => {
     attachment.dispose();
   });
 
+  it('recovers the accepted scene when a host applies a style without a style load event', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem()));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const errors: unknown[] = [];
+    let session: DocumentMapSession | null = null;
+    const driver = createDocumentMapDriver(
+      driverOptions(source, clock, createProjectionWorker(), {
+        attachSession: (attached) => {
+          session = attached;
+        },
+      }),
+    );
+    const attachment = await driver.attach(createAttachOptions(map, [], errors));
+    await advanceUntil(clock, map, () => session?.renderer.snapshot().acceptedRevision != null);
+    const renderer = requireSession(session).renderer;
+    const recoveryVersion = renderer.recoveryVersion();
+    const events: string[] = [];
+    const restoreActiveLayers = renderer.restoreActiveLayers.bind(renderer);
+    vi.spyOn(renderer, 'restoreActiveLayers').mockImplementation(() => {
+      events.push('restore');
+      restoreActiveLayers();
+    });
+    vi.spyOn(map, 'triggerRepaint').mockImplementation(() => events.push('paint'));
+    requireSession(session).recoverStyle();
+    await advanceUntil(clock, map, () => renderer.recoveryVersion() > recoveryVersion + 1);
+
+    expect(errors).toEqual([]);
+    expect(events.lastIndexOf('restore')).toBeLessThan(events.lastIndexOf('paint'));
+    attachment.dispose();
+  });
+
   it('retries retained-scene recovery when a style changes during an active projection', async () => {
     const initial = createReadySystem();
     const source = new TestDocumentSource(readySnapshot(initial));

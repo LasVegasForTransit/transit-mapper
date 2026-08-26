@@ -129,6 +129,7 @@ export function createEditorMapAttachmentHarness() {
     renderer: renderer as never,
     getSnapshot: () => source.getSnapshot(),
     scheduleProjection,
+    recoverStyle: vi.fn(),
     subscribeAcceptedScene(listener) {
       accepted.add(listener);
       return () => accepted.delete(listener);

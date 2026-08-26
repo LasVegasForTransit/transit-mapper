@@ -25,6 +25,7 @@ export interface EditorMapStyleBridge {
   ): StyleSpecification;
   retained(): boolean;
   themeApplied(theme: ColorScheme): void;
+  recover(): void;
   interactionActive(): boolean;
   resized(): void;
 }

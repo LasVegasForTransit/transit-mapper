@@ -390,6 +390,7 @@ class DocumentMapDriver implements MapDriver {
       renderer,
       getSnapshot: () => latestSnapshot,
       scheduleProjection,
+      recoverStyle: () => styleRecovery?.handleStyleLoad(),
       subscribeAcceptedScene(listener) {
         acceptedListeners.add(listener);
         return () => acceptedListeners.delete(listener);
@@ -617,7 +618,7 @@ class DocumentMapDriver implements MapDriver {
       },
       reportError: (error) => reportSafely(attachOptions, error),
     });
-    const onStyleLoad = () => styleRecovery?.handleStyleLoad();
+    const onStyleLoad = () => session.recoverStyle();
     try {
       map.on('style.load', onStyleLoad);
       mapListenerCleanups.push(() => map.off('style.load', onStyleLoad));

@@ -130,6 +130,7 @@ function createInitialStyleBridge(
     themeApplied: (nextTheme) => {
       theme.current = nextTheme;
     },
+    recover() {},
     interactionActive: () => false,
     resized() {},
   };
@@ -245,7 +246,7 @@ export function EditorMapSurface({
           carry: (previous, next, theme) => styleRef.current.carry(previous, next, theme),
           isDocumentStateRetained: () => styleRef.current.retained(),
           onThemeApplied: (theme) => styleRef.current.themeApplied(theme),
-          recoverDocumentLayers: () => {},
+          recoverDocumentLayers: () => styleRef.current.recover(),
           timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
           isInteractionActive: () => styleRef.current.interactionActive(),
           onBaseStyleUnavailable: () => basemapFailureRef.current?.(),

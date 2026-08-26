@@ -59,6 +59,10 @@ export interface DocumentMapSession {
   readonly renderer: LiveMapRenderer;
   getSnapshot(): DocumentMapSnapshot;
   scheduleProjection(request?: DocumentMapProjectionRequest): void;
+  /** Reinstalls the retained scene after the host changes the MapLibre style.
+   * Hosts must call this for diff-applied styles because MapLibre does not emit
+   * `style.load` for that path. */
+  recoverStyle(): void;
   subscribeAcceptedScene(listener: (event: DocumentMapSceneAccepted) => void): () => void;
 }
 
