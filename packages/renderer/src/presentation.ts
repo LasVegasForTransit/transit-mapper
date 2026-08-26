@@ -1,8 +1,15 @@
 import { MODE_ORDER, MODES, WAY_TYPE_ORDER, WAY_TYPES } from '@transitmapper/core/model/catalog';
 import type { MapDefinition } from '@transitmapper/map';
-import type { DocumentMapPresentation } from '@transitmapper/renderer/driver';
 import type { MapPresentationStateV1 } from '@transitmapper/views';
-import { DOCUMENT_VIEW_FILTER_IDS, type DocumentRepresentationId } from './document-view-adapter';
+import type { DocumentMapPresentation } from './document-map-driver-types';
+
+export type DocumentRepresentationId = 'network' | 'infrastructure' | 'diagram';
+
+export const DOCUMENT_VIEW_FILTER_IDS = {
+  modes: 'modes',
+  wayTypes: 'way-types',
+  landmarks: 'landmarks',
+} as const;
 
 const DOCUMENT_REPRESENTATIONS = Object.freeze([
   Object.freeze({ id: 'network', label: 'Network' }),

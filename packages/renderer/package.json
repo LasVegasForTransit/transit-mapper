@@ -36,6 +36,14 @@
       "types": "./dist/projection.d.ts",
       "import": "./dist/projection.js"
     },
+    "./presentation": {
+      "development": {
+        "types": "./src/presentation.ts",
+        "import": "./src/presentation.ts"
+      },
+      "types": "./dist/presentation.d.ts",
+      "import": "./dist/presentation.js"
+    },
     "./runtime": {
       "development": {
         "types": "./src/runtime.ts",

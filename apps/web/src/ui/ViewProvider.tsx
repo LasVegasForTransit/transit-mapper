@@ -13,12 +13,12 @@ import { createMapViewStore, type MapViewStore } from '@transitmapper/map';
 import type { MapCameraStateV1 } from '@transitmapper/views';
 import { MapViewProvider, useMapViewStore } from '@transitmapper/workspace';
 import {
-  createDocumentPresentationState,
   DOCUMENT_VIEW_FILTER_IDS,
   type DocumentRepresentationId,
-} from '../editor/document-view-adapter';
+} from '@transitmapper/renderer/presentation';
+import { createDocumentPresentationState } from '../editor/document-view-adapter';
 
-export type { DocumentRepresentationId } from '../editor/document-view-adapter';
+export type { DocumentRepresentationId } from '@transitmapper/renderer/presentation';
 export type ViewMode = DocumentRepresentationId;
 
 interface ViewState {

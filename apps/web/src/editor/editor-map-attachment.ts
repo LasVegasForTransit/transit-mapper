@@ -8,10 +8,11 @@ import {
   SRC_ACTION_ANCHOR,
 } from '@transitmapper/renderer/layers';
 import { sourceUploadsForSystemChange } from '@transitmapper/renderer/projection';
+import { DOCUMENT_VIEW_FILTER_IDS } from '@transitmapper/renderer/presentation';
 import { attachInteractions } from '../map/interactions';
 import { LAYER_SPECS } from '../map/layers/layerSpecs';
 import { editorSourcesNeedSystemRefresh, planSelectionRenderUpdate } from '../map/editor-overlays';
-import { DOCUMENT_VIEW_FILTER_IDS, initializeDocumentCamera } from './document-view-adapter';
+import { initializeDocumentCamera } from './document-view-adapter';
 import { clearArmedTerminusForViewChange } from '../map/viewEditorState';
 import { createEditorMapGesture, type EditorMapGestureController } from './editor-map-gesture';
 import {

@@ -1,10 +1,21 @@
 import type { TransitSystem } from '@transitmapper/core/model/system';
+import type { MapViewStateV1 } from '@transitmapper/views';
 import type { EmbedStartupMilestones } from './startup-milestones';
 
+export type EmbedReference =
+  { kind: 'shared-system'; id: string } | { kind: 'published-view'; id: string };
+
+export interface EmbedContent {
+  system: TransitSystem;
+  state: MapViewStateV1;
+  title: string;
+  openPath: string;
+}
+
 export interface EmbedMapRuntimeOptions {
-  id: string;
+  reference: EmbedReference;
   container: HTMLElement;
-  system: Promise<TransitSystem>;
+  content: Promise<EmbedContent>;
   milestones: EmbedStartupMilestones;
 }
 
@@ -13,12 +24,19 @@ interface EmbedMapRuntime {
 }
 
 export interface StartEmbedRuntimeOptions {
-  id: string;
+  reference: EmbedReference;
   container: HTMLElement;
   signal: AbortSignal;
   milestones: EmbedStartupMilestones;
-  loadSystem(id: string, signal: AbortSignal): Promise<TransitSystem>;
+  loadContent(reference: EmbedReference, signal: AbortSignal): Promise<EmbedContent>;
   loadRuntime(): Promise<EmbedMapRuntime>;
+}
+
+export function parseEmbedReference(pathname: string): EmbedReference | null {
+  const sharedSystemId = /^\/e\/([0-9a-z]{1,32})\/?$/.exec(pathname)?.[1];
+  if (sharedSystemId) return { kind: 'shared-system', id: sharedSystemId };
+  const publishedViewId = /^\/embed\/([0-9a-z]{1,32})\/?$/.exec(pathname)?.[1];
+  return publishedViewId ? { kind: 'published-view', id: publishedViewId } : null;
 }
 
 /**
@@ -28,12 +46,12 @@ export interface StartEmbedRuntimeOptions {
  * entry graph.
  */
 export async function startEmbedRuntime(options: StartEmbedRuntimeOptions): Promise<void> {
-  const system = options.loadSystem(options.id, options.signal);
+  const content = options.loadContent(options.reference, options.signal);
   const runtime = await options.loadRuntime();
   await runtime.start({
-    id: options.id,
+    reference: options.reference,
     container: options.container,
-    system,
+    content,
     milestones: options.milestones,
   });
 }

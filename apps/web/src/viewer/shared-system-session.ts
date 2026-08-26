@@ -1,7 +1,7 @@
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { resolveMapPresentationState } from '@transitmapper/map/state';
 import { decodeMapViewState, type MapViewStateV1, ViewParseError } from '@transitmapper/views';
-import { DOCUMENT_MAP_DEFINITION } from '../editor/document-map-definition';
+import { DOCUMENT_MAP_DEFINITION } from '@transitmapper/renderer/presentation';
 import { createDocumentPresentationState } from '../editor/document-view-adapter';
 import { fetchShare } from '../share/api';
 

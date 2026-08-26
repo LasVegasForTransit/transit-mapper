@@ -1,10 +1,8 @@
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { INITIAL_STYLE_FALLBACK_TIMEOUT_MS } from '@transitmapper/map';
-import { systemBounds } from '@transitmapper/core/model/geo';
-import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
-import { buildFeatures, type ViewOptions } from '@transitmapper/core/render/buildFeatures';
-import type { TransitSystem } from '@transitmapper/core/model/system';
+import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
+import { resolveDocumentMapPresentation } from '@transitmapper/renderer/presentation';
 import {
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
@@ -24,7 +22,7 @@ import {
 import { basemapStyleForScheme, localBlankStyleForScheme } from '../map/mapTheme';
 import { renderPresentationForFittedMap } from '../map/static-render-features';
 import { carryDocumentStyle } from '../map/document-style-carry';
-import type { EmbedMapRuntimeOptions } from './embed-bootstrap';
+import type { EmbedContent, EmbedMapRuntimeOptions } from './embed-bootstrap';
 import { createEmbedStyleController, embedOverlayIsRetained } from './embed-style-controller';
 
 const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
@@ -32,12 +30,6 @@ const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUIL
 // The embedded map is a live, read-only view of one shared system. This
 // runtime boundary starts after the static host shell is committed, keeping
 // MapLibre and its Workers out of the host page's initial parse work.
-const EMBED_VIEW: ViewOptions = {
-  viewMode: 'network',
-  visibleModes: new Set(MODE_ORDER),
-  visibleWayTypes: new Set(WAY_TYPE_ORDER),
-};
-
 const MAP_LOAD_TIMEOUT_MS = 20_000;
 const SYSTEM_PAINT_TIMEOUT_MS = 10_000;
 
@@ -185,23 +177,24 @@ async function drawSystem({ map, features, scheme, runtime }: DrawSystemOptions)
   markFirstSystemMapPaint();
 }
 
-function fitSystem(map: MLMap, system: TransitSystem): void {
-  // The projection must see the settled fitted camera. Building before this
-  // call stamps a tier for the temporary world view, then leaves that tier on
-  // screen after MapLibre fits the real system.
+function restoreCamera(map: MLMap, content: EmbedContent): void {
   map.resize();
-  const bounds = systemBounds(system);
-  if (bounds) map.fitBounds(bounds, { padding: 40, animate: false });
+  map.jumpTo({
+    center: content.state.camera.center,
+    zoom: content.state.camera.zoom,
+  });
 }
 
-function updateEmbedLabels(id: string, system: TransitSystem): void {
-  document.title = `${system.name || 'Transit system'} · TransitMapper`;
+function updateEmbedLabels(content: EmbedContent): void {
+  document.title = `${content.title} · TransitMapper`;
   // The credit link doubles as the way out of the iframe — a reader who wants
   // to explore or fork opens the real app in a new tab.
   const credit = document.getElementById('embed-open');
   if (credit instanceof HTMLAnchorElement) {
-    credit.href = `/s/${id}`;
-    credit.textContent = system.name ? `${system.name} · TransitMapper` : 'Open in TransitMapper';
+    credit.href = content.openPath;
+    credit.textContent = content.title
+      ? `${content.title} · TransitMapper`
+      : 'Open in TransitMapper';
   }
 }
 
@@ -213,13 +206,14 @@ export async function startEmbedMap(options: EmbedMapRuntimeOptions): Promise<vo
   const map = createMap(options.container, initialScheme, options);
   let detachScheme = () => {};
   try {
-    const [system] = await Promise.all([options.system, waitForMapLoad(map)]);
-    fitSystem(map, system);
-    const features = buildFeatures(system, null, [], {
-      ...EMBED_VIEW,
+    const [content] = await Promise.all([options.content, waitForMapLoad(map)]);
+    restoreCamera(map, content);
+    const presentation = resolveDocumentMapPresentation(content.state);
+    const features = buildFeatures(content.system, null, [], {
+      ...presentation,
       presentation: renderPresentationForFittedMap(map),
     });
-    updateEmbedLabels(options.id, system);
+    updateEmbedLabels(content);
     await drawSystem({ map, features, scheme: initialScheme, runtime: options });
     let activeScheme = initialScheme;
     const styleSwitcher = createEmbedStyleController({

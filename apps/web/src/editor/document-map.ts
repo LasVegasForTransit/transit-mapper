@@ -5,12 +5,18 @@ import {
 } from '@transitmapper/renderer/driver';
 import type { SourceFeatureProjectionAccounting } from '@transitmapper/renderer/projection';
 import type { RendererStatsCollector } from '@transitmapper/renderer/stats';
-import { DOCUMENT_MAP_DEFINITION, resolveDocumentMapPresentation } from './document-map-definition';
+import {
+  DOCUMENT_MAP_DEFINITION,
+  resolveDocumentMapPresentation,
+} from '@transitmapper/renderer/presentation';
 import { createDocumentMapSource, type EditorDocumentMapSource } from './document-map-source';
 import { createEditorSelectionController } from './editor-selection';
 import type { EditorStore } from './store';
 
-export { DOCUMENT_MAP_DEFINITION, resolveDocumentMapPresentation } from './document-map-definition';
+export {
+  DOCUMENT_MAP_DEFINITION,
+  resolveDocumentMapPresentation,
+} from '@transitmapper/renderer/presentation';
 
 export interface CreateEditorDocumentMapOptions {
   readonly store: EditorStore;

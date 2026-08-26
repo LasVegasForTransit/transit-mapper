@@ -85,6 +85,9 @@ and MapLibre. Its bounded entries include `driver`, `layers`, `projection`,
 
 `packages/renderer/src/layers` owns stable source and layer identities. Worker
 clients remain beside their projection modules until that directory moves.
+`packages/renderer/src/presentation.ts` owns the document map definition and
+the conversion from portable View filters to renderer presentation values.
+The editor, viewer, and non-React embed use that one definition.
 
 The web application supplies editor overlays, theme layers, and performance
 reporting. It still mounts `MapCanvas` until the editor session migration lands.
@@ -358,8 +361,10 @@ calculated by core; it owns neither timetable nor motion policy.
 
 `apps/web/src/share` owns publishing requests, browser-side preview
 rasterization, and downloadable formats. `apps/web/src/embed` owns the
-read-only entry and its host-page contract. Both use core rendering and share
-contracts so the editor, external exports, and embed agree on the same system.
+read-only entry and its host-page contract. The embed resolves either a legacy
+shared-system reference or a published View reference before loading MapLibre.
+It restores the same camera, representation, and filters as the full viewer
+without importing React or editor state.
 
 #### Platform integration
 

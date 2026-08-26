@@ -15,11 +15,11 @@ import {
   sourceBankLayerSpecs,
 } from '@transitmapper/renderer/layers';
 import type { ColorScheme } from '../theme/systemColorScheme';
-import { DOCUMENT_VIEW_FILTER_IDS } from '../editor/document-view-adapter';
 import {
+  DOCUMENT_VIEW_FILTER_IDS,
   DOCUMENT_MAP_DEFINITION,
   resolveDocumentMapPresentation,
-} from '../editor/document-map-definition';
+} from '@transitmapper/renderer/presentation';
 import { landmarksFeatureCollection } from '../map/landmarks';
 import { registerMapIcons } from '../map/layers';
 import { layerSpecsForScheme } from '../map/mapTheme';
@@ -68,10 +68,11 @@ function applyLandmarkVisibility(map: MapLibreMap, viewStore: MapViewStore): voi
   ) {
     map.setLayoutProperty(LYR_LANDMARKS, 'visibility', visibility);
   }
-  if (map.getLayer(LYR_LANDMARK_LABELS)) {
-    if (map.getLayoutProperty(LYR_LANDMARK_LABELS, 'visibility') !== visibility) {
-      map.setLayoutProperty(LYR_LANDMARK_LABELS, 'visibility', visibility);
-    }
+  if (
+    map.getLayer(LYR_LANDMARK_LABELS) &&
+    map.getLayoutProperty(LYR_LANDMARK_LABELS, 'visibility') !== visibility
+  ) {
+    map.setLayoutProperty(LYR_LANDMARK_LABELS, 'visibility', visibility);
   }
 }
 

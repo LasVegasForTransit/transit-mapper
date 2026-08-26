@@ -2,10 +2,18 @@ import '../theme/font.css';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import type { GetShareResponse } from '@transitmapper/core/share/contract';
 import type { TransitSystem } from '@transitmapper/core/model/system';
+import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
+import { parseMapViewState } from '@transitmapper/views';
 import { fetchWithTimeout } from '../network/fetchWithTimeout';
 import { createEmbedStartupMilestones } from './startup-milestones';
 import { startFieldSampling } from '../perf/field-sampling';
-import { startEmbedRuntime } from './embed-bootstrap';
+import {
+  parseEmbedReference,
+  startEmbedRuntime,
+  type EmbedContent,
+  type EmbedReference,
+} from './embed-bootstrap';
+import { fetchPublishedView } from '../views/api';
 
 const startupMilestones = createEmbedStartupMilestones();
 startupMilestones.bootstrapStarted();
@@ -15,11 +23,6 @@ startFieldSampling('embed');
 // in someone else's article. The map runtime loads immediately after its
 // static shell commits; this entry keeps only loading/error state and never
 // pulls in React, editing chrome, or MapLibre itself.
-
-function shareIdFromPath(pathname: string): string | null {
-  const match = /^\/e\/([0-9a-z]{1,32})\/?$/.exec(pathname);
-  return match?.[1] ?? null;
-}
 
 function fail(message: string): void {
   const el = document.getElementById('embed-status');
@@ -37,10 +40,43 @@ async function loadSystem(id: string, signal: AbortSignal): Promise<TransitSyste
   return parseSystem(data.system);
 }
 
+async function loadEmbedContent(
+  reference: EmbedReference,
+  signal: AbortSignal,
+): Promise<EmbedContent> {
+  if (reference.kind === 'shared-system') {
+    const system = await loadSystem(reference.id, signal);
+    return {
+      system,
+      title: system.name || 'Transit system',
+      openPath: `/s/${reference.id}`,
+      state: {
+        schemaVersion: 1,
+        camera: system.viewport,
+        representationId: 'network',
+        filters: {
+          modes: [...MODE_ORDER],
+          'way-types': [...WAY_TYPE_ORDER],
+          landmarks: true,
+        },
+      },
+    };
+  }
+
+  const published = await fetchPublishedView(reference.id, { signal });
+  const system = await loadSystem(published.view.map.id, signal);
+  return {
+    system,
+    title: published.view.title,
+    openPath: `/v/${reference.id}`,
+    state: parseMapViewState(published.view.state),
+  };
+}
+
 async function start(): Promise<void> {
   startupMilestones.shellMounted();
-  const id = shareIdFromPath(window.location.pathname);
-  if (!id) {
+  const reference = parseEmbedReference(window.location.pathname);
+  if (!reference) {
     fail('No system to show.');
     return;
   }
@@ -55,11 +91,11 @@ async function start(): Promise<void> {
   window.addEventListener('pagehide', cancel, { once: true });
   try {
     await startEmbedRuntime({
-      id,
+      reference,
       container,
       signal: controller.signal,
       milestones: startupMilestones,
-      loadSystem,
+      loadContent: loadEmbedContent,
       loadRuntime: () =>
         import('./embed-map-runtime').then(({ startEmbedMap }) => ({ start: startEmbedMap })),
     });

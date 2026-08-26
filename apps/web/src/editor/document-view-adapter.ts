@@ -5,16 +5,12 @@ import {
   type Viewport,
 } from '@transitmapper/core/model/system';
 import type { MapViewStore } from '@transitmapper/map';
+import {
+  DOCUMENT_VIEW_FILTER_IDS,
+  type DocumentRepresentationId,
+} from '@transitmapper/renderer/presentation';
 import type { MapFeatureReferenceV1, MapPresentationStateV1 } from '@transitmapper/views';
 import type { Selection } from './store';
-
-export type DocumentRepresentationId = 'network' | 'infrastructure' | 'diagram';
-
-export const DOCUMENT_VIEW_FILTER_IDS = {
-  modes: 'modes',
-  wayTypes: 'way-types',
-  landmarks: 'landmarks',
-} as const;
 
 interface CreateDocumentPresentationStateOptions {
   camera?: Viewport;

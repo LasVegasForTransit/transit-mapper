@@ -19,7 +19,7 @@ import {
 import { SRC_ACTION_ANCHOR } from '@transitmapper/renderer/layers';
 import { useEditorStore } from '../editor/EditorProvider';
 import { createEditorSelectionController } from '../editor/editor-selection';
-import { DOCUMENT_MAP_DEFINITION } from '../editor/document-map-definition';
+import { DOCUMENT_MAP_DEFINITION } from '@transitmapper/renderer/presentation';
 import { initializeDocumentCamera } from '../editor/document-view-adapter';
 import { inputTuningFor } from '../editor/input-tuning';
 import type { PointerIntent } from '../editor/pointerIntent';
