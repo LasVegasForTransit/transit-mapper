@@ -3,6 +3,9 @@
 TransitMapper has four shared map packages, a domain package, a browser
 application, and a Cloudflare Worker.
 
+Maintainers use this reference to place new code without reversing a package
+edge or adding application policy to a reusable map component.
+
 ## Workspace
 
 ### Dependency direction
@@ -86,11 +89,13 @@ and MapLibre. Its bounded entries include `driver`, `layers`, `projection`,
 `packages/renderer/src/layers` owns stable source and layer identities. Worker
 clients remain beside their projection modules until that directory moves.
 `packages/renderer/src/presentation.ts` owns the document map definition and
-the conversion from portable View filters to renderer presentation values.
-The editor, viewer, and non-React embed use that one definition.
+the default document View. It also converts portable View filters to renderer
+presentation values. The editor, viewer, and non-React embed use those same
+defaults and conversions.
 
 The web application supplies editor overlays, theme layers, and performance
-reporting. It still mounts `MapCanvas` until the editor session migration lands.
+reporting. `MapSurface` owns the stable MapLibre runtime. An injected
+`MapDriver` owns content attachment and feature detail resolution.
 
 ### Core
 
@@ -241,8 +246,10 @@ flowchart LR
   Root --> Intent[Route intent]
   Root -. lazy .-> Editor[Editor and providers]
   Root -. lazy .-> Viewer[Viewer application]
+  Main -. separate entry .-> Embed[Non-React embed]
   Editor --> Bootstrap[Bootstrap]
   Viewer --> Session[Viewer session resolver]
+  Embed --> EmbedSession[Embed content resolver]
 ```
 
 The editor owns `/`. The viewer owns both shared-system routes at `/s/:id` and
@@ -250,6 +257,10 @@ published View routes at `/v/:id`. A shared-system route synthesizes default
 presentation state. A published View route loads its saved state and then
 loads the referenced shared system. Both routes mount the same viewer
 workspace and document map driver without constructing editor state.
+
+The separate embed entry owns `/e/:id` and `/embed/:id`. It imports neither
+React nor editor code. `/e/:id` applies the same synthetic default View as
+`/s/:id`; `/embed/:id` restores the same published state as `/v/:id`.
 
 #### Editing
 
@@ -274,6 +285,8 @@ tolerances for each pointer precision. The web root injects one `MapViewStore`
 into map, editor, persistence, and sharing paths. `document-view-adapter.ts`
 copies its camera into saves, shares, and exports. Domain mutations pass
 through grouped editor commands; map and UI modules do not modify records.
+`document-view-controls.ts` adapts the renderer's document filter definition
+to editor controls without creating another provider or store.
 
 `apps/web/src/ui/sidebarOutline.ts` is the pure outline projection boundary;
 `SidebarPanel.tsx` owns search, expansion, bounded rendering, keyboard focus,
@@ -284,8 +297,25 @@ editing manages physical passenger-place geometry.
 
 `packages/map` owns the MapLibre lifecycle. `apps/web/src/map` provides editor
 interaction, overlays, theme layers, and exports. `packages/renderer` projects
-committed documents and publishes sources. `MapCanvas.tsx` adapts one
-`MapRuntime` to one `LiveMapRenderer`.
+committed documents and publishes sources. `packages/workspace` keeps one
+`MapSurface` mounted while host chrome changes.
+
+This component diagram shows the runtime ownership inside a full map host:
+
+```mermaid
+flowchart LR
+  Host[Editor or viewer host] --> Workspace[MapWorkspace]
+  Host --> Driver[Document MapDriver]
+  Workspace --> Surface[MapSurface]
+  Surface --> Runtime[MapRuntime]
+  Surface --> Driver
+  Driver --> Renderer[Document renderer]
+  Driver --> ViewStore[MapViewStore]
+  Host --> ViewStore
+```
+
+The embed uses the same View values and renderer presentation. It owns a
+smaller non-React runtime instead of importing the workspace component tree.
 
 | Modules                                                                    | Responsibility                                                          |
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |

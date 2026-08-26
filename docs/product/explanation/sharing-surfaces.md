@@ -5,6 +5,9 @@ unfurl in Slack, an iframe in someone's article, a thumbnail an oEmbed
 consumer fetched. This is how those surfaces work and why they're built the
 way they are.
 
+Maintainers use this page when they change a public route, preview, embed,
+framing rule, or published View contract.
+
 ## One renderer, no map
 
 Drawing a system used to require a live MapLibre instance, because the code
@@ -185,21 +188,48 @@ local development. If that header _is_ present and the binding is missing —
 the deployed config lost it — the endpoint returns 503 rather than quietly
 accepting unlimited writes.
 
+## Systems and Views
+
+A shared system and a published View are different resources. A system share
+stores one immutable transit document. A View stores a title and portable map
+state that references that shared system. Publishing a View creates the system
+share first, then stores the View reference. Renaming or deleting a local View
+does not mutate the transit document.
+
+The public routes keep content and presentation separate:
+
+| Route        | Resource       | Presentation state                       |
+| ------------ | -------------- | ---------------------------------------- |
+| `/s/:id`     | Shared system  | Synthetic default View plus URL fragment |
+| `/v/:id`     | Published View | Stored View plus optional URL fragment   |
+| `/e/:id`     | Shared system  | The same synthetic View as `/s/:id`      |
+| `/embed/:id` | Published View | The same stored View as `/v/:id`         |
+
+The full reader mounts `MapWorkspace` with reader chrome. The editor mounts the
+same workspace with mutation commands and editor chrome. Neither reader route
+constructs an editor store. A broad network map is therefore one saved View,
+not a separate application mode.
+
+Version 1 reuses the referenced system share's preview image for published
+View metadata. It does not rasterize one card per View.
+
 ## Embeds
 
-`/e/:id` is a separate Vite entry, not the editor with its chrome hidden. An
-embed competes with the host page's load budget, so it pulls in MapLibre and
-the feature builder and nothing else — no React, no editor store, no toolbars.
+`/e/:id` and `/embed/:id` use a separate Vite entry, not the editor with its
+chrome hidden. An embed competes with the host page's load budget, so it pulls
+in MapLibre and the feature builder and nothing else. It imports no React,
+editor store, or toolbars. Both embed routes use the renderer's document map
+definition and the same hostile-input View parser as the full reader.
 
 It is the only path on the origin any site may frame; everything else is
 served with `frame-ancestors 'none'`. The embed exposes nothing a share link
 doesn't already show to anyone holding it, and carries no account state, so
 there's no clickjacking surface behind that exception.
 
-`/api/oembed` describes a share for publishers that speak oEmbed, so pasting a
-plain share link into WordPress or Ghost produces the iframe automatically. It
-only answers for URLs on our own origin — otherwise it would describe (and
-lend the provider name to) anything at all.
+`/api/oembed` describes shared-system and published-View links for publishers
+that speak oEmbed, so pasting either full reader link into WordPress or Ghost
+produces the matching iframe. It only answers for URLs on our own origin.
+Otherwise it would describe, and lend the provider name to, arbitrary pages.
 
 ## Share lifetime
 

@@ -18,6 +18,25 @@ In practice: every mode, way type, lane kind, and facility type is a
 record in `src/model/catalog.ts`, and application code reads fields off
 those records instead of checking which one it got.
 
+## A View is data, not an application mode
+
+A geographic extent or audience does not justify a new branch in the editor.
+A city map, a statewide map, and a country-scale map differ through camera,
+representation, filters, selection, and referenced content. The application
+must not encode those examples as `if national` or route-specific editor
+states.
+
+In practice: `packages/views` defines the portable View value.
+`MapViewStore` owns one session's camera and presentation state. A
+`MapDriver` attaches bounded content to the shared map surface. Editor and
+viewer hosts choose commands and chrome around that surface. A saved View can
+therefore open in the editor, a full reader, or an embed without changing the
+map lifecycle or transit document model.
+
+Published Views currently reference immutable shared-system snapshots. A
+future live transit-data source will need another driver and publication plan.
+It must not add geography-specific behavior to View state.
+
 ## What something looks like is a separate decision from what it is
 
 A drive lane's identity (it's a travel lane, about 11 feet wide, counts
