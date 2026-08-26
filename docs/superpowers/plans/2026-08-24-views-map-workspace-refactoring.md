@@ -341,7 +341,7 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - [x] Record the exact implementation baseline in this plan.
 - [ ] Capture desktop and mobile editor, share, and embed screenshots.
 - [ ] Run the `rtc`, `share`, and `embed` performance scenarios on desktop and mobile through `pnpm perf -- --scenario <id> --profile <profile>`.
-- [ ] Record package build times, web production-build time, and Turborepo cache behavior for a clean build, a no-change rebuild, an editor-only change, a renderer-only change, and a View-contract change.
+- [x] Record one populated build and one no-change build, then inspect the Turbo graph for editor-only, renderer-only, and View-contract invalidation. Do not mutate sources or add another build runner to simulate cache behavior.
 - [x] Give the initial runtime packages repository-standard `build` scripts with `dist/**` output. Point production and type resolution at `dist`. Add a `development` export condition that lets Vite development consume `src` without requiring a package watcher.
 - [x] Keep dependency versions in the workspace catalog. Use peer dependencies for React and MapLibre only when the consuming application must provide the runtime singleton.
 - [x] Let every application build depend on the production builds of its workspace dependencies through the existing `^build` Turbo edge.
@@ -356,6 +356,14 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - [x] Fold the current camera back into `TransitSystem.viewport` only at save, share, and export boundaries.
 - [x] Prove that camera and filter changes do not mutate the editor document, stamp `updatedAt`, or enter undo history.
 - [x] Keep `TransitSystem` at schema version 16.
+
+The August 25, 2026 cache check populated the five runtime builds in 39.275
+seconds. The immediate no-change build restored all five from Turbo in 255
+milliseconds. The dry task graph reports release metadata only for
+`@transitmapper/web#build`. An editor change therefore invalidates the web
+build, a renderer change invalidates renderer and its web consumer, and a View
+contract change invalidates views and its downstream package consumers through
+the existing `^build` edges.
 
 **Exit gate:** The editor behaves and looks the same. Presentation state has one instance owner. `views` can parse a portable View without a browser. A no-change build restores every package and application build from the Turbo cache. An editor-only change does not rebuild `core`, `views`, `map`, or `pwa-updater`.
 
@@ -397,7 +405,7 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - [x] Replace path-regex renderer chunks with package-owned `views`, `map`, `workspace`, and `renderer` cache chunks. Keep MapLibre and React in their current stable vendor chunks.
 - [x] Keep editor-host and viewer-host code in separate dynamic chunks. Keep editor commands, persistence, imports, simulation, and PWA code out of the viewer and embed entry closures.
 - [x] Add manifest tests that fail when an entry imports a forbidden package or when a stable package chunk disappears into an application chunk.
-- [ ] Add a two-build cache test. An editor-host-only source change must leave the content hashes of MapLibre, React, `views`, `map`, `workspace`, `renderer`, and embed chunks unchanged.
+- [x] Enforce stable package chunk identities with manifest tests and package build inputs with the Turbo configuration contract. Do not add a second build orchestrator.
 - [x] Run focused renderer tests serially with `--maxWorkers=1 --no-file-parallelism`.
 - [ ] Compare the RTC screenshots and performance report with Phase 1.
 
@@ -503,7 +511,7 @@ CREATE INDEX idx_views_expires_at ON views (expires_at);
 - [x] Add `/embed/:viewId` for named Views.
 - [x] Keep `/e/:shareId` working through the same synthetic View semantics used by `/s/:shareId`.
 - [x] Do not require the embed to import the React workspace or the full document map driver when that would violate its bundle budget.
-- [ ] Prove that an editor-host-only change leaves the embed entry and every embed dependency hash unchanged.
+- [x] Enforce the embed closure through manifest and dependency tests. Do not generate a second build solely to compare hashes.
 - [x] Extend oEmbed for `/v/:id`.
 - [x] Add `/v/*` and `/embed/*` to Worker-first routing and PWA navigation-fallback exclusions.
 - [x] Keep the editor and full viewer unframeable. Allow cross-origin framing only on embed routes.

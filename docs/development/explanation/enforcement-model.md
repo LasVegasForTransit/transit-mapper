@@ -49,6 +49,13 @@ condition and emitted JavaScript and declarations otherwise. A clean
 production build therefore checks the same package artifacts that deployment
 consumes, while Vite development needs no package watcher.
 
+The generic build task does not hash application release metadata. Only
+`@transitmapper/web#build` embeds the commit, release tag, dirty state, and
+performance-sampling policy, so only that task declares those environment
+inputs. A new application commit therefore cannot invalidate unchanged
+`views`, `map`, `workspace`, or `renderer` package artifacts. The Turbo build
+cache contract test enforces that scope.
+
 ## Layers
 
 | Layer          | What runs                                          | Blocks on                   |

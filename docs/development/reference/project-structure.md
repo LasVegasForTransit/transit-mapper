@@ -394,8 +394,8 @@ see [Update application icons](../how-to/update-application-icons.md).
 
 #### Build identity
 
-The About dialog reads one immutable Vite-injected build record. The launcher
-includes revision and dirty state in the build cache key; a source archive
+The About dialog reads one immutable Vite-injected build record. Only the web
+build includes revision and dirty state in its cache key; a source archive
 without Git reports that its revision is unavailable rather than inventing one.
 
 #### Performance
