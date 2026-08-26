@@ -14,7 +14,7 @@ import type {
   MapDriverAttachment,
   MapDriverAttachOptions,
 } from '@transitmapper/map';
-import type { MapPresentationStateV1 } from '@transitmapper/views';
+import type { MapFeatureReferenceV1, MapPresentationStateV1 } from '@transitmapper/views';
 import {
   canReuseCommittedCameraRefresh,
   createCameraRenderPreloadController,
@@ -130,6 +130,10 @@ function presentationFromMap(map: MapLibreMap) {
   });
 }
 
+function documentHighlight(reference: MapFeatureReferenceV1 | undefined) {
+  return reference?.source === 'document' ? { kind: reference.kind, id: reference.id } : null;
+}
+
 class DocumentMapDriver implements MapDriver {
   readonly definition: MapDefinition;
 
@@ -187,6 +191,7 @@ class DocumentMapDriver implements MapDriver {
     let startupMilestonesPublished = false;
     let unsubscribeSource: (() => void) | null = null;
     let unsubscribeView: (() => void) | null = null;
+    let unsubscribeSelection: (() => void) | null = null;
     let presentationRefresh: PresentationRefreshScheduler | null = null;
     let extension: DocumentMapSessionAttachment | undefined;
     let sessionAttachmentAttempted = false;
@@ -447,7 +452,7 @@ class DocumentMapDriver implements MapDriver {
           candidateEnvelope: preload.candidateEnvelope,
           projection: {
             system: snapshot.system,
-            selection: null,
+            selection: documentHighlight(attachOptions.selection.getSnapshot()),
             handleWayIds: [],
             view: renderView(),
             physicalHandleStationId: null,
@@ -538,9 +543,13 @@ class DocumentMapDriver implements MapDriver {
         reportSafely(attachOptions, error);
       }
     };
+    const onSelection = () => {
+      scheduleProjection({ replaceActive: true });
+    };
     try {
       unsubscribeSource = this.options.source.subscribe(onSnapshot);
       unsubscribeView = attachOptions.viewStore.subscribe(onView);
+      unsubscribeSelection = attachOptions.selection.subscribe(onSelection);
     } catch (error) {
       dispose();
       return Promise.reject(errorFrom(error));
@@ -654,6 +663,9 @@ class DocumentMapDriver implements MapDriver {
       const viewCleanup = unsubscribeView;
       unsubscribeView = null;
       cleanupSafely(attachOptions, viewCleanup);
+      const selectionCleanup = unsubscribeSelection;
+      unsubscribeSelection = null;
+      cleanupSafely(attachOptions, selectionCleanup);
       const listenerCleanups = mapListenerCleanups.splice(0);
       for (const cleanup of listenerCleanups) cleanupSafely(attachOptions, cleanup);
       const refresh = presentationRefresh;

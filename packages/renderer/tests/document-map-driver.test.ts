@@ -218,11 +218,33 @@ describe('document map driver', () => {
     expect(worker.project.mock.calls[0]?.[0]).toMatchObject({
       system: source.getSnapshot().system,
       sourceIds: expect.arrayContaining([SRC_WAYS]),
-      selection: null,
+      selection: { kind: 'way', id: 'road' },
     });
     expect(milestones).toEqual(['content', 'interactive']);
     expect(errors).toEqual([]);
 
+    attachment.dispose();
+  });
+
+  it('reprojects the document when the portable selection changes', async () => {
+    const source = new TestDocumentSource(readySnapshot(createReadySystem()));
+    const map = new TestDocumentMap();
+    const clock = new DocumentDriverClock();
+    const worker = createProjectionWorker((input) =>
+      Promise.resolve({ features: projectedWayFeatures(input.system.id), counts: null }),
+    );
+    const selection = createSelectionController();
+    const driver = createDocumentMapDriver(driverOptions(source, clock, worker));
+
+    const attachment = await driver.attach(createAttachOptions(map, [], [], { selection }));
+    await advanceUntil(clock, map, () => worker.project.mock.calls.length === 1);
+
+    selection.select({ source: 'document', kind: 'way', id: 'road' });
+    await advanceUntil(clock, map, () => worker.project.mock.calls.length === 2);
+
+    expect(worker.project.mock.calls[1]?.[0]).toMatchObject({
+      selection: { kind: 'way', id: 'road' },
+    });
     attachment.dispose();
   });
 
