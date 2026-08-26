@@ -12,12 +12,18 @@ const manifest: BuildManifest = {
     name: 'main',
     isEntry: true,
     imports: ['_shared.js'],
-    dynamicImports: ['manifest-node:optional-feature'],
+    dynamicImports: ['manifest-node:editor-application'],
     css: ['assets/main.css'],
   },
   '_shared.js': {
     file: 'assets/shared.js',
     css: ['assets/shared.css'],
+  },
+  'manifest-node:editor-application': {
+    file: 'assets/editor-application.js',
+    name: 'editor-application',
+    imports: ['_shared.js'],
+    dynamicImports: ['manifest-node:optional-feature'],
   },
   'manifest-node:optional-feature': {
     file: 'assets/dialog.js',
@@ -45,6 +51,11 @@ describe('adaptive offline build assets', () => {
         url: 'assets/feature-projection-worker-entry-a1b2c3.js',
         size: 100,
         revision: 'projection-worker',
+      },
+      {
+        url: 'assets/editor-application.js',
+        size: 100,
+        revision: 'editor-application',
       },
       { url: 'assets/main.js', size: 100, revision: 'main' },
       { url: 'assets/offline-editor.js', size: 100, revision: 'offline-editor' },
