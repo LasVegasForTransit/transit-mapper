@@ -386,19 +386,19 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - [x] Make `MapWorkspace` render the map and Workbench as siblings.
 - [x] Define explicit Workbench slot interfaces for brand, primary actions, representation controls, simulation controls, main panel, supplemental panel, tool dock, import status, and application notices.
 - [x] Move MapLibre construction, disposal, resize observation, theme switching, base-style recovery, and common camera publication into `@transitmapper/map`.
-- [ ] Move `LiveMapRenderer`, document projection, source banks, layer definitions, and their workers into `@transitmapper/renderer` without changing their accepted-scene contracts.
+- [x] Move `LiveMapRenderer`, document projection, source banks, layer definitions, and their workers into `@transitmapper/renderer` without changing their accepted-scene contracts.
 - [x] Implement `DocumentMapDriver` over `TransitSystem` and `LiveMapRenderer`. Pass document snapshots through an attachment port instead of importing `EditorStore`.
-- [ ] Keep editing gestures, handles, termini, route previews, and simulation painting in `apps/web/src/editor/editor-map-attachment.ts`.
-- [ ] Reduce `MapCanvas.tsx` to a compatibility wrapper while callers move to `MapSurface`.
-- [ ] Prove with dependency tests that `workspace`, `map`, and `renderer` import no editor provider or editor command.
+- [x] Keep editing gestures, handles, termini, route previews, and simulation painting in `apps/web/src/editor/editor-map-attachment.ts`.
+- [x] Reduce `MapCanvas.tsx` to a compatibility wrapper while callers move to `MapSurface`.
+- [x] Prove with dependency tests that `workspace`, `map`, and `renderer` import no editor provider or editor command.
 - [x] Allow `MapSurface` to remount its MapLibre runtime when the driver or content identity changes.
-- [ ] Keep the application shell and Workbench structure mounted during that remount.
-- [ ] Preserve source-bank rollback, accepted-scene recovery, gesture settlement, style recovery, and startup milestones.
-- [ ] Replace path-regex renderer chunks with package-owned `views`, `map`, `workspace`, and `renderer` cache chunks. Keep MapLibre and React in their current stable vendor chunks.
+- [x] Keep the application shell and Workbench structure mounted during that remount.
+- [x] Preserve source-bank rollback, accepted-scene recovery, gesture settlement, style recovery, and startup milestones.
+- [x] Replace path-regex renderer chunks with package-owned `views`, `map`, `workspace`, and `renderer` cache chunks. Keep MapLibre and React in their current stable vendor chunks.
 - [ ] Keep editor-host and viewer-host code in separate dynamic chunks. Keep editor commands, persistence, imports, simulation, and PWA code out of the viewer and embed entry closures.
 - [ ] Add manifest tests that fail when an entry imports a forbidden package or when a stable package chunk disappears into an application chunk.
 - [ ] Add a two-build cache test. An editor-host-only source change must leave the content hashes of MapLibre, React, `views`, `map`, `workspace`, `renderer`, and embed chunks unchanged.
-- [ ] Run focused renderer tests serially with `--maxWorkers=1 --no-file-parallelism`.
+- [x] Run focused renderer tests serially with `--maxWorkers=1 --no-file-parallelism`.
 - [ ] Compare the RTC screenshots and performance report with Phase 1.
 
 **Exit gate:** The production editor is a concrete `MapWorkspace` host. No user-visible behavior changes. The common workspace contains no read-only or geography-specific branch. Package builds restore independently. Editor-only delivery changes do not invalidate stable shared chunks or the embed entry.
