@@ -328,6 +328,11 @@ loading for editable systems. Stored values cross into the domain through
 core serialization, keeping migrations and validation independent from the
 storage engine.
 
+`apps/web/src/views` owns transient links, the named View HTTP client, and the
+browser-local View library. Local Views use a separate IndexedDB database
+keyed by document ID. Saving, renaming, or deleting one therefore does not
+write a transit document or enter editor history.
+
 #### Imports and networking
 
 `apps/web/src/import` owns browser requests, progress, cancellation, and the
