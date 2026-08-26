@@ -12,7 +12,7 @@ import { FACILITY_TYPES, MODES } from '@transitmapper/core/model/catalog';
 import type { Facility, Station, Stop } from '@transitmapper/core/model/system';
 import type { EditorCommands, EditorState, Selection } from '../editor/store';
 import { useEditor, useEditorCommands } from '../editor/EditorProvider';
-import { useDocumentView, type ViewMode } from '../editor/document-view-controls';
+import { useDocumentView, type RepresentationId } from '../editor/document-view-controls';
 import { Icon } from './Icon';
 import {
   infrastructureOutlineProjection,
@@ -155,7 +155,7 @@ function sidebarTabIndexFor(tabStopKey: string | null) {
     return 0;
   };
 }
-const OUTLINE_TITLE: Record<ViewMode, string> = {
+const OUTLINE_TITLE: Record<RepresentationId, string> = {
   network: 'Network outline',
   infrastructure: 'Infrastructure outline',
   diagram: 'Diagram outline',
@@ -167,7 +167,7 @@ export function SidebarPanel() {
   const { selectAndFocus, setOutlineHover } = useEditorCommands().selection;
   const { viewMode } = useDocumentView();
   const [presentationByView, setPresentationByView] = useState<
-    Record<ViewMode, OutlinePresentationState>
+    Record<RepresentationId, OutlinePresentationState>
   >(() => ({
     network: emptyOutlinePresentationState(),
     infrastructure: emptyOutlinePresentationState(),
@@ -182,7 +182,7 @@ export function SidebarPanel() {
       [viewMode]: update(current[viewMode]),
     }));
   const { containerRef, onKeyDown } = useListboxKeyboardNav('[data-sidebar-option]:not(:disabled)');
-  const scrollPositions = useRef<Record<ViewMode, number>>({
+  const scrollPositions = useRef<Record<RepresentationId, number>>({
     network: 0,
     infrastructure: 0,
     diagram: 0,

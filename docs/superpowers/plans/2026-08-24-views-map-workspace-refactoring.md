@@ -348,7 +348,7 @@ Each phase must deploy independently. Each phase must preserve production behavi
 - [x] Enforce package dependency direction with the repository's dependency rules. Do not add another package build orchestrator or cache wrapper.
 - [x] Add characterization tests for shell-before-document behavior, camera persistence, current share camera capture, representation switching, filters, selection, forking, and embed startup ordering.
 - [x] Add the View contract and hostile-input parser to `@transitmapper/views`.
-- [ ] Rename the internal `ViewMode` type to `RepresentationId`. Keep Network, Infrastructure, and Diagram labels unchanged.
+- [x] Rename the internal `ViewMode` type to `RepresentationId`. Keep Network, Infrastructure, and Diagram labels unchanged.
 - [x] Implement `createMapViewStore()` in `@transitmapper/map` with camera, representation ID, and filters.
 - [x] Adapt current React controls to the instance store without changing their markup or keyboard behavior.
 - [x] Keep selection in `EditorStore` during this phase. Implement only the adapter needed to capture and restore an optional selection.

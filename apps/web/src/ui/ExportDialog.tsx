@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Map as MLMap } from 'maplibre-gl';
 import { useEditor } from '../editor/EditorProvider';
-import type { ViewMode } from '../editor/document-view-controls';
+import type { RepresentationId } from '../editor/document-view-controls';
 import { MODE_ORDER, MODES, WAY_TYPE_ORDER, WAY_TYPES } from '@transitmapper/core/model/catalog';
 import { legendEntriesFor } from '../share/exportLegend';
 import { exportPngFromMap } from '../share/pngExport';
@@ -34,7 +34,7 @@ interface ExportDialogProps {
 export function ExportDialog({ onClose }: ExportDialogProps) {
   const system = useEditor((s) => s.system);
   const [format, setFormat] = useState<ExportFormat>('png');
-  const [viewMode, setViewMode] = useState<ViewMode>('network');
+  const [viewMode, setViewMode] = useState<RepresentationId>('network');
   const [visibleModes, setVisibleModes] = useState<Set<string>>(new Set(MODE_ORDER));
   const [visibleWayTypes, setVisibleWayTypes] = useState<Set<string>>(new Set(WAY_TYPE_ORDER));
   const [title, setTitle] = useState(system.name || 'Transit system');

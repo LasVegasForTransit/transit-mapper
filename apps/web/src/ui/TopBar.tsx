@@ -1,5 +1,5 @@
 import { useEditor, useEditorCommands, useEditorStore } from '../editor/EditorProvider';
-import { useDocumentView, type ViewMode } from '../editor/document-view-controls';
+import { useDocumentView, type RepresentationId } from '../editor/document-view-controls';
 import { forkSystem } from '@transitmapper/core/model/serialize';
 import { useInertRef } from '@transitmapper/workspace/inert-ref';
 import { blurOnEnter } from './formUtils';
@@ -12,7 +12,7 @@ import { LayersPopover } from './LayersPopover';
 import { SavedViewsAction, SavedViewsMenuItem } from './saved-views-action';
 import { useUi } from './UiProvider';
 import { Icon } from './Icon';
-const VIEW_MODES: { mode: ViewMode; label: string }[] = [
+const VIEW_MODES: { mode: RepresentationId; label: string }[] = [
   { mode: 'network', label: 'Network' },
   { mode: 'infrastructure', label: 'Infrastructure' },
   { mode: 'diagram', label: 'Diagram' },

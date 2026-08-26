@@ -7,7 +7,7 @@ import {
   type DocumentRepresentationId,
 } from '@transitmapper/renderer/presentation';
 
-export type ViewMode = DocumentRepresentationId;
+export type RepresentationId = DocumentRepresentationId;
 
 export interface DocumentViewControls {
   viewMode: DocumentRepresentationId;
