@@ -3,6 +3,9 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "outputs": ["dist/**", "*.tsbuildinfo"]
+    },
+    "@transitmapper/web#build": {
       "env": [
         "GITHUB_SHA",
         "TRANSITMAPPER_BUILD_COMMIT",
@@ -12,8 +15,7 @@
         "TRANSITMAPPER_PERFORMANCE_ORDINARY_BASIS_POINTS",
         "TRANSITMAPPER_PERFORMANCE_RELEASE_BASIS_POINTS",
         "VITE_PERF_BUILD"
-      ],
-      "outputs": ["dist/**", "*.tsbuildinfo"]
+      ]
     },
     "typecheck": {
       "dependsOn": ["^typecheck"],
