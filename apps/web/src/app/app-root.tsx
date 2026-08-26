@@ -19,6 +19,7 @@ export type RouteHostLoader = () => Promise<{ default: ComponentType<RouteHostPr
 export interface AppRootProps {
   pathname?: string;
   loadEditorApplication?: RouteHostLoader;
+  loadViewerApplication?: RouteHostLoader;
 }
 
 interface RouteErrorBoundaryProps {
@@ -51,17 +52,21 @@ class RouteErrorBoundary extends Component<RouteErrorBoundaryProps, RouteErrorBo
 }
 
 const loadConcreteEditorApplication: RouteHostLoader = () => import('../editor/editor-application');
+const loadConcreteViewerApplication: RouteHostLoader = () => import('../viewer/viewer-application');
 
 /** Resolve the route before mounting its lazy application host. */
 export function AppRoot({
   pathname,
   loadEditorApplication = loadConcreteEditorApplication,
+  loadViewerApplication = loadConcreteViewerApplication,
 }: AppRootProps) {
   const routeIntent = useMemo(
     () => parseRouteIntent(pathname ?? window.location.pathname),
     [pathname],
   );
-  const RouteHost = useMemo(() => lazy(loadEditorApplication), [loadEditorApplication]);
+  const routeHostLoader =
+    routeIntent.kind === 'shared-system' ? loadViewerApplication : loadEditorApplication;
+  const RouteHost = useMemo(() => lazy(routeHostLoader), [routeHostLoader]);
 
   return (
     <RouteErrorBoundary>

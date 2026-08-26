@@ -3,9 +3,11 @@ import { sourceBankLayerSpecs } from '@transitmapper/renderer/layers';
 import { layerSpecsForScheme } from './mapTheme';
 import type { ColorScheme } from '../theme/systemColorScheme';
 
-export function editorDocumentLayersForScheme(scheme: ColorScheme): LayerSpecification[] {
+export function documentLayersForScheme(scheme: ColorScheme): LayerSpecification[] {
   return sourceBankLayerSpecs(layerSpecsForScheme(scheme));
 }
+
+export const editorDocumentLayersForScheme = documentLayersForScheme;
 
 export function documentOverlayIsRetained(
   style: StyleSpecification,

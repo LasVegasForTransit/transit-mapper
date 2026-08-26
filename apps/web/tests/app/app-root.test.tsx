@@ -8,12 +8,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppRoot, type RouteHostLoader, type RouteHostProps } from '../../src/app/app-root';
 
 const editorHostModule = vi.hoisted(() => ({ evaluations: 0 }));
+const viewerHostModule = vi.hoisted(() => ({ evaluations: 0 }));
 
 vi.mock('../../src/editor/editor-application', () => {
   editorHostModule.evaluations += 1;
   return {
     default: ({ routeIntent }: RouteHostProps) => (
       <div data-testid="editor-host">{routeIntent.kind}</div>
+    ),
+  };
+});
+
+vi.mock('../../src/viewer/viewer-application', () => {
+  viewerHostModule.evaluations += 1;
+  return {
+    default: ({ routeIntent }: RouteHostProps) => (
+      <div data-testid="viewer-host">{routeIntent.kind}</div>
     ),
   };
 });
@@ -72,7 +82,7 @@ describe('AppRoot', () => {
     expect(container.textContent).toBe('editor');
   });
 
-  it('passes a shared-system intent to the editor host until a viewer exists', async () => {
+  it('passes the shared-system intent to the viewer host', async () => {
     let received: RouteHostProps['routeIntent'] | undefined;
     const loadHost: RouteHostLoader = () =>
       Promise.resolve({
@@ -83,12 +93,36 @@ describe('AppRoot', () => {
       });
 
     await act(() => {
-      root.render(<AppRoot pathname="/s/abc123/" loadEditorApplication={loadHost} />);
+      root.render(<AppRoot pathname="/s/abc123/" loadViewerApplication={loadHost} />);
       return Promise.resolve();
     });
 
     expect(received).toEqual({ kind: 'shared-system', shareId: 'abc123' });
     expect(container.textContent).toBe('Shared system host');
+  });
+
+  it('loads shared systems through the viewer host instead of the editor host', async () => {
+    const loadEditor: RouteHostLoader = vi.fn(() =>
+      Promise.resolve({ default: () => <div>Editor host</div> }),
+    );
+    const loadViewer: RouteHostLoader = vi.fn(() =>
+      Promise.resolve({ default: () => <div>Viewer host</div> }),
+    );
+
+    await act(() => {
+      root.render(
+        <AppRoot
+          pathname="/s/abc123"
+          loadEditorApplication={loadEditor}
+          loadViewerApplication={loadViewer}
+        />,
+      );
+      return Promise.resolve();
+    });
+
+    expect(loadEditor).not.toHaveBeenCalled();
+    expect(loadViewer).toHaveBeenCalledOnce();
+    expect(container.textContent).toBe('Viewer host');
   });
 
   it('loads the concrete editor host only after AppRoot renders', async () => {
@@ -101,5 +135,19 @@ describe('AppRoot', () => {
 
     expect(editorHostModule.evaluations).toBe(1);
     expect(container.querySelector('[data-testid="editor-host"]')?.textContent).toBe('editor');
+  });
+
+  it('loads the concrete viewer host only for a shared-system route', async () => {
+    expect(viewerHostModule.evaluations).toBe(0);
+
+    await act(() => {
+      root.render(<AppRoot pathname="/s/abc123" />);
+      return Promise.resolve();
+    });
+
+    expect(viewerHostModule.evaluations).toBe(1);
+    expect(container.querySelector('[data-testid="viewer-host"]')?.textContent).toBe(
+      'shared-system',
+    );
   });
 });

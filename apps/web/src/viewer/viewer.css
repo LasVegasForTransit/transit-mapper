@@ -1,0 +1,81 @@
+.viewer-brand {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+
+.viewer-notice {
+  padding: 10px 14px;
+}
+
+.viewer-panel {
+  padding: 12px 16px 20px;
+}
+
+.viewer-panel-placeholder {
+  min-height: 120px;
+}
+
+.viewer-counts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.viewer-counts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.viewer-counts dt,
+.viewer-counts dd {
+  margin: 0;
+}
+
+.viewer-counts dd {
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-representation-select {
+  max-width: 11rem;
+}
+
+.viewer-feature-details {
+  padding: 14px 16px 20px;
+}
+
+.viewer-feature-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.viewer-feature-header h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer-feature-fields {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+}
+
+.viewer-feature-fields div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.viewer-feature-fields dt,
+.viewer-feature-fields dd {
+  margin: 0;
+}
