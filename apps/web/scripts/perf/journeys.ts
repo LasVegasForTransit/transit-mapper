@@ -658,7 +658,7 @@ async function runDirectManipulation(
   if (measurements.inputToNextPaintMs.length === 0) {
     throw new Error(`${scenario.id} produced no Event Timing entries for pointer interactions.`);
   }
-  if (scenario.surface !== 'embed' && (!recorder.values || recorder.values.length === 0)) {
+  if (scenarioRequiresPaintedFrameSamples(scenario) && recorder.values?.length === 0) {
     throw new Error(`${scenario.id} produced no painted map frames for its trusted actions.`);
   }
   return {
@@ -787,6 +787,10 @@ export function scenarioCameraDragProof(scenario: PerfScenario): ScenarioCameraD
 }
 
 export function scenarioRequiresEditorProjectionCounts(scenario: PerfScenario): boolean {
+  return scenario.surface === 'editor';
+}
+
+export function scenarioRequiresPaintedFrameSamples(scenario: PerfScenario): boolean {
   return scenario.surface === 'editor';
 }
 
