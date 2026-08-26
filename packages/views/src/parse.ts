@@ -7,6 +7,7 @@ import {
   type SavedViewV1,
   type SharedSystemMapReferenceV1,
 } from './contract';
+import { utf8ByteLength } from './text-bytes';
 
 export const MAX_NAMED_VIEW_JSON_BYTES = 32 * 1024;
 export const MAX_VIEW_FILTERS = 32;
@@ -22,18 +23,6 @@ export class ViewParseError extends Error {
     super(message);
     this.name = 'ViewParseError';
   }
-}
-
-function utf8ByteLength(value: string): number {
-  let bytes = 0;
-  for (const character of value) {
-    const codePoint = character.codePointAt(0) ?? 0;
-    if (codePoint <= 0x7f) bytes += 1;
-    else if (codePoint <= 0x7ff) bytes += 2;
-    else if (codePoint <= 0xffff) bytes += 3;
-    else bytes += 4;
-  }
-  return bytes;
 }
 
 function recordAt(value: unknown, path: string): Record<string, unknown> {
