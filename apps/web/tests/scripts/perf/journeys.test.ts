@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { PERF_SCENARIOS } from '../../../src/perf/scenarios';
-import { scenarioIdentitySelector } from '../../../scripts/perf/journeys';
+import {
+  scenarioIdentitySelector,
+  scenarioRequiresEditorProjectionCounts,
+} from '../../../scripts/perf/journeys';
 
 describe('performance journey readiness', () => {
   it('verifies a viewer title through the scenario-owned ready element', () => {
@@ -10,5 +13,11 @@ describe('performance journey readiness', () => {
     };
 
     expect(scenarioIdentitySelector(scenario)).toBe('.contract-owned-viewer-title');
+  });
+
+  it('requires editor projection diagnostics only for editor journeys', () => {
+    expect(scenarioRequiresEditorProjectionCounts(PERF_SCENARIOS.rtc)).toBe(true);
+    expect(scenarioRequiresEditorProjectionCounts(PERF_SCENARIOS.viewer)).toBe(false);
+    expect(scenarioRequiresEditorProjectionCounts(PERF_SCENARIOS.embed)).toBe(false);
   });
 });
