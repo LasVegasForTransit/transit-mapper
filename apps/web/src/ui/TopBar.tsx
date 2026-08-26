@@ -223,6 +223,15 @@ export function TopBarActions() {
             />
           </span>
           <span className="act-secondary">
+            <button
+              className="ghost-btn saved-views-action"
+              onClick={() => openDialog('savedViews')}
+              title="Saved views"
+            >
+              <Icon name="platform" size={18} /> <span className="btn-label">Saved views</span>
+            </button>
+          </span>
+          <span className="act-secondary">
             <ExportSplitButton />
           </span>
           <span className="act-secondary">
@@ -241,6 +250,11 @@ export function TopBarActions() {
           }
         >
           {!readOnly && <DropdownMenuItem onSelect={redo}>Redo</DropdownMenuItem>}
+          {!readOnly && (
+            <DropdownMenuItem onSelect={() => openDialog('savedViews')}>
+              Saved views…
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={() => openDialog('export')}>Export…</DropdownMenuItem>
           {!readOnly && (
             <DropdownMenuItem onSelect={() => openDialog('share')}>Share…</DropdownMenuItem>

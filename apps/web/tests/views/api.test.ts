@@ -82,6 +82,14 @@ describe('published View client', () => {
     );
   });
 
+  it('treats an already deleted View as deleted', async () => {
+    const fetcher = vi.fn(() =>
+      Promise.resolve(new Response(null, { status: 404 })),
+    ) as typeof fetch;
+
+    await expect(deletePublishedView('missing', 'secret', { fetcher })).resolves.toBeUndefined();
+  });
+
   it('reports the Worker error without hiding its status', async () => {
     const fetcher = vi.fn(() =>
       Promise.resolve(Response.json({ error: 'Shared system not found' }, { status: 404 })),

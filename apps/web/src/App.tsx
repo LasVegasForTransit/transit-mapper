@@ -59,6 +59,9 @@ const ImportDialog = lazy(() =>
 const ShareDialog = lazy(() =>
   import('./ui/ShareDialog').then((m) => ({ default: m.ShareDialog })),
 );
+const SavedViewsDialog = lazy(() =>
+  import('./ui/saved-views-dialog').then((module) => ({ default: module.SavedViewsDialog })),
+);
 const ShortcutsDialog = lazy(() =>
   import('./ui/ShortcutsDialog').then((m) => ({ default: m.ShortcutsDialog })),
 );
@@ -460,6 +463,16 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
       {activeDialog === 'share' && (
         <LazyDialog onFailure={dialogFailed}>
           <ShareDialog onClose={closeDialog} />
+        </LazyDialog>
+      )}
+      {activeDialog === 'savedViews' && (
+        <LazyDialog onFailure={dialogFailed}>
+          <SavedViewsDialog
+            onClose={closeDialog}
+            system={store.getState().system}
+            viewStore={mapViewStore}
+            selection={selection}
+          />
         </LazyDialog>
       )}
       {activeDialog === 'systems' && (

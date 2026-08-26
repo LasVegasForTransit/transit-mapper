@@ -90,5 +90,6 @@ export async function deletePublishedView(
     },
     options,
   );
+  if (response.status === 404) return;
   if (!response.ok) throw await viewRequestError(response, 'Could not delete the View');
 }

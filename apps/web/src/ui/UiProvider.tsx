@@ -19,6 +19,7 @@ export type DialogName =
   | 'gtfs'
   | 'export'
   | 'share'
+  | 'savedViews'
   | 'systems'
   | 'settings'
   | 'onboarding'

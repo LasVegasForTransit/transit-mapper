@@ -339,6 +339,13 @@ input[type='range'] {
   border-radius: 8px;
   padding: 4px 8px;
 }
+/* A saved View is not identifiable from its glyph alone. Keep its label at
+   the intermediate fit levels. If that text does not fit, Workbench advances
+   to overflow and moves the whole secondary action into More actions. */
+.actions-full[data-fit='labels'] .saved-views-action .btn-label,
+.actions-full[data-fit='tertiary'] .saved-views-action .btn-label {
+  display: inline;
+}
 
 /* A background import's live status (see UiProvider's ImportProgress) — no
    backdrop, no focus trap, sits above the tool dock rather than over it so
@@ -2244,6 +2251,149 @@ input[type='range'] {
   width: 56px;
 }
 
+/* ---- Saved views dialog ---- */
+.modal.saved-views-dialog {
+  width: 620px;
+  max-height: min(88dvh, 700px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.saved-views-toolbar {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+}
+.saved-view-create,
+.saved-view-rename {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.saved-view-create {
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--md-sys-color-primary);
+  border-radius: 12px;
+  background: var(--md-sys-color-primary-container);
+}
+.saved-view-name-input {
+  min-width: 0;
+  flex: 1;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: 8px;
+  color: var(--md-sys-color-on-surface);
+  background: var(--md-sys-color-surface);
+  font: inherit;
+}
+.saved-view-name-input:focus {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 1px;
+}
+.saved-views-list {
+  display: grid;
+  gap: 6px;
+  min-height: 80px;
+  max-height: min(64dvh, 520px);
+  margin: 0;
+  padding: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+.saved-view-row {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+  background: var(--md-sys-color-surface-container-low);
+}
+.saved-view-row[aria-busy='true'] {
+  opacity: 0.72;
+}
+.saved-view-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.saved-view-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.saved-view-info strong {
+  overflow: hidden;
+  color: var(--md-sys-color-on-surface);
+  font-size: var(--md-sys-typescale-body-large-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saved-view-info span {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: var(--md-sys-typescale-body-small-size);
+}
+.saved-view-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.saved-view-rename {
+  width: 100%;
+}
+.saved-view-confirmation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: var(--md-sys-typescale-body-small-size);
+}
+.saved-view-confirmation > div {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+.saved-view-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+.saved-view-link-row input {
+  min-width: 0;
+  height: 36px;
+  padding: 0 9px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 8px;
+  color: var(--md-sys-color-on-surface-variant);
+  background: var(--md-sys-color-surface);
+}
+.saved-view-link-row a {
+  text-decoration: none;
+}
+.saved-view-error {
+  margin: 0;
+}
+.saved-views-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 80px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
 /* ---- My systems dialog ---- */
 .modal.systems-dialog {
   width: 720px;
@@ -2504,6 +2654,22 @@ input[type='range'] {
 }
 
 @media (max-width: 620px) {
+  .modal.saved-views-dialog {
+    width: 94vw;
+  }
+  .saved-view-confirmation {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .saved-view-confirmation > div {
+    justify-content: flex-end;
+  }
+  .saved-view-link-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .saved-view-link-row input {
+    grid-column: 1 / -1;
+  }
   .modal.systems-dialog {
     width: 94vw;
   }
@@ -2531,6 +2697,24 @@ input[type='range'] {
 }
 
 @media (max-width: 360px) {
+  .saved-view-create,
+  .saved-view-rename {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .saved-view-create .btn,
+  .saved-view-rename .btn {
+    justify-content: center;
+    width: 100%;
+  }
+  .saved-view-main {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .saved-view-actions .btn.btn-primary {
+    flex: 1;
+    justify-content: center;
+  }
   .systems-toolbar {
     flex-direction: column;
   }

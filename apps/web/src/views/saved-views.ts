@@ -166,7 +166,14 @@ function publicationRequest(view: LocalViewRecord, sharedSystemId: string): Crea
 
 export async function publishSavedView(options: PublishSavedViewOptions): Promise<LocalViewRecord> {
   const requestOptions = { signal: options.signal };
-  const sharedSystem = await options.publishSystem(options.system, requestOptions);
+  const camera = options.view.state.camera;
+  const sharedSystem = await options.publishSystem(
+    {
+      ...options.system,
+      viewport: { center: [camera.center[0], camera.center[1]], zoom: camera.zoom },
+    },
+    requestOptions,
+  );
   const existingPublishedId = options.view.publishedId;
   const existingEditToken = options.view.editToken;
 
