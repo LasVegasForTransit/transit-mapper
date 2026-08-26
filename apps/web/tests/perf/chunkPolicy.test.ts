@@ -32,19 +32,22 @@ describe('performance chunk policy', () => {
     ).toBeUndefined();
   });
 
-  it('keeps the cooperative renderer in a normal budgeted cache chunk', () => {
-    expect(performanceChunkName('/repo/packages/renderer/src/scene-draft.ts')).toBe(
-      'renderer-runtime',
-    );
+  it('gives each stable workspace package its own normal budgeted cache chunk', () => {
+    expect(performanceChunkName('/repo/packages/views/src/index.ts')).toBe('views');
+    expect(performanceChunkName('/repo/packages/map/dist/map-surface.js')).toBe('map');
+    expect(performanceChunkName('/repo/packages/workspace/src/workbench.tsx')).toBe('workspace');
+    expect(performanceChunkName('/repo/packages/renderer/src/scene-draft.ts')).toBe('renderer');
     expect(performanceChunkName('/repo/packages/renderer/dist/scene-publication.js')).toBe(
-      'renderer-runtime',
+      'renderer',
     );
     expect(
-      performanceChunkName('/repo/packages/renderer/src/cooperative-render-job-scheduler.ts'),
-    ).toBeUndefined();
+      performanceChunkName(
+        String.raw`C:\repo\packages\renderer\dist\cooperative-render-job-scheduler.js`,
+      ),
+    ).toBe('renderer');
     expect(
       performanceChunkName('/repo/packages/core/src/render/render-preparation-update-plan.ts'),
-    ).toBe('renderer-runtime');
+    ).toBeUndefined();
     expect(performanceChunkName('/repo/apps/web/src/map/MapCanvas.tsx')).toBeUndefined();
     expect(performanceChunkName('/repo/apps/web/src/map/interactions.ts')).toBe(
       'editor-interactions',
@@ -53,7 +56,7 @@ describe('performance chunk policy', () => {
       performanceChunkName('/repo/apps/web/src/map/system-feature-sources.ts'),
     ).toBeUndefined();
     expect(
-      performanceChunkKind('assets/renderer-runtime-AbCd1234.js', [
+      performanceChunkKind('assets/renderer-AbCd1234.js', [
         '/repo/packages/renderer/dist/scene-draft.js',
       ]),
     ).toBe('standard');

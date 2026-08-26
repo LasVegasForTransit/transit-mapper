@@ -1,5 +1,11 @@
 export type PerformanceChunkName =
-  'map-engine' | 'react-runtime' | 'renderer-runtime' | 'editor-interactions';
+  | 'map-engine'
+  | 'react-runtime'
+  | 'views'
+  | 'map'
+  | 'workspace'
+  | 'renderer'
+  | 'editor-interactions';
 export type PerformanceChunkKind = 'map-engine' | 'standard';
 
 export const DEFAULT_CHUNK_MAXIMUM_RAW_BYTES = 500_000;
@@ -24,16 +30,11 @@ function isMapEngineModule(moduleId: string): boolean {
   return normalizedModuleId(moduleId).includes('/node_modules/.pnpm/maplibre-gl@');
 }
 
-function isRendererRuntimeModule(moduleId: string): boolean {
-  const normalizedId = normalizedModuleId(moduleId);
-  return (
-    /\/packages\/renderer\/(?:src|dist)\/(?:scene-(?:draft|feature|publication)|persistent-|resumable-feature-projection)[^/]*\.[jt]sx?$/.test(
-      normalizedId,
-    ) ||
-    /\/packages\/core\/src\/render\/(?:dependency-index|dependency-invalidation|render-preparation(?:-[^/]+)?|render-projection-scope)\.ts$/.test(
-      normalizedId,
-    )
+function stablePackageChunk(moduleId: string): PerformanceChunkName | undefined {
+  const match = normalizedModuleId(moduleId).match(
+    /\/packages\/(views|map|workspace|renderer)\/(?:src|dist)\//,
   );
+  return match?.[1] as PerformanceChunkName | undefined;
 }
 
 /**
@@ -49,7 +50,8 @@ function isEditorInteractionModule(moduleId: string): boolean {
 export function performanceChunkName(moduleId: string): PerformanceChunkName | undefined {
   const normalizedId = normalizedModuleId(moduleId);
   if (isMapEngineModule(normalizedId)) return 'map-engine';
-  if (isRendererRuntimeModule(normalizedId)) return 'renderer-runtime';
+  const packageChunk = stablePackageChunk(normalizedId);
+  if (packageChunk) return packageChunk;
   if (isEditorInteractionModule(normalizedId)) return 'editor-interactions';
   if (
     normalizedId.includes('/node_modules/.pnpm/react@') ||

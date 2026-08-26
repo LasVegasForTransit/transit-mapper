@@ -161,10 +161,9 @@ export default defineConfig({
         [OFFLINE_EDITOR_ENTRY_NAME]: resolve(import.meta.dirname, 'src/pwa/offline-editor.ts'),
       },
       output: {
-        // Assign only the explicitly named cooperative-renderer modules to
-        // its cache boundary. Pulling their shared dependencies into that
-        // chunk would make the lightweight embed download editor-only work
-        // and inflate both entry graphs without changing capability.
+        // Assign only modules owned by each stable package to that package's
+        // cache boundary. Shared dependencies keep Rollup's normal ownership,
+        // so a package chunk cannot drag editor-only code into the embed.
         onlyExplicitManualChunks: true,
         // Keep slow-changing runtimes cacheable across frequent editor
         // releases. Vite module-preloads these static imports in parallel.

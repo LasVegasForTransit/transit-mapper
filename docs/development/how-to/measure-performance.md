@@ -333,7 +333,7 @@ download those runtimes again. The renderer boundary contains only explicitly
 assigned editor modules; shared cartography stays shared with the embed. It has
 no size exception. MapLibre 4 is itself one prebundled module, so an output
 named `map-engine` whose source map contains only MapLibre modules has a narrow
-810 kB raw limit. Every other JavaScript output, including `renderer-runtime`,
+810 kB raw limit. Every other JavaScript output, including `renderer`,
 service-worker, and nested outputs, is limited to 500 kB.
 
 The absolute main-editor ceiling in `apps/web/perf.config.ts` protects the
