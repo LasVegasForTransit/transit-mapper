@@ -14,7 +14,7 @@ import {
   DOCUMENT_MAP_DEFINITION,
   resolveDocumentMapPresentation,
 } from '../../src/editor/document-map';
-import { createDocumentPresentationState } from '../../src/editor/document-view-adapter';
+import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
 import { createEditorStore } from '../../src/editor/store';
 
 describe('the editor document map composition', () => {

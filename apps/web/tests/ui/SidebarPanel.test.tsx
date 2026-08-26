@@ -5,7 +5,7 @@ import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { createMapViewStore } from '@transitmapper/map';
 import { MapViewProvider } from '@transitmapper/workspace';
 import type { DocumentRepresentationId } from '@transitmapper/renderer/presentation';
-import { createDocumentPresentationState } from '../../src/editor/document-view-adapter';
+import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
 import { SidebarPanel } from '../../src/ui/SidebarPanel';
 import {
   infrastructureOutlineProjection,

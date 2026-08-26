@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { createMapViewStore, createSelectionController } from '@transitmapper/map/state';
+import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
 import type { RouteHostProps } from '../app/route-host';
-import { createDocumentPresentationState } from '../editor/document-view-adapter';
 import { attachViewLink, copyViewLink } from '../views/view-link';
 import { resolveViewerSession, type ViewerSession } from './viewer-session';
 import {

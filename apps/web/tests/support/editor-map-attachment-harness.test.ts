@@ -9,7 +9,7 @@ import type { DocumentMapSceneAccepted, DocumentMapSession } from '@transitmappe
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { AttachEditorMapOptions } from '../../src/editor/editor-map-attachment';
 import { createDocumentMapSource } from '../../src/editor/document-map-source';
-import { createDocumentPresentationState } from '../../src/editor/document-view-adapter';
+import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
 import { createEditorStore } from '../../src/editor/store';
 import { FINE_POINTER_TUNING } from '../../src/editor/input-tuning';
 import { createProjectionOperationCounts } from '../../src/map/gestureProjection';

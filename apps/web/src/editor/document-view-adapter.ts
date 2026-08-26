@@ -1,37 +1,7 @@
-import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
-import {
-  DEFAULT_VIEWPORT,
-  type TransitSystem,
-  type Viewport,
-} from '@transitmapper/core/model/system';
+import type { TransitSystem, Viewport } from '@transitmapper/core/model/system';
 import type { MapViewStore } from '@transitmapper/map';
-import {
-  DOCUMENT_VIEW_FILTER_IDS,
-  type DocumentRepresentationId,
-} from '@transitmapper/renderer/presentation';
-import type { MapFeatureReferenceV1, MapPresentationStateV1 } from '@transitmapper/views';
+import type { MapFeatureReferenceV1 } from '@transitmapper/views';
 import type { Selection } from './store';
-
-interface CreateDocumentPresentationStateOptions {
-  camera?: Viewport;
-  representationId?: DocumentRepresentationId;
-}
-
-export function createDocumentPresentationState(
-  options: CreateDocumentPresentationStateOptions = {},
-): MapPresentationStateV1 {
-  const camera = options.camera ?? DEFAULT_VIEWPORT;
-  return {
-    schemaVersion: 1,
-    camera: { center: [camera.center[0], camera.center[1]], zoom: camera.zoom },
-    representationId: options.representationId ?? 'network',
-    filters: {
-      [DOCUMENT_VIEW_FILTER_IDS.modes]: [...MODE_ORDER],
-      [DOCUMENT_VIEW_FILTER_IDS.wayTypes]: [...WAY_TYPE_ORDER],
-      [DOCUMENT_VIEW_FILTER_IDS.landmarks]: true,
-    },
-  };
-}
 
 export function currentDocumentCamera(store: MapViewStore): Viewport {
   const camera = store.getSnapshot().camera;

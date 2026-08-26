@@ -1,6 +1,7 @@
 import { MODE_ORDER, MODES, WAY_TYPE_ORDER, WAY_TYPES } from '@transitmapper/core/model/catalog';
+import { DEFAULT_VIEWPORT } from '@transitmapper/core/model/system';
 import type { MapDefinition } from '@transitmapper/map';
-import type { MapPresentationStateV1 } from '@transitmapper/views';
+import type { MapCameraStateV1, MapPresentationStateV1 } from '@transitmapper/views';
 import type { DocumentMapPresentation } from './document-map-driver-types';
 
 export type DocumentRepresentationId = 'network' | 'infrastructure' | 'diagram';
@@ -52,6 +53,27 @@ export const DOCUMENT_MAP_DEFINITION: MapDefinition = Object.freeze({
   ]),
   attribution: Object.freeze([]),
 });
+
+export interface CreateDocumentPresentationStateOptions {
+  camera?: MapCameraStateV1;
+  representationId?: DocumentRepresentationId;
+}
+
+export function createDocumentPresentationState(
+  options: CreateDocumentPresentationStateOptions = {},
+): MapPresentationStateV1 {
+  const camera = options.camera ?? DEFAULT_VIEWPORT;
+  return {
+    schemaVersion: 1,
+    camera: { center: [camera.center[0], camera.center[1]], zoom: camera.zoom },
+    representationId: options.representationId ?? 'network',
+    filters: {
+      [DOCUMENT_VIEW_FILTER_IDS.modes]: [...MODE_ORDER],
+      [DOCUMENT_VIEW_FILTER_IDS.wayTypes]: [...WAY_TYPE_ORDER],
+      [DOCUMENT_VIEW_FILTER_IDS.landmarks]: true,
+    },
+  };
+}
 
 function documentRepresentation(value: string): DocumentRepresentationId {
   switch (value) {

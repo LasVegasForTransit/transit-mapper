@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createMapViewStore } from '@transitmapper/map';
 import { MapViewProvider } from '@transitmapper/workspace';
+import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
 import { EditorSession } from '../App';
 import type { RouteIntent } from '../app/route-intent';
 import { InstallProvider } from '../pwa/InstallProvider';
@@ -8,7 +9,7 @@ import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { SaveStatusProvider } from '../ui/SaveStatusProvider';
 import { SimProvider } from '../ui/SimProvider';
 import { UiProvider } from '../ui/UiProvider';
-import { createDocumentPresentationState, currentDocumentCamera } from './document-view-adapter';
+import { currentDocumentCamera } from './document-view-adapter';
 import { EditorProvider } from './EditorProvider';
 import { createEditorStore } from './store';
 

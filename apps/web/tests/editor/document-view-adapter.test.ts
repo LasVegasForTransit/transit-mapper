@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { createMapViewStore } from '@transitmapper/map';
+import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
 import {
-  createDocumentPresentationState,
   currentDocumentCamera,
   editorSelectionReference,
   initializeDocumentCamera,

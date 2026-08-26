@@ -2,8 +2,8 @@ import '../theme/font.css';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import type { GetShareResponse } from '@transitmapper/core/share/contract';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
 import { parseMapViewState } from '@transitmapper/views';
+import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
 import { fetchWithTimeout } from '../network/fetchWithTimeout';
 import { createEmbedStartupMilestones } from './startup-milestones';
 import { startFieldSampling } from '../perf/field-sampling';
@@ -50,16 +50,7 @@ async function loadEmbedContent(
       system,
       title: system.name || 'Transit system',
       openPath: `/s/${reference.id}`,
-      state: {
-        schemaVersion: 1,
-        camera: system.viewport,
-        representationId: 'network',
-        filters: {
-          modes: [...MODE_ORDER],
-          'way-types': [...WAY_TYPE_ORDER],
-          landmarks: true,
-        },
-      },
+      state: createDocumentPresentationState({ camera: system.viewport }),
     };
   }
 
