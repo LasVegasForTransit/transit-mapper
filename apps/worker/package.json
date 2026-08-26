@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
-    "verify": "tsx tests/verify.test.ts && vitest run",
+    "verify": "node --conditions=development --import tsx tests/verify.test.ts && vitest run",
     "deploy": "wrangler deploy",
     "lint": "eslint .",
     "types": "wrangler types",
