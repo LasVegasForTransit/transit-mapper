@@ -31,16 +31,20 @@ function startupMarkNames(): string[] {
 }
 
 describe('deserializeSystemOffThread', () => {
-  it('sends stored JSON to a Worker and resolves the reconstructed model', async () => {
+  it('parses normalized JSON returned by the Worker', async () => {
     const worker = new FakeWorker();
     const system = createEmptySystem();
     const serialized = JSON.stringify(system);
     const pending = deserializeSystemOffThread(serialized, { workerFactory: () => worker });
 
     expect(worker.posted).toEqual([serialized]);
-    worker.onmessage?.(new MessageEvent('message', { data: { kind: 'done', system } }));
+    worker.onmessage?.(
+      new MessageEvent('message', {
+        data: { kind: 'done', serialized: JSON.stringify(system) },
+      }),
+    );
 
-    await expect(pending).resolves.toBe(system);
+    await expect(pending).resolves.toEqual(system);
     expect(worker.terminated).toBe(true);
     expect(startupMarkNames()).toEqual(['tm:deserialize-start', 'tm:deserialize-end']);
   });
@@ -55,6 +59,21 @@ describe('deserializeSystemOffThread', () => {
     worker.onerror?.({ message: 'Worker script failed.' } as ErrorEvent);
 
     await expect(pending).resolves.toMatchObject({ id: system.id });
+    expect(worker.terminated).toBe(true);
+    expect(startupMarkNames()).toEqual(['tm:deserialize-start', 'tm:deserialize-end']);
+  });
+
+  it('rejects an invalid normalized payload returned by the Worker', async () => {
+    const worker = new FakeWorker();
+    const pending = deserializeSystemOffThread('{}', { workerFactory: () => worker });
+
+    worker.onmessage?.(
+      new MessageEvent('message', {
+        data: { kind: 'done', serialized: '{not-json' },
+      }),
+    );
+
+    await expect(pending).rejects.toBeInstanceOf(Error);
     expect(worker.terminated).toBe(true);
     expect(startupMarkNames()).toEqual(['tm:deserialize-start', 'tm:deserialize-end']);
   });

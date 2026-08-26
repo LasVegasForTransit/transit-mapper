@@ -71,8 +71,20 @@ export function deserializeSystemOffThread(
     };
     const timer = setTimeout(fallback, options.timeoutMs ?? DESERIALIZATION_TIMEOUT_MS);
     worker.onmessage = (event) => {
-      if (event.data.kind === 'done') finish({ system: event.data.system });
-      else finish({ error: new Error(event.data.message) });
+      if (event.data.kind === 'error') {
+        finish({ error: new Error(event.data.message) });
+        return;
+      }
+      try {
+        // The Worker already normalized and validated this payload through
+        // parseSystem. Returning JSON avoids a deep structured clone of every
+        // coordinate array while preserving that exact normalized model.
+        finish({ system: JSON.parse(event.data.serialized) as TransitSystem });
+      } catch (error) {
+        finish({
+          error: error instanceof Error ? error : new Error('Stored document is invalid.'),
+        });
+      }
     };
     // Worker startup/runtime failures are capability failures, not evidence
     // that the user's stored bytes are corrupt. Preserve the compatibility

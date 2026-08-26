@@ -13,9 +13,10 @@ const workerScope = globalThis as unknown as StorageDeserializerWorkerScope;
 
 workerScope.onmessage = (event) => {
   try {
+    const system = parseSystem(JSON.parse(event.data.serialized));
     workerScope.postMessage({
       kind: 'done',
-      system: parseSystem(JSON.parse(event.data.serialized)),
+      serialized: JSON.stringify(system),
     });
   } catch (error) {
     workerScope.postMessage({
