@@ -122,6 +122,26 @@ export default {
       },
     },
     {
+      name: 'views-is-the-map-contract-root',
+      severity: 'error',
+      comment:
+        'Portable View data cannot depend on map lifecycle, React composition, transit ' +
+        'documents, or rendering. Every other map package may consume this contract, but the ' +
+        'contract cannot reach back into them.',
+      from: { path: '^packages/views/src/' },
+      to: { pathNot: '^packages/views/' },
+    },
+    {
+      name: 'core-does-not-import-the-map-stack',
+      severity: 'error',
+      comment:
+        'Transit documents and pure transforms sit below the reusable map stack. Core importing ' +
+        'View state, MapLibre lifecycle, workspace chrome, or the renderer would create the ' +
+        'reverse edge that prevents those packages from building and caching independently.',
+      from: { path: '^packages/core/src/' },
+      to: { path: '^packages/(views|map|workspace|renderer)/' },
+    },
+    {
       name: 'packages-do-not-import-apps',
       severity: 'error',
       comment:
@@ -164,6 +184,18 @@ export default {
       },
     },
     {
+      name: 'workspace-package-dependencies-are-an-allowlist',
+      severity: 'error',
+      comment:
+        'Workspace composes React chrome around an injected map surface. It may consume map and ' +
+        'View contracts, but transit documents, renderers, and application policy belong in the ' +
+        'host that fills its slots.',
+      from: { path: '^packages/workspace/src/' },
+      to: {
+        pathNot: '^(packages/(workspace|map|views)/|node_modules/(\\.pnpm/)?(react|@types(\\+|/)))',
+      },
+    },
+    {
       name: 'viewer-startup-excludes-editor-capabilities',
       severity: 'error',
       comment:
@@ -174,6 +206,17 @@ export default {
       to: {
         path: '^apps/web/src/(storage/|import/|sim/|pwa/|editor/(store/|editor-application\\.tsx$|EditorProvider\\.tsx$)|ui/(InstallProvider|SimProvider))',
         dependencyTypesNot: ['dynamic-import', 'type-only'],
+      },
+    },
+    {
+      name: 'embed-is-framework-free-and-editor-free',
+      severity: 'error',
+      comment:
+        'The embed is a separate non-React entry. Importing React or editor code would couple its ' +
+        'read-only startup and bundle to the full application host.',
+      from: { path: '^apps/web/src/embed/' },
+      to: {
+        path: '^(apps/web/src/editor/|node_modules/(\\.pnpm/)?(react|react-dom)(/|$))',
       },
     },
     {
