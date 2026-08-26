@@ -8,7 +8,9 @@ function resolvedFilterValue(
   if (definition.kind === 'toggle') {
     return typeof incoming === 'boolean' ? incoming : definition.defaultValue;
   }
-  if (!Array.isArray(incoming)) return [...definition.defaultValue];
+  if (incoming === undefined || typeof incoming === 'boolean' || typeof incoming === 'string') {
+    return [...definition.defaultValue];
+  }
   const allowed = new Set(definition.options.map((option) => option.id));
   return incoming.filter((value) => allowed.has(value));
 }
@@ -17,7 +19,7 @@ export function resolveMapPresentationState(
   definition: MapDefinition,
   incoming: MapPresentationStateV1,
 ): MapPresentationStateV1 {
-  const defaultRepresentation = definition.representations[0]?.id;
+  const defaultRepresentation = definition.representations.at(0)?.id;
   if (defaultRepresentation === undefined) {
     throw new Error(`Map definition "${definition.id}" has no representations.`);
   }
