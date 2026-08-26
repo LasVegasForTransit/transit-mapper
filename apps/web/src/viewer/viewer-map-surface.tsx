@@ -168,3 +168,5 @@ export function ViewerMapSurface({ system, viewStore, selection, onError }: View
     />
   );
 }
+
+export default ViewerMapSurface;

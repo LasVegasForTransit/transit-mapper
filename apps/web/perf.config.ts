@@ -46,4 +46,9 @@ export const BUNDLE_BUDGETS: BundleBudget[] = [
     maximumGzipBytes: 358_400,
     maximumBrotliBytes: 307_200,
   },
+  {
+    entry: 'viewer',
+    maximumGzipBytes: 307_200,
+    maximumBrotliBytes: 256_000,
+  },
 ];

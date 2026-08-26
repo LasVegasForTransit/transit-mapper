@@ -3,7 +3,7 @@ import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
 import type { SourceUploadCount } from './source-uploads';
 
 export type PerfFixtureId = 'small' | 'dense' | 'published' | 'rtc';
-export type PerfScenarioId = 'small' | 'dense' | 'rtc' | 'share' | 'embed';
+export type PerfScenarioId = 'small' | 'dense' | 'rtc' | 'viewer' | 'embed';
 export type PerfSurface = 'editor' | 'share' | 'embed';
 export type PerfProfileId = 'desktop' | 'mobile';
 export type PerfRunMode = 'audit' | 'smoke';

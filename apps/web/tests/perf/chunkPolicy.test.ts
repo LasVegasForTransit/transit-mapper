@@ -35,8 +35,16 @@ describe('performance chunk policy', () => {
   it('gives each stable workspace package its own normal budgeted cache chunk', () => {
     expect(performanceChunkName('/repo/packages/views/src/index.ts')).toBe('views');
     expect(performanceChunkName('/repo/packages/map/dist/map-surface.js')).toBe('map');
+    expect(performanceChunkName('/repo/packages/map/src/state.ts')).toBe('map-state');
+    expect(performanceChunkName('/repo/packages/map/dist/map-view-store.js')).toBe('map-state');
     expect(performanceChunkName('/repo/packages/workspace/src/workbench.tsx')).toBe('workspace');
+    expect(performanceChunkName('/repo/packages/workspace/src/map-surface.tsx')).toBe(
+      'map-surface',
+    );
     expect(performanceChunkName('/repo/packages/renderer/src/scene-draft.ts')).toBe('renderer');
+    expect(
+      performanceChunkName('/repo/packages/renderer/src/document-map-feature-details.ts'),
+    ).toBe('feature-details');
     expect(performanceChunkName('/repo/packages/renderer/dist/scene-publication.js')).toBe(
       'renderer',
     );

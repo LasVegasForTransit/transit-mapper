@@ -3,8 +3,11 @@ export type PerformanceChunkName =
   | 'react-runtime'
   | 'views'
   | 'map'
+  | 'map-state'
   | 'workspace'
+  | 'map-surface'
   | 'renderer'
+  | 'feature-details'
   | 'editor-interactions';
 export type PerformanceChunkKind = 'map-engine' | 'standard';
 
@@ -37,6 +40,15 @@ function stablePackageChunk(moduleId: string): PerformanceChunkName | undefined 
   return match?.[1] as PerformanceChunkName | undefined;
 }
 
+function stablePackageModule(moduleId: string, packageName: string, file: RegExp): boolean {
+  const normalizedId = normalizedModuleId(moduleId);
+  const marker = `/packages/${packageName}/`;
+  const packageOffset = normalizedId.indexOf(marker);
+  if (packageOffset < 0) return false;
+  const packagePath = normalizedId.slice(packageOffset + marker.length);
+  return /^(?:src|dist)\//.test(packagePath) && file.test(packagePath);
+}
+
 /**
  * Pointer grammar is a stable, self-contained runtime with different churn
  * from the editor shell. Keeping it separately cacheable prevents a renderer
@@ -50,6 +62,27 @@ function isEditorInteractionModule(moduleId: string): boolean {
 export function performanceChunkName(moduleId: string): PerformanceChunkName | undefined {
   const normalizedId = normalizedModuleId(moduleId);
   if (isMapEngineModule(normalizedId)) return 'map-engine';
+  if (
+    stablePackageModule(
+      normalizedId,
+      'map',
+      /^(?:src|dist)\/(?:state|map-view-store|selection-controller|map-definition-state|map-driver)\.[^.]+$/,
+    )
+  ) {
+    return 'map-state';
+  }
+  if (stablePackageModule(normalizedId, 'workspace', /^(?:src|dist)\/map-surface\.[^.]+$/)) {
+    return 'map-surface';
+  }
+  if (
+    stablePackageModule(
+      normalizedId,
+      'renderer',
+      /^(?:src|dist)\/document-map-feature-details\.[^.]+$/,
+    )
+  ) {
+    return 'feature-details';
+  }
   const packageChunk = stablePackageChunk(normalizedId);
   if (packageChunk) return packageChunk;
   if (isEditorInteractionModule(normalizedId)) return 'editor-interactions';

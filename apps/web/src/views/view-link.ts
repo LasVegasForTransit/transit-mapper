@@ -1,4 +1,4 @@
-import type { MapViewStore, SelectionController } from '@transitmapper/map';
+import type { MapViewStore, SelectionController } from '@transitmapper/map/state';
 import { encodeMapViewState, type MapViewStateV1 } from '@transitmapper/views';
 
 export interface AttachViewLinkOptions {

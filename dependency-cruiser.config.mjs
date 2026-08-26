@@ -164,6 +164,19 @@ export default {
       },
     },
     {
+      name: 'viewer-startup-excludes-editor-capabilities',
+      severity: 'error',
+      comment:
+        'The reader may reuse pure document presentation adapters, but its startup graph must not ' +
+        'load editor state, persistence, imports, simulation, installation, or PWA policy. Fork ' +
+        'may reach persistence only through a dynamic import after the user invokes it.',
+      from: { path: '^apps/web/src/viewer/' },
+      to: {
+        path: '^apps/web/src/(storage/|import/|sim/|pwa/|editor/(store/|editor-application\\.tsx$|EditorProvider\\.tsx$)|ui/(InstallProvider|SimProvider))',
+        dependencyTypesNot: ['dynamic-import', 'type-only'],
+      },
+    },
+    {
       name: 'src-does-not-import-tests',
       severity: 'error',
       comment: 'Test material must not reach a shipped bundle.',

@@ -1,4 +1,4 @@
-import type { MapFeatureDetails } from '@transitmapper/map';
+import type { MapFeatureDetails } from '@transitmapper/map/state';
 import { Icon } from '../ui/Icon';
 
 export interface FeatureDetailsProps {

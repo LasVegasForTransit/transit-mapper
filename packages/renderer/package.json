@@ -12,6 +12,14 @@
       "types": "./dist/driver.d.ts",
       "import": "./dist/driver.js"
     },
+    "./feature-details": {
+      "development": {
+        "types": "./src/document-map-feature-details.ts",
+        "import": "./src/document-map-feature-details.ts"
+      },
+      "types": "./dist/document-map-feature-details.d.ts",
+      "import": "./dist/document-map-feature-details.js"
+    },
     "./layers": {
       "development": {
         "types": "./src/layers.ts",

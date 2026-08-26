@@ -21,7 +21,7 @@ const manifest: ViteManifest = {
     name: 'main',
     isEntry: true,
     imports: ['_shared.js'],
-    dynamicImports: ['src/Dialog.tsx'],
+    dynamicImports: ['src/Dialog.tsx', 'src/viewer/viewer-application.tsx'],
     css: ['assets/main.css'],
   },
   'embed.html': {
@@ -38,6 +38,11 @@ const manifest: ViteManifest = {
   'src/Dialog.tsx': {
     file: 'assets/dialog.js',
     imports: ['_shared.js', 'index.html'],
+  },
+  'src/viewer/viewer-application.tsx': {
+    file: 'assets/viewer.js',
+    name: 'viewer-application',
+    imports: ['_shared.js'],
   },
 };
 
@@ -134,6 +139,7 @@ function fixtureFiles(options: { changedMain?: boolean; extraIcon?: boolean } = 
     'assets/font.woff2': 'font bytes',
     'assets/dialog.js':
       'new Worker(new URL("/assets/dialog-worker.js",import.meta.url),{type:"module"});',
+    'assets/viewer.js': 'const viewer=true;',
     'assets/storage-worker.js': 'self.onmessage=()=>{};',
     'assets/dialog-worker.js': 'self.onmessage=()=>{};',
     'sw.js': `define(["./workbox-runtime"],function(w){w.precacheAndRoute([${precacheSource}])});`,
@@ -212,7 +218,7 @@ describe('bundle report delivery graphs', () => {
       'assets/shared.js',
       'index.html',
     ]);
-    expect(paths(main.lazy)).toEqual(['assets/dialog.js']);
+    expect(paths(main.lazy)).toEqual(['assets/dialog.js', 'assets/viewer.js']);
     expect(paths(main.complete)).toEqual([...paths(main.eager), ...paths(main.lazy)].sort());
     expect(paths(embed.eager)).toEqual([
       'assets/embed.js',
@@ -222,6 +228,21 @@ describe('bundle report delivery graphs', () => {
       'embed.html',
     ]);
     expect(paths(embed.lazy)).toEqual([]);
+  });
+
+  it('reports the viewer route host as its own static delivery graph', () => {
+    const viewer = required(
+      deliveryGraphs().entries.find((entry) => entry.entry === 'viewer'),
+      'viewer entry',
+    );
+
+    expect(paths(viewer.eager)).toEqual([
+      'assets/font.woff2',
+      'assets/shared.css',
+      'assets/shared.js',
+      'assets/viewer.js',
+    ]);
+    expect(paths(viewer.lazy)).toEqual([]);
   });
 
   it('reports Workers, service-worker runtime, install assets, and precache as distinct graphs', () => {
@@ -312,7 +333,7 @@ describe('bundle report delivery graphs', () => {
     const firstEntry = required(graphs.entries.at(0), 'first entry');
     const file = required(firstEntry.complete.files.at(0), 'first complete file');
 
-    expect(graphs.entries.map((entry) => entry.entry)).toEqual(['embed', 'main']);
+    expect(graphs.entries.map((entry) => entry.entry)).toEqual(['embed', 'main', 'viewer']);
     expect(typeof file.rawBytes).toBe('number');
     expect(typeof file.gzipBytes).toBe('number');
     expect(typeof file.brotliBytes).toBe('number');
@@ -691,7 +712,7 @@ describe('bundle report comparisons', () => {
       'index.html': {
         ...required(manifest['index.html'], 'main manifest entry'),
         imports: ['_shared.js', 'src/Dialog.tsx'],
-        dynamicImports: [],
+        dynamicImports: ['src/viewer/viewer-application.tsx'],
       },
     };
     const before = report(files, '2026-08-12T00:00:00.000Z');

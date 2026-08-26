@@ -11,6 +11,14 @@
       },
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./state": {
+      "development": {
+        "types": "./src/state.ts",
+        "import": "./src/state.ts"
+      },
+      "types": "./dist/state.d.ts",
+      "import": "./dist/state.js"
     }
   },
   "scripts": {

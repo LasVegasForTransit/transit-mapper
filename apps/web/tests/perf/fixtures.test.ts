@@ -44,7 +44,7 @@ describe('performance fixtures', () => {
   });
 
   it('keeps public-surface fixtures within the production publishing contract', () => {
-    for (const scenario of [PERF_SCENARIOS.share, PERF_SCENARIOS.embed]) {
+    for (const scenario of [PERF_SCENARIOS.viewer, PERF_SCENARIOS.embed]) {
       const request = serializeShareRequest(generatePerfFixture(scenario.fixtureId));
 
       expect(request.byteLength).toBeLessThanOrEqual(MAX_SHARE_BODY_BYTES);

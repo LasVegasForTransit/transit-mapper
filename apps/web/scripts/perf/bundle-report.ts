@@ -116,6 +116,11 @@ function entryName(key: string, entry: ViteManifestEntry): string {
     : basename(source).replace(/\.[^.]+$/, '');
 }
 
+function deliveryEntryName(key: string, entry: ViteManifestEntry): string {
+  const name = entryName(key, entry);
+  return name === 'viewer-application' ? 'viewer' : name;
+}
+
 function collectManifestFiles(key: string, traversal: ManifestTraversal): void {
   if (traversal.visited.has(key)) return;
   traversal.visited.add(key);
@@ -338,10 +343,16 @@ function installAssetFiles(files: Readonly<Partial<Record<string, Uint8Array>>>)
 }
 
 export function createDeliveryGraphs(options: CreateDeliveryGraphsOptions): DeliveryGraphs {
-  const manifestEntries = Object.entries(options.manifest).filter(
+  const allEntries = Object.entries(options.manifest).filter(
+    (entry): entry is [string, ViteManifestEntry] => entry[1] !== undefined,
+  );
+  const manifestEntries = allEntries.filter(
     (entry): entry is [string, ViteManifestEntry] => entry[1]?.isEntry === true,
   );
-  const entries = manifestEntries
+  const routeHostEntries = allEntries.filter(
+    ([key, entry]) => entry.isEntry !== true && deliveryEntryName(key, entry) === 'viewer',
+  );
+  const entries = [...manifestEntries, ...routeHostEntries]
     .map(([key, entry]) => {
       const eagerFiles = manifestEntryFiles(key, options.manifest, false);
       const completeFiles = manifestEntryFiles(key, options.manifest, true);
@@ -350,7 +361,7 @@ export function createDeliveryGraphs(options: CreateDeliveryGraphsOptions): Deli
       const lazy = graphReport(lazyFiles, options.files);
       const complete = graphReport(completeFiles, options.files);
       return {
-        entry: entryName(key, entry),
+        entry: deliveryEntryName(key, entry),
         rawBytes: complete.rawBytes,
         gzipBytes: complete.gzipBytes,
         brotliBytes: complete.brotliBytes,

@@ -68,6 +68,11 @@ describe('ViewerApplication', () => {
           renderMap={renderMap}
           onFork={onFork}
           onCopyLink={onCopy}
+          resolveFeatureDetails={async (_system, reference) => ({
+            reference,
+            title: 'Central',
+            fields: [],
+          })}
         />,
       );
     });
@@ -78,6 +83,9 @@ describe('ViewerApplication', () => {
     await act(async () => {
       finish?.();
       await Promise.resolve();
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(container.textContent).toContain('Central'));
     });
 
     expect(container.textContent).toContain('Regional transit plan');
@@ -159,6 +167,11 @@ describe('ViewerApplication', () => {
           resolveSession={resolveSession}
           fragmentValue={undefined}
           renderMap={() => <div role="region" aria-label="Map" />}
+          resolveFeatureDetails={async (_system, reference) => ({
+            reference,
+            title: 'Central',
+            fields: [],
+          })}
         />,
       );
     });
@@ -197,6 +210,12 @@ describe('ViewerApplication', () => {
         landmarks: true,
       },
       selection: { source: 'document', kind: 'stop', id: 'central' },
+    });
+
+    await act(async () => {
+      await vi.waitFor(() =>
+        expect(container.querySelector('button[aria-label="Close details"]')).not.toBeNull(),
+      );
     });
 
     const close = container.querySelector<HTMLButtonElement>('button[aria-label="Close details"]');

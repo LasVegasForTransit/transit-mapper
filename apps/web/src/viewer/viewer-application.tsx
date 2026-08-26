@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import { createMapViewStore, createSelectionController } from '@transitmapper/map';
-import { documentMapFeatureDetails } from '@transitmapper/renderer/driver';
-import type { RouteHostProps } from '../app/app-root';
+import { createMapViewStore, createSelectionController } from '@transitmapper/map/state';
+import type { RouteHostProps } from '../app/route-host';
 import { createDocumentPresentationState } from '../editor/document-view-adapter';
 import { attachViewLink, copyViewLink } from '../views/view-link';
 import { resolveSharedSystemSession, type SharedSystemSession } from './shared-system-session';
-import { ViewerMapSurface } from './viewer-map-surface';
-import { ViewerWorkspace, type ViewerMapRenderer, type ViewerStatus } from './viewer-workspace';
+import {
+  ViewerWorkspace,
+  type ViewerFeatureDetailsResolver,
+  type ViewerMapRenderer,
+  type ViewerStatus,
+} from './viewer-workspace';
 import '../ui/app.css';
 import '@transitmapper/workspace/workbench.css';
 import './viewer.css';
@@ -20,6 +23,7 @@ export interface ViewerApplicationProps extends RouteHostProps {
   renderMap?: ViewerMapRenderer;
   onFork?: (system: TransitSystem) => void;
   onCopyLink?: () => void;
+  resolveFeatureDetails?: ViewerFeatureDetailsResolver;
 }
 
 function currentFragmentValue(): string | undefined {
@@ -46,7 +50,14 @@ function copyCurrentLink(): void {
   void copyViewLink();
 }
 
-const renderDocumentMap: ViewerMapRenderer = (options) => <ViewerMapSurface {...options} />;
+const viewerMapSurfaceModule = import('./viewer-map-surface');
+const ViewerMapSurface = lazy(() => viewerMapSurfaceModule);
+
+const renderDocumentMap: ViewerMapRenderer = (options) => (
+  <Suspense fallback={<div className="workspace-map-surface" role="region" aria-label="Map" />}>
+    <ViewerMapSurface {...options} />
+  </Suspense>
+);
 
 export function ViewerApplication({
   routeIntent,
@@ -55,6 +66,7 @@ export function ViewerApplication({
   renderMap = renderDocumentMap,
   onFork = (system) => void forkIntoEditor(system),
   onCopyLink = copyCurrentLink,
+  resolveFeatureDetails,
 }: ViewerApplicationProps) {
   const [viewStore] = useState(() => createMapViewStore(createDocumentPresentationState()));
   const [selection] = useState(() => createSelectionController());
@@ -74,13 +86,7 @@ export function ViewerApplication({
       (next) => {
         if (controller.signal.aborted) return;
         viewStore.replace(next.state);
-        const selectedDetails = next.state.selection
-          ? documentMapFeatureDetails(
-              { status: 'ready', system: next.system },
-              next.state.selection,
-            )
-          : null;
-        selection.select(selectedDetails?.reference);
+        selection.select(next.state.selection);
         setSession(next);
         setStatus('ready');
       },
@@ -107,6 +113,7 @@ export function ViewerApplication({
       onMapError={() => setMapFailed(true)}
       onFork={onFork}
       onCopyLink={onCopyLink}
+      resolveFeatureDetails={resolveFeatureDetails}
     />
   );
 }

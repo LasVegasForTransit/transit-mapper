@@ -1,7 +1,12 @@
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import type { MapDefinition, MapViewStore, SelectionController } from '@transitmapper/map';
-import { documentMapFeatureDetails } from '@transitmapper/renderer/driver';
+import type {
+  MapDefinition,
+  MapFeatureDetails,
+  MapViewStore,
+  SelectionController,
+} from '@transitmapper/map/state';
+import type { MapFeatureReferenceV1 } from '@transitmapper/views';
 import { MapWorkspace } from '@transitmapper/workspace';
 import { DOCUMENT_MAP_DEFINITION } from '../editor/document-map-definition';
 import { Icon } from '../ui/Icon';
@@ -19,6 +24,15 @@ export interface ViewerMapRenderOptions {
 }
 
 export type ViewerMapRenderer = (options: ViewerMapRenderOptions) => ReactNode;
+export type ViewerFeatureDetailsResolver = (
+  system: TransitSystem,
+  reference: MapFeatureReferenceV1,
+) => Promise<MapFeatureDetails | null>;
+
+const resolveDocumentFeatureDetails: ViewerFeatureDetailsResolver = async (system, reference) => {
+  const { documentMapFeatureDetails } = await import('./document-feature-details');
+  return documentMapFeatureDetails({ status: 'ready', system }, reference);
+};
 
 export interface ViewerWorkspaceProps {
   status: ViewerStatus;
@@ -30,6 +44,7 @@ export interface ViewerWorkspaceProps {
   onMapError: (error: unknown) => void;
   onFork: (system: TransitSystem) => void;
   onCopyLink: () => void;
+  resolveFeatureDetails?: ViewerFeatureDetailsResolver;
 }
 
 function useViewSnapshot(store: MapViewStore) {
@@ -38,6 +53,35 @@ function useViewSnapshot(store: MapViewStore) {
     () => store.getSnapshot(),
     () => store.getSnapshot(),
   );
+}
+
+function useSelectedFeatureDetails(
+  system: TransitSystem | null,
+  selection: SelectionController,
+  resolveFeatureDetails: ViewerFeatureDetailsResolver,
+): MapFeatureDetails | null {
+  const reference = useSyncExternalStore(
+    (listener) => selection.subscribe(listener),
+    () => selection.getSnapshot(),
+    () => selection.getSnapshot(),
+  );
+  const [details, setDetails] = useState<MapFeatureDetails | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDetails(null);
+    if (system === null || reference === undefined) return;
+    void resolveFeatureDetails(system, reference).then((resolved) => {
+      if (cancelled) return;
+      setDetails(resolved);
+      if (resolved === null) selection.select(undefined);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [reference, resolveFeatureDetails, selection, system]);
+
+  return details;
 }
 
 interface RepresentationControlsProps {
@@ -205,18 +249,11 @@ export function ViewerWorkspace({
   onMapError,
   onFork,
   onCopyLink,
+  resolveFeatureDetails = resolveDocumentFeatureDetails,
 }: ViewerWorkspaceProps) {
   const [chromeHidden, setChromeHidden] = useState(false);
   const view = useViewSnapshot(viewStore);
-  const selectedReference = useSyncExternalStore(
-    (listener) => selection.subscribe(listener),
-    () => selection.getSnapshot(),
-    () => selection.getSnapshot(),
-  );
-  const details =
-    system && selectedReference
-      ? documentMapFeatureDetails({ status: 'ready', system }, selectedReference)
-      : null;
+  const details = useSelectedFeatureDetails(system, selection, resolveFeatureDetails);
   const selectedRepresentation = DOCUMENT_MAP_DEFINITION.representations.find(
     (candidate) => candidate.id === view.representationId,
   );

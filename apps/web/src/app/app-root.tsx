@@ -1,20 +1,9 @@
-import {
-  Component,
-  lazy,
-  Suspense,
-  useMemo,
-  type ComponentType,
-  type ErrorInfo,
-  type ReactNode,
-} from 'react';
-import { parseRouteIntent, type RouteIntent } from './route-intent';
+import { Component, lazy, Suspense, useMemo, type ErrorInfo, type ReactNode } from 'react';
+import { parseRouteIntent } from './route-intent';
+import type { RouteHostLoader } from './route-host';
 import './app-root.css';
 
-export interface RouteHostProps {
-  routeIntent: RouteIntent;
-}
-
-export type RouteHostLoader = () => Promise<{ default: ComponentType<RouteHostProps> }>;
+export type { RouteHostLoader, RouteHostProps } from './route-host';
 
 export interface AppRootProps {
   pathname?: string;

@@ -39,6 +39,14 @@ describe('bundle budgets', () => {
     ).toContainEqual(expect.objectContaining({ entry: 'main', encoding: 'gzip' }));
   });
 
+  it('gives the full viewer its own strict first-load ceiling', () => {
+    expect(BUNDLE_BUDGETS.find((budget) => budget.entry === 'viewer')).toEqual({
+      entry: 'viewer',
+      maximumGzipBytes: 307_200,
+      maximumBrotliBytes: 256_000,
+    });
+  });
+
   it('gates delivered bytes without treating raw module size as a product ceiling', () => {
     const sizes: BundleEntrySize[] = [
       { entry: 'main', rawBytes: 99_999, gzipBytes: 499, brotliBytes: 399 },
