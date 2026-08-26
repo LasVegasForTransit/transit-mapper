@@ -228,4 +228,43 @@ describe('published View API', () => {
     ).toBe(204);
     expect((await call(new Request(url))).status).toBe(404);
   });
+
+  it('publishes oEmbed metadata that opens the named View embed', async () => {
+    const sharedSystemId = await createSharedSystem();
+    const created = await createView(sharedSystemId, 'Buses across the valley');
+    const target = encodeURIComponent(`https://map.lasvegasfortransit.org/v/${created.view.id}`);
+
+    const response = await call(
+      new Request(`https://example.com/api/oembed?url=${target}&format=json`),
+    );
+    expect(response.status).toBe(200);
+    const payload: unknown = await response.json();
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      !('title' in payload) ||
+      !('thumbnail_url' in payload) ||
+      !('html' in payload)
+    ) {
+      throw new TypeError('Expected an oEmbed response object.');
+    }
+    expect(payload.title).toBe('Buses across the valley');
+    expect(payload.thumbnail_url).toBe(
+      `https://map.lasvegasfortransit.org/s/${sharedSystemId}/preview.png`,
+    );
+    expect(payload.html).toContain(
+      `src="https://map.lasvegasfortransit.org/embed/${created.view.id}"`,
+    );
+  });
+
+  it('allows framing only for the named View embed route', async () => {
+    const created = await createView(await createSharedSystem());
+
+    const embed = await call(new Request(`https://example.com/embed/${created.view.id}`));
+    expect(embed.headers.get('content-security-policy')).toContain('frame-ancestors *');
+    expect(embed.headers.has('x-frame-options')).toBe(false);
+
+    const viewer = await call(new Request(`https://example.com/v/${created.view.id}`));
+    expect(viewer.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+  });
 });

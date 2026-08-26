@@ -37,7 +37,7 @@ const WEB_APP_MANIFEST_PATH = resolve(DIST_DIRECTORY, 'manifest.json');
 const SERVICE_WORKER_PATH = resolve(DIST_DIRECTORY, 'sw.js');
 const ADAPTIVE_MANIFEST_PATH = resolve(DIST_DIRECTORY, 'adaptive-assets.json');
 const REPORT_PATH = resolve(DIST_DIRECTORY, 'performance/pwa-report.json');
-const NAVIGATION_FALLBACK_DENYLIST = ['/api/', '/s/', '/e/'] as const;
+const NAVIGATION_FALLBACK_DENYLIST = ['/api/', '/s/', '/e/', '/v/', '/embed/'] as const;
 
 function precacheUrls(serviceWorker: string): string[] {
   return [...serviceWorker.matchAll(/\burl:"([^"]+)"/g)].map((match) => match[1]).sort();

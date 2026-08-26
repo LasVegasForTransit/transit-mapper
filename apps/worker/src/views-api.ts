@@ -55,6 +55,11 @@ interface ActiveView {
   state: MapViewStateV1;
 }
 
+export interface PublishedViewResource {
+  response: GetViewResponse;
+  expiresAt: number | null;
+}
+
 interface BoundedBody {
   raw: string;
 }
@@ -100,6 +105,31 @@ async function getActiveView(db: D1Database, id: string): Promise<ActiveView | n
     await db.prepare('DELETE FROM views WHERE id = ?').bind(id).run();
     return null;
   }
+}
+
+export async function readPublishedViewResource(
+  db: D1Database,
+  id: string,
+): Promise<PublishedViewResource | null> {
+  const active = await getActiveView(db, id);
+  return active ? { response: viewResponse(active), expiresAt: active.row.expires_at } : null;
+}
+
+export function touchPublishedViewResource(
+  db: D1Database,
+  resource: PublishedViewResource,
+): Promise<unknown> | null {
+  const now = Date.now();
+  if (!shouldTouchAnonymousExpiry(resource.expiresAt, now)) return null;
+  return db
+    .prepare('UPDATE views SET expires_at = ? WHERE id = ?')
+    .bind(anonymousExpiry(now), resource.response.view.id)
+    .run()
+    .catch(() => undefined);
+}
+
+export async function deletePublishedViewResource(db: D1Database, id: string): Promise<void> {
+  await db.prepare('DELETE FROM views WHERE id = ?').bind(id).run();
 }
 
 function touchViewExpiry(db: D1Database, view: ActiveView): Promise<unknown> | null {

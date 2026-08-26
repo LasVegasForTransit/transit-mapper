@@ -20,6 +20,11 @@ import {
   sha256Hex,
   shouldTouchAnonymousExpiry,
 } from './anonymous-resource';
+import {
+  deletePublishedViewResource,
+  readPublishedViewResource,
+  touchPublishedViewResource,
+} from './views-api';
 
 type OptionalLocalBinding =
   | 'SHARE_CREATE_LIMITER'
@@ -45,12 +50,15 @@ const EMBED_DEFAULT_HEIGHT = 500;
  *  id-shaped position is someone probing, not a real link. */
 export const SHARE_ID_PATTERN = /^[0-9a-z]{1,32}$/;
 
+export type EmbeddableTarget =
+  { kind: 'shared-system'; id: string } | { kind: 'published-view'; id: string };
+
 /**
  * Pulls the share id out of a share or embed URL, but only for our own
  * origin. Scoping to SITE_URL is what stops this from being an open oEmbed
  * endpoint that will describe (and lend our provider name to) arbitrary URLs.
  */
-export function shareIdFromUrl(target: string, siteUrl: string): string | null {
+export function embeddableTargetFromUrl(target: string, siteUrl: string): EmbeddableTarget | null {
   let url: URL;
   try {
     url = new URL(target);
@@ -59,9 +67,18 @@ export function shareIdFromUrl(target: string, siteUrl: string): string | null {
   }
   if (url.origin !== new URL(siteUrl).origin) return null;
 
-  const match = /^\/(?:s|e)\/([^/]+)\/?$/.exec(url.pathname);
-  const id = match?.[1];
-  return id && SHARE_ID_PATTERN.test(id) ? id : null;
+  const match = /^\/(s|e|v|embed)\/([^/]+)\/?$/.exec(url.pathname);
+  const pathKind = match?.[1];
+  const id = match?.[2];
+  if (!pathKind || !id || !SHARE_ID_PATTERN.test(id)) return null;
+  return pathKind === 's' || pathKind === 'e'
+    ? { kind: 'shared-system', id }
+    : { kind: 'published-view', id };
+}
+
+export function shareIdFromUrl(target: string, siteUrl: string): string | null {
+  const parsed = embeddableTargetFromUrl(target, siteUrl);
+  return parsed?.kind === 'shared-system' ? parsed.id : null;
 }
 
 export function positiveInt(raw: string | undefined): number | null {
@@ -465,6 +482,42 @@ app.get('/api/openstreetmap/ways', (c) =>
 // to learn how to embed it, and pastes back the iframe we hand them.
 // Deliberately unauthenticated and cacheable — it exposes nothing the share
 // page doesn't already.
+interface OEmbedResource {
+  title: string;
+  embedPath: string;
+  previewShareId: string;
+}
+
+async function resolveOEmbedResource(
+  db: D1Database,
+  target: EmbeddableTarget,
+): Promise<OEmbedResource | null> {
+  if (target.kind === 'shared-system') {
+    const share = await getActiveShare(db, target.id);
+    return share
+      ? {
+          title: share.system.name || 'Transit system',
+          embedPath: `/e/${target.id}`,
+          previewShareId: target.id,
+        }
+      : null;
+  }
+
+  const published = await readPublishedViewResource(db, target.id);
+  if (!published) return null;
+  const shareId = published.response.view.map.id;
+  const share = await getActiveShare(db, shareId);
+  if (!share) {
+    await deletePublishedViewResource(db, target.id);
+    return null;
+  }
+  return {
+    title: published.response.view.title,
+    embedPath: `/embed/${target.id}`,
+    previewShareId: shareId,
+  };
+}
+
 app.get('/api/oembed', async (c) => {
   const target = c.req.query('url');
   const format = c.req.query('format') ?? 'json';
@@ -473,11 +526,10 @@ app.get('/api/oembed', async (c) => {
   if (format !== 'json') return c.json({ error: 'Only json format is supported' }, 501);
   if (!target) return c.json({ error: 'Missing url parameter' }, 400);
 
-  const id = shareIdFromUrl(target, c.env.SITE_URL);
-  if (!id) return c.json({ error: 'Not an embeddable TransitMapper URL' }, 404);
-
-  const share = await getActiveShare(c.env.DB, id);
-  if (!share) return c.json({ error: 'Not found' }, 404);
+  const parsedTarget = embeddableTargetFromUrl(target, c.env.SITE_URL);
+  if (!parsedTarget) return c.json({ error: 'Not an embeddable TransitMapper URL' }, 404);
+  const resource = await resolveOEmbedResource(c.env.DB, parsedTarget);
+  if (!resource) return c.json({ error: 'Not found' }, 404);
 
   // maxwidth/maxheight are the consumer telling us how much room it has; we
   // ask for our preferred size and shrink to fit whatever they allow.
@@ -486,22 +538,22 @@ app.get('/api/oembed', async (c) => {
   const width = Math.min(EMBED_DEFAULT_WIDTH, maxWidth ?? EMBED_DEFAULT_WIDTH);
   const height = Math.min(EMBED_DEFAULT_HEIGHT, maxHeight ?? EMBED_DEFAULT_HEIGHT);
 
-  const embedUrl = `${c.env.SITE_URL}/e/${id}`;
+  const embedUrl = `${c.env.SITE_URL}${resource.embedPath}`;
   return c.json(
     {
       version: '1.0',
       type: 'rich',
       provider_name: 'TransitMapper',
       provider_url: c.env.SITE_URL,
-      title: share.system.name || 'Transit system',
+      title: resource.title,
       width,
       height,
-      thumbnail_url: `${c.env.SITE_URL}/s/${id}/preview.png`,
+      thumbnail_url: `${c.env.SITE_URL}/s/${resource.previewShareId}/preview.png`,
       thumbnail_width: PREVIEW_WIDTH,
       thumbnail_height: PREVIEW_HEIGHT,
       // Attribute values are quoted and the id is [A-Za-z0-9] by construction
       // (shortId), so there's nothing here that could break out of the markup.
-      html: `<iframe src="${embedUrl}" width="${width}" height="${height}" style="border:0" loading="lazy" allowfullscreen title="${escapeHtmlAttribute(share.system.name || 'Transit system')}"></iframe>`,
+      html: `<iframe src="${embedUrl}" width="${width}" height="${height}" style="border:0" loading="lazy" allowfullscreen title="${escapeHtmlAttribute(resource.title)}"></iframe>`,
     },
     200,
     { 'cache-control': 'public, max-age=3600' },
@@ -589,6 +641,72 @@ function fetchAppShell(c: Context<{ Bindings: WorkerEnv }>): Promise<Response> {
   return c.env.ASSETS.fetch(new Request(new URL('/', c.req.raw.url), c.req.raw));
 }
 
+interface ReaderPageMetadata {
+  title: string;
+  description: string;
+  canonicalUrl: string;
+  previewUrl: string;
+  oembedUrl: string;
+}
+
+function rewriteReaderPage(asset: Response, metadata: ReaderPageMetadata): Response {
+  return new HTMLRewriter()
+    .on('title', {
+      element(el) {
+        el.setInnerContent(`${metadata.title} · TransitMapper`, { html: false });
+      },
+    })
+    .on('meta[property="og:title"]', {
+      element(el) {
+        el.setAttribute('content', metadata.title);
+      },
+    })
+    .on('meta[property="og:description"]', {
+      element(el) {
+        el.setAttribute('content', metadata.description);
+      },
+    })
+    .on('meta[property="og:url"]', {
+      element(el) {
+        el.setAttribute('content', metadata.canonicalUrl);
+      },
+    })
+    .on('meta[name="twitter:title"]', {
+      element(el) {
+        el.setAttribute('content', metadata.title);
+      },
+    })
+    .on('meta[name="twitter:description"]', {
+      element(el) {
+        el.setAttribute('content', metadata.description);
+      },
+    })
+    .on('meta[property="og:image"]', {
+      element(el) {
+        el.setAttribute('content', metadata.previewUrl);
+      },
+    })
+    .on('meta[name="twitter:image"]', {
+      element(el) {
+        el.setAttribute('content', metadata.previewUrl);
+      },
+    })
+    .on('link[rel="canonical"]', {
+      element(el) {
+        el.setAttribute('href', metadata.canonicalUrl);
+      },
+    })
+    .on('head', {
+      element(el) {
+        el.append(
+          `<link rel="alternate" type="application/json+oembed" href="${metadata.oembedUrl}" title="TransitMapper oEmbed">`,
+          { html: true },
+        );
+      },
+    })
+    .transform(asset);
+}
+
 // Inject real per-share Open Graph/Twitter meta tags into the SPA shell for
 // /s/:id, so pasting a share link into Slack/Discord/iMessage shows the
 // system's actual name instead of the generic site-wide card, and the
@@ -623,76 +741,54 @@ async function handleSharePage(c: Context<{ Bindings: WorkerEnv }>) {
   // sanitization at write time — using HTMLRewriter's element API (rather
   // than string/template concatenation into raw HTML) is what keeps this
   // safe, since it escapes values for their context automatically.
-  const transformed = new HTMLRewriter()
-    .on('title', {
-      element(el) {
-        el.setInnerContent(`${title} · TransitMapper`, { html: false });
-      },
-    })
-    .on('meta[property="og:title"]', {
-      element(el) {
-        el.setAttribute('content', title);
-      },
-    })
-    .on('meta[property="og:description"]', {
-      element(el) {
-        el.setAttribute('content', description);
-      },
-    })
-    .on('meta[property="og:url"]', {
-      element(el) {
-        el.setAttribute('content', shareUrl);
-      },
-    })
-    .on('meta[name="twitter:title"]', {
-      element(el) {
-        el.setAttribute('content', title);
-      },
-    })
-    .on('meta[name="twitter:description"]', {
-      element(el) {
-        el.setAttribute('content', description);
-      },
-    })
-    .on('meta[property="og:image"]', {
-      element(el) {
-        el.setAttribute('content', previewUrl);
-      },
-    })
-    .on('meta[name="twitter:image"]', {
-      element(el) {
-        el.setAttribute('content', previewUrl);
-      },
-    })
-    .on('link[rel="canonical"]', {
-      element(el) {
-        el.setAttribute('href', shareUrl);
-      },
-    })
-    // oEmbed discovery is appended rather than rewritten in place: the shell
-    // carries no placeholder for it, and only share pages are embeddable —
-    // the homepage has nothing to advertise. `oembedUrl` is entirely
-    // Worker-built (SITE_URL plus an encoded id), so there's no user text in
-    // this markup.
-    .on('head', {
-      element(el) {
-        el.append(
-          `<link rel="alternate" type="application/json+oembed" href="${oembedUrl}" title="TransitMapper oEmbed">`,
-          {
-            html: true,
-          },
-        );
-      },
-    })
-    .transform(assetResponse);
+  const transformed = rewriteReaderPage(assetResponse, {
+    title,
+    description,
+    canonicalUrl: shareUrl,
+    previewUrl,
+    oembedUrl,
+  });
 
-  // A share page is the full editor loaded read-only, not an embed surface —
-  // /e/:id is the one thing on this origin that's meant to be framed.
+  // A reader page is a full application surface, not an embed surface.
   return withHtmlSecurityHeaders(transformed, "'none'");
 }
 
 app.get('/s/:id', handleSharePage);
 app.get('/s/:id/', handleSharePage);
+
+async function handlePublishedViewPage(c: Context<{ Bindings: WorkerEnv }>) {
+  const id = c.req.param('id');
+  const assetResponse = await fetchAppShell(c);
+  const published = id ? await readPublishedViewResource(c.env.DB, id) : null;
+  const shareId = published?.response.view.map.id;
+  const share = shareId ? await getActiveShare(c.env.DB, shareId) : null;
+  if (!published || !share) {
+    if (published) await deletePublishedViewResource(c.env.DB, published.response.view.id);
+    const missing = withHtmlSecurityHeaders(assetResponse, "'none'");
+    return new Response(missing.body, { status: 404, headers: missing.headers });
+  }
+
+  const viewTouch = touchPublishedViewResource(c.env.DB, published);
+  if (viewTouch) c.executionCtx.waitUntil(viewTouch);
+  const shareTouch = touchExpiry(c.env.DB, share);
+  if (shareTouch) c.executionCtx.waitUntil(shareTouch);
+
+  const view = published.response.view;
+  const canonicalUrl = `${c.env.SITE_URL}/v/${view.id}`;
+  const transformed = rewriteReaderPage(assetResponse, {
+    title: view.title,
+    description:
+      view.description ??
+      `${share.system.stations.length} stations, ${share.system.services.length} lines`,
+    canonicalUrl,
+    previewUrl: `${c.env.SITE_URL}/s/${share.id}/preview.png`,
+    oembedUrl: `${c.env.SITE_URL}/api/oembed?url=${encodeURIComponent(canonicalUrl)}&format=json`,
+  });
+  return withHtmlSecurityHeaders(transformed, "'none'");
+}
+
+app.get('/v/:id', handlePublishedViewPage);
+app.get('/v/:id/', handlePublishedViewPage);
 
 // The embeddable read-only map. Served from its own built entry (embed.html)
 // rather than the SPA shell, so an iframe in someone's article downloads the
@@ -716,9 +812,11 @@ async function handleEmbedPage(c: Context<{ Bindings: WorkerEnv }>) {
 
 app.get('/e/:id', handleEmbedPage);
 app.get('/e/:id/', handleEmbedPage);
+app.get('/embed/:id', handleEmbedPage);
+app.get('/embed/:id/', handleEmbedPage);
 
-// Only the share and embed prefixes reach the Worker (see run_worker_first in
-// wrangler.toml), so this catches ids under them that matched no earlier
+// Only API, reader, and embed prefixes reach the Worker (see run_worker_first
+// in wrangler.toml), so this catches ids under them that matched no earlier
 // route. Assets and ordinary client routes never get here — they're served
 // straight from the assets binding, which also owns the SPA fallback again.
 //

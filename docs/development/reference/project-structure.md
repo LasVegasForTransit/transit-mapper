@@ -412,6 +412,9 @@ and maintenance. Stored text enters HTML through `HTMLRewriter`.
 unversioned. `views-api.ts` owns public View creation, reads, edits, deletion,
 expiry, and edit-token checks. The main router injects shared-system lookup so
 a View read can keep its map alive without coupling the two route modules.
+The Worker serves metadata-rich reader pages at `/v/:id`, frameable embed
+shells at `/embed/:id`, and oEmbed records for both named Views and legacy
+shared systems. Reader pages reject framing. Embed routes allow it explicitly.
 `gtfs-feeds.ts` owns reviewed metadata and R2 archive lookup.
 
 `POST /api/performance-samples` accepts 8 KiB of same-origin JSON, honors

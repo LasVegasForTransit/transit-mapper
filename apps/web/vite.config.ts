@@ -101,12 +101,12 @@ export default defineConfig({
         // it does this even with no navigateFallback option set at all), and
         // by default it's unrestricted: a NavigationRoute matching every
         // full-page navigation on the origin. Left alone, an offline hit on
-        // /s/:id or /e/:id would silently get served the cached EDITOR shell
+        // /s/:id, /v/:id, /e/:id, or /embed/:id would silently get served the cached editor shell
         // instead of failing the way those Worker-routed paths actually
         // should (see run_worker_first in apps/worker/wrangler.toml). This
-        // isn't an offline-capable-app feature, so those three prefixes are
+        // isn't an offline-capable-app feature, so those five prefixes are
         // excluded from the fallback rather than trying to disable it outright.
-        navigateFallbackDenylist: [/^\/api\//, /^\/s\//, /^\/e\//],
+        navigateFallbackDenylist: [/^\/api\//, /^\/s\//, /^\/e\//, /^\/v\//, /^\/embed\//],
       },
     }),
     adaptiveAssetManifestPlugin({
