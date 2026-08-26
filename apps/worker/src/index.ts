@@ -25,6 +25,13 @@ import {
   readPublishedViewResource,
   touchPublishedViewResource,
 } from './views-api';
+import {
+  embeddableTargetFromUrl,
+  escapeHtmlAttribute,
+  positiveInt,
+  SHARE_ID_PATTERN,
+  type EmbeddableTarget,
+} from './oembed';
 
 type OptionalLocalBinding =
   | 'SHARE_CREATE_LIMITER'
@@ -45,59 +52,6 @@ type WorkerEnv = Omit<Env, OptionalLocalBinding> & Partial<Pick<Env, OptionalLoc
 // without taking over the page.
 const EMBED_DEFAULT_WIDTH = 800;
 const EMBED_DEFAULT_HEIGHT = 500;
-
-/** Share ids are lowercase alphanumerics from shortId; anything else in an
- *  id-shaped position is someone probing, not a real link. */
-export const SHARE_ID_PATTERN = /^[0-9a-z]{1,32}$/;
-
-type EmbeddableTarget =
-  { kind: 'shared-system'; id: string } | { kind: 'published-view'; id: string };
-
-/**
- * Pulls the share id out of a share or embed URL, but only for our own
- * origin. Scoping to SITE_URL is what stops this from being an open oEmbed
- * endpoint that will describe (and lend our provider name to) arbitrary URLs.
- */
-function embeddableTargetFromUrl(target: string, siteUrl: string): EmbeddableTarget | null {
-  let url: URL;
-  try {
-    url = new URL(target);
-  } catch {
-    return null;
-  }
-  if (url.origin !== new URL(siteUrl).origin) return null;
-
-  const match = /^\/(s|e|v|embed)\/([^/]+)\/?$/.exec(url.pathname);
-  const pathKind = match?.[1];
-  const id = match?.[2];
-  if (!pathKind || !id || !SHARE_ID_PATTERN.test(id)) return null;
-  return pathKind === 's' || pathKind === 'e'
-    ? { kind: 'shared-system', id }
-    : { kind: 'published-view', id };
-}
-
-export function shareIdFromUrl(target: string, siteUrl: string): string | null {
-  const parsed = embeddableTargetFromUrl(target, siteUrl);
-  return parsed?.kind === 'shared-system' ? parsed.id : null;
-}
-
-export function positiveInt(raw: string | undefined): number | null {
-  if (!raw) return null;
-  const n = Number(raw);
-  return Number.isInteger(n) && n > 0 ? n : null;
-}
-
-/** For interpolating user-supplied text into the oEmbed `html` payload. That
- *  string is raw markup by definition — HTMLRewriter can't escape it for us
- *  the way it does for the share page's meta tags. */
-export function escapeHtmlAttribute(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 /**
  * Decodes and vets an uploaded preview card. Returns the bytes to store, or

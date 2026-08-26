@@ -13,13 +13,8 @@
 // Run with: pnpm --filter @transitmapper/worker verify
 import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from '@transitmapper/core/render/preview';
 import { MAX_PREVIEW_BYTES } from '@transitmapper/core/render/pngBytes';
-import {
-  acceptedPreview,
-  escapeHtmlAttribute,
-  positiveInt,
-  shareIdFromUrl,
-  SHARE_ID_PATTERN,
-} from '../src/index';
+import { acceptedPreview } from '../src/index';
+import { escapeHtmlAttribute, positiveInt, shareIdFromUrl, SHARE_ID_PATTERN } from '../src/oembed';
 
 let failures = 0;
 function check(name: string, cond: boolean) {
