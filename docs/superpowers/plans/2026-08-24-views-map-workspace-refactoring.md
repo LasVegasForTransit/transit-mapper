@@ -340,7 +340,7 @@ Each phase must deploy independently. Each phase must preserve production behavi
 
 - [x] Record the exact implementation baseline in this plan.
 - [ ] Capture desktop and mobile editor, share, and embed screenshots.
-- [ ] Run the `rtc`, `share`, and `embed` performance scenarios on desktop and mobile through `pnpm perf -- --scenario <id> --profile <profile>`.
+- [ ] Run the `rtc`, `viewer`, and `embed` performance scenarios on desktop and mobile through `pnpm perf -- --scenario <id> --profile <profile>`.
 - [x] Record one populated build and one no-change build, then inspect the Turbo graph for editor-only, renderer-only, and View-contract invalidation. Do not mutate sources or add another build runner to simulate cache behavior.
 - [x] Give the initial runtime packages repository-standard `build` scripts with `dist/**` output. Point production and type resolution at `dist`. Add a `development` export condition that lets Vite development consume `src` without requiring a package watcher.
 - [x] Keep dependency versions in the workspace catalog. Use peer dependencies for React and MapLibre only when the consuming application must provide the runtime singleton.
@@ -546,8 +546,28 @@ CREATE INDEX idx_views_expires_at ON views (expires_at);
 - [x] Add package dependency rules that enforce `views -> map -> workspace` and `core + map -> renderer` without a reverse edge.
 - [x] Update architecture documentation with the implemented ownership and route behavior.
 - [x] Run `CI=1 pnpm check` with bounded package concurrency.
-- [ ] Run desktop and mobile performance audits for `rtc`, `share`, and `embed` against the checked baseline.
+- [ ] Run desktop and mobile performance audits for `rtc`, `viewer`, and `embed` against the checked baseline.
 - [ ] Run production smoke tests for `/`, `/s/:id`, `/v/:id`, `/e/:id`, `/embed/:id`, oEmbed, previews, offline editor startup, and View deletion.
+
+The August 26, 2026 local production-build smoke covered the editor, shared
+reader, named View reader, both embed routes, oEmbed, preview delivery, offline
+editor startup, View state restoration, representation switching, and View
+deletion. It used 1440 by 900 and 390 by 844 browser viewports. The reader and
+embed painted transit content without browser page errors. The smoke run also
+confirmed that an unauthorized View deletion returns 403, an authorized
+deletion returns 204, and the deleted View then returns 404.
+
+The bounded performance pass rebuilt both the public and instrumented
+artifacts. The current viewer entered its measured interaction run, but the
+harness timed out before it produced a sample. The generated bundle report
+records 413,053 gzip bytes for the viewer closure, 412,627 for the embed
+closure, and 619,541 for the main closure. These values miss the launch
+budgets, and this implementation pass does not claim otherwise.
+
+The deployed-production gate remains open. The August 23, 2026 production
+workflow run 32629385997 passed validation, failed its performance jobs, and
+skipped deployment. The new readers have therefore not completed one stable
+production release, and the `readOnly` rollback path must remain until they do.
 
 **Exit gate:** The repository enforces the separation. The extension driver works without editor or document imports. No compatibility flag or reader-owned editor state remains.
 
