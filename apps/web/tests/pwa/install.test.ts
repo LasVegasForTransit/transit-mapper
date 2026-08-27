@@ -28,12 +28,11 @@ function createEnvironment(overrides: Partial<InstallEnvironment> = {}): Install
 }
 
 describe('install controller', () => {
-  it('keeps the contextual banner out of Zen mode and read-only sessions', () => {
+  it('keeps the contextual banner out of Zen mode', () => {
     expect(
       shouldShowInstallBanner({
         eligible: true,
         uiHidden: true,
-        readOnly: false,
         appNoticeShowing: false,
       }),
     ).toBe(false);
@@ -41,28 +40,19 @@ describe('install controller', () => {
       shouldShowInstallBanner({
         eligible: true,
         uiHidden: false,
-        readOnly: true,
-        appNoticeShowing: false,
-      }),
-    ).toBe(false);
-    expect(
-      shouldShowInstallBanner({
-        eligible: true,
-        uiHidden: false,
-        readOnly: false,
         appNoticeShowing: false,
       }),
     ).toBe(true);
   });
 
   it('yields the screen to an application notice, and returns once it clears', () => {
-    const eligible = { eligible: true, uiHidden: false, readOnly: false };
+    const eligible = { eligible: true, uiHidden: false };
 
     expect(shouldShowInstallBanner({ ...eligible, appNoticeShowing: true })).toBe(false);
     expect(shouldShowInstallBanner({ ...eligible, appNoticeShowing: false })).toBe(true);
   });
 
-  it('does not register browser install events for read-only or standalone entries', () => {
+  it('does not register browser install events for disabled or standalone entries', () => {
     expect(shouldRegisterInstallController({ enabled: false, permanentlySuppressed: false })).toBe(
       false,
     );

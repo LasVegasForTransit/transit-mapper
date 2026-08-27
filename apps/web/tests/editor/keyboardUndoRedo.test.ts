@@ -49,12 +49,6 @@ describe('a key press resolves to the command it is bound to, honoring read-only
 
     expect(store.getState().tool).toBe('way');
   });
-
-  it('the way-tool binding is refused in read-only mode', () => {
-    store.commands.document.setSystem(store.getState().system, { readOnly: true });
-
-    expect(resolveBinding(KEY_BINDINGS, evt({ key: 'l' }), ctx)).toBeNull();
-  });
 });
 
 describe('undo and redo walk the edit history, and only genuine edits enter it', () => {
@@ -143,7 +137,7 @@ describe('undo and redo walk the edit history, and only genuine edits enter it',
   it('loading a system (even the same one) resets history', () => {
     store.commands.stops.addStop([-115.2, 36.1]);
 
-    store.commands.document.setSystem(store.getState().system, { readOnly: true });
+    store.commands.document.setSystem(store.getState().system);
 
     expect(store.getState().canUndo).toBe(false);
     expect(store.getState().canRedo).toBe(false);

@@ -7,13 +7,12 @@ import {
 
 function importStore(
   systemId: string,
-  options: { readOnly?: boolean; documentStatus?: 'loading' | 'ready' } = {},
+  options: { documentStatus?: 'loading' | 'ready' } = {},
 ): BackgroundImportStore {
   const system = createEmptySystem();
   system.id = systemId;
   const snapshot = {
     system,
-    readOnly: options.readOnly ?? false,
     documentStatus: options.documentStatus ?? 'ready',
   };
   return {
@@ -28,9 +27,6 @@ describe('background import eligibility', () => {
     expect(backgroundImportBlockMessage(importStore('other'), 'target', 'TriMet')).toContain(
       'different system',
     );
-    expect(
-      backgroundImportBlockMessage(importStore('target', { readOnly: true }), 'target', 'TriMet'),
-    ).toContain('TriMet import stopped because this system is read-only');
     expect(
       backgroundImportBlockMessage(
         importStore('target', { documentStatus: 'loading' }),

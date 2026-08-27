@@ -329,9 +329,6 @@
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
     },
-    "complexity": {
-      "count": 1
-    },
     "max-lines": {
       "count": 1
     },
@@ -377,11 +374,6 @@
     }
   },
   "src/ui/Toolbar.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/ui/TopBar.tsx": {
     "max-lines-per-function": {
       "count": 1
     }

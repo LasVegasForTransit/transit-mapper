@@ -42,7 +42,6 @@ export type SupplementalContent =
 
 export interface SupplementalInput {
   tool: Tool;
-  readOnly: boolean;
   viewMode: DocumentRepresentationId;
   hasSelection: boolean;
 }
@@ -55,14 +54,12 @@ export interface SupplementalInput {
  */
 export function supplementalContentFor({
   tool,
-  readOnly,
   viewMode,
   hasSelection,
 }: SupplementalInput): SupplementalContent {
-  // Diagram and read-only both disable the drawing tools outright (see
-  // Toolbar's `locked`), so an armed tool from before switching there must not
-  // still claim this slot. A selection can still be inspected.
-  if (readOnly || viewMode === 'diagram') {
+  // Diagram disables the drawing tools outright, so an armed tool from before
+  // switching there must not still claim this slot. A selection remains visible.
+  if (viewMode === 'diagram') {
     return hasSelection ? { kind: 'selection' } : { kind: 'none' };
   }
   // An armed drawing tool is what you are doing right now, and outranks
@@ -75,13 +72,11 @@ export function supplementalContentFor({
 
 export function useSupplementalContent(): SupplementalContent {
   const tool = useEditor((s) => s.tool);
-  const readOnly = useEditor((s) => s.readOnly);
   const selection = useEditor((s) => s.selection);
   const multiSelection = useEditor((s) => s.multiSelection);
   const { viewMode } = useDocumentView();
   return supplementalContentFor({
     tool,
-    readOnly,
     viewMode,
     hasSelection: selection !== null || multiSelection.length > 0,
   });

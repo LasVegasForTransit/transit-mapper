@@ -57,8 +57,6 @@ export interface KeyBinding {
 
 const PAN_STEP_PX = 120;
 const ZOOM_STEP = 0.6;
-const editable = (c: KeyContext) => !c.editor.getState().readOnly;
-
 const panBy = (c: KeyContext, dx: number, dy: number) => c.map.panBy([dx, dy], { duration: 0 });
 const zoom = (c: KeyContext, d: number) => c.map.zoomTo(c.map.getZoom() + d, { duration: 130 });
 
@@ -120,7 +118,7 @@ function laneTargetWay(c: KeyContext) {
   return id ? (s.system.ways.find((w) => w.id === id) ?? null) : null;
 }
 
-const hasLaneTarget = (c: KeyContext) => editable(c) && laneTargetWay(c) !== null;
+const hasLaneTarget = (c: KeyContext) => laneTargetWay(c) !== null;
 
 function stepLanes(c: KeyContext, delta: number): void {
   const way = laneTargetWay(c);
@@ -155,49 +153,42 @@ export const KEY_BINDINGS: KeyBinding[] = [
     group: 'Tools',
     keys: ['l'],
     description: 'Draw way / line (last kind)',
-    when: editable,
     run: (c) => c.editor.commands.tools.setTool('way'),
   },
   {
     group: 'Tools',
     keys: ['r'],
     description: 'Draw road',
-    when: editable,
     run: drawFamily('roadway'),
   },
   {
     group: 'Tools',
     keys: ['t'],
     description: 'Draw track',
-    when: editable,
     run: drawFamily('guideway'),
   },
   {
     group: 'Tools',
     keys: ['p'],
     description: 'Draw path',
-    when: editable,
     run: drawFamily('path'),
   },
   {
     group: 'Tools',
     keys: ['s'],
     description: 'Add stop',
-    when: editable,
     run: (c) => c.editor.commands.tools.setTool('stop'),
   },
   {
     group: 'Tools',
     keys: ['f'],
     description: 'Place facility',
-    when: editable,
     run: (c) => c.editor.commands.tools.setTool('facility'),
   },
   {
     group: 'Tools',
     keys: ['b'],
     description: 'Demolish streets',
-    when: editable,
     run: (c) => c.editor.commands.tools.setTool('demolish'),
   },
 
@@ -255,7 +246,6 @@ export const KEY_BINDINGS: KeyBinding[] = [
     group: 'Edit',
     keys: ['Delete', 'Backspace'],
     description: 'Delete selection',
-    when: editable,
     run: deleteSelection,
   },
   {
@@ -264,7 +254,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     description: 'Undo',
     repeatable: true,
     mod: true,
-    when: (c) => editable(c) && c.editor.getState().canUndo,
+    when: (c) => c.editor.getState().canUndo,
     run: (c) => c.editor.commands.history.undo(),
   },
   {
@@ -274,7 +264,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     repeatable: true,
     mod: true,
     shift: true,
-    when: (c) => editable(c) && c.editor.getState().canRedo,
+    when: (c) => c.editor.getState().canRedo,
     run: (c) => c.editor.commands.history.redo(),
   },
   {
@@ -283,7 +273,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     description: 'Redo',
     repeatable: true,
     mod: true,
-    when: (c) => editable(c) && c.editor.getState().canRedo,
+    when: (c) => c.editor.getState().canRedo,
     run: (c) => c.editor.commands.history.redo(),
   },
 
@@ -328,7 +318,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     group: 'Lanes',
     keys: ['o'],
     description: 'Toggle one-way ⇄ two-way (or arm it for the next draw)',
-    when: (c) => editable(c) && (laneTargetWay(c) !== null || c.editor.getState().tool === 'way'),
+    when: (c) => laneTargetWay(c) !== null || c.editor.getState().tool === 'way',
     run: (c) => {
       const s = c.editor.getState();
       const way = laneTargetWay(c);
@@ -352,7 +342,6 @@ export const KEY_BINDINGS: KeyBinding[] = [
     keys: [String(i + 1)],
     description: `Cross-section preset ${i + 1}`,
     when: (c) => {
-      if (!editable(c)) return false;
       const s = c.editor.getState();
       const typeId = laneTargetWay(c)?.typeId ?? (s.tool === 'way' ? s.draftWayTypeId : null);
       return !!typeId && profilePresetsForWayType(typeId).length > i;

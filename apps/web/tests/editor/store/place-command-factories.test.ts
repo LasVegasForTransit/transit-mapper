@@ -18,12 +18,9 @@ interface PlaceHarness {
   readCameraCenter: ReturnType<typeof vi.fn>;
 }
 
-function createHarness(options: { system?: TransitSystem; readOnly?: boolean } = {}): PlaceHarness {
+function createHarness(options: { system?: TransitSystem } = {}): PlaceHarness {
   const runtime = createEditorRuntime();
-  runtime.installDocument(options.system ?? createEmptySystem(1), {
-    tool: 'select',
-    readOnly: options.readOnly,
-  });
+  runtime.installDocument(options.system ?? createEmptySystem(1), { tool: 'select' });
   const readCameraCenter = vi.fn(() => [-115.18, 36.13] as [number, number]);
   return {
     runtime,
@@ -93,21 +90,6 @@ describe('place command factories', () => {
     expect(harness.runtime.read().system.stops).toEqual([
       expect.objectContaining({ id: 'platform', stationId: undefined }),
     ]);
-  });
-
-  it('blocks place content in read-only documents but allows workflow state', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const harness = createHarness({ readOnly: true });
-    const before = harness.runtime.read().system;
-
-    expect(harness.stops.addStop([-115.2, 36.1])).toBeNull();
-    expect(harness.facilities.addFacility('entrance', [-115.2, 36.1])).toBeNull();
-    expect(harness.groups.createGroup([])).toBeNull();
-    harness.groups.startPlacingFacility('group');
-
-    expect(harness.runtime.read().system).toBe(before);
-    expect(harness.runtime.read().placingFacilityForGroupId).toBe('group');
-    expect(harness.runtime.read().tool).toBe('facility');
   });
 
   it('preserves the system reference for missing and idempotent edits', () => {

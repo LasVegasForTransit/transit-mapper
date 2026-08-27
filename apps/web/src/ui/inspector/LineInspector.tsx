@@ -120,7 +120,6 @@ function LineServiceActions({ lineId, services }: { lineId: string; services: Se
 
 export function LineInspector({ id }: { id: string }) {
   const system = useEditor((state) => state.system);
-  const readOnly = useEditor((state) => state.readOnly);
   const commands = useEditorCommands();
   const { setLineName, setLineColor } = commands.services;
   const { addPaletteColor } = commands.tools;
@@ -138,7 +137,6 @@ export function LineInspector({ id }: { id: string }) {
           className="insp-name"
           aria-label="Line name"
           value={line.name}
-          disabled={readOnly}
           onChange={(event) => setLineName(id, event.target.value)}
           onKeyDown={blurOnEnter}
         />
@@ -149,7 +147,6 @@ export function LineInspector({ id }: { id: string }) {
         <ColorField
           value={line.color}
           palette={system.palette}
-          disabled={readOnly}
           onChange={(color) => setLineColor(id, color)}
           onAddToPalette={addPaletteColor}
         />
@@ -175,7 +172,7 @@ export function LineInspector({ id }: { id: string }) {
           ))}
         </div>
 
-        {!readOnly && <LineServiceActions lineId={id} services={services} />}
+        <LineServiceActions lineId={id} services={services} />
       </div>
     </Panel>
   );

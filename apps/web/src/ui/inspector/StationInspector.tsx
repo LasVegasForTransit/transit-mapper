@@ -17,7 +17,6 @@ export function StationInspector({ id }: StationInspectorProps) {
     state.system.stations.find((candidate) => candidate.id === id),
   );
   const system = useEditor((state) => state.system);
-  const readOnly = useEditor((state) => state.readOnly);
   const {
     setStationName,
     deleteStation,
@@ -51,7 +50,6 @@ export function StationInspector({ id }: StationInspectorProps) {
           aria-label="Station name"
           placeholder="Unnamed station"
           value={station.name ?? ''}
-          disabled={readOnly}
           onChange={(event) => setStationName(id, event.target.value)}
           onKeyDown={blurOnEnter}
         />
@@ -74,19 +72,17 @@ export function StationInspector({ id }: StationInspectorProps) {
               >
                 {stop.name?.trim() ? stop.name : 'Unnamed stop'}
               </button>
-              {!readOnly && (
-                <button
-                  className="chip-remove-btn"
-                  aria-label={`Detach ${stop.name?.trim() ? stop.name : 'unnamed stop'}`}
-                  onClick={() => detachStop(stop.id)}
-                >
-                  <Icon name="x" size={14} />
-                </button>
-              )}
+              <button
+                className="chip-remove-btn"
+                aria-label={`Detach ${stop.name?.trim() ? stop.name : 'unnamed stop'}`}
+                onClick={() => detachStop(stop.id)}
+              >
+                <Icon name="x" size={14} />
+              </button>
             </div>
           ))}
         </div>
-        {!readOnly && availableStops.length > 0 && (
+        {availableStops.length > 0 && (
           <div className="insp-row-actions">
             <select
               className="opt-select"
@@ -134,52 +130,44 @@ export function StationInspector({ id }: StationInspectorProps) {
 
         <label className="field-label">Physical boundary</label>
         {!station.footprint ? (
-          !readOnly && (
-            <button className="add-btn" onClick={() => addStationFootprint(id)}>
-              <Icon name="plus" size={17} /> Add footprint
-            </button>
-          )
+          <button className="add-btn" onClick={() => addStationFootprint(id)}>
+            <Icon name="plus" size={17} /> Add footprint
+          </button>
         ) : (
           <>
             <div className="stats">
               <span>{station.footprint.length} corners</span>
               <span>{station.platforms?.length ?? 0} platforms</span>
             </div>
-            {!readOnly && (
-              <div className="insp-row-actions">
-                <button className="add-btn" onClick={() => addPlatform(id)}>
-                  <Icon name="plus" size={17} /> Add platform
-                </button>
-                <button className="danger-btn" onClick={() => deleteStationFootprint(id)}>
-                  Remove footprint
-                </button>
-              </div>
-            )}
+            <div className="insp-row-actions">
+              <button className="add-btn" onClick={() => addPlatform(id)}>
+                <Icon name="plus" size={17} /> Add platform
+              </button>
+              <button className="danger-btn" onClick={() => deleteStationFootprint(id)}>
+                Remove footprint
+              </button>
+            </div>
           </>
         )}
         {(station.platforms ?? []).map((platform, index) => (
           <div key={platform.id} className="svc-chip chip-removable">
             <span className="chip-removable-label">Platform {index + 1}</span>
-            {!readOnly && (
-              <button
-                className="chip-remove-btn"
-                aria-label={`Remove platform ${index + 1}`}
-                onClick={() => deletePlatform(id, platform.id)}
-              >
-                <Icon name="x" size={14} />
-              </button>
-            )}
+            <button
+              className="chip-remove-btn"
+              aria-label={`Remove platform ${index + 1}`}
+              onClick={() => deletePlatform(id, platform.id)}
+            >
+              <Icon name="x" size={14} />
+            </button>
           </div>
         ))}
       </div>
 
-      {!readOnly && (
-        <div className="insp-footer">
-          <button className="danger-btn" onClick={() => deleteStation(id)}>
-            <Icon name="trash" size={18} /> Delete station
-          </button>
-        </div>
-      )}
+      <div className="insp-footer">
+        <button className="danger-btn" onClick={() => deleteStation(id)}>
+          <Icon name="trash" size={18} /> Delete station
+        </button>
+      </div>
     </Panel>
   );
 }

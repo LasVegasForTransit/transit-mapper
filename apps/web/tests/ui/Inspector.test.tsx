@@ -4,7 +4,6 @@ import { supplementalContentFor, type SupplementalInput } from '../../src/ui/Ins
 function content(overrides: Partial<SupplementalInput> = {}) {
   return supplementalContentFor({
     tool: 'select',
-    readOnly: false,
     viewMode: 'network',
     hasSelection: false,
     ...overrides,
@@ -33,13 +32,9 @@ describe('what the supplemental panel shows', () => {
     expect(content({ tool: 'select', hasSelection: true })).toEqual({ kind: 'selection' });
   });
 
-  it('offers no tool options where nothing is editable', () => {
-    // Diagram is a projection and a shared system is immutable, so an armed
-    // tool from before switching there must not still claim the panel.
+  it('offers no tool options in Diagram view', () => {
+    // Diagram is a projection, so an armed tool from before switching there
+    // must not still claim the panel.
     expect(content({ tool: 'way', viewMode: 'diagram' })).toEqual({ kind: 'none' });
-    expect(content({ tool: 'way', readOnly: true })).toEqual({ kind: 'none' });
-    expect(content({ tool: 'select', readOnly: true, hasSelection: true })).toEqual({
-      kind: 'selection',
-    });
   });
 });

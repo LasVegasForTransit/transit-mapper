@@ -75,7 +75,6 @@ export interface EditorState {
   placingFacilityForGroupId: string | null;
   pickingMemberForGroupId: string | null;
   addingServiceDraft: { lineId: string; name: string; modeId: string } | null;
-  readOnly: boolean;
   documentStatus: DocumentStatus;
   canUndo: boolean;
   canRedo: boolean;
@@ -113,7 +112,6 @@ export function createInitialEditorState(documentStatus: DocumentStatus): Editor
     placingFacilityForGroupId: null,
     pickingMemberForGroupId: null,
     addingServiceDraft: null,
-    readOnly: false,
     canUndo: false,
     canRedo: false,
   };

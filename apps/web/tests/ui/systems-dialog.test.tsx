@@ -186,7 +186,7 @@ describe('My systems dialog', () => {
 
     expect(order).toEqual(['flush', 'load']);
     expect(state.setActiveId).toHaveBeenCalledWith(savedSystem.id);
-    expect(state.setSystem).toHaveBeenCalledWith(savedSystem, { readOnly: false });
+    expect(state.setSystem).toHaveBeenCalledWith(savedSystem);
     expect(onClose).toHaveBeenCalledOnce();
   });
 

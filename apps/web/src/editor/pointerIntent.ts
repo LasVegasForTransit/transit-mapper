@@ -107,7 +107,6 @@ export interface PointerIntentInput {
   tool: 'select' | 'lines' | 'way' | 'stop' | 'facility';
   target?: PointerTarget;
   modifiers: ModifierState;
-  readOnly: boolean;
   armed: ArmedInteraction;
   gestureActive: boolean;
   /** Captured on pointer-down. During a drag, modifier changes must not turn
@@ -140,10 +139,10 @@ export function resolvePointerIntent(input: PointerIntentInput): PointerIntent {
   const { modifiers } = input;
   const constraint = input.gestureActive && modifiers.constrain ? 'constrain' : 'none';
 
-  // Diagram coordinates are a projection and shared snapshots are immutable;
-  // neither may feed an edit back into the store. Space still offers camera
-  // pan, but an editable target must state its refusal explicitly.
-  if (input.readOnly || input.view === 'diagram') {
+  // Diagram coordinates are a projection and may not feed an edit back into
+  // the store. Space still offers camera pan, but an editable target must
+  // state its refusal explicitly.
+  if (input.view === 'diagram') {
     if (modifiers.pan || target === 'empty') return intent('pan', 'grab', null, true);
     return intent('refuse-edit', 'not-allowed', null, false);
   }

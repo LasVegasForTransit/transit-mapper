@@ -1,4 +1,4 @@
-import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
+import { useEditorCommands } from '../../editor/EditorProvider';
 import { useSelectionActions } from '../../editor/useSelectionActions';
 import type { MultiSelectItem, Selection } from '../../editor/store';
 import { Icon } from '../Icon';
@@ -53,7 +53,6 @@ interface MultiInspectorProps {
 // Bulk actions only. The registry decides which actions exist, shared with
 // the map action menu, so this surface cannot drift into a second policy.
 function MultiInspector({ items }: MultiInspectorProps) {
-  const readOnly = useEditor((state) => state.readOnly);
   const { clearMultiSelection } = useEditorCommands().selection;
   const { actions, note } = useSelectionActions();
   const counts = new Map<MultiSelectItem['kind'], number>();
@@ -69,12 +68,10 @@ function MultiInspector({ items }: MultiInspectorProps) {
         <span className="insp-name static">{items.length} selected</span>
       </div>
       <div className="insp-kind">{summary}</div>
-      {!readOnly && (
-        <p className="insp-sub">
-          Drag any selected way, station, or facility to move the whole group · Shift-click to add
-          or remove one
-        </p>
-      )}
+      <p className="insp-sub">
+        Drag any selected way, station, or facility to move the whole group · Shift-click to add or
+        remove one
+      </p>
       {note && (
         <p className="insp-sub" style={{ marginBottom: 12 }}>
           {note}
@@ -107,14 +104,13 @@ function MultiInspector({ items }: MultiInspectorProps) {
       >
         Clear selection
       </button>
-      {!readOnly &&
-        actions
-          .filter((action) => action.group === 'destructive')
-          .map((action) => (
-            <button key={action.id} type="button" className="danger-btn" onClick={action.run}>
-              <Icon name="trash" size={18} /> {action.label}
-            </button>
-          ))}
+      {actions
+        .filter((action) => action.group === 'destructive')
+        .map((action) => (
+          <button key={action.id} type="button" className="danger-btn" onClick={action.run}>
+            <Icon name="trash" size={18} /> {action.label}
+          </button>
+        ))}
     </Panel>
   );
 }

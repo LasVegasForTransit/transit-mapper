@@ -176,9 +176,9 @@ export interface AttachInteractionsOptions {
   openShortcuts: () => void;
   toggleUi: () => void;
   attachKeyboard(context: EditorKeyboardContext): () => void;
-  /** True while the Diagram view is active — a schematic, read-only
-   *  projection (see model/diagramLayout.ts). Gated exactly like `readOnly`
-   *  below: pan/zoom still work, nothing else does, since every coordinate
+  /** True while the Diagram view is active — a schematic projection (see
+   *  model/diagramLayout.ts). Pan and zoom still work, but nothing else does,
+   *  since every coordinate
    *  on screen is a distorted stand-in for the real one and must never be
    *  fed back into a store mutation. */
   isDiagramMode: () => boolean;
@@ -677,7 +677,7 @@ export function attachInteractions(
         primaryOperation: 'default',
         cursor: 'crosshair',
         badge: null,
-        allowed: !state.readOnly && !opts.isNetworkMode(),
+        allowed: !opts.isNetworkMode(),
         anchor: 'none',
         constraint: 'none',
       };
@@ -692,7 +692,6 @@ export function attachInteractions(
       tool: state.tool,
       target: pointerTargetAt(e),
       modifiers: modifierOverride ?? modifierState(e.originalEvent),
-      readOnly: state.readOnly,
       armed: activeTerminusSource
         ? activeTerminusSource.purpose === 'return'
           ? 'network-return'
@@ -801,13 +800,7 @@ export function attachInteractions(
         // Way tool, right-click ON an open endpoint: branch a NEW one-way
         // segment off it — the couplet gesture. Inherits the street's
         // cross-section and name; travel runs the direction you now draw.
-        if (
-          st.tool === 'way' &&
-          !st.readOnly &&
-          !opts.isDiagramMode() &&
-          !st.activeWayId &&
-          !st.routeDraft
-        ) {
+        if (st.tool === 'way' && !opts.isDiagramMode() && !st.activeWayId && !st.routeDraft) {
           const hit = nearestOpenEndpoint(st.system.ways, lngLatOf(ev), snapMeters(snapPx));
           if (hit) {
             commands.ways.beginOneWayBranch(hit.wayId, hit.end);
@@ -2023,7 +2016,6 @@ export function attachInteractions(
     clearPreviews();
     if (
       st.tool === 'way' &&
-      !st.readOnly &&
       (pointerIntent.primaryOperation === 'route-service' ||
         pointerIntent.primaryOperation === 'resume-service-and-corridor') &&
       pointerIntent.anchor === 'target'
@@ -2366,7 +2358,7 @@ export function attachInteractions(
       return;
     }
     if (oe.button !== 0) return;
-    if (st.readOnly || st.tool === 'select' || st.tool === 'lines') {
+    if (st.tool === 'select' || st.tool === 'lines') {
       opts.onSelectionIntent?.();
     }
 
@@ -2384,7 +2376,7 @@ export function attachInteractions(
       return;
     }
 
-    if (st.readOnly || opts.isDiagramMode()) {
+    if (opts.isDiagramMode()) {
       // Nothing is editable, but empty-space left-drag still pans — matching
       // the grab cursor and right-drag/space-drag, which already bypass this.
       if (!endpoint && !handle && !physicalHandle && !stop && !facility) startPan(e, false);
@@ -2680,7 +2672,7 @@ export function attachInteractions(
     // MapLibre never fires can't leave this armed for the next one.
     if (suppressClick) return;
     const st = store.getState();
-    if (st.readOnly || opts.isDiagramMode() || spaceHeld) return;
+    if (opts.isDiagramMode() || spaceHeld) return;
     const coord = lngLatOf(e);
 
     // Picking mode: the next stop/facility clicked joins the armed group;
@@ -3090,9 +3082,8 @@ export function attachInteractions(
   }
 
   // Cursor must always match what a press would actually do right now — never
-  // show an affordance the current tool/readOnly state can't back up.
-  const draggable = () =>
-    store.getState().tool === 'select' && !store.getState().readOnly && !opts.isDiagramMode();
+  // show an affordance the current tool and view cannot back up.
+  const draggable = () => store.getState().tool === 'select' && !opts.isDiagramMode();
   // Stations/handles/facilities: click-drag to select/reshape/reposition —
   // "grab" (not "pointer", which reads as "click this link/button") matches
   // the same drag-affordance convention as the map's own pan cursor. Which
@@ -3100,14 +3091,8 @@ export function attachInteractions(
   // always a circle, a facility is always its own catalog pictogram, and a
   // reshape handle is always a plain solid square (see map/layers.ts) — none
   // of them can ever be mistaken for one another.
-  // Only the Select tool's own drag affordance depends on draggable() (grab
-  // to reshape/move) — every drawing tool (way/station/facility) still acts
-  // on a click regardless of what's under the cursor, so its own crosshair
-  // from cursorFor() stays accurate there and must NOT be overridden to
-  // "default". The one real gap this closes: read-only + Select tool used
-  // to keep showing "grab" over a station even though a press there did
-  // nothing (dragging disabled, and it's not empty space either, so the pan
-  // fallback doesn't kick in) — that's the only case that becomes "default".
+  // Only the Select tool's own drag affordance depends on draggable(). Every
+  // drawing tool still acts on a click regardless of the feature underneath.
   // A way's open end shares this cursor too — a plain drag there reshapes
   // it in place now, same verb as any other handle. Extending is the
   // Ctrl/Cmd-modified action (see startExtendDrag) and, like this app's
@@ -3227,7 +3212,6 @@ export function attachInteractions(
 
   let lastTool = store.getState().tool;
   let lastActive = store.getState().activeWayId;
-  let lastReadOnly = store.getState().readOnly;
   let lastSystemId = store.getState().system.id;
   registerExtension(() =>
     store.subscribe((s) => {
@@ -3253,13 +3237,6 @@ export function attachInteractions(
           activeExtendAtStart = false;
           clearPointerIntent();
         }
-      }
-      if (s.readOnly !== lastReadOnly) {
-        lastReadOnly = s.readOnly;
-        // A transition to a shared snapshot invalidates a previously editable
-        // hover even when the active tool happened to remain Select.
-        clearPointerIntent();
-        canvas.style.cursor = cursorFor();
       }
     }),
   );

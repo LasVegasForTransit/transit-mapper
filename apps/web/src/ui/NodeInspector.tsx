@@ -128,7 +128,6 @@ export function NodeInspector({ id }: NodeInspectorProps) {
   const node = useEditor((s) => s.system.nodes.find((n) => n.id === id));
   const ways = useEditor((s) => s.system.ways);
   const namedWays = useEditor((s) => s.system.namedWays);
-  const readOnly = useEditor((s) => s.readOnly);
   const turnRestrictions = useEditor((s) => s.system.turnRestrictions);
   const approachControls = useEditor((s) => s.system.approachControls);
   const {
@@ -272,12 +271,10 @@ export function NodeInspector({ id }: NodeInspectorProps) {
 
       {tab === 'turns' && (
         <div className="insp-section" role="tabpanel">
-          {!readOnly && (
-            <p className="insp-sub">
-              Lanes are listed left-to-right as a driver on that approach sees them — toggle where
-              each may go
-            </p>
-          )}
+          <p className="insp-sub">
+            Lanes are listed left-to-right as a driver on that approach sees them — toggle where
+            each may go
+          </p>
           {approaches.map(({ arm, way, inbound }) => (
             <div key={`${arm.wayId}:${arm.end}`} className="node-approach">
               <div className="node-approach-name">{wayLabel(way)}</div>
@@ -300,7 +297,7 @@ export function NodeInspector({ id }: NodeInspectorProps) {
                             key={turn}
                             className={`chip ${active ? 'active' : ''}`}
                             aria-pressed={active}
-                            disabled={readOnly || targets.length === 0}
+                            disabled={targets.length === 0}
                             title={
                               restriction && targets.length === 0
                                 ? `${turn} turn restricted`
@@ -320,44 +317,41 @@ export function NodeInspector({ id }: NodeInspectorProps) {
                           </button>
                         );
                       })}
-                      {!readOnly && (
-                        <button
-                          type="button"
-                          className={`ghost-btn icon-btn ${restriction ? 'active' : ''}`}
-                          aria-pressed={!!restriction}
-                          title={
-                            restriction
-                              ? 'Turn-restricted — click to unrestrict'
-                              : 'Lock this lane to only its currently-toggled turns'
+                      <button
+                        type="button"
+                        className={`ghost-btn icon-btn ${restriction ? 'active' : ''}`}
+                        aria-pressed={!!restriction}
+                        title={
+                          restriction
+                            ? 'Turn-restricted — click to unrestrict'
+                            : 'Lock this lane to only its currently-toggled turns'
+                        }
+                        onClick={() => {
+                          if (restriction) {
+                            setTurnRestriction(arm.wayId, lane.id, undefined);
+                          } else {
+                            const allowed = [
+                              ...new Set(
+                                connectors
+                                  .filter(
+                                    (c) => c.from.wayId === arm.wayId && c.from.laneId === lane.id,
+                                  )
+                                  .map((c) => c.to.wayId),
+                              ),
+                            ];
+                            setTurnRestriction(arm.wayId, lane.id, allowed);
                           }
-                          onClick={() => {
-                            if (restriction) {
-                              setTurnRestriction(arm.wayId, lane.id, undefined);
-                            } else {
-                              const allowed = [
-                                ...new Set(
-                                  connectors
-                                    .filter(
-                                      (c) =>
-                                        c.from.wayId === arm.wayId && c.from.laneId === lane.id,
-                                    )
-                                    .map((c) => c.to.wayId),
-                                ),
-                              ];
-                              setTurnRestriction(arm.wayId, lane.id, allowed);
-                            }
-                          }}
-                        >
-                          <Icon name="lock" size={12} />
-                        </button>
-                      )}
+                        }}
+                      >
+                        <Icon name="lock" size={12} />
+                      </button>
                     </span>
                   </div>
                 );
               })}
             </div>
           ))}
-          {!readOnly && node.connectors && (
+          {node.connectors && (
             <div className="insp-actions">
               <button
                 type="button"
@@ -382,7 +376,6 @@ export function NodeInspector({ id }: NodeInspectorProps) {
                 key={value}
                 className={`chip ${control === value ? 'active' : ''}`}
                 aria-pressed={control === value}
-                disabled={readOnly}
                 onClick={() =>
                   setNodeControl(node.id, value === 'uncontrolled' ? undefined : value)
                 }
@@ -415,14 +408,13 @@ export function NodeInspector({ id }: NodeInspectorProps) {
                           key={value}
                           className={`chip ${effective === value ? 'active' : ''}`}
                           aria-pressed={effective === value}
-                          disabled={readOnly}
                           onClick={() => setApproachControl(arm.wayId, arm.end, value)}
                         >
                           {label}
                         </button>
                       ))}
                     </div>
-                    {!readOnly && override !== undefined && (
+                    {override !== undefined && (
                       <button
                         type="button"
                         className="ghost-btn"
@@ -453,7 +445,7 @@ export function NodeInspector({ id }: NodeInspectorProps) {
               </p>
             )
           )}
-          {!readOnly && !mixedTypes && (
+          {!mixedTypes && (
             <p className="insp-sub">
               Disconnecting a way pulls its end clear of the others — the rest of the junction stays
               as it is.
@@ -466,19 +458,17 @@ export function NodeInspector({ id }: NodeInspectorProps) {
                   {wayIdentity(way)} · {wayType(way.typeId).label}
                 </span>
                 <span className="node-lane-label">{approachOf(node, way)}</span>
-                {!readOnly && (
-                  <button
-                    type="button"
-                    className="chip-remove-btn"
-                    aria-label={`Disconnect the ${approachOf(node, way) ?? ''} ${wayIdentity(
-                      way,
-                    )} arm from this junction`}
-                    title="Disconnect from this junction"
-                    onClick={() => disconnectNodeWay(node.id, way.id)}
-                  >
-                    <Icon name="x" size={14} />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="chip-remove-btn"
+                  aria-label={`Disconnect the ${approachOf(node, way) ?? ''} ${wayIdentity(
+                    way,
+                  )} arm from this junction`}
+                  title="Disconnect from this junction"
+                  onClick={() => disconnectNodeWay(node.id, way.id)}
+                >
+                  <Icon name="x" size={14} />
+                </button>
               </div>
             ))}
           </div>

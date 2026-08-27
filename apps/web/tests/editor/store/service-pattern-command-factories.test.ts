@@ -24,18 +24,12 @@ describe('service pattern command factories', () => {
     const position = patternPositionAt([road], system.services[0].path, 'outbound', 0, 0.5);
     if (!position) throw new Error('Expected a position on the fixture pattern');
 
-    for (const block of ['loading', 'read-only'] as const) {
-      const runtime = createEditorRuntime(
-        block === 'loading' ? { documentStatus: 'loading', initialSystem: system } : {},
-      );
-      if (block === 'read-only')
-        runtime.installDocument(system, { tool: 'select', readOnly: true });
-      const commands = createServicePatternCommands(runtime);
+    const runtime = createEditorRuntime({ documentStatus: 'loading', initialSystem: system });
+    const commands = createServicePatternCommands(runtime);
 
-      expect(commands.divideServiceAt('service', position)).toBeNull();
-      expect(commands.splitServiceAt('service', 'service', 'road', 0.5)).toBeNull();
-      expect(runtime.read().system).toBe(system);
-    }
+    expect(commands.divideServiceAt('service', position)).toBeNull();
+    expect(commands.splitServiceAt('service', 'service', 'road', 0.5)).toBeNull();
+    expect(runtime.read().system).toBe(system);
   });
 
   it('preserves the system reference for missing and idempotent edits', () => {

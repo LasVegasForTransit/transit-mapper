@@ -2,7 +2,6 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 
 interface BackgroundImportSnapshot {
   system: TransitSystem;
-  readOnly: boolean;
   documentStatus: 'loading' | 'ready';
 }
 
@@ -24,7 +23,6 @@ export function backgroundImportBlockMessage(
   if (state.system.id !== targetSystemId) {
     return `${feedName} import stopped because a different system was opened.`;
   }
-  if (state.readOnly) return `${feedName} import stopped because this system is read-only.`;
   if (state.documentStatus === 'loading') {
     return `${feedName} import stopped because the system is still loading.`;
   }

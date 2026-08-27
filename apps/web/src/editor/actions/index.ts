@@ -17,22 +17,18 @@ import { wayActionProvider } from './wayActions';
 /**
  * Build the registry for one editor store.
  *
- * Read-only mode is enforced here rather than inside each provider: every
- * action offered by any provider mutates the system, so one wrapper is both
- * shorter and impossible to forget when the next provider is written.
+ * Every provider is editor-only. Read-only readers use their own selection
+ * controller and never construct this registry.
  */
 export function createSelectionActions(store: SelectionActionStore): SelectionActionRegistry {
   const registry = createSelectionActionRegistry();
   const isTerminusMenu = (ctx: Parameters<ReturnType<typeof serviceActionProvider>>[0]) =>
     Boolean(ctx.serviceHit?.terminusSide);
-  const whenEditable =
-    (provider: ReturnType<typeof wayActionProvider>) => (ctx: Parameters<typeof provider>[0]) =>
-      store.getState().readOnly ? [] : provider(ctx);
-  const wayActions = whenEditable(wayActionProvider(store));
-  const serviceActions = whenEditable(serviceActionProvider(store));
-  const servicePointActions = whenEditable(servicePointActionProvider(store));
-  const wayPointActions = whenEditable(wayPointActionProvider(store));
-  const commonActions = whenEditable(commonActionProvider(store));
+  const wayActions = wayActionProvider(store);
+  const serviceActions = serviceActionProvider(store);
+  const servicePointActions = servicePointActionProvider(store);
+  const wayPointActions = wayPointActionProvider(store);
+  const commonActions = commonActionProvider(store);
 
   registry.register(wayActions);
   registry.register(serviceActions);

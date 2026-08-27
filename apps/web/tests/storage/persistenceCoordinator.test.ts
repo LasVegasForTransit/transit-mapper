@@ -11,8 +11,8 @@ class FakeStore implements PersistenceStore {
   private snapshot: PersistenceSnapshot;
   private listeners = new Set<(next: PersistenceSnapshot, previous: PersistenceSnapshot) => void>();
 
-  constructor(system: TransitSystem, readOnly = false) {
-    this.snapshot = { system, readOnly };
+  constructor(system: TransitSystem) {
+    this.snapshot = { system };
   }
 
   getState(): PersistenceSnapshot {
@@ -117,7 +117,7 @@ describe('persistence coordinator', () => {
     const harness = setup();
     const edited = { ...harness.system, name: 'Frequent network' };
 
-    harness.store.replace({ system: edited, readOnly: false });
+    harness.store.replace({ system: edited });
     harness.moveCamera();
     await harness.flushTimer();
 
@@ -143,7 +143,6 @@ describe('persistence coordinator', () => {
     const harness = setup();
     harness.store.replace({
       system: { ...harness.system, name: 'Last edit' },
-      readOnly: false,
     });
 
     harness.pageHide();
@@ -157,7 +156,6 @@ describe('persistence coordinator', () => {
     const harness = setup();
     harness.store.replace({
       system: { ...harness.system, name: 'Hidden-tab edit' },
-      readOnly: false,
     });
 
     harness.hidePage();
@@ -182,7 +180,6 @@ describe('persistence coordinator', () => {
     });
     harness.store.replace({
       system: { ...harness.system, name: 'Immediate close' },
-      readOnly: false,
     });
 
     harness.pageHide();
@@ -203,7 +200,6 @@ describe('persistence coordinator', () => {
     });
     harness.store.replace({
       system: { ...harness.system, name: 'In-flight close' },
-      readOnly: false,
     });
     harness.fireTimer();
     await Promise.resolve();
@@ -222,7 +218,6 @@ describe('persistence coordinator', () => {
     const harness = setup();
     harness.store.replace({
       system: { ...harness.system, name: 'One emergency copy' },
-      readOnly: false,
     });
 
     harness.hidePage();
@@ -240,7 +235,6 @@ describe('persistence coordinator', () => {
     });
     harness.store.replace({
       system: { ...harness.system, name: 'Retry this recovery copy' },
-      readOnly: false,
     });
 
     harness.hidePage();
@@ -254,9 +248,9 @@ describe('persistence coordinator', () => {
     const harness = setup();
     const edited = { ...harness.system, name: 'Unsaved old document' };
     const next = createEmptySystem();
-    harness.store.replace({ system: edited, readOnly: false });
+    harness.store.replace({ system: edited });
 
-    harness.store.replace({ system: next, readOnly: false });
+    harness.store.replace({ system: next });
 
     await harness.coordinator.flush();
     expect(harness.save).toHaveBeenCalledTimes(2);
@@ -279,10 +273,10 @@ describe('persistence coordinator', () => {
     });
     const edited = { ...harness.system, name: 'Unsaved first document' };
     const next = { ...createEmptySystem(), name: 'Unsaved second document' };
-    harness.store.replace({ system: edited, readOnly: false });
+    harness.store.replace({ system: edited });
     harness.fireTimer();
     await Promise.resolve();
-    harness.store.replace({ system: next, readOnly: false });
+    harness.store.replace({ system: next });
 
     harness.hidePage();
 
@@ -301,12 +295,11 @@ describe('persistence coordinator', () => {
     });
     harness.store.replace({
       system: { ...harness.system, name: 'Failed first document' },
-      readOnly: false,
     });
     await harness.coordinator.flush();
 
     const next = { ...createEmptySystem(), name: 'Successfully saved document' };
-    harness.store.replace({ system: next, readOnly: false });
+    harness.store.replace({ system: next });
     await harness.coordinator.flush();
 
     expect(harness.report).toHaveBeenLastCalledWith('unavailable');
@@ -331,7 +324,6 @@ describe('persistence coordinator', () => {
     });
     harness.store.replace({
       system: { ...harness.system, name: 'Deleted after failed autosave' },
-      readOnly: false,
     });
     await harness.coordinator.flush();
     expect(harness.report).toHaveBeenLastCalledWith('unavailable');
@@ -347,7 +339,6 @@ describe('persistence coordinator', () => {
     const harness = setup();
     harness.store.replace({
       system: { ...harness.system, name: 'Pending at detach' },
-      readOnly: false,
     });
 
     harness.coordinator.detach();
@@ -355,18 +346,6 @@ describe('persistence coordinator', () => {
 
     expect(harness.save).toHaveBeenCalledTimes(1);
     expect(harness.save.mock.calls[0][0].name).toBe('Pending at detach');
-  });
-
-  it('never saves a read-only shared system', async () => {
-    const harness = setup();
-    harness.store.replace({
-      system: { ...harness.system, name: 'Shared' },
-      readOnly: true,
-    });
-    harness.moveCamera();
-    await harness.flushTimer();
-
-    expect(harness.save).not.toHaveBeenCalled();
   });
 
   it('coalesces snapshots queued behind an in-flight save to the latest edit', async () => {
@@ -379,7 +358,6 @@ describe('persistence coordinator', () => {
     });
     harness.store.replace({
       system: { ...harness.system, name: 'First' },
-      readOnly: false,
     });
     harness.fireTimer();
     await Promise.resolve();
@@ -387,12 +365,10 @@ describe('persistence coordinator', () => {
 
     harness.store.replace({
       system: { ...harness.system, name: 'Second' },
-      readOnly: false,
     });
     harness.fireTimer();
     harness.store.replace({
       system: { ...harness.system, name: 'Third' },
-      readOnly: false,
     });
     harness.fireTimer();
     expect(harness.save).toHaveBeenCalledTimes(1);
@@ -419,7 +395,6 @@ describe('persistence coordinator', () => {
     });
     harness.store.replace({
       system: { ...harness.system, name: 'First' },
-      readOnly: false,
     });
     harness.fireTimer();
     await Promise.resolve();
@@ -429,7 +404,6 @@ describe('persistence coordinator', () => {
     queueMicrotask(() => {
       harness.store.replace({
         system: { ...harness.system, name: 'Queued at boundary' },
-        readOnly: false,
       });
       boundaryFlush = harness.coordinator.flush();
     });

@@ -18,7 +18,6 @@ interface StopRelationshipsProps {
   stop: Stop;
   system: TransitSystem;
   served: Service[];
-  readOnly: boolean;
   attachStop: (stationId: string, stopId: string) => void;
   detachStop: (stopId: string) => void;
   selectCall: (serviceId: string, stopId: string) => void;
@@ -29,7 +28,6 @@ function StopRelationships({
   stop,
   system,
   served,
-  readOnly,
   attachStop,
   detachStop,
   selectCall,
@@ -46,7 +44,6 @@ function StopRelationships({
         id="stop-station"
         className="opt-select"
         value={stop.stationId ?? ''}
-        disabled={readOnly}
         onChange={(event) =>
           event.target.value ? attachStop(event.target.value, id) : detachStop(id)
         }
@@ -78,7 +75,6 @@ function StopRelationships({
 interface StopSettingsProps {
   id: string;
   stop: Stop;
-  readOnly: boolean;
   setDwell: (id: string, seconds: number | undefined) => void;
   setMajor: (id: string, major: boolean) => void;
 }
@@ -89,7 +85,6 @@ interface StopHeaderProps {
   system: TransitSystem;
   served: Service[];
   stationName: string;
-  readOnly: boolean;
   inputRef: RefObject<HTMLInputElement>;
   setName: (id: string, name: string) => void;
   suggestName: (id: string) => void;
@@ -101,7 +96,6 @@ function StopHeader({
   system,
   served,
   stationName,
-  readOnly,
   inputRef,
   setName,
   suggestName,
@@ -123,11 +117,10 @@ function StopHeader({
           aria-label="Stop name"
           placeholder="Unnamed stop"
           value={stop.name ?? ''}
-          disabled={readOnly}
           onChange={(event) => setName(id, event.target.value)}
           onKeyDown={blurOnEnter}
         />
-        {!readOnly && !stop.name && (
+        {!stop.name && (
           <IconButton
             icon="redo"
             size={15}
@@ -141,7 +134,7 @@ function StopHeader({
   );
 }
 
-function StopSettings({ id, stop, readOnly, setDwell, setMajor }: StopSettingsProps) {
+function StopSettings({ id, stop, setDwell, setMajor }: StopSettingsProps) {
   return (
     <>
       <label className="field-label" htmlFor="dwell-input">
@@ -156,7 +149,6 @@ function StopSettings({ id, stop, readOnly, setDwell, setMajor }: StopSettingsPr
           className="freq-input"
           aria-label="Dwell time in seconds"
           value={stop.dwellSeconds ?? ''}
-          disabled={readOnly}
           placeholder="20 (default)"
           onChange={(event) =>
             setDwell(
@@ -174,7 +166,6 @@ function StopSettings({ id, stop, readOnly, setDwell, setMajor }: StopSettingsPr
         <input
           type="checkbox"
           checked={stop.majorStop === true}
-          disabled={readOnly}
           onChange={(event) => setMajor(id, event.target.checked)}
         />
         Major stop
@@ -189,7 +180,6 @@ function StopSettings({ id, stop, readOnly, setDwell, setMajor }: StopSettingsPr
 export function StopInspector({ id }: StopInspectorProps) {
   const stop = useEditor((state) => state.system.stops.find((candidate) => candidate.id === id));
   const system = useEditor((state) => state.system);
-  const readOnly = useEditor((state) => state.readOnly);
   const focusNameToken = useEditor((state) => state.focusNameToken);
   const focusNameStopId = useEditor((state) => state.focusNameStopId);
   const {
@@ -205,11 +195,11 @@ export function StopInspector({ id }: StopInspectorProps) {
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (focusNameStopId !== id || readOnly) return;
+    if (focusNameStopId !== id) return;
     nameInputRef.current?.focus();
     nameInputRef.current?.select();
     consumeFocusName(id);
-  }, [consumeFocusName, focusNameStopId, focusNameToken, id, readOnly]);
+  }, [consumeFocusName, focusNameStopId, focusNameToken, id]);
 
   if (!stop) return <EmptyInspector />;
   const served = servicesAtStop(system.ways, system.services, stop);
@@ -225,7 +215,6 @@ export function StopInspector({ id }: StopInspectorProps) {
         system={system}
         served={served}
         stationName={station?.name ?? (station ? 'Unnamed station' : 'standalone boarding point')}
-        readOnly={readOnly}
         inputRef={nameInputRef}
         setName={setStopName}
         suggestName={suggestStopName}
@@ -237,7 +226,6 @@ export function StopInspector({ id }: StopInspectorProps) {
           stop={stop}
           system={system}
           served={served}
-          readOnly={readOnly}
           attachStop={attachStop}
           detachStop={detachStop}
           selectCall={(serviceId, stopId) =>
@@ -247,19 +235,16 @@ export function StopInspector({ id }: StopInspectorProps) {
         <StopSettings
           id={id}
           stop={stop}
-          readOnly={readOnly}
           setDwell={setStopDwellSeconds}
           setMajor={setStopMajorStop}
         />
       </div>
 
-      {!readOnly && (
-        <div className="insp-footer">
-          <button className="danger-btn" onClick={() => deleteStop(id)}>
-            <Icon name="trash" size={18} /> Delete stop
-          </button>
-        </div>
-      )}
+      <div className="insp-footer">
+        <button className="danger-btn" onClick={() => deleteStop(id)}>
+          <Icon name="trash" size={18} /> Delete stop
+        </button>
+      </div>
     </Panel>
   );
 }

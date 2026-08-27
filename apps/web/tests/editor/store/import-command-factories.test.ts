@@ -87,47 +87,6 @@ describe('import command factories', () => {
     expect(runtime.read().canUndo).toBe(false);
   });
 
-  it('blocks all import content in a read-only document', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const { runtime, commands } = createCommands();
-    const system = createEmptySystem();
-    runtime.installDocument(system, { tool: 'select', readOnly: true });
-
-    expect(
-      commands.applyImportedNetwork({
-        targetSystemId: system.id,
-        network: {
-          ways: [],
-          nodes: [],
-          namedWays: [],
-          medians: [],
-          turnRestrictions: [],
-        },
-      }),
-    ).toBeNull();
-    expect(
-      commands.importWays({
-        ways: [],
-        nodes: [],
-        namedWays: [],
-        medians: [],
-        turnRestrictions: [],
-      }),
-    ).toEqual({
-      added: 0,
-      skipped: 0,
-    });
-    commands.importGtfs({ ways: [], lines: [], services: [], stops: [] });
-    expect(commands.reconcileImportedServices([])).toBe(0);
-    expect(
-      commands.applyGtfsImportBatch({
-        targetSystemId: system.id,
-        pieces: { ways: [], lines: [], services: [], stops: [] },
-      }),
-    ).toBe(false);
-    expect(runtime.read().system).toBe(system);
-  });
-
   it('blocks every import result while a document is loading', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const system = createEmptySystem();

@@ -122,22 +122,6 @@ describe('routing commands', () => {
     expect(runtime.read().system.services).toHaveLength(0);
   });
 
-  it('allows transient draft controls in a read-only document', () => {
-    const runtime = createEditorRuntime();
-    runtime.installDocument(routableSystem(), { tool: 'lines', readOnly: true });
-    const commands = commandsFor(runtime);
-    const anchor = {
-      wayId: 'main',
-      insertIndex: 1,
-      coord: [-115.18, 36.1] as [number, number],
-    };
-
-    commands.startRouteDraft(anchor);
-    expect(runtime.read().routeDraft?.lastAnchor).toBe(anchor);
-    commands.cancelRouteDraft();
-    expect(runtime.read().routeDraft).toBeNull();
-  });
-
   it('preserves the system reference when a routed service cannot materialize', () => {
     const runtime = createEditorRuntime();
     const system = routableSystem();

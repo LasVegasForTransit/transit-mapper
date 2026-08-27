@@ -95,7 +95,6 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const selectedStopId = useEditor((s) =>
     s.selection?.kind === 'service' && s.selection.id === id ? s.selection.stopId : undefined,
   );
-  const readOnly = useEditor((s) => s.readOnly);
   const vehicleKinds = useEditor((s) => s.system.vehicleKinds);
   const {
     services: {
@@ -178,7 +177,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
         modeLabel={MODES[service.modeId].label}
         distanceLabel={formatDistance(length, unitSystem)}
         totalStops={totalStops}
-        readOnly={readOnly}
+        readOnly={false}
         onNameChange={(name) => setServiceName(id, name)}
         onNameKeyDown={blurOnEnter}
       />
@@ -194,7 +193,6 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                 key={m.id}
                 className={`chip ${service.modeId === m.id ? 'active' : ''}`}
                 aria-pressed={service.modeId === m.id}
-                disabled={readOnly}
                 onClick={() => setServiceMode(id, m.id)}
               >
                 {m.label}
@@ -209,7 +207,6 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
             id="vehicle-kind-select"
             className="opt-select"
             style={{ width: '100%', marginBottom: 4 }}
-            disabled={readOnly}
             value={service.vehicleKindId ?? ''}
             onChange={(e) => setServiceVehicleKind(id, e.target.value || undefined)}
           >
@@ -222,16 +219,14 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                 </option>
               ))}
           </select>
-          {!readOnly && (
-            <button
-              type="button"
-              className="link-btn"
-              style={{ display: 'block', marginBottom: 12 }}
-              onClick={() => setVehicleKindsOpen(true)}
-            >
-              Manage vehicle kinds…
-            </button>
-          )}
+          <button
+            type="button"
+            className="link-btn"
+            style={{ display: 'block', marginBottom: 12 }}
+            onClick={() => setVehicleKindsOpen(true)}
+          >
+            Manage vehicle kinds…
+          </button>
 
           <div className="stats">
             <Stat label="Length" value={formatDistance(length, unitSystem)} />
@@ -239,7 +234,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
           </div>
 
           {singleWay && (
-            <ServicesOnWay wayId={singleWay.id} activeServiceId={id} readOnly={readOnly} />
+            <ServicesOnWay wayId={singleWay.id} activeServiceId={id} readOnly={false} />
           )}
         </div>
       )}
@@ -264,7 +259,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
             frequencyMinutes={service.frequencyMinutes}
             spanStart={service.spanStart}
             spanEnd={service.spanEnd}
-            readOnly={readOnly}
+            readOnly={false}
             onSave={(periods) => setServiceSchedule(id, periods)}
             onClose={() => setScheduleOpen(false)}
           />
@@ -276,21 +271,19 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
           <VehicleKindsDialog
             modeId={service.modeId}
             vehicleKinds={vehicleKinds}
-            readOnly={readOnly}
+            readOnly={false}
             onSave={setVehicleKinds}
             onClose={() => setVehicleKindsOpen(false)}
           />
         </Suspense>
       )}
 
-      {!readOnly && (
-        <div className="insp-footer">
-          <button className="danger-btn" onClick={() => deleteService(id)}>
-            <Icon name="trash" size={18} />{' '}
-            {line?.serviceIds.length === 1 ? 'Delete service and line' : 'Delete service'}
-          </button>
-        </div>
-      )}
+      <div className="insp-footer">
+        <button className="danger-btn" onClick={() => deleteService(id)}>
+          <Icon name="trash" size={18} />{' '}
+          {line?.serviceIds.length === 1 ? 'Delete service and line' : 'Delete service'}
+        </button>
+      </div>
     </Panel>
   );
 
@@ -305,7 +298,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
           spanStart={service.spanStart}
           spanEnd={service.spanEnd}
           schedule={service.schedule}
-          readOnly={readOnly}
+          readOnly={false}
           onFrequencyChange={(frequencyMinutes) => setServiceFrequency(id, frequencyMinutes)}
           onSpanChange={(spanStart, spanEnd) => setServiceSpan(id, spanStart, spanEnd)}
           onOpenFullSchedule={() => setScheduleOpen(true)}
@@ -319,36 +312,32 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     const moveTargets = lines.filter((candidate) => candidate.id !== line?.id);
     return (
       <>
-        {!readOnly && (
-          <>
-            <button
-              type="button"
-              className="ghost-btn"
-              style={{ width: '100%', justifyContent: 'center', marginBottom: 4 }}
-              title={ROUTE_INSPECTOR_COPY.adoptTitle}
-              onClick={() => {
-                const n = adoptExistingInfrastructure(id);
-                if (n === 0) window.alert(ROUTE_INSPECTOR_COPY.adoptRefusal);
-              }}
-            >
-              Adopt existing infrastructure
-            </button>
-            <p className="insp-sub" style={{ marginBottom: 12 }}>
-              {ROUTE_INSPECTOR_COPY.adoptHelp}
-            </p>
-          </>
-        )}
+        <button
+          type="button"
+          className="ghost-btn"
+          style={{ width: '100%', justifyContent: 'center', marginBottom: 4 }}
+          title={ROUTE_INSPECTOR_COPY.adoptTitle}
+          onClick={() => {
+            const n = adoptExistingInfrastructure(id);
+            if (n === 0) window.alert(ROUTE_INSPECTOR_COPY.adoptRefusal);
+          }}
+        >
+          Adopt existing infrastructure
+        </button>
+        <p className="insp-sub" style={{ marginBottom: 12 }}>
+          {ROUTE_INSPECTOR_COPY.adoptHelp}
+        </p>
         {singleWay && (
           <>
             <label className="field-label">{ROUTE_INSPECTOR_COPY.pathShape}</label>
-            {!readOnly && <p className="insp-sub">{ROUTE_INSPECTOR_COPY.pathHelp}</p>}
+            <p className="insp-sub">{ROUTE_INSPECTOR_COPY.pathHelp}</p>
             <div className="chip-row" role="group" aria-label={ROUTE_INSPECTOR_COPY.pathShape}>
               {GEOMETRY_OPTIONS.map(([g, label]) => (
                 <button
                   key={g}
                   className={`chip ${singleWay.geometry === g ? 'active' : ''}`}
                   aria-pressed={singleWay.geometry === g}
-                  disabled={readOnly || (g === 'freeform' && singleWay.geometry !== 'freeform')}
+                  disabled={g === 'freeform' && singleWay.geometry !== 'freeform'}
                   onClick={() => setWayGeometry(singleWay.id, g)}
                 >
                   {label}
@@ -357,19 +346,17 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
             </div>
             <GradeChips
               value={singleWay.grade}
-              disabled={readOnly}
+              disabled={false}
               onChange={(g) => setWayGrade(singleWay.id, g)}
             />
           </>
         )}
 
         <label className="field-label">Service path</label>
-        {!readOnly && (
-          <p className="insp-sub">
-            This is the one path operated by this service. Add another service when the public line
-            has a branch, express pattern, or temporary shuttle.
-          </p>
-        )}
+        <p className="insp-sub">
+          This is the one path operated by this service. Add another service when the public line
+          has a branch, express pattern, or temporary shuttle.
+        </p>
         <ul className="pattern-list">
           {[singlePattern].map((p) => {
             const pWay = ways.find((w) => w.id === patternLegs(p)[0]?.wayId);
@@ -392,54 +379,50 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
             );
           })}
         </ul>
-        {!readOnly && (
+        {patternHasCouplet(singlePattern) ? (
           <>
-            {patternHasCouplet(singlePattern) ? (
-              <>
-                <p className="insp-sub">
-                  This Service runs two one-way paths. Its outward and return trips use different
-                  streets.
-                </p>
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
-                  onClick={() => makePatternTwoWay(id, singlePattern.id)}
-                >
-                  Make it run both ways on one street
-                </button>
-              </>
-            ) : null}
-            {moveTargets.length > 0 && (
-              <>
-                <label className="field-label" htmlFor="move-to-line-select">
-                  Move to another Line
-                </label>
-                <p className="insp-sub">{ROUTE_INSPECTOR_COPY.moveService}</p>
-                <select
-                  id="move-to-line-select"
-                  className="opt-select"
-                  style={{ width: '100%', marginBottom: 12 }}
-                  defaultValue=""
-                  onChange={(e) => {
-                    const targetId = e.target.value;
-                    if (targetId) {
-                      moveServiceToLine(id, targetId);
-                      e.target.value = '';
-                    }
-                  }}
-                >
-                  <option value="" disabled>
-                    Choose a Line…
-                  </option>
-                  {moveTargets.map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>
-                      {candidate.name || 'Unnamed line'}
-                    </option>
-                  ))}
-                </select>
-              </>
-            )}
+            <p className="insp-sub">
+              This Service runs two one-way paths. Its outward and return trips use different
+              streets.
+            </p>
+            <button
+              type="button"
+              className="ghost-btn"
+              style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
+              onClick={() => makePatternTwoWay(id, singlePattern.id)}
+            >
+              Make it run both ways on one street
+            </button>
+          </>
+        ) : null}
+        {moveTargets.length > 0 && (
+          <>
+            <label className="field-label" htmlFor="move-to-line-select">
+              Move to another Line
+            </label>
+            <p className="insp-sub">{ROUTE_INSPECTOR_COPY.moveService}</p>
+            <select
+              id="move-to-line-select"
+              className="opt-select"
+              style={{ width: '100%', marginBottom: 12 }}
+              defaultValue=""
+              onChange={(e) => {
+                const targetId = e.target.value;
+                if (targetId) {
+                  moveServiceToLine(id, targetId);
+                  e.target.value = '';
+                }
+              }}
+            >
+              <option value="" disabled>
+                Choose a Line…
+              </option>
+              {moveTargets.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.name || 'Unnamed line'}
+                </option>
+              ))}
+            </select>
           </>
         )}
 
@@ -447,7 +430,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
           stops.length > 0 ? (
             <div key={pattern.id}>
               <label className="field-label">Stop sequence</label>
-              {!readOnly && stops.length > 1 && (
+              {stops.length > 1 && (
                 <p className="insp-sub">
                   A stop is a place this Service can be cut. Ending it at a stop shortens the
                   Service; the street it runs on is not touched.
@@ -464,7 +447,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                       <span className="stop-index">{j + 1}</span>
                       <span className="stop-name">{st.name || 'Unnamed stop'}</span>
                     </button>
-                    {!readOnly && stops.length > 1 && (
+                    {stops.length > 1 && (
                       <span className="stop-actions">
                         {/* Only where both directions ride the same stretch.
                             On a couplet they ride different streets, so a stop

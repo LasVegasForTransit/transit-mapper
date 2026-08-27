@@ -4,7 +4,6 @@ import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type { TransitSystem, Viewport } from '@transitmapper/core/model/system';
 import { recordRenderPreparationPatch } from '@transitmapper/core/render/render-preparation-journal';
 import type { CreateEditorStoreOptions } from './contracts';
-import type { SetSystemOptions } from './contracts/document-commands';
 import type { EditorRenderMutation } from './contracts/render-mutation';
 import {
   createHistoryController,
@@ -14,11 +13,7 @@ import {
 import { createInitialEditorState, type EditorState } from './state';
 import { pruneTransientReferences } from './transient-references';
 
-type MutationBlockReason = 'loading' | 'read-only';
-type TransientState = Omit<
-  EditorState,
-  'system' | 'canUndo' | 'canRedo' | 'readOnly' | 'documentStatus'
->;
+type TransientState = Omit<EditorState, 'system' | 'canUndo' | 'canRedo' | 'documentStatus'>;
 type TransientPatch = Partial<TransientState>;
 
 interface ContentChange<Result> {
@@ -28,7 +23,7 @@ interface ContentChange<Result> {
   result: Result;
 }
 
-interface InstallDocumentOptions extends SetSystemOptions {
+interface InstallDocumentOptions {
   tool: EditorState['tool'];
 }
 
@@ -56,18 +51,13 @@ interface EditorRuntimeOptions extends CreateEditorStoreOptions {
   initialSystem?: TransitSystem;
 }
 
-function warnBlockedEdit(reason: MutationBlockReason): void {
+function warnBlockedEdit(): void {
   if (!import.meta.env.DEV) return;
-  console.warn(
-    reason === 'loading'
-      ? '[transitmapper] refused an edit made before the saved document loaded'
-      : '[transitmapper] refused an edit to a read-only document',
-  );
+  console.warn('[transitmapper] refused an edit made before the saved document loaded');
 }
 
-function blockReason(state: EditorState): MutationBlockReason | null {
-  if (state.documentStatus === 'loading') return 'loading';
-  return state.readOnly ? 'read-only' : null;
+function documentIsLoading(state: EditorState): boolean {
+  return state.documentStatus === 'loading';
 }
 
 function documentWorkflowReset(tool: EditorState['tool']): Partial<EditorState> {
@@ -157,9 +147,8 @@ export function createEditorRuntime(options: EditorRuntimeOptions = {}): EditorR
   };
 
   const runContent: RunContent = (blockedResult, operation) => {
-    const blocked = blockReason(store.getState());
-    if (!blocked) return operation();
-    warnBlockedEdit(blocked);
+    if (!documentIsLoading(store.getState())) return operation();
+    warnBlockedEdit();
     return blockedResult;
   };
 
@@ -171,7 +160,6 @@ export function createEditorRuntime(options: EditorRuntimeOptions = {}): EditorR
       ...documentWorkflowReset(installOptions.tool),
       ...availability,
       system,
-      readOnly: installOptions.readOnly === true,
     });
   };
 
@@ -182,7 +170,7 @@ export function createEditorRuntime(options: EditorRuntimeOptions = {}): EditorR
     updateTransient,
     commitContent,
     installDocument,
-    newDocument: () => installDocument(createEmptySystem(), { tool: 'way', readOnly: false }),
+    newDocument: () => installDocument(createEmptySystem(), { tool: 'way' }),
     persistViewport(viewport) {
       runContent(undefined, () => {
         const current = store.getState();

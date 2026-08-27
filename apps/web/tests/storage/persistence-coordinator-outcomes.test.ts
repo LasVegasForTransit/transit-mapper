@@ -13,7 +13,7 @@ class OutcomeStore implements PersistenceStore {
   private listeners = new Set<(next: PersistenceSnapshot, previous: PersistenceSnapshot) => void>();
 
   constructor(system: TransitSystem) {
-    this.snapshot = { system, readOnly: false };
+    this.snapshot = { system };
   }
 
   getState(): PersistenceSnapshot {

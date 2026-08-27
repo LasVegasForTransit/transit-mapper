@@ -2006,25 +2006,6 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
-  it('refreshes a read-only target to its refusal cursor', () => {
-    const scheduler = installBrowserGlobals();
-    const store = createEditorStore();
-    const system = createEmptySystem();
-    system.ways = [erasableWay()];
-    store.commands.document.setSystem(system);
-    const map = createMap(handleFeature(1));
-    const detach = attach(map, store, {
-      networkMode: false,
-    });
-
-    map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
-    scheduler.pump();
-    store.commands.document.setSystem(store.getState().system, { readOnly: true });
-
-    expect(map.getCanvas().style.cursor).toBe('not-allowed');
-    detach();
-  });
-
   it('clears and gates stationary intent while the action menu is open', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
@@ -2104,9 +2085,6 @@ describe('pointer work coalescing', () => {
     store.commands.tools.setTool('select');
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
-    store.commands.document.setSystem(store.getState().system, { readOnly: true });
-    expect(shown.at(-1)).toBeNull();
-
     detach();
   });
 

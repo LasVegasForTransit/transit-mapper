@@ -18,8 +18,7 @@ const InstallContext = createContext<InstallController | null>(null);
 
 export interface InstallProviderProps {
   children: ReactNode;
-  /** The main entry also serves read-only shares, which must never retain an
-   *  install prompt. embed.html never mounts this provider at all. */
+  /** embed.html and the full reader never mount this provider. */
   enabled: boolean;
 }
 

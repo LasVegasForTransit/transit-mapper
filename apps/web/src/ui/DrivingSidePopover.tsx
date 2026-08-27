@@ -15,7 +15,6 @@ const DRIVING_SIDES: { value: DrivingSide; label: string }[] = [
 export function DrivingSidePopover() {
   const drivingSide = useEditor((s) => s.system.drivingSide);
   const { setDrivingSide } = useEditorCommands().network;
-  const readOnly = useEditor((s) => s.readOnly);
 
   return (
     <Popover
@@ -38,7 +37,6 @@ export function DrivingSidePopover() {
                 key={d.value}
                 className={`chip ${drivingSide === d.value ? 'active' : ''}`}
                 aria-pressed={drivingSide === d.value}
-                disabled={readOnly}
                 onClick={() => setDrivingSide(d.value)}
               >
                 {d.label}

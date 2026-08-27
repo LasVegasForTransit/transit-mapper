@@ -8,7 +8,6 @@ const SAVE_DEBOUNCE_MS = 450;
 
 export interface PersistenceSnapshot {
   system: TransitSystem;
-  readOnly: boolean;
 }
 
 export interface PersistenceStore {
@@ -171,12 +170,6 @@ export function createPersistenceCoordinator(
   };
 
   const unsubscribeStore = options.store.subscribe((next, previous) => {
-    if (next.readOnly) {
-      // A local edit may be pending when the user opens a read-only share.
-      // Save that editable snapshot before refusing future writes.
-      void flush();
-      return;
-    }
     if (next.system === previous.system) return;
     if (next.system.id !== previous.system.id) {
       // Never let the new document overwrite the only pending slot before the
@@ -187,8 +180,7 @@ export function createPersistenceCoordinator(
     queue(next.system);
   });
   const unsubscribeCamera = options.subscribeCamera(() => {
-    const current = options.store.getState();
-    if (!current.readOnly) queue(current.system);
+    queue(options.store.getState().system);
   });
   const lifecycleFlush = () => {
     for (const [id, system] of undurableSystems) {

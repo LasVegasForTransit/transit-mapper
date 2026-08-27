@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { resolvePointerIntent, type PointerIntentInput } from '../../src/editor/pointerIntent';
 
 const editable = {
-  readOnly: false,
   view: 'network' as const,
   tool: 'select' as const,
   armed: 'none' as const,
@@ -299,16 +298,6 @@ describe('resolvePointerIntent', () => {
       constraint: 'none',
     },
     {
-      name: 'Read-only editable target',
-      input: { readOnly: true, target: 'control-point' },
-      cursor: 'not-allowed',
-      badge: null,
-      primaryOperation: 'refuse-edit',
-      allowed: false,
-      anchor: 'none',
-      constraint: 'none',
-    },
-    {
       name: 'Diagram editable target',
       input: { view: 'diagram', target: 'control-point' },
       cursor: 'not-allowed',
@@ -366,7 +355,7 @@ describe('resolvePointerIntent', () => {
     expect(dragged.constraint).toBe('constrain');
   });
 
-  it('refuses read-only or Diagram editing even when an earlier pointer-down locked a move', () => {
+  it('refuses Diagram editing even when an earlier pointer-down locked a move', () => {
     const locked: PointerIntentInput = {
       ...editable,
       view: 'infrastructure',
@@ -374,11 +363,6 @@ describe('resolvePointerIntent', () => {
       gestureActive: true,
       lockedPrimaryOperation: 'move-point',
     };
-    expect(resolvePointerIntent({ ...locked, readOnly: true })).toMatchObject({
-      primaryOperation: 'refuse-edit',
-      cursor: 'not-allowed',
-      allowed: false,
-    });
     expect(resolvePointerIntent({ ...locked, view: 'diagram' })).toMatchObject({
       primaryOperation: 'refuse-edit',
       cursor: 'not-allowed',

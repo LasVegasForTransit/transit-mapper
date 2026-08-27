@@ -1,6 +1,5 @@
-import { useEditor, useEditorCommands, useEditorStore } from '../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import { useDocumentView, type RepresentationId } from '../editor/document-view-controls';
-import { forkSystem } from '@transitmapper/core/model/serialize';
 import { useInertRef } from '@transitmapper/workspace/inert-ref';
 import { blurOnEnter } from './formUtils';
 import { DropdownMenu, DropdownMenuChoice, DropdownMenuItem } from './DropdownMenu';
@@ -108,7 +107,6 @@ export function ViewSwitchCompact() {
  *  nowhere to put a header. See Workbench.tsx's own comment. */
 export function TopBarBrand() {
   const name = useEditor((s) => s.system.name);
-  const readOnly = useEditor((s) => s.readOnly);
   const { setName } = useEditorCommands().document;
   // The store holds a blank placeholder until the saved document arrives, and
   // that placeholder has a name — "Untitled system". Showing it would put a
@@ -119,27 +117,22 @@ export function TopBarBrand() {
   const loading = useEditor((s) => s.documentStatus) === 'loading';
   return (
     <>
-      {/* One row, always, in every state: FileMenu icon at the left (a
-          read-only view keeps only the app's About action), the system name
-          filling the middle, the toggle fixed at
+      {/* One row, always: FileMenu icon at the left, the system name filling
+          the middle, the toggle fixed at
           the right — never three lines, never a wrap. FileMenu's own
           "TransitMapper" wordmark doesn't render here at all (see
           FileMenu.tsx) — the middle of this row is the system name's
           permanently, not the app's own name conditionally collapsing
           into it. */}
       <FileMenu />
-      {readOnly ? (
-        <span className="ro-name">{name}</span>
-      ) : (
-        <input
-          className="system-name"
-          value={loading ? '' : name}
-          disabled={loading}
-          aria-label="System name"
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={blurOnEnter}
-        />
-      )}
+      <input
+        className="system-name"
+        value={loading ? '' : name}
+        disabled={loading}
+        aria-label="System name"
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={blurOnEnter}
+      />
     </>
   );
 }
@@ -168,69 +161,41 @@ export function TopBarBrand() {
  * and undo. Driving side is unmarked because a verb menu cannot represent a document setting.
  */
 export function TopBarActions() {
-  const store = useEditorStore();
-  const readOnly = useEditor((s) => s.readOnly);
   const canUndo = useEditor((s) => s.canUndo);
   const canRedo = useEditor((s) => s.canRedo);
   const {
-    document: { setSystem },
     history: { undo, redo },
   } = useEditorCommands();
   const { openShortcuts, openDialog, toggleUi } = useUi();
 
-  const fork = () => {
-    const forked = forkSystem(store.getState().system);
-    setSystem(forked, { readOnly: false });
-    // Drop the /s/:id path so edits are clearly local.
-    window.history.replaceState(null, '', '/');
-  };
-
   return (
     <>
       <LayersPopover />
-      {!readOnly && <DrivingSidePopover />}
+      <DrivingSidePopover />
       <span className="act-tertiary act-secondary">
         <IconButton icon="keyboard" onClick={openShortcuts} label="Keyboard shortcuts (?)" />
       </span>
       <span className="act-tertiary act-secondary">
         <IconButton icon="play" onClick={() => openDialog('onboarding')} label="Replay intro" />
       </span>
-      {readOnly ? (
-        <>
-          <span className="ro-badge act-secondary">
-            <span className="btn-label">Shared · read-only</span>
-          </span>
-          <button className="primary-btn" onClick={fork} title="Fork & edit">
-            <Icon name="copy" size={18} /> <span className="btn-label">Fork &amp; edit</span>
-          </button>
-        </>
-      ) : (
-        <>
-          <IconButton
-            icon="undo"
-            onClick={undo}
-            disabled={!canUndo}
-            label={`Undo (${MOD_LABEL}+Z)`}
-          />
-          <span className="act-secondary">
-            <IconButton
-              icon="redo"
-              onClick={redo}
-              disabled={!canRedo}
-              label={`Redo (${MOD_LABEL}+Shift+Z)`}
-            />
-          </span>
-          <SavedViewsAction onOpen={() => openDialog('savedViews')} />
-          <span className="act-secondary">
-            <ExportSplitButton />
-          </span>
-          <span className="act-secondary">
-            <button className="primary-btn" onClick={() => openDialog('share')} title="Share">
-              <Icon name="share" size={18} /> <span className="btn-label">Share</span>
-            </button>
-          </span>
-        </>
-      )}
+      <IconButton icon="undo" onClick={undo} disabled={!canUndo} label={`Undo (${MOD_LABEL}+Z)`} />
+      <span className="act-secondary">
+        <IconButton
+          icon="redo"
+          onClick={redo}
+          disabled={!canRedo}
+          label={`Redo (${MOD_LABEL}+Shift+Z)`}
+        />
+      </span>
+      <SavedViewsAction onOpen={() => openDialog('savedViews')} />
+      <span className="act-secondary">
+        <ExportSplitButton />
+      </span>
+      <span className="act-secondary">
+        <button className="primary-btn" onClick={() => openDialog('share')} title="Share">
+          <Icon name="share" size={18} /> <span className="btn-label">Share</span>
+        </button>
+      </span>
       <span className="act-overflow">
         <DropdownMenu
           trigger={
@@ -239,12 +204,10 @@ export function TopBarActions() {
             </button>
           }
         >
-          {!readOnly && <DropdownMenuItem onSelect={redo}>Redo</DropdownMenuItem>}
-          {!readOnly && <SavedViewsMenuItem onOpen={() => openDialog('savedViews')} />}
+          <DropdownMenuItem onSelect={redo}>Redo</DropdownMenuItem>
+          <SavedViewsMenuItem onOpen={() => openDialog('savedViews')} />
           <DropdownMenuItem onSelect={() => openDialog('export')}>Export…</DropdownMenuItem>
-          {!readOnly && (
-            <DropdownMenuItem onSelect={() => openDialog('share')}>Share…</DropdownMenuItem>
-          )}
+          <DropdownMenuItem onSelect={() => openDialog('share')}>Share…</DropdownMenuItem>
           <DropdownMenuItem onSelect={openShortcuts}>Keyboard shortcuts</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => openDialog('onboarding')}>
             Replay intro

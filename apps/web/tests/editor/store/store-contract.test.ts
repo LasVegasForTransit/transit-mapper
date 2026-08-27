@@ -45,6 +45,7 @@ describe('the editor store contract', () => {
     expect(store.commands).toBe(commands);
     expect(store.commands.ways.beginWay).toBe(beginWay);
     expect('setSystem' in store.getState()).toBe(false);
+    expect('readOnly' in store.getState()).toBe(false);
     expect(Object.values(store.getState()).some((value) => typeof value === 'function')).toBe(
       false,
     );
@@ -87,71 +88,6 @@ describe('the editor store contract', () => {
     expect(next).toBe(store.getState());
     expect(next.system.name).toBe('One write');
     expect(next.canUndo).toBe(true);
-  });
-
-  it('blocks content edits in read-only documents while allowing transient tools', () => {
-    const store = createEditorStore();
-    const system = createEmptySystem();
-    store.commands.document.setSystem(system, { readOnly: true });
-
-    expect(store.commands.ways.beginWay('road', 'straight')).toBeNull();
-    expect(store.getState().system).toBe(system);
-
-    store.commands.document.setViewport({ center: [-115, 36], zoom: 12 });
-    expect(store.getState().system).toBe(system);
-
-    store.commands.tools.setTool('way');
-    expect(store.getState().tool).toBe('way');
-  });
-
-  it('applies the read-only mutation gate across every content command group', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const store = createEditorStore();
-    const system = createEmptySystem();
-    system.ways = [
-      {
-        id: 'way',
-        typeId: 'road',
-        geometry: 'straight',
-        grade: 'atGrade',
-        profile: defaultProfileFor('road'),
-        points: [
-          [-115.2, 36.1],
-          [-115.1, 36.1],
-        ],
-      },
-    ];
-    system.stops = [{ id: 'stop', coord: [-115.15, 36.1], anchors: [] }];
-    store.commands.document.setSystem(system, { readOnly: true });
-    store.commands.selection.addMultiSelection([{ kind: 'stop', id: 'stop' }]);
-
-    store.commands.document.setName('Blocked');
-    store.commands.tools.addPaletteColor('#123456');
-    store.commands.selection.deleteMultiSelection();
-    expect(store.commands.ways.beginWay('road', 'straight')).toBeNull();
-    store.commands.network.setDrivingSide('left');
-    store.commands.imports.importGtfs({
-      ways: [],
-      lines: [],
-      stops: [],
-      services: [
-        {
-          id: 'imported',
-          modeId: 'bus',
-          path: { id: 'imported', sections: [] },
-        },
-      ],
-    });
-    expect(
-      store.commands.routing.createRoutedService([{ wayId: 'way', fromPoint: 0, toPoint: 1 }]),
-    ).toBeNull();
-    expect(store.commands.services.addServiceToWay('way')).toBeNull();
-    expect(store.commands.stops.addStop([-115.14, 36.1])).toBeNull();
-    expect(store.commands.facilities.addFacility('entrance', [-115.14, 36.1])).toBeNull();
-    expect(store.commands.groups.createGroup(['stop'])).toBeNull();
-
-    expect(store.getState().system).toBe(system);
-    expect(store.getState().multiSelection).toEqual([{ kind: 'stop', id: 'stop' }]);
   });
 
   it('clears every document-owned workflow when another document is installed', () => {
