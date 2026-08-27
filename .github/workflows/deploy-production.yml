@@ -15,7 +15,7 @@ on:
         required: false
         type: string
       deploy_existing_tag:
-        description: Existing release tag at this commit to deploy
+        description: Existing published release tag to deploy
         required: false
         type: string
 
@@ -101,16 +101,11 @@ jobs:
         run: |
           set -euo pipefail
           release=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-            --json isDraft,tagName,targetCommitish)
+            --json isDraft,tagName)
           tag=$(jq -er '.tagName' <<< "$release")
-          target=$(jq -er '.targetCommitish' <<< "$release")
           draft=$(jq -er '.isDraft' <<< "$release")
           if [ "$draft" != 'false' ]; then
             echo "Release $tag is still a draft." >&2
-            exit 1
-          fi
-          if [ "$target" != "$GITHUB_SHA" ]; then
-            echo "Release $tag targets $target, but this run validates $GITHUB_SHA." >&2
             exit 1
           fi
           echo "release_created=true" >> "$GITHUB_OUTPUT"
@@ -155,7 +150,7 @@ jobs:
       deployments: write
       id-token: write
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     # Scopes secrets to the production environment + surfaces a deployment
     # record in the GitHub UI. Add required reviewers via repo settings if
     # you want a manual approval gate later.
@@ -174,6 +169,10 @@ jobs:
 
       - name: Setup Node + pnpm
         uses: ./.github/actions/setup-node-pnpm
+
+      - name: Validate selected release
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy_existing_tag != ''
+        run: pnpm check
 
       # Built BEFORE the migration step, not as part of the deploy. The build
       # is pure, local and fallible — a vite failure has nothing to do with
