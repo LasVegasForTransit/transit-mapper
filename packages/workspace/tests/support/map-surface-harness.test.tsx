@@ -1,6 +1,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import {
+  createMapStartupMilestones,
   createMapViewStore,
   createSelectionController,
   type MapDriver,
@@ -99,10 +100,7 @@ export function createRuntimeHarness(onDispose: () => void = () => {}): RuntimeH
     runtime: {
       host: { map, reportError },
       map,
-      milestones: {
-        contentCommitted: vi.fn<() => void>(),
-        interactive: vi.fn<() => void>(),
-      },
+      milestones: createMapStartupMilestones(),
       requestTheme,
       flushTheme: vi.fn<() => Promise<void>>(() => Promise.resolve()),
       refreshPadding: vi.fn<() => void>(),
