@@ -6,7 +6,9 @@ import { describe, expect, it } from 'vitest';
 import {
   compareBundleReports,
   createDeliveryGraphs,
+  evaluateDeliveryBudgets,
   initialDeliverySizes,
+  javascriptClosureSizes,
   parseBundleReportArguments,
   writeBundleReportArtifacts,
   type BundleGraphReport,
@@ -14,6 +16,7 @@ import {
   type DeliveryGraphs,
   type ViteManifest,
 } from '../../scripts/perf/report-bundle';
+import { validateFrozenBundleReport } from '../../scripts/perf/bundle-report-validation';
 
 const manifest: ViteManifest = {
   'index.html': {
@@ -178,6 +181,7 @@ function report(
     ...deliveryGraphs(files, buildManifest),
     chunks: [],
     violations: [],
+    javascriptClosureViolations: [],
     chunkViolations: [],
   };
 }
@@ -197,6 +201,41 @@ describe('bundle report delivery graphs', () => {
       brotliBytes: main.eager.brotliBytes,
     });
     expect(main.complete.gzipBytes).toBeGreaterThan(main.eager.gzipBytes);
+  });
+
+  it('budgets the complete JavaScript graph without transferred assets', () => {
+    const graphs = deliveryGraphs();
+    const main = required(
+      graphs.entries.find((entry) => entry.entry === 'main'),
+      'main entry',
+    );
+    expect(javascriptClosureSizes(graphs.entries)).toContainEqual({
+      entry: 'main',
+      rawBytes: main.javascriptClosure.rawBytes,
+      gzipBytes: main.javascriptClosure.gzipBytes,
+      brotliBytes: main.javascriptClosure.brotliBytes,
+    });
+    expect(main.javascriptClosure.gzipBytes).toBeLessThan(main.complete.gzipBytes);
+  });
+
+  it('reports JavaScript closure debt separately from first-load transfer budgets', () => {
+    const entries = structuredClone(deliveryGraphs().entries);
+    const main = required(
+      entries.find((entry) => entry.entry === 'main'),
+      'main entry',
+    );
+    main.javascriptClosure.gzipBytes = 450_001;
+    expect(evaluateDeliveryBudgets(entries)).toEqual({
+      initialTransfer: [],
+      javascriptClosure: [
+        expect.objectContaining({
+          entry: 'main',
+          encoding: 'gzip',
+          actualBytes: 450_001,
+          maximumBytes: 450_000,
+        }),
+      ],
+    });
   });
 
   it('separates each entry static closure from files reached only through dynamic imports', () => {
@@ -228,6 +267,50 @@ describe('bundle report delivery graphs', () => {
       'embed.html',
     ]);
     expect(paths(embed.lazy)).toEqual([]);
+  });
+
+  it('reports the complete JavaScript closure separately from transferred assets', () => {
+    const graphs = deliveryGraphs();
+    const main = required(
+      graphs.entries.find((entry) => entry.entry === 'main'),
+      'main entry',
+    ) as (typeof graphs.entries)[number] & {
+      javascriptClosure?: BundleGraphReport;
+    };
+
+    expect(paths(required(main.javascriptClosure, 'main JavaScript closure'))).toEqual([
+      'assets/dialog.js',
+      'assets/main.js',
+      'assets/shared.js',
+      'assets/viewer.js',
+    ]);
+  });
+
+  it('derives the JavaScript closure when an older frozen report omitted it', () => {
+    const frozen = structuredClone(report(fixtureFiles(), '2026-08-13T00:00:00.000Z')) as Omit<
+      BundleReport,
+      'entries'
+    > & {
+      entries: Array<
+        Omit<BundleReport['entries'][number], 'javascriptClosure'> & {
+          javascriptClosure?: BundleGraphReport;
+        }
+      >;
+    };
+    for (const entry of frozen.entries) delete entry.javascriptClosure;
+
+    const validated = validateFrozenBundleReport(frozen, 'frozen-bundle-report.json');
+    const main = required(
+      validated.entries.find((entry) => entry.entry === 'main'),
+      'validated main entry',
+    );
+
+    expect(paths(main.javascriptClosure)).toEqual([
+      'assets/dialog.js',
+      'assets/main.js',
+      'assets/shared.js',
+      'assets/viewer.js',
+    ]);
   });
 
   it('rejects React and Workbench chunks from the embed closure by semantic name', () => {
@@ -705,6 +788,11 @@ describe('bundle report comparisons', () => {
       'manifest.json',
       'sw.js',
     ]);
+    const javascriptClosure = required(
+      comparison.graphs.find((graph) => graph.graph === 'entries.main.javascriptClosure'),
+      'main JavaScript closure comparison',
+    );
+    expect(javascriptClosure.changed.map((file) => file.path)).toEqual(['assets/main.js']);
     expect(reverseComparison.added).toEqual([]);
     expect(reverseComparison.removed.map((file) => file.path)).toEqual(['icons/app-icon-192.png']);
     expect(comparison.rawBytes).toBe(

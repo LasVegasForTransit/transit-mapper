@@ -52,6 +52,7 @@ export interface BundleEntryReport extends BundleEntrySize {
   eager: BundleGraphReport;
   lazy: BundleGraphReport;
   complete: BundleGraphReport;
+  javascriptClosure: BundleGraphReport;
 }
 
 export interface DeliveryGraphs {
@@ -67,6 +68,7 @@ export interface BundleReport extends DeliveryGraphs {
   generatedAt: string;
   chunks: PerformanceChunkSize[];
   violations: BundleBudgetViolation[];
+  javascriptClosureViolations: BundleBudgetViolation[];
   chunkViolations: PerformanceChunkViolation[];
 }
 
@@ -391,6 +393,10 @@ export function createDeliveryGraphs(options: CreateDeliveryGraphsOptions): Deli
       const eager = graphReport(eagerFiles, options.files);
       const lazy = graphReport(lazyFiles, options.files);
       const complete = graphReport(completeFiles, options.files);
+      const javascriptClosure = graphReport(
+        [...completeFiles].filter((file) => /\.(?:m?js)$/.test(file)),
+        options.files,
+      );
       return {
         entry: deliveryEntryName(key, entry),
         rawBytes: complete.rawBytes,
@@ -399,6 +405,7 @@ export function createDeliveryGraphs(options: CreateDeliveryGraphsOptions): Deli
         eager,
         lazy,
         complete,
+        javascriptClosure,
       };
     })
     .sort((left, right) => compareText(left.entry, right.entry));
