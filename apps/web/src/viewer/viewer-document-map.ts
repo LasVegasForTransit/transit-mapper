@@ -1,18 +1,20 @@
-import type { Map as MapLibreMap, MapMouseEvent } from 'maplibre-gl';
+import type { LayerSpecification, Map as MapLibreMap, MapMouseEvent } from 'maplibre-gl';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { MapDriver, MapViewStore, SelectionController } from '@transitmapper/map';
+import type { MapPresentationStateV1 } from '@transitmapper/views';
 import {
-  createDocumentMapDriver,
+  createSnapshotMapDriver,
   documentLayerSpecsForViewMode,
-  type DocumentMapSession,
-  type DocumentMapSnapshotSource,
-} from '@transitmapper/renderer/driver';
+  type SnapshotMapPresentation,
+  type SnapshotMapSession,
+} from '@transitmapper/renderer/snapshot';
 import {
+  COMMITTED_SYSTEM_FEATURE_SOURCES,
   LYR_LANDMARKS,
   LYR_LANDMARK_LABELS,
   SRC_LANDMARKS,
+  SRC_STATIONS,
   logicalRenderLayerId,
-  sourceBankLayerSpecs,
 } from '@transitmapper/renderer/layers';
 import type { ColorScheme } from '../theme/color-scheme';
 import {
@@ -23,8 +25,14 @@ import {
 import { landmarksFeatureCollection } from '../map/landmarks';
 import { registerMapIcons } from '../map/layers';
 import { layerSpecsForScheme } from '../map/mapTheme';
-import { attachDocumentMapPaintProof } from '../map/document-map-paint-proof';
+import { markFirstSystemMapPaint } from '../perf/mapPaintMark';
 import { viewerFeatureReference } from './viewer-feature-reference';
+
+export const VIEWER_DOCUMENT_SOURCE_IDS = [
+  ...COMMITTED_SYSTEM_FEATURE_SOURCES,
+  SRC_LANDMARKS,
+] as const;
+const viewerDocumentSourceIds = new Set<string>(VIEWER_DOCUMENT_SOURCE_IDS);
 
 export interface ViewerDocumentMapStyle {
   readonly current: ColorScheme;
@@ -35,21 +43,34 @@ export interface CreateViewerDocumentMapOptions {
   readonly viewStore: MapViewStore;
   readonly selection: SelectionController;
   readonly style: ViewerDocumentMapStyle;
-  readonly onSessionChange?: (session: DocumentMapSession | null) => void;
+  readonly onSessionChange?: (session: SnapshotMapSession | null) => void;
 }
 
 declare global {
   interface Window {
-    __viewerDocumentSession?: DocumentMapSession;
+    __viewerSnapshotSession?: SnapshotMapSession;
   }
 }
 
-function readySource(system: TransitSystem): DocumentMapSnapshotSource {
-  const snapshot = Object.freeze({ status: 'ready' as const, system });
-  return {
-    getSnapshot: () => snapshot,
-    subscribe: () => () => {},
-  };
+function layerSource(spec: LayerSpecification): string | null {
+  return 'source' in spec && typeof spec.source === 'string' ? spec.source : null;
+}
+
+function viewerLayerSpecsForPresentation(
+  catalog: readonly LayerSpecification[],
+  presentation: SnapshotMapPresentation,
+): LayerSpecification[] {
+  return documentLayerSpecsForViewMode(catalog, presentation.viewMode).filter((spec) => {
+    const source = layerSource(spec);
+    return source !== null && viewerDocumentSourceIds.has(source);
+  });
+}
+
+export function viewerLayerSpecsForState(
+  catalog: readonly LayerSpecification[],
+  state: MapPresentationStateV1,
+): LayerSpecification[] {
+  return viewerLayerSpecsForPresentation(catalog, resolveDocumentMapPresentation(state));
 }
 
 function addStaticSources(map: MapLibreMap, scheme: ColorScheme): void {
@@ -79,7 +100,12 @@ function applyLandmarkVisibility(map: MapLibreMap, viewStore: MapViewStore): voi
 
 function setBasemapVisible(map: MapLibreMap, visible: boolean, scheme: ColorScheme): void {
   const documentLayerIds = new Set(
-    sourceBankLayerSpecs(layerSpecsForScheme(scheme)).map((layer) => layer.id),
+    layerSpecsForScheme(scheme)
+      .filter((layer) => {
+        const source = layerSource(layer);
+        return source !== null && viewerDocumentSourceIds.has(source);
+      })
+      .map((layer) => layer.id),
   );
   const visibility = visible ? 'visible' : 'none';
   for (const layer of map.getStyle().layers) {
@@ -93,7 +119,7 @@ function setBasemapVisible(map: MapLibreMap, visible: boolean, scheme: ColorSche
 }
 
 function attachPresentation(
-  session: DocumentMapSession,
+  session: SnapshotMapSession,
   options: CreateViewerDocumentMapOptions,
 ): () => void {
   const initial = options.viewStore.getSnapshot();
@@ -114,7 +140,7 @@ function attachPresentation(
 }
 
 function attachReaderSelection(
-  session: DocumentMapSession,
+  session: SnapshotMapSession,
   selection: SelectionController,
 ): () => void {
   const onClick = (event: MapMouseEvent) => {
@@ -130,26 +156,31 @@ function attachReaderSelection(
   return () => session.map.off('click', onClick);
 }
 
+function attachPaintProof(session: SnapshotMapSession): () => void {
+  const onRender = () => {
+    if (!session.map.getSource(SRC_STATIONS) || !session.map.isSourceLoaded(SRC_STATIONS)) return;
+    session.map.off('render', onRender);
+    markFirstSystemMapPaint();
+  };
+  session.map.on('render', onRender);
+  session.map.triggerRepaint();
+  return () => session.map.off('render', onRender);
+}
+
 export function createViewerDocumentMap(options: CreateViewerDocumentMapOptions): MapDriver {
-  return createDocumentMapDriver({
+  return createSnapshotMapDriver({
     definition: DOCUMENT_MAP_DEFINITION,
-    source: readySource(options.system),
+    system: options.system,
     layerSpecs: () => layerSpecsForScheme(options.style.current),
-    layerSpecsForPresentation: (catalog, presentation) =>
-      documentLayerSpecsForViewMode(catalog, presentation.viewMode),
+    layerSpecsForPresentation: viewerLayerSpecsForPresentation,
     resolvePresentation: resolveDocumentMapPresentation,
     setupStaticSources: (map) => addStaticSources(map, options.style.current),
     attachSession: (session) => {
       options.onSessionChange?.(session);
-      if (import.meta.env.DEV) window.__viewerDocumentSession = session;
-      const detachPaintProof = attachDocumentMapPaintProof({
-        session,
-        currentDocumentId: () => options.system.id,
-      });
+      if (import.meta.env.DEV) window.__viewerSnapshotSession = session;
+      const detachPaintProof = attachPaintProof(session);
       const detachPresentation = attachPresentation(session, options);
       const detachSelection = attachReaderSelection(session, options.selection);
-      const onResize = () => session.scheduleProjection();
-      session.map.on('resize', onResize);
       return {
         restoreAfterStyle: () => {
           applyLandmarkVisibility(session.map, options.viewStore);
@@ -161,10 +192,9 @@ export function createViewerDocumentMap(options: CreateViewerDocumentMapOptions)
         },
         dispose() {
           options.onSessionChange?.(null);
-          if (import.meta.env.DEV && window.__viewerDocumentSession === session) {
-            delete window.__viewerDocumentSession;
+          if (import.meta.env.DEV && window.__viewerSnapshotSession === session) {
+            delete window.__viewerSnapshotSession;
           }
-          session.map.off('resize', onResize);
           detachPaintProof();
           detachSelection();
           detachPresentation();

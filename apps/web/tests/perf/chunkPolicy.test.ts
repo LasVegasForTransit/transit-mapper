@@ -50,6 +50,9 @@ describe('performance chunk policy', () => {
     expect(performanceChunkName('/repo/packages/renderer/src/render-presentation.ts')).toBe(
       'renderer-display',
     );
+    expect(performanceChunkName('/repo/packages/renderer/dist/snapshot-map-driver.js')).toBe(
+      'renderer-display',
+    );
     expect(performanceChunkName('/repo/packages/renderer/src/layers/constants.ts')).toBe(
       'renderer-display',
     );

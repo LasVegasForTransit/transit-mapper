@@ -33,9 +33,10 @@ viewer hosts choose commands and chrome around that surface. A saved View can
 therefore open in the editor, a full reader, or an embed without changing the
 map lifecycle or transit document model.
 
-Published Views currently reference immutable shared-system snapshots. A
-future live transit-data source will need another driver and publication plan.
-It must not add geography-specific behavior to View state.
+Published Views currently reference shared-system resources and resolve their
+latest stored content. A future tiled or live transit-data source will need
+another driver and publication plan. It must not add geography-specific
+behavior to View state.
 
 ## What something looks like is a separate decision from what it is
 

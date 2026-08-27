@@ -3,7 +3,7 @@ import { sourceBankLayerSpecs } from '@transitmapper/renderer/layers';
 import { layerSpecsForScheme } from './mapTheme';
 import type { ColorScheme } from '../theme/color-scheme';
 
-export function documentLayersForScheme(scheme: ColorScheme): LayerSpecification[] {
+function documentLayersForScheme(scheme: ColorScheme): LayerSpecification[] {
   return sourceBankLayerSpecs(layerSpecsForScheme(scheme));
 }
 
