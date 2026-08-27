@@ -251,6 +251,11 @@ function surfaceClassName(className: string | undefined): string {
     : `workspace-map-surface ${className}`;
 }
 
+function serializedCamera(viewStore: MapViewStore): string {
+  const { center, zoom } = viewStore.getSnapshot().camera;
+  return `${center[0]},${center[1]},${zoom}`;
+}
+
 export function MapSurface<ThemeId extends string>({
   driver,
   contentIdentity,
@@ -288,6 +293,18 @@ export function MapSurface<ThemeId extends string>({
   useEffect(() => {
     requestRuntimeTheme(mountedRuntimeRef, theme);
   }, [theme]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container === null) return;
+    // A host can prove that a real pointer gesture changed the shared camera
+    // without retaining MapLibre or enabling the development performance API.
+    const publishCamera = () => {
+      container.dataset.mapCamera = serializedCamera(viewStore);
+    };
+    publishCamera();
+    return viewStore.subscribe(publishCamera);
+  }, [viewStore]);
 
   return <div ref={containerRef} className={surfaceClassName(className)} />;
 }

@@ -95,8 +95,8 @@ describe('the document arriving', () => {
 
 describe('a store given its document directly', () => {
   it('waits for nothing by default', () => {
-    // Every test, fixture and read-only preview map takes this path: there is
-    // no storage to look in, so there is nothing to wait for.
+    // Every test and fixture that provides a document takes this path: there
+    // is no storage to look in, so there is nothing to wait for.
     const store = createEditorStore();
 
     expect(store.getState().documentStatus).toBe('ready');

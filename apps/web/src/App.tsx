@@ -323,11 +323,10 @@ export function EditorSession() {
         setBootstrapAttempt((attempt) => attempt + 1);
         return;
       case 'start-new-system':
-        // The way out when storage or a shared link can't be reached. Writing
-        // immediately rather than waiting for the first edit: the write is how
-        // anyone finds out whether storage is working now, and someone who
-        // just chose to start over deserves that answer before they've drawn
-        // anything, not after.
+        // Starting a new system lets someone recover when local storage cannot
+        // be read. We write immediately instead of waiting for the first edit.
+        // The write tells us whether storage works before that person draws
+        // anything.
         newSystem();
         setBootstrap({ kind: 'ok' });
         setActiveId(store.getState().system.id);
@@ -364,10 +363,9 @@ export function EditorSession() {
   // the chunks, the font, the store's placeholder system — so replacing all of
   // it with a status message withholds something that costs nothing to show,
   // and does so at the moment the app knows least about whether the wait will
-  // end. It used to, and the two paths that never finished loading (storage
-  // unavailable, a shared link that wouldn't fetch) left the product as a
-  // single sentence with one button. Waiting is now a banner over a working
-  // editor. See docs/product/explanation/design-principles.md.
+  // end. The old blocking path left the product as a single sentence with one
+  // button when storage never finished loading. Waiting is now a banner over
+  // a working editor. See docs/product/explanation/design-principles.md.
   return (
     <>
       <MapWorkspace

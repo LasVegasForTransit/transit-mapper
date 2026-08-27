@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   captureOnboardingJourney,
+  onboardingJourneyFunctionalViolations,
   onboardingJourneyViolations,
   type OnboardingJourneyDriver,
 } from '../../scripts/perf/onboarding-journey';
@@ -54,18 +55,23 @@ describe('the onboarding performance journey', () => {
   });
 
   it('rejects a reconstructed map, remote style request, or task above 50 ms', () => {
-    expect(
-      onboardingJourneyViolations({
-        slideCount: 5,
-        trustedClickCount: 4,
-        previewCanvasCount: 1,
-        webGlContextCount: 2,
-        mapReconstructionCount: 1,
-        remoteStyleRequests: ['https://tiles.openfreemap.org/styles/positron'],
-        slideLongTasksMs: [51],
-        maximumSlideLongTaskMs: 51,
-      }),
-    ).toEqual([
+    const sample = {
+      slideCount: 5,
+      trustedClickCount: 4,
+      previewCanvasCount: 1,
+      webGlContextCount: 2,
+      mapReconstructionCount: 1,
+      remoteStyleRequests: ['https://tiles.openfreemap.org/styles/positron'],
+      slideLongTasksMs: [51],
+      maximumSlideLongTaskMs: 51,
+    };
+
+    expect(onboardingJourneyFunctionalViolations(sample)).toEqual([
+      'Onboarding created 2 WebGL contexts; expected exactly 1.',
+      'Onboarding reconstructed its preview map 1 time; expected 0.',
+      'Onboarding requested a remote map style: https://tiles.openfreemap.org/styles/positron.',
+    ]);
+    expect(onboardingJourneyViolations(sample)).toEqual([
       'Onboarding created 2 WebGL contexts; expected exactly 1.',
       'Onboarding reconstructed its preview map 1 time; expected 0.',
       'Onboarding requested a remote map style: https://tiles.openfreemap.org/styles/positron.',

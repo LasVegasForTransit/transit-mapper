@@ -81,6 +81,22 @@ describe('MapSurface', () => {
     await mounted.unmount();
   });
 
+  it('publishes the current camera on the shared map surface', async () => {
+    const driver = createDriver('document', () => Promise.resolve(createAttachment()));
+    const runtime = createRuntimeHarness();
+    const props = baseProps(driver, () => runtime.runtime);
+    const mounted = await mountSurface(props);
+    const surface = mounted.host.querySelector<HTMLElement>('.workspace-map-surface');
+
+    expect(surface?.dataset.mapCamera).toBe('-115.17,36.17,10');
+
+    props.viewStore.setCamera({ center: [-115.2, 36.1], zoom: 11 });
+
+    expect(surface?.dataset.mapCamera).toBe('-115.2,36.1,11');
+
+    await mounted.unmount();
+  });
+
   it('replaces the runtime and aborts the old attachment when the driver changes', async () => {
     let firstSignal: AbortSignal | undefined;
     const firstAttachment = createAttachment();
