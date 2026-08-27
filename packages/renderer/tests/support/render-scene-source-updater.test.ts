@@ -13,7 +13,7 @@ import {
 import type {
   GeoJsonSourceTarget,
   GeoJsonSourceUpdate,
-} from '../../src/render-scene-source-updater';
+} from '../../src/sources/render-scene-source-updater';
 
 export type SourceCall =
   | { method: 'setData'; data: FeatureCollection }

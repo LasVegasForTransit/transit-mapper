@@ -7,7 +7,7 @@
  */
 import type { SystemFeatureSourceId } from '@transitmapper/core/render/render-identity';
 import type { RenderScene } from '@transitmapper/core/render/render-scene';
-import { composeRenderScenePatches, filterRenderScenePatch } from './render-scene-patch-journal';
+import { composeRenderScenePatches, filterRenderScenePatch } from '../render-scene-patch-journal';
 import {
   bankScene,
   canApplyDirectBankUpdate,

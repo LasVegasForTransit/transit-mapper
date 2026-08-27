@@ -1,6 +1,6 @@
 import type { RenderSceneSourceUpdatePlan } from './render-scene-source-updater';
-import type { AcceptedSceneStore } from './accepted-scene-store';
-import { SRC_HIT_FEATURES } from './layers/constants';
+import type { AcceptedSceneStore } from '../accepted-scene-store';
+import { SRC_HIT_FEATURES } from '../layers/constants';
 import type { SourceBankId } from './source-bank';
 import { logicalRenderSourceId, type SourceBankLayerController } from './source-bank-layers';
 

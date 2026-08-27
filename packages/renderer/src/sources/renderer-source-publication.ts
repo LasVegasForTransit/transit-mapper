@@ -9,14 +9,14 @@
  * the CPU scene, visible layers, and hit queries on different revisions.
  */
 import type { RenderDomainIdentity } from '@transitmapper/core/render/render-identity';
-import type { AcceptedSceneUpdate, SceneFeatureTarget } from './accepted-scene-store';
+import type { AcceptedSceneUpdate, SceneFeatureTarget } from '../accepted-scene-store';
 import type {
   RenderSourceErrorEvent,
   RenderSourceErrorRecoveryCoordinator,
 } from './render-source-error-recovery';
-import type { ScenePublicationContext, PublishSceneDraftOptions } from './scene-publication';
+import type { ScenePublicationContext, PublishSceneDraftOptions } from '../scene-publication';
 import type { SourceBankController, SourceBankId } from './source-bank';
-import { SRC_HIT_FEATURES } from './layers/constants';
+import { SRC_HIT_FEATURES } from '../layers/constants';
 import { logicalRenderSourceId, type SourceBankLayerController } from './source-bank-layers';
 import {
   waitForSourceBankLoad,

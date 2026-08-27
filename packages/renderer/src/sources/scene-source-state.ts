@@ -24,8 +24,8 @@ import {
   SYSTEM_FEATURE_NAME_BY_SOURCE,
   SYSTEM_FEATURE_SOURCE_BY_NAME,
   type MapSystemFeatureSourceId,
-} from './system-feature-sources';
-import { ResumableGeometryVertexCount } from './scene-draft-work';
+} from '../system-feature-sources';
+import { ResumableGeometryVertexCount } from '../scene-draft-work';
 
 export interface IncrementalSceneOperationCounts {
   normalizedSourceCount: number;

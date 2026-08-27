@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { scheduleSourceBankSeed } from '../src/source-bank-settlement';
-import type { RenderSceneSourceUpdatePlan } from '../src/render-scene-source-updater';
+import { scheduleSourceBankSeed } from '../src/sources/source-bank-settlement';
+import type { RenderSceneSourceUpdatePlan } from '../src/sources/render-scene-source-updater';
 
 function seedPlan(events: string[]): RenderSceneSourceUpdatePlan {
   return {

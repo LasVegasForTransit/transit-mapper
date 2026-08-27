@@ -22,8 +22,8 @@ import {
   EMPTY_RENDER_COLLECTION,
   requireRenderFeature,
   type IncrementalSourceState,
-} from './scene-source-state';
-import type { IncrementalSceneOperationCounts } from './scene-source-state';
+} from './sources/scene-source-state';
+import type { IncrementalSceneOperationCounts } from './sources/scene-source-state';
 import type { SceneDraftWorkUnit } from './scene-draft-types';
 import { SortedRunMerge } from './scene-draft-work';
 import { SceneFeatureStats, type SceneFeatureStatsResult } from './scene-feature-stats';

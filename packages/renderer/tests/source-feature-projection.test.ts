@@ -19,7 +19,7 @@ import {
   SRC_STATIONS,
 } from '../src/layers/constants';
 import { buildFeaturesForSources } from '../src/projection/source-feature-projection';
-import { ALL_SYSTEM_FEATURE_SOURCES } from '../src/sourceUploadPlan';
+import { ALL_SYSTEM_FEATURE_SOURCES } from '../src/sources/source-upload-plan';
 
 const presentation = renderPresentationForViewport({
   center: [-115.16, 36.14],

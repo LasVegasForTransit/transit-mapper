@@ -12,7 +12,7 @@ import type {
   SystemFeatureSourceId,
 } from '@transitmapper/core/render/render-identity';
 import type { RenderScene } from '@transitmapper/core/render/render-scene';
-import type { IncrementalSourceState } from './scene-source-state';
+import type { IncrementalSourceState } from './sources/scene-source-state';
 
 export interface IncrementalLiveSceneState {
   readonly sourceStates: ReadonlyMap<SystemFeatureSourceId, IncrementalSourceState>;

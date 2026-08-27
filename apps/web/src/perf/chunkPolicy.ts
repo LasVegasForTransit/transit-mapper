@@ -83,7 +83,7 @@ export function performanceChunkName(moduleId: string): PerformanceChunkName | u
     stablePackageModule(
       normalizedId,
       'renderer',
-      /^(?:src|dist)\/(?:document-layer-plan|presentation|render-presentation|render-visibility|snapshot|snapshot-map-driver|layers|layers\/constants|source-bank|source-bank-layers|system-feature-sources)\.[^.]+$/,
+      /^(?:src|dist)\/(?:document-layer-plan|presentation|render-presentation|render-visibility|snapshot|snapshot-map-driver|layers|layers\/constants|sources\/source-bank|sources\/source-bank-layers|system-feature-sources)\.[^.]+$/,
     )
   ) {
     return 'renderer-display';

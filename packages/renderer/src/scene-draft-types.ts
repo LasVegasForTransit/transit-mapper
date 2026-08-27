@@ -14,8 +14,11 @@ import type { RenderScene, RenderSceneStats } from '@transitmapper/core/render/r
 import type { RenderScenePatch } from '@transitmapper/core/render/render-scene-diff';
 import type { IncrementalLiveSceneState } from './accepted-scene-state';
 import type { CooperativeRenderJobUnitSequence } from './projection/cooperative-render-job-scheduler';
-import type { RenderSceneUploadIntent } from './render-scene-source-contract';
-import type { IncrementalSceneOperationCounts, IncrementalSourceState } from './scene-source-state';
+import type { RenderSceneUploadIntent } from './sources/render-scene-source-contract';
+import type {
+  IncrementalSceneOperationCounts,
+  IncrementalSourceState,
+} from './sources/scene-source-state';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 
 export type { SceneDraftWorkUnit } from './scene-draft-work';

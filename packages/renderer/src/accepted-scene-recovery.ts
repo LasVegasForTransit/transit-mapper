@@ -3,20 +3,23 @@
  * error. Recovery follows the same hidden-bank rule as normal publication:
  * prepare offscreen, load exactly the affected sources, paint, then switch.
  */
-import type { RenderSceneSourceUpdateResult } from './render-scene-source-updater';
+import type { RenderSceneSourceUpdateResult } from './sources/render-scene-source-updater';
 import {
   createRenderSourceErrorRecoveryCoordinator,
   type RenderSourceErrorRecoveryCoordinator,
-} from './render-source-error-recovery';
+} from './sources/render-source-error-recovery';
 import type { AcceptedSceneStore } from './accepted-scene-store';
 import { SRC_HIT_FEATURES } from './layers/constants';
-import type { SourceBankController, SourceBankId } from './source-bank';
-import { logicalRenderSourceId, type SourceBankLayerController } from './source-bank-layers';
+import type { SourceBankController, SourceBankId } from './sources/source-bank';
+import {
+  logicalRenderSourceId,
+  type SourceBankLayerController,
+} from './sources/source-bank-layers';
 import {
   waitForSourceBankLoad,
   waitForSourceBankPaint,
   type SourceBankSettlementHost,
-} from './source-bank-settlement';
+} from './sources/source-bank-settlement';
 import {
   COMMITTED_SYSTEM_FEATURE_SOURCES,
   EDITOR_SYSTEM_FEATURE_SOURCES,

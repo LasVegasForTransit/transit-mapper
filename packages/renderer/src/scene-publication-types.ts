@@ -16,7 +16,7 @@ import type {
   RenderFeatureId,
   SystemFeatureSourceId,
 } from '@transitmapper/core/render/render-identity';
-import type { RenderSceneSourceMutationUnit } from './render-scene-source-updater';
+import type { RenderSceneSourceMutationUnit } from './sources/render-scene-source-updater';
 import type { SceneDraft, SceneDraftOptions, SceneDraftPlan } from './scene-draft';
 
 interface SceneDraftController<Update> {

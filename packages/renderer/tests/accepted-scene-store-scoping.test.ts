@@ -11,7 +11,10 @@ import {
   type AcceptedSceneStore,
   type SceneDraftOperationCounts,
 } from '../src/accepted-scene-store';
-import type { GeoJsonSourceTarget, GeoJsonSourceUpdate } from '../src/render-scene-source-updater';
+import type {
+  GeoJsonSourceTarget,
+  GeoJsonSourceUpdate,
+} from '../src/sources/render-scene-source-updater';
 import { emptySystemFeatures, SYSTEM_FEATURE_SOURCE_BY_NAME } from '../src/system-feature-sources';
 import { SRC_SERVICES, SRC_STATIONS, SRC_WAYS } from '../src/layers/constants';
 

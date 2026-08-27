@@ -15,7 +15,7 @@ import {
   initialSourceStates,
   renderSourceId,
   type IncrementalSourceState,
-} from './scene-source-state';
+} from './sources/scene-source-state';
 import { SourceNormalizer } from './scene-draft-normalization';
 import { resolveScopedReplacementDomains } from './scene-draft-assembly';
 import type { BuildSceneDraftInput, SceneDraftWorkUnit } from './scene-draft-types';

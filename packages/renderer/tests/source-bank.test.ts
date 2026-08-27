@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { bankedLayerId, bankedSourceId, createSourceBankController } from '../src/source-bank';
+import {
+  bankedLayerId,
+  bankedSourceId,
+  createSourceBankController,
+} from '../src/sources/source-bank';
 
 const WAYS = 'tm-ways';
 const STATIONS = 'tm-stations';

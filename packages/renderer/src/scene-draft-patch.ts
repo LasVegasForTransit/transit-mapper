@@ -8,8 +8,8 @@ import type {
   RenderFeature,
   RenderFeatureCollection,
 } from '@transitmapper/core/render/render-scene';
-import type { IncrementalSourceState } from './scene-source-state';
-import type { IncrementalSceneOperationCounts } from './scene-source-state';
+import type { IncrementalSourceState } from './sources/scene-source-state';
+import type { IncrementalSceneOperationCounts } from './sources/scene-source-state';
 import type { SceneDraftWorkUnit } from './scene-draft-types';
 import { ResumableRenderFeatureComparison } from './scene-feature-comparison';
 import { SortedRunMerge } from './scene-draft-work';

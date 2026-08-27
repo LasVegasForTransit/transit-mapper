@@ -8,7 +8,7 @@ import type {
   RenderSceneSourceUpdateResult,
 } from './render-scene-source-contract';
 import type { RenderFeatureCollectionMaterialization } from './persistent-render-source-state';
-import type { SceneDraftWorkUnit } from './scene-draft-work';
+import type { SceneDraftWorkUnit } from '../scene-draft-work';
 
 export interface ResolvedFullUpload {
   id: string;

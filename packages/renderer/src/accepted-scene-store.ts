@@ -14,7 +14,7 @@ import {
 } from '@transitmapper/core/render/render-identity';
 import type { RenderScene, RenderSceneStats } from '@transitmapper/core/render/render-scene';
 import { visualTargetsForDomain, type IncrementalLiveSceneState } from './accepted-scene-state';
-import type { IncrementalSceneOperationCounts } from './scene-source-state';
+import type { IncrementalSceneOperationCounts } from './sources/scene-source-state';
 import {
   createRenderSceneSourceUpdater,
   type ApplyRenderSceneOptions,
@@ -23,7 +23,7 @@ import {
   type RenderSceneSourceUpdateResult,
   type RenderSceneSourceUpdaterOptions,
   type RenderSceneUploadIntent,
-} from './render-scene-source-updater';
+} from './sources/render-scene-source-updater';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 import {
   planSceneDraft,

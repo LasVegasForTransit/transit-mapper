@@ -5,7 +5,7 @@ import { createAcceptedSceneStore, type AcceptedSceneStore } from '../../src/acc
 import type {
   GeoJsonSourceTarget,
   GeoJsonSourceUpdate,
-} from '../../src/render-scene-source-updater';
+} from '../../src/sources/render-scene-source-updater';
 import { SYSTEM_FEATURE_SOURCE_BY_NAME } from '../../src/system-feature-sources';
 
 export { emptySystemFeatures } from '../../src/system-feature-sources';

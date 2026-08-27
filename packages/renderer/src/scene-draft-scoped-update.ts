@@ -10,12 +10,12 @@ import type {
   RenderFeatureId,
 } from '@transitmapper/core/render/render-identity';
 import type { RenderFeature } from '@transitmapper/core/render/render-scene';
-import type { IncrementalSourceState, SourceFeatureStats } from './scene-source-state';
+import type { IncrementalSourceState, SourceFeatureStats } from './sources/scene-source-state';
 import {
   overlayReadonlyMap,
   overlayReadonlySet,
   RenderFeatureCollectionOverlayBuilder,
-} from './persistent-render-source-state';
+} from './sources/persistent-render-source-state';
 import { ScopedIndexBuilder } from './scene-draft-scope-indexes';
 import type { SceneDraftWorkUnit } from './scene-draft-types';
 

@@ -32,13 +32,13 @@ import { SRC_HIT_FEATURES } from './layers/constants';
 import {
   type GeoJsonSourceTarget,
   type RenderSceneSourceUpdateResult,
-} from './render-scene-source-updater';
+} from './sources/render-scene-source-updater';
 import {
   type RenderSourceErrorEvent,
   type RenderSourceErrorRecoveryCoordinator,
-} from './render-source-error-recovery';
+} from './sources/render-source-error-recovery';
 import { createAcceptedSceneRecovery } from './accepted-scene-recovery';
-import { RendererSourcePublication } from './renderer-source-publication';
+import { RendererSourcePublication } from './sources/renderer-source-publication';
 import {
   DocumentProjector,
   type DiagramLayoutResolver,
@@ -49,29 +49,29 @@ import {
   createSourceFeatureProjectionAccounting,
   type SourceFeatureProjectionAccounting,
 } from './projection/committed-feature-projection';
-import type { SourceUploadTransition } from './sourceUploadPlan';
+import type { SourceUploadTransition } from './sources/source-upload-plan';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 import { createRendererStatsCollector, type RendererStatsCollector } from './renderer-stats';
 import { publishSceneDraft, type ScenePublicationSubmission } from './scene-publication';
-import { createSourceBankDataStore } from './source-bank-data';
+import { createSourceBankDataStore } from './sources/source-bank-data';
 import {
   createSourceBankLayerController,
   logicalBankedLayerIds,
   physicalRenderLayerIds,
   type RenderLayerVisibility,
   type SourceBankLayerController,
-} from './source-bank-layers';
+} from './sources/source-bank-layers';
 import {
   createSourceBankController,
   type SourceBankController,
   type SourceBankDiagnostics,
   type SourceBankId,
-} from './source-bank';
+} from './sources/source-bank';
 import {
   createSourceBankBackgroundPreparation,
   type SourceBankBackgroundPreparation,
   type SourceBankSettlementHost,
-} from './source-bank-settlement';
+} from './sources/source-bank-settlement';
 import {
   COMMITTED_SYSTEM_FEATURE_SOURCES,
   EDITOR_SYSTEM_FEATURE_SOURCES,
