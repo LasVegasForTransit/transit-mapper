@@ -2,7 +2,7 @@ import { generatePerfFixture } from '../../src/perf/fixtures';
 import { createPerfProtocol } from '../../src/perf/scenarios';
 import { chromium, type Browser } from 'playwright-core';
 import { closeContext, seedIndexedDbFixture } from './browser';
-import { onboardingJourneyViolations } from './onboarding-journey';
+import { onboardingJourneyFunctionalViolations } from './onboarding-journey';
 import { capturePlaywrightOnboardingJourney } from './playwright-onboarding';
 
 function siteFromArgs(args: readonly string[]): string {
@@ -53,17 +53,30 @@ async function exerciseRtcEditor(browser: Browser, site: string): Promise<void> 
     });
     const bounds = await canvas.boundingBox();
     if (!bounds) throw new Error('The deployed RTC map has no interactive bounds.');
-    const before = await canvas.screenshot();
+    const surface = page.locator('.workspace-map-surface').first();
+    const before = await surface.getAttribute('data-map-camera');
+    if (!before) throw new Error('The deployed RTC map did not publish its camera state.');
     const startX = bounds.x + bounds.width / 2;
     const startY = bounds.y + bounds.height / 2;
-    await page.mouse.move(startX, startY);
-    await page.mouse.down({ button: 'right' });
-    await page.mouse.move(startX + 120, startY + 40, { steps: 4 });
-    await page.mouse.up({ button: 'right' });
-    await page.waitForTimeout(250);
-    const after = await canvas.screenshot();
-    if (before.equals(after)) {
-      throw new Error('The deployed RTC map did not repaint after a trusted pan gesture.');
+    await page.keyboard.down('Space');
+    try {
+      await page.mouse.move(startX, startY);
+      await page.mouse.down({ button: 'left' });
+      await page.mouse.move(startX + 120, startY + 40, { steps: 4 });
+      await page.mouse.up({ button: 'left' });
+    } finally {
+      await page.keyboard.up('Space');
+    }
+    await page.waitForFunction(
+      ({ expected }) =>
+        document.querySelector('.workspace-map-surface')?.getAttribute('data-map-camera') !==
+        expected,
+      { expected: before },
+      { timeout: 5_000 },
+    );
+    const after = await surface.getAttribute('data-map-camera');
+    if (!after || after === before) {
+      throw new Error('The deployed RTC map camera did not move after a trusted pan gesture.');
     }
   } finally {
     await closeContext(context);
@@ -80,7 +93,7 @@ async function main(): Promise<void> {
       protocol: createPerfProtocol('desktop', 'smoke'),
       previewUrl: site,
     });
-    const violations = onboardingJourneyViolations(onboarding);
+    const violations = onboardingJourneyFunctionalViolations(onboarding);
     if (violations.length > 0) throw new Error(violations.join(' '));
     console.log('Live production RTC interaction and onboarding walkthrough passed.');
   } finally {

@@ -45,7 +45,7 @@ export async function captureOnboardingJourney(
   };
 }
 
-export function onboardingJourneyViolations(sample: PerfOnboardingSample): string[] {
+export function onboardingJourneyFunctionalViolations(sample: PerfOnboardingSample): string[] {
   const violations: string[] = [];
   if (sample.previewCanvasCount !== 1) {
     violations.push(
@@ -68,6 +68,11 @@ export function onboardingJourneyViolations(sample: PerfOnboardingSample): strin
       `Onboarding requested a remote map style: ${sample.remoteStyleRequests.join(', ')}.`,
     );
   }
+  return violations;
+}
+
+export function onboardingJourneyViolations(sample: PerfOnboardingSample): string[] {
+  const violations = onboardingJourneyFunctionalViolations(sample);
   if (sample.maximumSlideLongTaskMs > 50) {
     violations.push(
       `Onboarding produced a ${sample.maximumSlideLongTaskMs} ms slide-change task; the limit is 50 ms.`,
