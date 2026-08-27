@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import {
   createMapViewStore,
+  createMapStartupMilestones,
   createSelectionController,
   type MapDriver,
   type MapDriverAttachment,
@@ -33,10 +34,7 @@ function testRuntime(panBy: () => void, dispose: () => void = vi.fn()): MapRunti
       reportError: vi.fn(),
     },
     map: { panBy } as never,
-    milestones: {
-      contentCommitted: vi.fn(),
-      interactive: vi.fn(),
-    },
+    milestones: createMapStartupMilestones(),
     requestTheme: vi.fn(() => Promise.resolve()),
     flushTheme: vi.fn(() => Promise.resolve()),
     refreshPadding: vi.fn(),

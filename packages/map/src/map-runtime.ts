@@ -13,7 +13,6 @@ import type { MapViewStore } from './map-view-store';
 import { createBaseStyleController } from './base-style-controller';
 import {
   createMapStartupMilestones,
-  type MapStartupMilestones,
   type ObservableMapStartupMilestones,
 } from './startup-milestones';
 
@@ -96,7 +95,7 @@ export interface MapRuntimeOptions<ThemeId extends string> {
 export interface MapRuntime<ThemeId extends string = string> {
   readonly host: MapRuntimeHost;
   readonly map: MapLibreMap;
-  readonly milestones: MapStartupMilestones;
+  readonly milestones: ObservableMapStartupMilestones;
   requestTheme(theme: ThemeId): Promise<void>;
   flushTheme(): Promise<void>;
   refreshPadding(): void;

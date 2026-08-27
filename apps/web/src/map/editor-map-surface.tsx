@@ -33,6 +33,7 @@ import { useContextMenu, useUi } from '../ui/UiProvider';
 import type { ColorScheme } from '../theme/color-scheme';
 import { useSystemColorScheme } from '../theme/systemColorScheme';
 import { createVehicleAnimationGateController } from '../sim/vehicle-animation-gate';
+import { useMapRuntimeStartupMarks } from '../perf/use-map-runtime-startup-marks';
 import type { TerminusConnectionChoice } from './interactions';
 import { PointerBadge } from './PointerBadge';
 import { getMap, setMap } from './mapRef';
@@ -67,6 +68,7 @@ export function EditorMapSurfaceFrame({
   onRuntimeChange,
   children,
 }: EditorMapSurfaceFrameProps) {
+  const publishRuntimeChange = useMapRuntimeStartupMarks(onRuntimeChange);
   return (
     <>
       <MapSurface
@@ -77,7 +79,7 @@ export function EditorMapSurfaceFrame({
         theme={theme}
         createRuntime={createRuntime}
         scheduleAttachment={scheduleAttachment}
-        onRuntimeChange={onRuntimeChange}
+        onRuntimeChange={publishRuntimeChange}
       />
       {children}
     </>

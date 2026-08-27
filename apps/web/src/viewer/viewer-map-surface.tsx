@@ -30,6 +30,7 @@ import {
 } from '../map/document-style-carry';
 import { registerMapIcons } from '../map/layers';
 import { basemapStyleForScheme, localBlankStyleForScheme } from '../map/mapTheme';
+import { useMapRuntimeStartupMarks } from '../perf/use-map-runtime-startup-marks';
 import { createViewerDocumentMap, type ViewerDocumentMapStyle } from './viewer-document-map';
 
 declare global {
@@ -175,6 +176,10 @@ export function ViewerMapSurface({ system, viewStore, selection, onError }: View
       };
     },
   );
+  const publishRuntimeChange = useMapRuntimeStartupMarks((runtime) => {
+    runtimeRef.current = runtime;
+    if (import.meta.env.DEV) window.__viewerMap = runtime?.map;
+  });
 
   return (
     <MapSurface
@@ -185,10 +190,7 @@ export function ViewerMapSurface({ system, viewStore, selection, onError }: View
       theme={colorScheme}
       createRuntime={createRuntime}
       scheduleAttachment={scheduleAttachment}
-      onRuntimeChange={(runtime) => {
-        runtimeRef.current = runtime;
-        if (import.meta.env.DEV) window.__viewerMap = runtime?.map;
-      }}
+      onRuntimeChange={publishRuntimeChange}
     />
   );
 }
