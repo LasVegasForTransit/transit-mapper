@@ -44,6 +44,18 @@ describe('performance chunk policy', () => {
     expect(performanceChunkName('/repo/packages/workspace/src/map-surface.tsx')).toBe(
       'map-surface',
     );
+    expect(performanceChunkName('/repo/packages/renderer/dist/presentation.js')).toBe(
+      'renderer-display',
+    );
+    expect(performanceChunkName('/repo/packages/renderer/src/render-presentation.ts')).toBe(
+      'renderer-display',
+    );
+    expect(performanceChunkName('/repo/packages/renderer/src/layers/constants.ts')).toBe(
+      'renderer-display',
+    );
+    expect(performanceChunkName('/repo/packages/renderer/dist/source-bank-layers.js')).toBe(
+      'renderer-display',
+    );
     expect(performanceChunkName('/repo/packages/renderer/src/scene-draft.ts')).toBe('renderer');
     expect(
       performanceChunkName('/repo/packages/renderer/src/document-map-feature-details.ts'),

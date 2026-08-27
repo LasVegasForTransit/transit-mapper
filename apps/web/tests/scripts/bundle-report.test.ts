@@ -239,7 +239,7 @@ describe('bundle report delivery graphs', () => {
       },
       'src/embed-runtime.ts': {
         file: 'assets/embed-runtime.js',
-        imports: ['_react-runtime.js', '_workspace.js'],
+        imports: ['_react-runtime.js', '_renderer.js', '_workspace.js'],
       },
       '_react-runtime.js': {
         file: 'assets/react-runtime.js',
@@ -249,18 +249,23 @@ describe('bundle report delivery graphs', () => {
         file: 'assets/workspace.js',
         name: 'workspace',
       },
+      '_renderer.js': {
+        file: 'assets/renderer.js',
+        name: 'renderer',
+      },
     };
     const files = {
       ...fixtureFiles(),
       ...encodedFiles({
         'assets/embed-runtime.js': 'const runtime=true;',
         'assets/react-runtime.js': 'const react=true;',
+        'assets/renderer.js': 'const documentRenderer=true;',
         'assets/workspace.js': 'const workbench=true;',
       }),
     };
 
     expect(() => deliveryGraphs(files, buildManifest)).toThrow(
-      'Embed entry imports forbidden chunks: react-runtime, workspace.',
+      'Embed entry imports forbidden chunks: react-runtime, renderer, workspace.',
     );
   });
 
