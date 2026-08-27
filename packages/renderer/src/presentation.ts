@@ -4,6 +4,8 @@ import type { MapDefinition } from '@transitmapper/map';
 import type { MapCameraStateV1, MapPresentationStateV1 } from '@transitmapper/views';
 import type { DocumentMapPresentation } from './document-map-driver-types';
 
+export * from './render-presentation';
+
 export type DocumentRepresentationId = 'network' | 'infrastructure' | 'diagram';
 
 export const DOCUMENT_VIEW_FILTER_IDS = {

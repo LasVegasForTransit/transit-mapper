@@ -8,6 +8,7 @@ export type PerformanceChunkName =
   | 'workspace'
   | 'map-surface'
   | 'renderer'
+  | 'renderer-display'
   | 'feature-details'
   | 'editor-interactions';
 export type PerformanceChunkKind = 'map-engine' | 'standard';
@@ -77,6 +78,15 @@ export function performanceChunkName(moduleId: string): PerformanceChunkName | u
   }
   if (stablePackageModule(normalizedId, 'workspace', /^(?:src|dist)\/map-surface\.[^.]+$/)) {
     return 'map-surface';
+  }
+  if (
+    stablePackageModule(
+      normalizedId,
+      'renderer',
+      /^(?:src|dist)\/(?:presentation|render-presentation|layers|layers\/constants|source-bank|source-bank-layers|system-feature-sources)\.[^.]+$/,
+    )
+  ) {
+    return 'renderer-display';
   }
   if (
     stablePackageModule(

@@ -174,7 +174,7 @@ function validateEmbedBoundary(
   const embedEntry = manifestEntries.find(([key, entry]) => entryName(key, entry) === 'embed');
   if (!embedEntry) return;
   const forbidden = [...manifestDependencyNames(embedEntry[0], manifest)]
-    .filter((name) => name === 'react-runtime' || name === 'workspace')
+    .filter((name) => name === 'react-runtime' || name === 'renderer' || name === 'workspace')
     .sort(compareText);
   if (forbidden.length > 0) {
     throw new Error(`Embed entry imports forbidden chunks: ${forbidden.join(', ')}.`);
