@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.7.1...v0.7.2) (2026-08-27)
+
+
+### Bug Fixes
+
+* **ci:** Preserve explicit release markers ([124041d](https://github.com/LasVegasForTransit/transit-mapper/commit/124041de1618835e479dbaf5ec42ae977d5f0264))
+
 ## [0.7.1](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.7.0...v0.7.1) (2026-08-27)
 
 
