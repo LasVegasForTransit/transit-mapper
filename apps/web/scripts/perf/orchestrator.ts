@@ -215,7 +215,9 @@ async function runAuditPhase(options: RunAuditPhasesOptions, phase: PerfAuditPha
     protocol: options.protocol,
     previewUrl: publicPreview.url,
   });
-  const violations = onboardingJourneyViolations(options.results.onboarding);
+  const violations = onboardingJourneyViolations(options.results.onboarding, {
+    enforceNumericBudgets: !options.cli.smoke,
+  });
   if (violations.length > 0) throw new Error(violations.join(' '));
 }
 

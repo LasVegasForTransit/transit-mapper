@@ -17,6 +17,10 @@ export interface OnboardingJourneyDriver {
   observations: () => Promise<OnboardingJourneyObservations>;
 }
 
+export interface OnboardingJourneyViolationOptions {
+  enforceNumericBudgets: boolean;
+}
+
 export async function captureOnboardingJourney(
   driver: OnboardingJourneyDriver,
 ): Promise<PerfOnboardingSample> {
@@ -71,9 +75,12 @@ export function onboardingJourneyFunctionalViolations(sample: PerfOnboardingSamp
   return violations;
 }
 
-export function onboardingJourneyViolations(sample: PerfOnboardingSample): string[] {
+export function onboardingJourneyViolations(
+  sample: PerfOnboardingSample,
+  options: OnboardingJourneyViolationOptions,
+): string[] {
   const violations = onboardingJourneyFunctionalViolations(sample);
-  if (sample.maximumSlideLongTaskMs > 50) {
+  if (options.enforceNumericBudgets && sample.maximumSlideLongTaskMs > 50) {
     violations.push(
       `Onboarding produced a ${sample.maximumSlideLongTaskMs} ms slide-change task; the limit is 50 ms.`,
     );
