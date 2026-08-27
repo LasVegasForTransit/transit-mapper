@@ -309,17 +309,17 @@ export function evaluatePerfBudgets(options: EvaluatePerfBudgetsOptions): PerfBu
     };
   }
 
-  const firstSessionViolations = firstSessionSettlementViolations(options.report);
   if (options.enforceNumericBudgets === false) {
     return {
-      status: firstSessionViolations.length === 0 ? 'pass' : 'fail',
-      violations: firstSessionViolations,
+      status: 'pass',
+      violations: [],
       notices: [
         'Smoke mode proves the production build and browser journey; numeric budgets require a full audit.',
       ],
     };
   }
 
+  const firstSessionViolations = firstSessionSettlementViolations(options.report);
   const violations = [...firstSessionViolations, ...absoluteViolations(options)];
   const notices: string[] = [];
   if (options.baseline?.status !== 'ok') {

@@ -100,19 +100,27 @@ describe('first-session byte budgets', () => {
     );
   });
 
-  it('fails an unsettled automatic first session even in smoke mode', () => {
+  it('keeps the automatic network boundary out of a functional smoke', () => {
     const actual = report('new-user-editor');
     actual.firstSessions = [firstSession('new-user-editor', 0, false)];
 
-    const result = evaluatePerfBudgets({
+    const smoke = evaluatePerfBudgets({
       report: actual,
       scenarios: [],
       maxRegressionRatio: 0.1,
       enforceNumericBudgets: false,
     });
+    const audit = evaluatePerfBudgets({
+      report: actual,
+      scenarios: [],
+      maxRegressionRatio: 0.1,
+      enforceNumericBudgets: true,
+    });
 
-    expect(result.status).toBe('fail');
-    expect(result.violations).toContainEqual(
+    expect(smoke.status).toBe('pass');
+    expect(smoke.violations).toEqual([]);
+    expect(audit.status).toBe('fail');
+    expect(audit.violations).toContainEqual(
       expect.objectContaining({ kind: 'first-session-unsettled' }),
     );
   });
