@@ -250,7 +250,7 @@ export interface PerfScenarioSummary {
 type PerfReportStatus = 'ok' | 'partial' | 'unavailable';
 
 export type PerfAuditPhase = 'instrumented' | 'first-session' | 'onboarding';
-export type PerfAuditPhaseStatus = 'passed' | 'failed' | 'unavailable';
+type PerfAuditPhaseStatus = 'passed' | 'failed' | 'unavailable';
 
 export interface PerfAuditPhaseResult {
   phase: PerfAuditPhase;
@@ -313,7 +313,7 @@ export interface PerfFirstSessionSample {
  * always come from CDP; this only makes a historic mark-compatibility shim
  * auditable instead of making it look like a shipping instrumentation run.
  */
-export interface PerfReportProvenance {
+interface PerfReportProvenance {
   artifactRevision: string;
   milestoneMarkSource: 'shipping' | 'legacy-497a549-observer-v1';
 }

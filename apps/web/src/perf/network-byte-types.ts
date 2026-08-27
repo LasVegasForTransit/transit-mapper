@@ -10,8 +10,8 @@ export type PerfCacheSource =
   'network' | 'disk' | 'memory-or-disk' | 'prefetch' | 'service-worker' | 'unknown';
 export type PerfCompression = 'identity' | 'gzip' | 'br' | 'zstd' | 'other';
 export type PerfRenderBlockingStatus = 'blocking' | 'non-blocking' | 'unknown';
-export type PerfAttributionSource = 'resource-timing' | 'cdp';
-export type PerfRequestByteAuthority = 'loading-finished';
+type PerfAttributionSource = 'resource-timing' | 'cdp';
+type PerfRequestByteAuthority = 'loading-finished';
 export type PerfNetworkPhaseName =
   | 'document'
   | 'shell'
@@ -103,7 +103,7 @@ export interface PerfResourceTimingAttribution {
   decodedBodySize: number;
 }
 
-export interface ByteChunk {
+interface ByteChunk {
   timestamp: number;
   encodedBytes: number;
   decodedBytes: number;
