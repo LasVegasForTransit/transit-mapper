@@ -10,12 +10,7 @@ import {
   type MapViewStore,
   type SelectionController,
 } from '@transitmapper/map';
-import {
-  COMMITTED_SYSTEM_FEATURE_SOURCES,
-  SRC_HIT_FEATURES,
-  physicalRenderSourceIds,
-} from '@transitmapper/renderer/layers';
-import type { DocumentMapSession } from '@transitmapper/renderer/driver';
+import type { SnapshotMapSession } from '@transitmapper/renderer/snapshot';
 import {
   MapSurface,
   type MapSurfaceAttachmentScheduler,
@@ -23,15 +18,20 @@ import {
 } from '@transitmapper/workspace';
 import type { ColorScheme } from '../theme/color-scheme';
 import { useSystemColorScheme } from '../theme/systemColorScheme';
-import {
-  carryDocumentStyle,
-  documentLayersForScheme,
-  documentOverlayIsRetained,
-} from '../map/document-style-carry';
+import { carryDocumentStyle, documentOverlayIsRetained } from '../map/document-style-carry';
 import { registerMapIcons } from '../map/layers';
-import { basemapStyleForScheme, localBlankStyleForScheme } from '../map/mapTheme';
+import {
+  basemapStyleForScheme,
+  layerSpecsForScheme,
+  localBlankStyleForScheme,
+} from '../map/mapTheme';
 import { useMapRuntimeStartupMarks } from '../perf/use-map-runtime-startup-marks';
-import { createViewerDocumentMap, type ViewerDocumentMapStyle } from './viewer-document-map';
+import {
+  createViewerDocumentMap,
+  viewerLayerSpecsForState,
+  VIEWER_DOCUMENT_SOURCE_IDS,
+  type ViewerDocumentMapStyle,
+} from './viewer-document-map';
 
 declare global {
   interface Window {
@@ -59,29 +59,30 @@ function chromePadding(container: HTMLElement): PaddingOptions {
 
 interface ViewerRuntimePorts {
   readonly runtime: { current: MapRuntime<ColorScheme> | null };
-  readonly session: { current: DocumentMapSession | null };
+  readonly session: { current: SnapshotMapSession | null };
   readonly activeTheme: { current: ColorScheme };
   readonly reportError: (error: unknown) => void;
 }
 
 function viewerRuntimeFactory(ports: ViewerRuntimePorts): MapSurfaceRuntimeFactory<ColorScheme> {
-  return ({ container, viewStore, initialTheme }) =>
-    createMapRuntime<ColorScheme>({
+  return ({ container, viewStore, initialTheme }) => {
+    const viewerLayers = (theme: ColorScheme) =>
+      viewerLayerSpecsForState(layerSpecsForScheme(theme), viewStore.getSnapshot());
+    return createMapRuntime<ColorScheme>({
       container,
       viewStore,
       initialTheme,
       style: {
         local: localBlankStyleForScheme,
         remoteUrl: basemapStyleForScheme,
-        carry: (previous, next, theme) =>
-          carryDocumentStyle(previous, next, documentLayersForScheme(theme)),
+        carry: (previous, next, theme) => carryDocumentStyle(previous, next, viewerLayers(theme)),
         isDocumentStateRetained: () => {
           const runtime = ports.runtime.current;
           return runtime
             ? documentOverlayIsRetained(
                 runtime.map.getStyle(),
-                physicalRenderSourceIds([...COMMITTED_SYSTEM_FEATURE_SOURCES, SRC_HIT_FEATURES]),
-                documentLayersForScheme(ports.activeTheme.current),
+                VIEWER_DOCUMENT_SOURCE_IDS,
+                viewerLayers(ports.activeTheme.current),
               )
             : false;
         },
@@ -118,12 +119,13 @@ function viewerRuntimeFactory(ports: ViewerRuntimePorts): MapSurfaceRuntimeFacto
         ports.reportError(error);
       },
     });
+  };
 }
 
 export function ViewerMapSurface({ system, viewStore, selection, onError }: ViewerMapSurfaceProps) {
   const colorScheme = useSystemColorScheme();
   const runtimeRef = useRef<MapRuntime<ColorScheme> | null>(null);
-  const sessionRef = useRef<DocumentMapSession | null>(null);
+  const sessionRef = useRef<SnapshotMapSession | null>(null);
   const activeThemeRef = useRef<ColorScheme>(colorScheme);
   const style = useRef<ViewerDocumentMapStyle>({
     get current() {
@@ -132,7 +134,7 @@ export function ViewerMapSurface({ system, viewStore, selection, onError }: View
   });
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
-  const onSessionChange = useCallback((session: DocumentMapSession | null) => {
+  const onSessionChange = useCallback((session: SnapshotMapSession | null) => {
     sessionRef.current = session;
   }, []);
   const driver = useMemo(

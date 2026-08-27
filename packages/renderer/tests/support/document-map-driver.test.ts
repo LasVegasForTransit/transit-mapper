@@ -38,7 +38,8 @@ class TestGeoJsonSource {
     private readonly map: TestDocumentMap,
   ) {}
 
-  setData(_data: FeatureCollection): void {
+  setData(data: FeatureCollection): void {
+    this.map.sourceData.set(this.id, data);
     this.map.sourceOperations.push({ id: this.id, method: 'setData' });
     this.map.completeSource(this.id);
   }
@@ -56,6 +57,7 @@ export class TestDocumentMap {
   readonly filters = new Map<string, unknown>();
   readonly sourceMutations: string[] = [];
   readonly sourceOperations: Array<{ id: string; method: 'setData' | 'updateData' }> = [];
+  readonly sourceData = new Map<string, FeatureCollection>();
   readonly layerAdds: string[] = [];
   readonly styleUpdates: Array<{
     style: StyleSpecification;
@@ -68,12 +70,13 @@ export class TestDocumentMap {
     northeast: [-114, 37] as [number, number],
   };
 
-  addSource(id: string): void {
+  addSource(id: string, source?: { data?: FeatureCollection }): void {
     if (this.failNextOverlaySetup) {
       this.failNextOverlaySetup = false;
       throw new Error('Style is not done loading.');
     }
     if (!this.sources.has(id)) this.sources.set(id, new TestGeoJsonSource(id, this));
+    if (source?.data) this.sourceData.set(id, source.data);
   }
 
   getSource(id: string): GeoJSONSource | undefined {
@@ -181,6 +184,10 @@ export class TestDocumentMap {
     return this.sources.size;
   }
 
+  sourceFeatureCount(id: string): number {
+    return this.sourceData.get(id)?.features.length ?? 0;
+  }
+
   listenerCount(): number {
     let count = 0;
     for (const listeners of this.listeners.values()) count += listeners.size;
@@ -189,6 +196,7 @@ export class TestDocumentMap {
 
   replaceStyle(): void {
     this.sources.clear();
+    this.sourceData.clear();
     this.layers.clear();
     this.sourceMutations.length = 0;
     this.sourceOperations.length = 0;

@@ -81,10 +81,12 @@ The package depends on map, treats React as a peer, and imports no editor state.
 ### Renderer
 
 `packages/renderer` owns document projection, source banks, recovery, workers,
-and the read-only `DocumentMapDriver`. Hosts inject immutable snapshots and can
-attach neutral session extensions. The package depends on core, map, views,
-and MapLibre. Its bounded entries include `driver`, `layers`, `projection`,
-`runtime`, and `stats`.
+and two `MapDriver` implementations. `DocumentMapDriver` publishes changing
+editor documents through `LiveMapRenderer`. `SnapshotMapDriver` projects one
+fixed system directly for readers. Hosts can attach neutral session extensions
+to either driver. The package depends on core, map, views, and MapLibre. Its
+bounded entries include `driver`, `snapshot`, `layers`, `projection`, `runtime`,
+and `stats`.
 
 `packages/renderer/src/layers` owns stable source and layer identities. Worker
 clients remain beside their projection modules until that directory moves.
@@ -239,7 +241,8 @@ The editor owns `/`. The viewer owns both shared-system routes at `/s/:id` and
 published View routes at `/v/:id`. A shared-system route synthesizes default
 presentation state. A published View route loads its saved state and then
 loads the referenced shared system. Both routes mount the same viewer
-workspace and document map driver without constructing editor state.
+workspace and snapshot map driver without constructing editor state or the
+live document renderer.
 
 The separate embed entry owns `/e/:id` and `/embed/:id`. It imports neither
 React nor editor code. `/e/:id` applies the same synthetic default View as
@@ -290,18 +293,25 @@ interaction, overlays, theme layers, and exports. `packages/renderer` projects
 committed documents and publishes sources. `packages/workspace` keeps one
 `MapSurface` mounted while host chrome changes.
 
-This component diagram shows the runtime ownership inside a full map host:
+This component diagram shows the runtime ownership inside the editor and
+viewer hosts:
 
 ```mermaid
 flowchart LR
-  Host[Editor or viewer host] --> Workspace[MapWorkspace]
-  Host --> Driver[Document MapDriver]
+  Editor[Editor host] --> Workspace[MapWorkspace]
+  Viewer[Viewer host] --> Workspace
+  Editor --> DocumentDriver[DocumentMapDriver]
+  Viewer --> SnapshotDriver[SnapshotMapDriver]
   Workspace --> Surface[MapSurface]
   Surface --> Runtime[MapRuntime]
-  Surface --> Driver
-  Driver --> Renderer[Document renderer]
-  Driver --> ViewStore[MapViewStore]
-  Host --> ViewStore
+  Surface --> DocumentDriver
+  Surface --> SnapshotDriver
+  DocumentDriver --> Renderer[LiveMapRenderer]
+  SnapshotDriver --> Projection[Fixed-system projection]
+  DocumentDriver --> ViewStore[MapViewStore]
+  SnapshotDriver --> ViewStore
+  Editor --> ViewStore
+  Viewer --> ViewStore
 ```
 
 The embed uses the same View values and renderer presentation. It owns a
@@ -313,9 +323,10 @@ smaller non-React runtime instead of importing the workspace component tree.
 | `packages/renderer/src/render-visibility.ts`                               | Apply reader-neutral representation, mode, and way-type visibility.     |
 | `apps/web/src/map/editor-feature-state.ts`, `editor-overlays.ts`           | Own selection paint, hover, route focus, and transient editor geometry. |
 
-The renderer package's worker protocol contains serializable document and
-presentation facts, never MapLibre objects or an editor store. Fitted
-read-only maps use the same worker and presentation facts as SVG.
+The live renderer's worker protocol contains serializable document and
+presentation facts, never MapLibre objects or an editor store. The snapshot
+driver and embed use the same pure feature projection and presentation values
+without importing accepted-scene publication or source banks.
 
 Scoped scenes retain a stable source base and small deltas. Static map, embed,
 export, and SVG share scene normalization. Handles, termini, and movement

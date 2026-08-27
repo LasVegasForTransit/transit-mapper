@@ -52,6 +52,14 @@
       "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js"
     },
+    "./snapshot": {
+      "development": {
+        "types": "./src/snapshot.ts",
+        "import": "./src/snapshot.ts"
+      },
+      "types": "./dist/snapshot.d.ts",
+      "import": "./dist/snapshot.js"
+    },
     "./stats": {
       "development": {
         "types": "./src/stats.ts",
