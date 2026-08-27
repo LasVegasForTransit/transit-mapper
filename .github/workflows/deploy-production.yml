@@ -43,6 +43,7 @@ jobs:
   # orders them with the release and deploy stages.
   performance:
     name: Release performance gates
+    if: github.event_name != 'workflow_dispatch' || inputs.deploy_existing_tag == ''
     uses: ./.github/workflows/performance.yml
 
   # Conventional commits are the only release input. Release Please maintains
@@ -59,7 +60,14 @@ jobs:
           (
             github.event_name == 'workflow_dispatch' &&
             inputs.override_performance == true &&
-            inputs.override_reason != ''
+            inputs.override_reason != '' &&
+            (
+              needs.performance.result == 'failure' ||
+              (
+                inputs.deploy_existing_tag != '' &&
+                needs.performance.result == 'skipped'
+              )
+            )
           )
         )
       }}
@@ -100,10 +108,9 @@ jobs:
           RELEASE_TAG: ${{ inputs.deploy_existing_tag }}
         run: |
           set -euo pipefail
-          release=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-            --json isDraft,tagName)
-          tag=$(jq -er '.tagName' <<< "$release")
-          draft=$(jq -er '.isDraft' <<< "$release")
+          release=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG")
+          tag=$(jq -er '.tag_name' <<< "$release")
+          draft=$(jq -er '.draft' <<< "$release")
           if [ "$draft" != 'false' ]; then
             echo "Release $tag is still a draft." >&2
             exit 1

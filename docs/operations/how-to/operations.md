@@ -58,8 +58,10 @@ If Release Please creates the GitHub release but the deploy job does not run,
 dispatch the production workflow again from the release commit. Set **Existing
 published release tag to deploy** to the published tag. The workflow checks out
 and validates the tag itself. It then builds, attests, migrates, deploys, and
-smokes that tag without creating a second release. Use the performance override
-and reason when the recorded gates still fail.
+smokes that tag without creating a second release. The recovery run does not
+repeat performance measurements that the release run already recorded. It
+still requires the performance override and reason so the audit remains
+explicit.
 
 [`deploy-production.yml`](../../../.github/workflows/deploy-production.yml)
 attaches the deployment archive and its Sigstore bundle to every GitHub
