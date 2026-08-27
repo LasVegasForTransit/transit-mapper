@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderDomainIdentity, renderFeatureId } from '@transitmapper/core/render/render-identity';
 import { SYSTEM_FEATURE_SOURCE_BY_NAME } from '../src/system-feature-sources';
-import { normalizedRequestedStates } from '../src/scene-source-state';
+import { normalizedRequestedStates } from '../src/sources/scene-source-state';
 import { SRC_SERVICES, SRC_WAYS } from '../src/layers/constants';
 import {
   controllerFixture,

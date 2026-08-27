@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RendererSourcePublication } from '../src/renderer-source-publication';
+import { RendererSourcePublication } from '../src/sources/renderer-source-publication';
 import type { ScenePublicationContext } from '../src/scene-publication';
-import type { SourceBankSettlementHost } from '../src/source-bank-settlement';
-import type { SourceBankLayerController } from '../src/source-bank-layers';
+import type { SourceBankSettlementHost } from '../src/sources/source-bank-settlement';
+import type { SourceBankLayerController } from '../src/sources/source-bank-layers';
 
 class PublicationHost implements SourceBankSettlementHost {
   private readonly sourceListeners = new Set<(sourceId: string) => void>();

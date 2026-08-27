@@ -92,6 +92,9 @@ and `stats`.
 `packages/renderer/src/projection` owns feature building, preparation,
 cooperative scheduling, resumable work, and projection measurements behind the
 bounded `projection` entry.
+`packages/renderer/src/sources` owns source banks, retained source state,
+mutation plans, settlement, publication, and recovery behind the bounded
+`layers` and `runtime` entries.
 `packages/renderer/src/workers` keeps each worker client beside its protocol,
 entry point, request lifecycle, and publication submission boundary.
 `packages/renderer/src/presentation.ts` owns the document map definition and

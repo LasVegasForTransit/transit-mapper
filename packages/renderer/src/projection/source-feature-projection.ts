@@ -19,7 +19,7 @@ import {
   SRC_STATIONS,
   SRC_WAYS,
 } from '../layers/constants';
-import type { SystemFeatureSourceId } from '../sourceUploadPlan';
+import type { SystemFeatureSourceId } from '../sources/source-upload-plan';
 import { SYSTEM_FEATURE_NAME_BY_SOURCE } from '../system-feature-sources';
 import type { SourceFeatureProjectionCounts } from './feature-projection-counts';
 

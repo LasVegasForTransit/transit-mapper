@@ -12,7 +12,7 @@ import type {
 } from '@transitmapper/core/render/render-scene';
 import type { SceneDraftWorkUnit } from './scene-draft-types';
 import { ResumableGeometryVertexCount } from './scene-draft-work';
-import type { SourceFeatureStats } from './scene-source-state';
+import type { SourceFeatureStats } from './sources/scene-source-state';
 
 export interface SceneFeatureStatsResult {
   readonly stats: SourceFeatureStats;

@@ -56,7 +56,7 @@ describe('performance chunk policy', () => {
     expect(performanceChunkName('/repo/packages/renderer/src/layers/constants.ts')).toBe(
       'renderer-display',
     );
-    expect(performanceChunkName('/repo/packages/renderer/dist/source-bank-layers.js')).toBe(
+    expect(performanceChunkName('/repo/packages/renderer/dist/sources/source-bank-layers.js')).toBe(
       'renderer-display',
     );
     expect(performanceChunkName('/repo/packages/renderer/src/scene-draft.ts')).toBe('renderer');

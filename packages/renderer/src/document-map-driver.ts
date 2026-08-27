@@ -34,13 +34,16 @@ import { SRC_HIT_FEATURES } from './layers/constants';
 import { createLiveMapRenderer, type LiveMapRendererHost } from './live-map-renderer';
 import { renderPresentationFromMap } from './render-presentation';
 import { applyRendererVisibilityFilters, planViewRenderUpdate } from './render-visibility';
-import { physicalRenderSourceIds, sourceBankLayerSpecs } from './source-bank-layers';
+import { physicalRenderSourceIds, sourceBankLayerSpecs } from './sources/source-bank-layers';
 import {
   committedSystemFeatureSources,
   COMMITTED_SYSTEM_FEATURE_SOURCES,
 } from './system-feature-sources';
-import { createSourceUploadQueue, sourceUploadsForSystemChange } from './sourceUploadPlan';
-import type { GeoJsonSourceTarget } from './render-scene-source-updater';
+import {
+  createSourceUploadQueue,
+  sourceUploadsForSystemChange,
+} from './sources/source-upload-plan';
+import type { GeoJsonSourceTarget } from './sources/render-scene-source-updater';
 import { documentMapFeatureDetails } from './document-map-feature-details';
 import type {
   DocumentMapDriverOptions,

@@ -4,7 +4,7 @@ import {
   ALL_SYSTEM_FEATURE_SOURCES,
   createSourceUploadQueue,
   sourceUploadsForSystemChange,
-} from '../src/sourceUploadPlan';
+} from '../src/sources/source-upload-plan';
 import {
   COMMITTED_SYSTEM_FEATURE_SOURCES,
   EDITOR_SYSTEM_FEATURE_SOURCES,

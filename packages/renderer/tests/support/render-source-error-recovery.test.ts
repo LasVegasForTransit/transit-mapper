@@ -3,8 +3,8 @@ import {
   createRenderSourceErrorRecoveryCoordinator,
   type RenderSourceErrorRecoveryCoordinator,
   type RenderSourceErrorRecoveryOptions,
-} from '../../src/render-source-error-recovery';
-import type { RenderSceneSourceUpdateResult } from '../../src/render-scene-source-updater';
+} from '../../src/sources/render-source-error-recovery';
+import type { RenderSceneSourceUpdateResult } from '../../src/sources/render-scene-source-updater';
 
 export const RECOVERY_WAYS_SOURCE = 'tm-ways';
 export const RECOVERY_HIT_SOURCE = 'tm-hit-features';

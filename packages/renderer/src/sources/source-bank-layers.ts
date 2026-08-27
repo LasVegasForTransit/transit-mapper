@@ -7,7 +7,7 @@
  * translations at once.
  */
 import type { LayerSpecification } from 'maplibre-gl';
-import { SRC_HIT_FEATURES } from './layers/constants';
+import { SRC_HIT_FEATURES } from '../layers/constants';
 import {
   bankedLayerId,
   bankedSourceId,
@@ -15,7 +15,7 @@ import {
   type SourceBankController,
   type SourceBankId,
 } from './source-bank';
-import { COMMITTED_SYSTEM_FEATURE_SOURCES } from './system-feature-sources';
+import { COMMITTED_SYSTEM_FEATURE_SOURCES } from '../system-feature-sources';
 
 const BANK_SUFFIX = '--bank-';
 const BANKED_RENDER_SOURCE_IDS = new Set<string>([

@@ -16,13 +16,13 @@ import {
   SRC_STATIONS,
   SRC_WAY_LABELS,
   SRC_WAYS,
-} from './layers/constants';
+} from '../layers/constants';
 import {
   ALL_SYSTEM_FEATURE_SOURCES,
   type MapSystemFeatureSourceId,
-} from './system-feature-sources';
+} from '../system-feature-sources';
 
-export { ALL_SYSTEM_FEATURE_SOURCES } from './system-feature-sources';
+export { ALL_SYSTEM_FEATURE_SOURCES } from '../system-feature-sources';
 export type SystemFeatureSourceId = MapSystemFeatureSourceId;
 export type SourceUploadRequest = 'all' | readonly SystemFeatureSourceId[];
 

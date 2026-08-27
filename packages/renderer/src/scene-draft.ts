@@ -21,11 +21,11 @@ import type {
 } from '@transitmapper/core/render/render-scene-diff';
 import type { CooperativeRenderJobUnitSequence } from './projection/cooperative-render-job-scheduler';
 import type { IncrementalLiveSceneState } from './accepted-scene-state';
-import type { IncrementalSourceState } from './scene-source-state';
+import type { IncrementalSourceState } from './sources/scene-source-state';
 import {
   createRenderFeatureCollectionMaterialization,
   type RenderFeatureCollectionMaterialization,
-} from './persistent-render-source-state';
+} from './sources/persistent-render-source-state';
 import { SourcePatchBuilder, type CollectionPatch } from './scene-draft-patch';
 import { completeStagedLiveScene } from './scene-draft-assembly';
 import type {

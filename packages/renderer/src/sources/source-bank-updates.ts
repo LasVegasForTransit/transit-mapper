@@ -11,7 +11,7 @@ import type { RenderScenePatch } from '@transitmapper/core/render/render-scene-d
 import {
   renderScenePatchEntryCount,
   renderScenePatchSourceCount,
-} from './render-scene-patch-journal';
+} from '../render-scene-patch-journal';
 import {
   createRenderSceneSourceUpdater,
   type ApplyRenderSceneOptions,

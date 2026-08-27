@@ -2,9 +2,12 @@ import type { FeatureCollection } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import { renderFeatureId, systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
 import { diffRenderScenes } from '@transitmapper/core/render/render-scene-diff';
-import { createSourceBankDataStore } from '../src/source-bank-data';
-import { createSourceBankController } from '../src/source-bank';
-import type { GeoJsonSourceTarget, GeoJsonSourceUpdate } from '../src/render-scene-source-updater';
+import { createSourceBankDataStore } from '../src/sources/source-bank-data';
+import { createSourceBankController } from '../src/sources/source-bank';
+import type {
+  GeoJsonSourceTarget,
+  GeoJsonSourceUpdate,
+} from '../src/sources/render-scene-source-updater';
 import { renderPointFeature, renderScene } from './support/render-scene-source-updater.test';
 
 class MaterializedSource implements GeoJsonSourceTarget {

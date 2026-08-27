@@ -18,7 +18,7 @@ import {
   EMPTY_RENDER_COLLECTION,
   renderSourceId,
   type IncrementalSourceState,
-} from './scene-source-state';
+} from './sources/scene-source-state';
 import type { SceneDraft } from './scene-draft-types';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 

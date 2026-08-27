@@ -12,7 +12,10 @@ import {
   type AcceptedSceneStore,
   type SceneDraftOperationCounts,
 } from '../src/accepted-scene-store';
-import type { GeoJsonSourceTarget, GeoJsonSourceUpdate } from '../src/render-scene-source-updater';
+import type {
+  GeoJsonSourceTarget,
+  GeoJsonSourceUpdate,
+} from '../src/sources/render-scene-source-updater';
 import {
   ALL_SYSTEM_FEATURE_SOURCES,
   emptySystemFeatures,

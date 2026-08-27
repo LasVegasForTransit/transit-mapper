@@ -22,7 +22,7 @@ import type { CooperativeRenderJobScheduler } from './cooperative-render-job-sch
 import { createPreparedLiveInvalidationTracker } from './entity-render-update';
 import type { PlanResumableGeographicFeatureProjectionOptions } from './resumable-feature-projection';
 import type { ScenePublicationSubmission } from '../scene-publication';
-import type { SourceUploadTransition } from '../sourceUploadPlan';
+import type { SourceUploadTransition } from '../sources/source-upload-plan';
 import type { MapSystemFeatureSourceId } from '../system-feature-sources';
 import type { FeatureProjectionClient } from '../workers/feature-projection-worker';
 

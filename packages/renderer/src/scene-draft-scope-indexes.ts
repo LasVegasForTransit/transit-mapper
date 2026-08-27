@@ -2,8 +2,8 @@ import type {
   RenderDomainIdentity,
   RenderFeatureId,
 } from '@transitmapper/core/render/render-identity';
-import type { IncrementalSourceState } from './scene-source-state';
-import { overlayReadonlyMap } from './persistent-render-source-state';
+import type { IncrementalSourceState } from './sources/scene-source-state';
+import { overlayReadonlyMap } from './sources/persistent-render-source-state';
 import type { SceneDraftWorkUnit } from './scene-draft-types';
 
 export interface ScopedSourceIndexes {

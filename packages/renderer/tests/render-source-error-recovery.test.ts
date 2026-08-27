@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createRenderSourceErrorRecoveryCoordinator } from '../src/render-source-error-recovery';
+import { createRenderSourceErrorRecoveryCoordinator } from '../src/sources/render-source-error-recovery';
 import {
   RecoveryFrameHarness as FrameHarness,
   RECOVERY_HEAL_RESULT as HEAL_RESULT,

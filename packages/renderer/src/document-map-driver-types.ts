@@ -10,7 +10,7 @@ import type { FeatureProjectionClient } from './workers/feature-projection-worke
 import type { LiveMapRenderer, SceneTargetResolver } from './live-map-renderer';
 import type { RendererStatsCollector } from './renderer-stats';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
-import type { SourceUploadTransition } from './sourceUploadPlan';
+import type { SourceUploadTransition } from './sources/source-upload-plan';
 
 export type DocumentMapStatus = 'loading' | 'ready' | 'error';
 

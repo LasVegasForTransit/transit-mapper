@@ -11,8 +11,8 @@ import {
   persistentReadonlyOverlayEntryCount,
   streamingReadonlyMapEntries,
 } from './persistent-readonly-overlay';
-import type { SceneDraftWorkUnit } from './scene-draft-types';
-import { SortedRunMerge } from './scene-draft-work';
+import type { SceneDraftWorkUnit } from '../scene-draft-types';
+import { SortedRunMerge } from '../scene-draft-work';
 
 export { overlayReadonlyMap, overlayReadonlySet } from './persistent-readonly-overlay';
 

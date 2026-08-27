@@ -5,7 +5,10 @@ import { SRC_HANDLES, SRC_WAYS } from '../src/layers/constants';
 import { createLiveMapRenderer, type LiveMapRendererHost } from '../src/live-map-renderer';
 import type { FeatureProjectionClient } from '../src/workers/feature-projection-worker';
 import { emptySystemFeatures } from '../src/system-feature-sources';
-import type { GeoJsonSourceTarget, GeoJsonSourceUpdate } from '../src/render-scene-source-updater';
+import type {
+  GeoJsonSourceTarget,
+  GeoJsonSourceUpdate,
+} from '../src/sources/render-scene-source-updater';
 
 const unusedProjectionWorker: FeatureProjectionClient = {
   project: () => Promise.reject(new Error('This publication test does not project features.')),

@@ -5,7 +5,7 @@ export {
   type LiveMapRendererHost,
   type SceneTargetResolver,
 } from './live-map-renderer';
-export type { RenderSceneSourceUpdateResult } from './render-scene-source-updater';
-export { createSourceBankController, type SourceBankDiagnostics } from './source-bank';
-export { createSourceBankLayerController } from './source-bank-layers';
-export type { SourceBankSettlementHost } from './source-bank-settlement';
+export type { RenderSceneSourceUpdateResult } from './sources/render-scene-source-updater';
+export { createSourceBankController, type SourceBankDiagnostics } from './sources/source-bank';
+export { createSourceBankLayerController } from './sources/source-bank-layers';
+export type { SourceBankSettlementHost } from './sources/source-bank-settlement';

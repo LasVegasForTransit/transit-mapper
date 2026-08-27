@@ -24,7 +24,7 @@ import {
   SRC_WAY_LABELS,
   SRC_WAYS,
 } from '../src/layers/constants';
-import { sourceUploadsForSystemChange } from '../src/sourceUploadPlan';
+import { sourceUploadsForSystemChange } from '../src/sources/source-upload-plan';
 
 function corridorFixture() {
   const west = aRoad('west', [

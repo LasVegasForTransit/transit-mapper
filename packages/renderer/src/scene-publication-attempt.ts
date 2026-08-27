@@ -8,7 +8,7 @@ import type {
   CooperativeRenderJobUnit,
   CooperativeRenderJobUnitSequence,
 } from './projection/cooperative-render-job-scheduler';
-import type { RenderSceneSourceMutationUnit } from './render-scene-source-updater';
+import type { RenderSceneSourceMutationUnit } from './sources/render-scene-source-updater';
 import type { SceneDraftPlan } from './scene-draft';
 import type {
   PreparedScenePublication,

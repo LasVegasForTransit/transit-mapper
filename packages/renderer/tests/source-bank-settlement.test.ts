@@ -3,7 +3,7 @@ import {
   waitForSourceBankLoad,
   waitForSourceBankPaint,
   type SourceBankSettlementHost,
-} from '../src/source-bank-settlement';
+} from '../src/sources/source-bank-settlement';
 
 class SettlementHost implements SourceBankSettlementHost {
   readonly loaded = new Set<string>();

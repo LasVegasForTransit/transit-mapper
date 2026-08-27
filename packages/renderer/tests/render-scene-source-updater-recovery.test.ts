@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderFeatureId, systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
 import { diffRenderScenes } from '@transitmapper/core/render/render-scene-diff';
 import type { RenderScene } from '@transitmapper/core/render/render-scene';
-import { createRenderSceneSourceUpdater } from '../src/render-scene-source-updater';
+import { createRenderSceneSourceUpdater } from '../src/sources/render-scene-source-updater';
 import {
   renderPointFeature as pointFeature,
   renderScene as scene,

@@ -1,5 +1,10 @@
 export * from './layers/constants';
-export { bankedLayerId, bankedSourceId, SOURCE_BANK_IDS, type SourceBankId } from './source-bank';
+export {
+  bankedLayerId,
+  bankedSourceId,
+  SOURCE_BANK_IDS,
+  type SourceBankId,
+} from './sources/source-bank';
 export {
   isBankedRenderLayer,
   logicalBankedLayerIds,
@@ -12,7 +17,7 @@ export {
   renderOverlayNeedsHealing,
   sourceBankForPhysicalId,
   sourceBankLayerSpecs,
-} from './source-bank-layers';
+} from './sources/source-bank-layers';
 export {
   ALL_SYSTEM_FEATURE_SOURCES,
   committedSystemFeatureSources,

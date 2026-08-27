@@ -26,4 +26,4 @@ export {
   type SourceUploadRequest,
   type SourceUploadTransition,
   type SystemFeatureSourceId,
-} from './sourceUploadPlan';
+} from './sources/source-upload-plan';
