@@ -51,10 +51,10 @@ describe('the onboarding performance journey', () => {
       mapReconstructionCount: 0,
       maximumSlideLongTaskMs: 24,
     });
-    expect(onboardingJourneyViolations(sample)).toEqual([]);
+    expect(onboardingJourneyViolations(sample, { enforceNumericBudgets: true })).toEqual([]);
   });
 
-  it('rejects a reconstructed map, remote style request, or task above 50 ms', () => {
+  it('keeps responsiveness thresholds out of a functional smoke', () => {
     const sample = {
       slideCount: 5,
       trustedClickCount: 4,
@@ -71,7 +71,12 @@ describe('the onboarding performance journey', () => {
       'Onboarding reconstructed its preview map 1 time; expected 0.',
       'Onboarding requested a remote map style: https://tiles.openfreemap.org/styles/positron.',
     ]);
-    expect(onboardingJourneyViolations(sample)).toEqual([
+    expect(onboardingJourneyViolations(sample, { enforceNumericBudgets: false })).toEqual([
+      'Onboarding created 2 WebGL contexts; expected exactly 1.',
+      'Onboarding reconstructed its preview map 1 time; expected 0.',
+      'Onboarding requested a remote map style: https://tiles.openfreemap.org/styles/positron.',
+    ]);
+    expect(onboardingJourneyViolations(sample, { enforceNumericBudgets: true })).toEqual([
       'Onboarding created 2 WebGL contexts; expected exactly 1.',
       'Onboarding reconstructed its preview map 1 time; expected 0.',
       'Onboarding requested a remote map style: https://tiles.openfreemap.org/styles/positron.',
