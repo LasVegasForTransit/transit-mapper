@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createCooperativeRenderJobScheduler } from '../src/cooperative-render-job-scheduler';
-import { submitResumableGeographicFeatureProjection } from '../src/resumable-feature-projection-scheduling';
+import { createCooperativeRenderJobScheduler } from '../src/projection/cooperative-render-job-scheduler';
+import { submitResumableGeographicFeatureProjection } from '../src/projection/resumable-feature-projection-scheduling';
 import type { SceneDraft } from '../src/scene-draft';
 import { publishSceneDraft } from '../src/scene-publication';
 import { emptySystemFeatures } from '../src/system-feature-sources';

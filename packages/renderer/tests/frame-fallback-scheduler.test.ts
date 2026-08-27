@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFrameFallbackScheduler } from '../src/frame-fallback-scheduler';
+import { createFrameFallbackScheduler } from '../src/projection/frame-fallback-scheduler';
 
 interface ScheduledCallback {
   callback: (time: number) => void;

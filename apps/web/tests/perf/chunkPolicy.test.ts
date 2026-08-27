@@ -68,7 +68,7 @@ describe('performance chunk policy', () => {
     );
     expect(
       performanceChunkName(
-        String.raw`C:\repo\packages\renderer\dist\cooperative-render-job-scheduler.js`,
+        String.raw`C:\repo\packages\renderer\dist\projection\cooperative-render-job-scheduler.js`,
       ),
     ).toBe('renderer');
     expect(

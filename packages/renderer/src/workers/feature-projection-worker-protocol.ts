@@ -5,8 +5,8 @@
  * or an editor store. The main thread remains the sole owner of source banks
  * and visible pixels; the worker only returns detached GeoJSON collections.
  */
-import type { BuildFeaturesForSourcesOptions } from '../sourceFeatureProjection';
-import type { SourceFeatureProjectionCounts } from '../feature-projection-counts';
+import type { BuildFeaturesForSourcesOptions } from '../projection/source-feature-projection';
+import type { SourceFeatureProjectionCounts } from '../projection/feature-projection-counts';
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 

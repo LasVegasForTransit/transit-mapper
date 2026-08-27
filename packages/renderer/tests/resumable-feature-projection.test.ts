@@ -17,11 +17,11 @@ import { SRC_CONNECTORS, SRC_WAYS, SRC_WAY_LABELS } from '../src/layers/constant
 import {
   buildFeaturesForSources,
   createSourceFeatureProjectionCounts,
-} from '../src/sourceFeatureProjection';
+} from '../src/projection/source-feature-projection';
 import {
   planResumableGeographicFeatureProjection,
   type ResumableGeographicFeatureProjectionPlan,
-} from '../src/resumable-feature-projection';
+} from '../src/projection/resumable-feature-projection';
 
 const view: RenderViewOptions = {
   viewMode: 'infrastructure',

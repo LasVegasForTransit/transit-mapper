@@ -14,10 +14,10 @@ import {
   type DocumentMapDriverOptions,
   type DocumentMapSession,
 } from '../src/document-map-driver';
-import { createSourceFeatureProjectionAccounting } from '../src/committed-feature-projection';
+import { createSourceFeatureProjectionAccounting } from '../src/projection/committed-feature-projection';
 import { LYR_WAYS_SOLID, SRC_STATIONS, SRC_WAYS } from '../src/layers/constants';
 import type { RendererStatsCollector } from '../src/renderer-stats';
-import { createSourceFeatureProjectionCounts } from '../src/sourceFeatureProjection';
+import { createSourceFeatureProjectionCounts } from '../src/projection/source-feature-projection';
 import { COMMITTED_SYSTEM_FEATURE_SOURCES } from '../src/system-feature-sources';
 import {
   DocumentDriverClock,

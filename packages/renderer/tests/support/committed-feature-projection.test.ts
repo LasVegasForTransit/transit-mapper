@@ -11,15 +11,15 @@ import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 import type {
   CooperativeRenderJobScheduler,
   CooperativeRenderJobSchedulerStats,
-} from '../../src/cooperative-render-job-scheduler';
+} from '../../src/projection/cooperative-render-job-scheduler';
 import {
   prepareResumableGeographicFeatureProjection,
   type GeographicFeatureProjectionPreparationStats,
   type PlanResumableGeographicFeatureProjectionOptions,
-} from '../../src/resumable-feature-projection';
-import type { ResumableGeographicFeatureProjectionContinuation } from '../../src/resumable-feature-projection-scheduling';
-import { submitResumableGeographicFeatureProjection } from '../../src/resumable-feature-projection-scheduling';
-import { buildFeaturesForSources } from '../../src/sourceFeatureProjection';
+} from '../../src/projection/resumable-feature-projection';
+import type { ResumableGeographicFeatureProjectionContinuation } from '../../src/projection/resumable-feature-projection-scheduling';
+import { submitResumableGeographicFeatureProjection } from '../../src/projection/resumable-feature-projection-scheduling';
+import { buildFeaturesForSources } from '../../src/projection/source-feature-projection';
 
 export interface SynchronousCommittedFeatureProjectionOptions {
   readonly scheduler: CooperativeRenderJobScheduler;

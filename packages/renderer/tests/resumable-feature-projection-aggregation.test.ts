@@ -5,8 +5,8 @@ import { renderPresentationForViewport } from '@transitmapper/core/render/render
 import {
   planResumableFeatureProjectionAggregation,
   type ProjectionAggregationWorkUnit,
-} from '../src/resumable-feature-projection-aggregation';
-import type { GeographicFeatureProjectionUnit } from '../src/resumable-feature-projection';
+} from '../src/projection/resumable-feature-projection-aggregation';
+import type { GeographicFeatureProjectionUnit } from '../src/projection/resumable-feature-projection';
 import { emptySystemFeatures } from '../src/system-feature-sources';
 
 function line(id: string, hitTarget = false): Feature<LineString> {

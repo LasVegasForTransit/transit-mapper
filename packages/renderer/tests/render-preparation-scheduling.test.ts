@@ -5,8 +5,8 @@ import type {
   RenderPreparationPlan,
   RenderPreparedSnapshot,
 } from '@transitmapper/core/render/render-preparation';
-import { createCooperativeRenderJobScheduler } from '../src/cooperative-render-job-scheduler';
-import { submitRenderPreparationPipeline } from '../src/render-preparation-scheduling';
+import { createCooperativeRenderJobScheduler } from '../src/projection/cooperative-render-job-scheduler';
+import { submitRenderPreparationPipeline } from '../src/projection/render-preparation-scheduling';
 
 class FrameClock {
   nowMs = 0;

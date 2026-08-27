@@ -18,7 +18,7 @@ import {
   SRC_SERVICES,
   SRC_STATIONS,
 } from '../src/layers/constants';
-import { buildFeaturesForSources } from '../src/sourceFeatureProjection';
+import { buildFeaturesForSources } from '../src/projection/source-feature-projection';
 import { ALL_SYSTEM_FEATURE_SOURCES } from '../src/sourceUploadPlan';
 
 const presentation = renderPresentationForViewport({

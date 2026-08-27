@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createCooperativeRenderJobScheduler } from '../src/cooperative-render-job-scheduler';
+import { createCooperativeRenderJobScheduler } from '../src/projection/cooperative-render-job-scheduler';
 
 class FrameClock {
   nowMs = 0;

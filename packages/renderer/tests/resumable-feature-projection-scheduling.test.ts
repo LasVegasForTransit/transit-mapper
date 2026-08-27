@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { emptySystemFeatures } from '../src/system-feature-sources';
-import { createCooperativeRenderJobScheduler } from '../src/cooperative-render-job-scheduler';
-import type { ResumableGeographicFeatureProjectionPlan } from '../src/resumable-feature-projection';
-import { submitResumableGeographicFeatureProjection } from '../src/resumable-feature-projection-scheduling';
-import type { SourceFeatureProjectionCounts } from '../src/sourceFeatureProjection';
+import { createCooperativeRenderJobScheduler } from '../src/projection/cooperative-render-job-scheduler';
+import type { ResumableGeographicFeatureProjectionPlan } from '../src/projection/resumable-feature-projection';
+import { submitResumableGeographicFeatureProjection } from '../src/projection/resumable-feature-projection-scheduling';
+import type { SourceFeatureProjectionCounts } from '../src/projection/source-feature-projection';
 
 class FrameClock {
   nowMs = 0;

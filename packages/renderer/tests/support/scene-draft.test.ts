@@ -1,6 +1,6 @@
 import type { Feature, FeatureCollection, LineString, Point } from 'geojson';
 import type { SystemFeatureSourceId } from '@transitmapper/core/render/render-identity';
-import type { CooperativeRenderJobUnitSequence } from '../../src/cooperative-render-job-scheduler';
+import type { CooperativeRenderJobUnitSequence } from '../../src/projection/cooperative-render-job-scheduler';
 import { createAcceptedSceneStore, type AcceptedSceneStore } from '../../src/accepted-scene-store';
 import type {
   GeoJsonSourceTarget,

@@ -1,7 +1,7 @@
-import type { SourceFeatureProjectionCounts } from './sourceFeatureProjection';
+import type { SourceFeatureProjectionCounts } from './source-feature-projection';
 import type { CooperativeRenderJobSchedulerStats } from './cooperative-render-job-scheduler';
 import type { GeographicFeatureProjectionPreparationStats } from './resumable-feature-projection';
-import type { RendererProjectionSample, RendererStatsCollector } from './renderer-stats';
+import type { RendererProjectionSample, RendererStatsCollector } from '../renderer-stats';
 
 const RENDERER_INSTRUMENTATION_BUILD =
   import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';

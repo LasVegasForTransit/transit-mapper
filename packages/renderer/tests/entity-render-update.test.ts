@@ -6,7 +6,7 @@ import type { RenderPreparedSnapshot } from '@transitmapper/core/render/render-p
 import {
   planEntityRenderUpdate,
   planPreparedLiveEntityRenderUpdate,
-} from '../src/entity-render-update';
+} from '../src/projection/entity-render-update';
 import {
   SRC_CONNECTORS,
   SRC_FACILITIES,

@@ -11,7 +11,7 @@ import {
   type CooperativeRenderJobScheduler,
   type CooperativeRenderJobSchedulerStats,
   type CooperativeRenderJobSettlement,
-} from './cooperative-render-job-scheduler';
+} from './projection/cooperative-render-job-scheduler';
 import type {
   ScenePublicationSubmission,
   PreparedScenePublication,

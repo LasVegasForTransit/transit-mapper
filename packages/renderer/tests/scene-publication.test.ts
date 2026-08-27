@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createCooperativeRenderJobScheduler,
   type CooperativeRenderJobSchedulerStats,
-} from '../src/cooperative-render-job-scheduler';
+} from '../src/projection/cooperative-render-job-scheduler';
 import { publishSceneDraft } from '../src/scene-publication';
 import {
   flushScenePublication as flushUntilSettled,

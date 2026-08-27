@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { aRoad, aSystem } from '@transitmapper/core/testing/fixtures';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
-import { createSourceFeatureProjectionAccounting } from '../src/committed-feature-projection';
-import { createCooperativeRenderJobScheduler } from '../src/cooperative-render-job-scheduler';
+import { createSourceFeatureProjectionAccounting } from '../src/projection/committed-feature-projection';
+import { createCooperativeRenderJobScheduler } from '../src/projection/cooperative-render-job-scheduler';
 import {
   DocumentProjector,
   type DocumentProjectionRequest,
   type DocumentProjectorOptions,
-} from '../src/document-projection';
+} from '../src/projection/document-projection';
 import { SRC_WAYS } from '../src/layers/constants';
 import { createRendererStatsCollector } from '../src/renderer-stats';
 import type {

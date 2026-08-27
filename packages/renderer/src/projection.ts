@@ -1,14 +1,14 @@
-export type { CooperativeRenderJobSchedulerStats } from './cooperative-render-job-scheduler';
+export type { CooperativeRenderJobSchedulerStats } from './projection/cooperative-render-job-scheduler';
 export {
   createSourceFeatureProjectionAccounting,
   scheduleRenderProjectionFailureRetry,
   type SourceFeatureProjectionAccounting,
-} from './committed-feature-projection';
+} from './projection/committed-feature-projection';
 export {
   createDiagramLayoutWorker,
   type DiagramLayoutWorker,
 } from './workers/diagram-layout-worker';
-export { mergeSourceFeatureProjectionCounts } from './feature-projection-counts';
+export { mergeSourceFeatureProjectionCounts } from './projection/feature-projection-counts';
 export {
   createFeatureProjectionWorker,
   type FeatureProjectionClient,
@@ -18,7 +18,7 @@ export {
 export {
   buildFeaturesForSources,
   type SourceFeatureProjectionCounts,
-} from './sourceFeatureProjection';
+} from './projection/source-feature-projection';
 export {
   createSourceUploadQueue,
   sourceUploadsForSystemChange,

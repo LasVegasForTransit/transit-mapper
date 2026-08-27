@@ -10,10 +10,10 @@ import { generatePerformanceFixture } from '@transitmapper/core/performance-fixt
 import {
   createCooperativeRenderJobScheduler,
   type CooperativeRenderJobSchedulerStats,
-} from '../src/cooperative-render-job-scheduler';
+} from '../src/projection/cooperative-render-job-scheduler';
 import { SRC_STATIONS, SRC_WAYS } from '../src/layers/constants';
 import { persistentRenderOverlayDiagnostics } from '../src/persistent-render-source-state';
-import { buildFeaturesForSources } from '../src/sourceFeatureProjection';
+import { buildFeaturesForSources } from '../src/projection/source-feature-projection';
 import { publishSceneDraft } from '../src/scene-publication';
 import {
   COMMITTED_SYSTEM_FEATURE_SOURCES,

@@ -1,8 +1,8 @@
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
-import { SRC_SERVICES } from './layers/constants';
+import { SRC_SERVICES } from '../layers/constants';
 import type { ProjectionPlanningContext } from './resumable-feature-projection-planning';
-import { emptySystemFeatures } from './system-feature-sources';
-import { buildFeaturesForSources } from './sourceFeatureProjection';
+import { emptySystemFeatures } from '../system-feature-sources';
+import { buildFeaturesForSources } from './source-feature-projection';
 
 /**
  * A Street service is drawn in two complementary passes. Corridor units own

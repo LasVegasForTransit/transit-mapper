@@ -10,7 +10,7 @@ import type { RenderCandidateEnvelope } from '@transitmapper/core/render/render-
 import type { RenderPreparedSnapshot } from '@transitmapper/core/render/render-preparation';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { createRenderPreparationCoordinator } from '@transitmapper/core/render/render-preparation-update';
-import type { AcceptedSceneUpdate } from './accepted-scene-store';
+import type { AcceptedSceneUpdate } from '../accepted-scene-store';
 import {
   createCommittedProjectionOwnership,
   submitPreparedCommittedFeatureProjection,
@@ -21,10 +21,10 @@ import {
 import type { CooperativeRenderJobScheduler } from './cooperative-render-job-scheduler';
 import { createPreparedLiveInvalidationTracker } from './entity-render-update';
 import type { PlanResumableGeographicFeatureProjectionOptions } from './resumable-feature-projection';
-import type { ScenePublicationSubmission } from './scene-publication';
-import type { SourceUploadTransition } from './sourceUploadPlan';
-import type { MapSystemFeatureSourceId } from './system-feature-sources';
-import type { FeatureProjectionClient } from './workers/feature-projection-worker';
+import type { ScenePublicationSubmission } from '../scene-publication';
+import type { SourceUploadTransition } from '../sourceUploadPlan';
+import type { MapSystemFeatureSourceId } from '../system-feature-sources';
+import type { FeatureProjectionClient } from '../workers/feature-projection-worker';
 
 export type DiagramLayoutResolver = (
   system: TransitSystem,
@@ -35,7 +35,7 @@ import {
   createRendererProjectionMeasurement,
   type RendererProjectionMeasurement,
 } from './renderer-projection-measurement';
-import type { RendererStatsCollector } from './renderer-stats';
+import type { RendererStatsCollector } from '../renderer-stats';
 
 export interface DocumentProjectionRequest {
   readonly revision: string;

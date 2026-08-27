@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { scheduleRenderProjectionFailureRetry } from '../src/committed-feature-projection';
+import { scheduleRenderProjectionFailureRetry } from '../src/projection/committed-feature-projection';
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = () => {};

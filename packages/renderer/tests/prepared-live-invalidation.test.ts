@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RenderDependencyClosure } from '@transitmapper/core/render/dependency-index';
 import type { RenderPreparedSnapshot } from '@transitmapper/core/render/render-preparation';
-import { createPreparedLiveInvalidationTracker } from '../src/entity-render-update';
+import { createPreparedLiveInvalidationTracker } from '../src/projection/entity-render-update';
 
 const EMPTY: RenderDependencyClosure = {
   corridorIds: [],

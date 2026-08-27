@@ -24,8 +24,8 @@ import {
   SRC_WAY_LABELS,
   SRC_WAYS,
 } from '../src/layers/constants';
-import { planResumableGeographicFeatureProjection } from '../src/resumable-feature-projection';
-import { buildFeaturesForSources } from '../src/sourceFeatureProjection';
+import { planResumableGeographicFeatureProjection } from '../src/projection/resumable-feature-projection';
+import { buildFeaturesForSources } from '../src/projection/source-feature-projection';
 
 const view: RenderViewOptions = {
   viewMode: 'infrastructure',

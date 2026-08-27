@@ -22,7 +22,7 @@ import {
   SRC_PHYSICAL_HANDLES,
   SRC_SERVICE_TERMINI,
   SRC_WAY_LABELS,
-} from './layers/constants';
+} from '../layers/constants';
 import {
   CORRIDOR_SOURCES,
   JUNCTION_SOURCES,

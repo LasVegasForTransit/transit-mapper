@@ -24,16 +24,16 @@ import {
   SRC_STATIONS,
   SRC_WAY_LABELS,
   SRC_WAYS,
-} from './layers/constants';
+} from '../layers/constants';
 import {
   buildFeaturesForSources,
   type BuildFeaturesForSourcesOptions,
   type SourceFeatureProjectionCounts,
-} from './sourceFeatureProjection';
+} from './source-feature-projection';
 import {
   ALL_SYSTEM_FEATURE_SOURCES,
   type MapSystemFeatureSourceId,
-} from './system-feature-sources';
+} from '../system-feature-sources';
 
 export interface GeographicFeatureProjectionBatchSizes {
   readonly corridors?: number;

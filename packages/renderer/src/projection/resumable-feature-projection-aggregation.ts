@@ -16,7 +16,7 @@ import {
   emptySystemFeatures,
   SYSTEM_FEATURE_NAME_BY_SOURCE,
   type MapSystemFeatureSourceId,
-} from './system-feature-sources';
+} from '../system-feature-sources';
 
 export interface ProjectionAggregationWorkUnit extends CooperativeRenderJobUnit<void> {
   /** Upper bound on features visited or appended by this unit. */

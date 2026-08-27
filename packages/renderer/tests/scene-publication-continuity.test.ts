@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createCooperativeRenderJobScheduler } from '../src/cooperative-render-job-scheduler';
+import { createCooperativeRenderJobScheduler } from '../src/projection/cooperative-render-job-scheduler';
 import { publishSceneDraft } from '../src/scene-publication';
 import {
   flushScenePublication,

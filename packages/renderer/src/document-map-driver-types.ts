@@ -4,7 +4,7 @@ import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { MapDefinition } from '@transitmapper/map';
 import type { MapPresentationStateV1 } from '@transitmapper/views';
 import type { AcceptedSceneUpdate } from './accepted-scene-store';
-import type { SourceFeatureProjectionAccounting } from './committed-feature-projection';
+import type { SourceFeatureProjectionAccounting } from './projection/committed-feature-projection';
 import type { DiagramLayoutWorkerClient } from './workers/diagram-layout-worker';
 import type { FeatureProjectionClient } from './workers/feature-projection-worker';
 import type { LiveMapRenderer, SceneTargetResolver } from './live-map-renderer';
