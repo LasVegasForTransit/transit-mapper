@@ -151,6 +151,36 @@ function manifestEntryFiles(
   return collected;
 }
 
+function manifestDependencyNames(key: string, manifest: ViteManifest): Set<string> {
+  const names = new Set<string>();
+  const pending = [key];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const candidate = pending.pop();
+    if (!candidate || visited.has(candidate)) continue;
+    visited.add(candidate);
+    const entry = manifest[candidate];
+    if (!entry) throw new Error(`Vite manifest import "${candidate}" does not exist.`);
+    if (candidate !== key && entry.name) names.add(entry.name);
+    pending.push(...(entry.imports ?? []), ...(entry.dynamicImports ?? []));
+  }
+  return names;
+}
+
+function validateEmbedBoundary(
+  manifestEntries: readonly [string, ViteManifestEntry][],
+  manifest: ViteManifest,
+): void {
+  const embedEntry = manifestEntries.find(([key, entry]) => entryName(key, entry) === 'embed');
+  if (!embedEntry) return;
+  const forbidden = [...manifestDependencyNames(embedEntry[0], manifest)]
+    .filter((name) => name === 'react-runtime' || name === 'workspace')
+    .sort(compareText);
+  if (forbidden.length > 0) {
+    throw new Error(`Embed entry imports forbidden chunks: ${forbidden.join(', ')}.`);
+  }
+}
+
 function fileReport(
   path: string,
   files: Readonly<Partial<Record<string, Uint8Array>>>,
@@ -349,6 +379,7 @@ export function createDeliveryGraphs(options: CreateDeliveryGraphsOptions): Deli
   const manifestEntries = allEntries.filter(
     (entry): entry is [string, ViteManifestEntry] => entry[1].isEntry === true,
   );
+  validateEmbedBoundary(manifestEntries, options.manifest);
   const routeHostEntries = allEntries.filter(
     ([key, entry]) => entry.isEntry !== true && deliveryEntryName(key, entry) === 'viewer',
   );
