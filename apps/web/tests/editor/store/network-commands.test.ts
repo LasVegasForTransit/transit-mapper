@@ -48,33 +48,6 @@ function networkSystem(): TransitSystem {
 }
 
 describe('network commands', () => {
-  it('blocks every network content command in read-only documents', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const runtime = createEditorRuntime();
-    const system = networkSystem();
-    runtime.installDocument(system, { tool: 'select', readOnly: true });
-    const createId = vi.fn(() => 'forbidden');
-    const commands = createNetworkCommands(runtime, { createId });
-
-    commands.setNodeControl('junction', 'signal');
-    commands.setNodeConnectors('junction', []);
-    commands.disconnectNodeWay('junction', 'first');
-    commands.setApproachControl('first', 'end', 'stop');
-    commands.setTurnRestriction('first', system.ways[0].profile.lanes[0].id, []);
-    commands.setDrivingSide('left');
-    commands.formCrossingJunctions('first');
-    commands.mergeWays('first', 'second');
-    expect(commands.separateCarriageways('first')).toBeNull();
-    commands.combineCarriageways('street');
-    commands.setMedianWidth('street', 8);
-    expect(commands.deleteWayStretch('first', 0.25, 0.75)).toBe(0);
-    expect(commands.mergeWaysIntoCorridor(['first', 'second'])).toBe(0);
-
-    expect(runtime.read().system).toBe(system);
-    expect(runtime.read().canUndo).toBe(false);
-    expect(createId).not.toHaveBeenCalled();
-  });
-
   it('blocks returned loading commands before generating ids', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const system = networkSystem();

@@ -59,7 +59,7 @@ async function selectReplacementAfterDelete({
   if (!first) {
     const next = createEmptySystem();
     setActiveId(next.id);
-    setSystem(next, { readOnly: false });
+    setSystem(next);
     return;
   }
 
@@ -74,12 +74,11 @@ async function selectReplacementAfterDelete({
   }
   if (loaded.status === 'missing') return;
   setActiveId(loaded.system.id);
-  setSystem(loaded.system, { readOnly: false });
+  setSystem(loaded.system);
 }
 
-/** Replaces the old single-slot autosave with a real library: every saved
- *  system its own row, switch between them without losing anything, rename/
- *  duplicate/delete in place. See storage/browserLibrary.ts for the durable
+/** Gives each saved system its own row with switching, rename, duplication,
+ *  and deletion. See storage/browserLibrary.ts for the durable
  *  IndexedDB path and its localStorage recovery boundary. */
 export function SystemsDialog({
   onClose,
@@ -199,7 +198,7 @@ export function SystemsDialog({
       }
       const system = result.system;
       setActiveId(id);
-      setSystem(system, { readOnly: false });
+      setSystem(system);
       onClose();
     } finally {
       openingIdRef.current = null;

@@ -12,7 +12,6 @@ export interface FacilityInspectorProps {
 export function FacilityInspector({ id }: FacilityInspectorProps) {
   const facility = useEditor((s) => s.system.facilities.find((f) => f.id === id));
   const complex = useEditor((s) => s.system.groups.find((g) => g.memberIds.includes(id)));
-  const readOnly = useEditor((s) => s.readOnly);
   const { setFacilityName, deleteFacility } = useEditorCommands().facilities;
   const { selectAndFocus } = useEditorCommands().selection;
 
@@ -28,7 +27,6 @@ export function FacilityInspector({ id }: FacilityInspectorProps) {
           aria-label="Facility name"
           placeholder={type.label}
           value={facility.name ?? ''}
-          disabled={readOnly}
           onChange={(e) => setFacilityName(id, e.target.value)}
           onKeyDown={blurOnEnter}
         />
@@ -50,13 +48,11 @@ export function FacilityInspector({ id }: FacilityInspectorProps) {
         </>
       )}
 
-      {!readOnly && (
-        <div className="insp-footer">
-          <button className="danger-btn" onClick={() => deleteFacility(id)}>
-            <Icon name="trash" size={18} /> Delete facility
-          </button>
-        </div>
-      )}
+      <div className="insp-footer">
+        <button className="danger-btn" onClick={() => deleteFacility(id)}>
+          <Icon name="trash" size={18} /> Delete facility
+        </button>
+      </div>
     </Panel>
   );
 }

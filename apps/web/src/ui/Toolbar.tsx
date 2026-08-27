@@ -65,7 +65,6 @@ const lastTypeByFamily: Partial<Record<WayFamily, string>> = {};
 export function Toolbar() {
   const tool = useEditor((s) => s.tool);
   const selectVariant = useEditor((s) => s.selectVariant);
-  const readOnly = useEditor((s) => s.readOnly);
   const draftWayTypeId = useEditor((s) => s.draftWayTypeId);
   const draftModeId = useEditor((s) => s.draftModeId);
   const draftFacilityTypeId = useEditor((s) => s.draftFacilityTypeId);
@@ -84,9 +83,9 @@ export function Toolbar() {
   const dockRef = useInertRef<HTMLDivElement>(uiHidden);
   // Diagram is schematic, so its marks cannot become document edits (see
   // map/interactions.ts's isDiagramMode gating). Drawing tools stay disabled,
-  // like they do in a read-only shared view.
+  // while the separate reader continues to offer its own controls.
   const diagram = viewMode === 'diagram';
-  const locked = readOnly || diagram;
+  const locked = diagram;
   const network = viewMode === 'network';
   const placeTool = passengerPlaceTool(network ? 'network' : 'infrastructure');
   const activeFamily = tool === 'way' ? wayType(draftWayTypeId).family : null;

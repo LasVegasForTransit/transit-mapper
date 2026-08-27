@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { MapWorkspace, useMapViewStore } from '@transitmapper/workspace';
-import type { RouteIntent } from './app/route-intent';
 import { useEditor, useEditorCommands, useEditorStore } from './editor/EditorProvider';
 import { resolveEditorBootstrap } from './editor/editor-bootstrap';
 import { createEditorSelectionController } from './editor/editor-selection';
@@ -128,11 +127,7 @@ function LazyDialog({ children, onFailure }: LazyDialogProps) {
   );
 }
 
-interface EditorSessionProps {
-  routeIntent: RouteIntent;
-}
-
-export function EditorSession({ routeIntent }: EditorSessionProps) {
+export function EditorSession() {
   const store = useEditorStore();
   const mapViewStore = useMapViewStore();
   const [selection] = useState(() => createEditorSelectionController(store));
@@ -174,28 +169,20 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
   // Only ever used to explain a failure that already happened — see
   // network/useOnlineStatus for why the "online" direction is never acted on.
   const online = useOnlineStatus();
-  const { installState, recordUndoableEdit, setEditable } = useInstall();
+  const { installState, recordUndoableEdit } = useInstall();
 
   // Bootstrap resolves the accepted route once. This host applies the outcome
   // only while this mounted editor session still owns the request.
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
-      const outcome = await resolveEditorBootstrap(routeIntent, controller.signal);
+      const outcome = await resolveEditorBootstrap(controller.signal);
       if (outcome.kind === 'aborted') return;
-      if (outcome.kind === 'share-failed') {
-        setBootstrap({ kind: 'share-failed' });
-        return;
-      }
       if (outcome.kind === 'storage-unavailable') {
         // Do not create a blank replacement or change activeId. IndexedDB may
         // contain the only copy of an agency-scale document and recover on
         // the next attempt.
         setBootstrap({ kind: 'storage-unavailable' });
-        return;
-      }
-      if (outcome.source === 'shared-system') {
-        setSystem(outcome.system, { readOnly: true });
         return;
       }
       const { system, isBrandNew } = outcome;
@@ -218,7 +205,7 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
       if (controller.signal.aborted) return;
       setBootstrap({ kind: 'ok' });
       setActiveId(system.id);
-      setSystem(system, { readOnly: false });
+      setSystem(system);
       if (isBrandNew) setTool('way');
       // isBrandNew means "no saved system found" — true for a genuine first
       // run AND for a returning user who deleted their only system, and
@@ -232,16 +219,7 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
       else if (!hasSeenOnboarding()) openDialog('onboarding');
     })();
     return () => controller.abort();
-  }, [
-    store,
-    report,
-    openDialog,
-    openNewSystemLocation,
-    bootstrapAttempt,
-    routeIntent,
-    setSystem,
-    setTool,
-  ]);
+  }, [store, report, openDialog, openNewSystemLocation, bootstrapAttempt, setSystem, setTool]);
 
   // A wait nobody noticed does not need announcing, and a message that flashes
   // for 40ms on every single load is worse than silence. Only a wait somebody
@@ -310,12 +288,7 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
     }
   }, []);
 
-  const readOnly = useEditor((s) => s.readOnly);
   const canUndo = useEditor((s) => s.canUndo);
-
-  useEffect(() => {
-    setEditable(!readOnly);
-  }, [readOnly, setEditable]);
 
   useEffect(() => {
     if (canUndo) recordUndoableEdit();
@@ -375,7 +348,6 @@ export function EditorSession({ routeIntent }: EditorSessionProps) {
   const installBannerShowing = shouldShowInstallBanner({
     eligible: installState.eligible,
     uiHidden,
-    readOnly,
     appNoticeShowing: descriptor !== null,
   });
   const applicationNotices = banner

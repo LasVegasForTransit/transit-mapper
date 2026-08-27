@@ -42,7 +42,7 @@ function importHarness(): ImportHarness {
   const options: StartGtfsImportOptions = {
     feed: FEED,
     store: {
-      getState: () => ({ system, readOnly: false, documentStatus: 'ready' }),
+      getState: () => ({ system, documentStatus: 'ready' }),
       subscribe: () => () => undefined,
     },
     commands: {

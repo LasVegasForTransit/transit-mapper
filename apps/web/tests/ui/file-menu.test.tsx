@@ -10,7 +10,6 @@ import { EditorProvider } from '../../src/editor/EditorProvider';
 import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
 import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { FileMenu } from '../../src/ui/FileMenu';
-import { TopBarBrand } from '../../src/ui/TopBar';
 
 const { exportSystemJson } = vi.hoisted(() => ({ exportSystemJson: vi.fn() }));
 
@@ -81,19 +80,6 @@ describe('File menu', () => {
     expect(document.querySelector('a[href="/privacy"]')?.textContent).toContain('Privacy');
   });
 
-  it('offers About and Privacy on a shared read-only system', () => {
-    store.commands.document.setSystem(store.getState().system, { readOnly: true });
-    renderWithEditor(<FileMenu />);
-    openMenu();
-
-    expect(document.body.textContent).toContain('About TransitMapper…');
-    expect(document.querySelector('a[href="/privacy"]')?.textContent).toContain('Privacy');
-    expect(document.body.textContent).not.toContain('New system');
-    expect(document.body.textContent).not.toContain('My systems…');
-    expect(document.body.textContent).not.toContain('Import streets…');
-    expect(document.body.textContent).not.toContain('Export system data (.json)');
-  });
-
   it('exports the current map camera without mutating the editor document', () => {
     const original = store.getState().system;
     mapViewStore.setCamera({ center: [-73.9857, 40.7484], zoom: 13 });
@@ -110,13 +96,5 @@ describe('File menu', () => {
       expect.objectContaining({ viewport: { center: [-73.9857, 40.7484], zoom: 13 } }),
     );
     expect(store.getState().system).toBe(original);
-  });
-
-  it('keeps the application menu mounted in the read-only brand row', () => {
-    store.commands.document.setSystem(store.getState().system, { readOnly: true });
-    renderWithEditor(<TopBarBrand />);
-
-    expect(container.querySelector('button[aria-label="TransitMapper menu"]')).not.toBeNull();
-    expect(container.textContent).toContain('Test system');
   });
 });

@@ -20,13 +20,12 @@ const medianFtLabel = (m: number) => `${Math.round(m / MEDIAN_FT)}′`;
 
 interface MedianFieldProps {
   namedWayId: string;
-  readOnly: boolean;
 }
 
 /** A NamedWay's captured median width (see model/system.ts's Median) —
  *  editable independent of how far apart the carriageways happen to be
  *  dragged, and preserved across separate/combine round-trips. */
-function MedianField({ namedWayId, readOnly }: MedianFieldProps) {
+function MedianField({ namedWayId }: MedianFieldProps) {
   const median = useEditor((s) => getComponent(s.system.medians, namedWayId));
   const { setMedianWidth } = useEditorCommands().network;
   const widthM = median?.widthM ?? LANE_KINDS.median.defaultWidthM;
@@ -41,7 +40,6 @@ function MedianField({ namedWayId, readOnly }: MedianFieldProps) {
             key={w}
             className={`chip ${Math.abs(widthM - w) < 0.01 ? 'active' : ''}`}
             aria-pressed={Math.abs(widthM - w) < 0.01}
-            disabled={readOnly}
             onClick={() => setMedianWidth(namedWayId, w)}
           >
             {medianFtLabel(w)}
@@ -65,7 +63,6 @@ export interface WayInspectorProps {
 export function WayInspector({ id }: WayInspectorProps) {
   const unitSystem = useUnitPreference();
   const way = useEditor((s) => s.system.ways.find((w) => w.id === id));
-  const readOnly = useEditor((s) => s.readOnly);
   const namedWay = useEditor((s) => s.system.namedWays.find((n) => n.wayIds.includes(id)));
   // A median is only ever captured by separating, so its presence is the
   // durable record that this street is a separated pair — unlike the member
@@ -171,55 +168,51 @@ export function WayInspector({ id }: WayInspectorProps) {
 
       {active === 'lanes' && (
         <div className="insp-section" role="tabpanel">
-          <CrossSectionEditor wayId={id} readOnly={readOnly} />
-          {!readOnly && (
-            <div className="insp-actions">
-              {!isOneWay(way.profile) && way.profile.lanes.length > 1 && (
-                <button
-                  className="ghost-btn"
-                  title="Split into two one-way carriageways around a median gap — both stay one named street"
-                  onClick={() => {
-                    const newId = separateCarriageways(id);
-                    if (newId) select({ kind: 'way', id });
-                  }}
-                >
-                  Separate carriageways
-                </button>
-              )}
-              {namedWay && (namedWay.wayIds.length === 2 || hasCapturedMedian) && (
-                // Shown whenever this street was ever separated, disabled with
-                // its reason rather than vanishing: a button that disappears
-                // when a cross street splits a carriageway — which is an
-                // ordinary edit — leaves nothing to diagnose. See
-                // combineCarriageways for the matching guard.
-                <button
-                  className="ghost-btn"
-                  disabled={!canCombine}
-                  title={
-                    combineHint ?? 'Merge the two one-way carriageways back into one two-way street'
-                  }
-                  onClick={() => combineCarriageways(namedWay.id)}
-                >
-                  Combine carriageways
-                </button>
-              )}
-            </div>
-          )}
+          <CrossSectionEditor wayId={id} readOnly={false} />
+          <div className="insp-actions">
+            {!isOneWay(way.profile) && way.profile.lanes.length > 1 && (
+              <button
+                className="ghost-btn"
+                title="Split into two one-way carriageways around a median gap — both stay one named street"
+                onClick={() => {
+                  const newId = separateCarriageways(id);
+                  if (newId) select({ kind: 'way', id });
+                }}
+              >
+                Separate carriageways
+              </button>
+            )}
+            {namedWay && (namedWay.wayIds.length === 2 || hasCapturedMedian) && (
+              // Shown whenever this street was ever separated, disabled with
+              // its reason rather than vanishing: a button that disappears
+              // when a cross street splits a carriageway — which is an
+              // ordinary edit — leaves nothing to diagnose. See
+              // combineCarriageways for the matching guard.
+              <button
+                className="ghost-btn"
+                disabled={!canCombine}
+                title={
+                  combineHint ?? 'Merge the two one-way carriageways back into one two-way street'
+                }
+                onClick={() => combineCarriageways(namedWay.id)}
+              >
+                Combine carriageways
+              </button>
+            )}
+          </div>
           {/* The reason it is disabled, on screen rather than in a `title`.
               Disabling a button and putting the only explanation in a tooltip
               is the same as not explaining it on a phone, where there is no
               hover to reveal one — and this button is disabled precisely when
               something non-obvious happened to the street. */}
-          {!readOnly && combineHint && <p className="insp-sub">{combineHint}</p>}
+          {combineHint && <p className="insp-sub">{combineHint}</p>}
           {namedWay && (namedWay.wayIds.length === 2 || hasCapturedMedian) && (
             // Gated on the captured component, not the member count: the
             // median is a property of the street and must stay editable after
             // a cross street splits a carriageway, as MedianField promises.
-            <MedianField namedWayId={namedWay.id} readOnly={readOnly} />
+            <MedianField namedWayId={namedWay.id} />
           )}
-          {!readOnly && (
-            <p className="insp-sub">Shortcuts: [ ] lanes · D flip · O one-way · 1–9 presets</p>
-          )}
+          <p className="insp-sub">Shortcuts: [ ] lanes · D flip · O one-way · 1–9 presets</p>
         </div>
       )}
 
@@ -231,11 +224,10 @@ export function WayInspector({ id }: WayInspectorProps) {
             className="insp-name-input"
             placeholder={`Unnamed ${identityNoun.toLowerCase()}`}
             defaultValue={namedWay?.name ?? ''}
-            readOnly={readOnly}
             onBlur={(e) => nameWay(id, e.target.value)}
             onKeyDown={blurOnEnter}
           />
-          {!readOnly && namedWay?.name && namedWay.wayIds.length > 1 && (
+          {namedWay?.name && namedWay.wayIds.length > 1 && (
             <p className="insp-sub">
               Shared by {namedWay.wayIds.length} segments — renaming here renames the whole{' '}
               {identityNoun.toLowerCase()}
@@ -251,7 +243,6 @@ export function WayInspector({ id }: WayInspectorProps) {
                     key={c.id}
                     className={`chip ${way.classId === c.id ? 'active' : ''}`}
                     aria-pressed={way.classId === c.id}
-                    disabled={readOnly}
                     onClick={() => setWayClassId(id, c.id)}
                   >
                     {c.label}
@@ -261,7 +252,7 @@ export function WayInspector({ id }: WayInspectorProps) {
             </>
           )}
 
-          <ServicesOnWay wayId={id} readOnly={readOnly} />
+          <ServicesOnWay wayId={id} readOnly={false} />
 
           {cost && (
             <div className="cost-estimate">
@@ -288,7 +279,7 @@ export function WayInspector({ id }: WayInspectorProps) {
                 key={g}
                 className={`chip ${way.geometry === g ? 'active' : ''}`}
                 aria-pressed={way.geometry === g}
-                disabled={readOnly || (g === 'freeform' && way.geometry !== 'freeform')}
+                disabled={g === 'freeform' && way.geometry !== 'freeform'}
                 onClick={() => setWayGeometry(id, g)}
               >
                 {label}
@@ -296,7 +287,7 @@ export function WayInspector({ id }: WayInspectorProps) {
             ))}
           </div>
 
-          <GradeChips value={way.grade} disabled={readOnly} onChange={(g) => setWayGrade(id, g)} />
+          <GradeChips value={way.grade} disabled={false} onChange={(g) => setWayGrade(id, g)} />
 
           <div className="stats">
             <Stat label="Length" value={formatDistance(length, unitSystem)} />
@@ -304,7 +295,7 @@ export function WayInspector({ id }: WayInspectorProps) {
             <Stat label="Points" value={String(way.points.length)} />
           </div>
 
-          {!readOnly && (Boolean(mergeCandidate) || canStraighten) && (
+          {(Boolean(mergeCandidate) || canStraighten) && (
             <div className="insp-actions">
               {mergeCandidate && (
                 <button
@@ -327,22 +318,18 @@ export function WayInspector({ id }: WayInspectorProps) {
             </div>
           )}
 
-          {!readOnly && (
-            <p className="insp-sub">
-              Drag a handle to reshape · Ctrl-drag an end to extend · Alt-drag to erase · Ctrl-click
-              a point to split
-            </p>
-          )}
+          <p className="insp-sub">
+            Drag a handle to reshape · Ctrl-drag an end to extend · Alt-drag to erase · Ctrl-click a
+            point to split
+          </p>
         </div>
       )}
 
-      {!readOnly && (
-        <div className="insp-footer">
-          <button className="danger-btn" onClick={() => deleteWay(id)}>
-            <Icon name="trash" size={18} /> Delete way
-          </button>
-        </div>
-      )}
+      <div className="insp-footer">
+        <button className="danger-btn" onClick={() => deleteWay(id)}>
+          <Icon name="trash" size={18} /> Delete way
+        </button>
+      </div>
     </Panel>
   );
 }

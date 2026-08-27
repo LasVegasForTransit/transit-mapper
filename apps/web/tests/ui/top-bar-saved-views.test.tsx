@@ -8,7 +8,7 @@ import { UiProvider, useUi } from '../../src/ui/UiProvider';
 
 vi.mock('../../src/editor/EditorProvider', () => ({
   useEditor: <T,>(selector: (state: Record<string, unknown>) => T): T =>
-    selector({ readOnly: false, canUndo: false, canRedo: false }),
+    selector({ canUndo: false, canRedo: false }),
   useEditorStore: () => ({ getState: () => ({ system: { id: 'document-1' } }) }),
   useEditorCommands: () => ({
     document: { setSystem: vi.fn() },

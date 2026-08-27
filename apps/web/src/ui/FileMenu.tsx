@@ -1,4 +1,4 @@
-import { useEditor, useEditorStore } from '../editor/EditorProvider';
+import { useEditorStore } from '../editor/EditorProvider';
 import { useMapViewStore } from '@transitmapper/workspace';
 import { withDocumentCamera } from '../editor/document-view-adapter';
 import { exportSystemJson } from '../share/jsonExport';
@@ -27,7 +27,6 @@ export function FileMenu() {
   // value anyway). Read it imperatively instead.
   const store = useEditorStore();
   const mapViewStore = useMapViewStore();
-  const readOnly = useEditor((s) => s.readOnly);
   const { openDialog, openNewSystemLocation } = useUi();
 
   return (
@@ -45,34 +44,28 @@ export function FileMenu() {
         </button>
       }
     >
-      {!readOnly && (
-        <>
-          <DropdownMenuItem onSelect={() => openNewSystemLocation('create')}>
-            <Icon name="file" size={17} /> New system
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => openDialog('systems')}>
-            <Icon name="layers" size={17} /> My systems…
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => openDialog('import')}>
-            <Icon name="road" size={17} /> Import streets…
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => openDialog('gtfs')}>
-            <Icon name="bus" size={17} /> Import a published transit feed…
-          </DropdownMenuItem>
-          {/* The portable escape hatch out of browser localStorage (the only
-              other place a system lives) — back it up, put it in git, move it
-              to another browser/computer. Not the same as Share, which creates
-              a hosted read-only snapshot rather than a file you keep. */}
-          <DropdownMenuItem
-            onSelect={() =>
-              exportSystemJson(withDocumentCamera(store.getState().system, mapViewStore))
-            }
-          >
-            <Icon name="download" size={17} /> Export system data (.json)
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-        </>
-      )}
+      <DropdownMenuItem onSelect={() => openNewSystemLocation('create')}>
+        <Icon name="file" size={17} /> New system
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => openDialog('systems')}>
+        <Icon name="layers" size={17} /> My systems…
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => openDialog('import')}>
+        <Icon name="road" size={17} /> Import streets…
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => openDialog('gtfs')}>
+        <Icon name="bus" size={17} /> Import a published transit feed…
+      </DropdownMenuItem>
+      {/* The portable escape hatch out of browser localStorage (the only
+          other place a system lives) — back it up, put it in git, move it
+          to another browser/computer. Not the same as Share, which creates
+          a hosted read-only snapshot rather than a file you keep. */}
+      <DropdownMenuItem
+        onSelect={() => exportSystemJson(withDocumentCamera(store.getState().system, mapViewStore))}
+      >
+        <Icon name="download" size={17} /> Export system data (.json)
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
       <DropdownMenuItem onSelect={() => openDialog('about')}>
         <span className="dropdown-menu-icon-spacer" aria-hidden="true" /> About TransitMapper…
       </DropdownMenuItem>

@@ -542,10 +542,10 @@ CREATE INDEX idx_views_expires_at ON views (expires_at);
 - Modify `docs/development/reference/project-structure.md`, `docs/product/explanation/design-principles.md`, and `docs/product/explanation/sharing-surfaces.md`.
 - Delete compatibility modules only after production evidence identifies no caller.
 
-- [ ] Run the shared-system reader and named View reader in production for one stable release before cleanup.
+- [x] Run the shared-system reader and named View reader in production for one stable release before cleanup.
 - [x] Add a fixture driver that registers bounded map content and resolves feature details without constructing a `TransitSystem` or `EditorStore`.
 - [x] Run the same workspace, View restoration, filter, selection, and responsive-chrome contract tests against the document and fixture drivers.
-- [ ] Remove `readOnly` from `EditorState` after no reader constructs an editor store.
+- [x] Remove `readOnly` from `EditorState` after no reader constructs an editor store.
 - [x] Remove the module-global camera after every session owns a View store.
 - [x] Remove `ViewProvider` after every consumer uses `MapViewStore`.
 - [x] Remove `MapCanvas` after every caller uses `MapSurface`.
@@ -574,10 +574,14 @@ records 413,053 gzip bytes for the viewer closure, 412,627 for the embed
 closure, and 619,541 for the main closure. These values miss the launch
 budgets, and this implementation pass does not claim otherwise.
 
-The deployed-production gate remains open. The August 23, 2026 production
-workflow run 32629385997 passed validation, failed its performance jobs, and
-skipped deployment. The new readers have therefore not completed one stable
-production release, and the `readOnly` rollback path must remain until they do.
+Release v0.7.0 deployed the shared-system and named View readers on August 26, 2026. The release validation, exact-tag build, database migration, artifact
+attestation, Cloudflare deployment, and deterministic production smoke passed.
+The final scripted browser exercise failed its screenshot comparison after a
+pan, so that assertion remains release-workflow debt rather than evidence that
+the reader still needs the editor store. The route host, production build, and
+dependency rules show that both reader routes construct `ViewerApplication`.
+The cleanup therefore removes the dead shared-system editor bootstrap and the
+`EditorState.readOnly` mutation gate.
 
 **Exit gate:** The repository enforces the separation. The extension driver works without editor or document imports. No compatibility flag or reader-owned editor state remains.
 

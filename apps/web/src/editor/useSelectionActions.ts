@@ -46,7 +46,6 @@ export function useSelectionActions(
   const system = useEditor((s) => s.system);
   const multiSelection = useEditor((s) => s.multiSelection);
   const selection = useEditor((s) => s.selection);
-  const readOnly = useEditor((s) => s.readOnly);
 
   return useMemo(() => {
     const refs = multiSelection.length > 0 ? multiSelection : refsOfSelection(selection);
@@ -54,7 +53,7 @@ export function useSelectionActions(
     return {
       refs,
       actions: registry.actionsFor({ system, refs, at, serviceHit, corridorHit }),
-      note: readOnly ? null : blockedMergeNote(system, refs),
+      note: blockedMergeNote(system, refs),
     };
-  }, [registry, system, multiSelection, selection, readOnly, at, serviceHit, corridorHit]);
+  }, [registry, system, multiSelection, selection, at, serviceHit, corridorHit]);
 }

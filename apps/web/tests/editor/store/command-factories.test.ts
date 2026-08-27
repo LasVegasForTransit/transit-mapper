@@ -20,10 +20,9 @@ describe('editor command factories', () => {
     const history = createHistoryCommands(runtime);
     const system = createEmptySystem();
 
-    document.setSystem(system, { readOnly: true });
+    document.setSystem(system);
 
     expect(runtime.read().system).toBe(system);
-    expect(runtime.read().readOnly).toBe(true);
     expect(history.undo).toBe(runtime.history.undo);
   });
 
@@ -64,24 +63,6 @@ describe('editor command factories', () => {
     expect(runtime.read().multiSelection).toEqual([{ kind: 'line', id: 'line' }]);
     expect(runtime.read().system.lines[0]?.serviceIds).toEqual(['parent', 'generated']);
     expect(runtime.read().system.services[1]?.path.id).toBe('generated');
-  });
-
-  it('allows transient selection in read-only documents while blocking deletion', () => {
-    const runtime = createEditorRuntime();
-    const selection = createSelectionCommands(runtime);
-    const system = {
-      ...createEmptySystem(),
-      stops: [{ id: 'stop', coord: [0, 0] as [number, number], anchors: [] }],
-    };
-    runtime.installDocument(system, { tool: 'select', readOnly: true });
-
-    selection.select({ kind: 'stop', id: 'stop' });
-    selection.addMultiSelection([{ kind: 'stop', id: 'stop' }]);
-    selection.deleteMultiSelection();
-
-    expect(runtime.read().selection).toBeNull();
-    expect(runtime.read().multiSelection).toEqual([{ kind: 'stop', id: 'stop' }]);
-    expect(runtime.read().system).toBe(system);
   });
 
   it('allows transient tool and selection changes while loading but blocks their content edits', () => {

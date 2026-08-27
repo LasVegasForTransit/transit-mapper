@@ -137,7 +137,7 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
       system.drivingSide = drivingSide;
       targetSystemId = system.id;
       setActiveId(system.id);
-      store.commands.document.setSystem(system, { readOnly: false });
+      store.commands.document.setSystem(system);
     } else {
       targetSystemId = store.getState().system.id;
       store.commands.document.setViewport({ center: chosenCamera.center, zoom: chosenCamera.zoom });
@@ -164,7 +164,7 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
       if (chosenCamera) system.viewport = { center: chosenCamera.center, zoom: chosenCamera.zoom };
       if (picked?.drivingSide) system.drivingSide = picked.drivingSide;
       setActiveId(system.id);
-      store.commands.document.setSystem(system, { readOnly: false });
+      store.commands.document.setSystem(system);
       finishLandingState();
     }
     onClose();

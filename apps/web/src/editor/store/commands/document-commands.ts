@@ -4,8 +4,8 @@ import type { EditorRuntime } from '../runtime';
 /** Builds the document lifecycle commands once for one editor runtime. */
 export function createDocumentCommands(runtime: EditorRuntime): DocumentCommands {
   return {
-    setSystem(system, options) {
-      runtime.installDocument(system, { ...options, tool: 'select' });
+    setSystem(system) {
+      runtime.installDocument(system, { tool: 'select' });
     },
     newSystem: runtime.newDocument,
     setName(name) {

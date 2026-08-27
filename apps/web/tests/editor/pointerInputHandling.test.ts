@@ -67,7 +67,6 @@ describe('modifier channels resolve the operations their keys used to', () => {
   const base = {
     view: 'infrastructure' as const,
     tool: 'select' as const,
-    readOnly: false,
     armed: 'none' as const,
     gestureActive: false,
   };

@@ -64,7 +64,6 @@ export function GroupInspector({ id }: GroupInspectorProps) {
   const lines = useEditor((s) => s.system.lines);
   const services = useEditor((s) => s.system.services);
   const palette = useEditor((s) => s.system.palette);
-  const readOnly = useEditor((s) => s.readOnly);
   const {
     groups: { renameGroup, setGroupColor, removeGroupMember, deleteGroup },
     tools: { addPaletteColor },
@@ -92,7 +91,6 @@ export function GroupInspector({ id }: GroupInspectorProps) {
           aria-label="Group name"
           placeholder={isComplex ? 'Facility complex' : 'Complex'}
           value={group.name ?? ''}
-          disabled={readOnly}
           onChange={(e) => renameGroup(id, e.target.value)}
           onKeyDown={blurOnEnter}
         />
@@ -124,20 +122,18 @@ export function GroupInspector({ id }: GroupInspectorProps) {
                   ) : (
                     <span className="chip-removable-label">Unknown</span>
                   )}
-                  {!readOnly && (
-                    <button
-                      className="chip-remove-btn"
-                      aria-label="Remove member"
-                      onClick={() => removeGroupMember(id, mid)}
-                    >
-                      <Icon name="x" size={14} />
-                    </button>
-                  )}
+                  <button
+                    className="chip-remove-btn"
+                    aria-label="Remove member"
+                    onClick={() => removeGroupMember(id, mid)}
+                  >
+                    <Icon name="x" size={14} />
+                  </button>
                 </div>
               );
             })}
           </div>
-          <GroupPlacement groupId={id} readOnly={readOnly} />
+          <GroupPlacement groupId={id} />
         </div>
       )}
 
@@ -148,23 +144,20 @@ export function GroupInspector({ id }: GroupInspectorProps) {
               <ColorField
                 value={group.color}
                 palette={palette}
-                disabled={readOnly}
                 onChange={(c) => setGroupColor(id, c)}
                 onAddToPalette={addPaletteColor}
               />
             </div>
           )}
-          <GroupFootprint groupId={id} readOnly={readOnly} />
+          <GroupFootprint groupId={id} />
         </div>
       )}
 
-      {!readOnly && (
-        <div className="insp-footer">
-          <button className="danger-btn" onClick={() => deleteGroup(id)}>
-            <Icon name="trash" size={18} /> Delete {isComplex ? 'complex' : 'group'}
-          </button>
-        </div>
-      )}
+      <div className="insp-footer">
+        <button className="danger-btn" onClick={() => deleteGroup(id)}>
+          <Icon name="trash" size={18} /> Delete {isComplex ? 'complex' : 'group'}
+        </button>
+      </div>
     </Panel>
   );
 }
@@ -173,10 +166,9 @@ export function GroupInspector({ id }: GroupInspectorProps) {
 // stop's footprint (see StopFootprint above), just owned by the Group.
 interface GroupFootprintProps {
   groupId: string;
-  readOnly: boolean;
 }
 
-function GroupFootprint({ groupId, readOnly }: GroupFootprintProps) {
+function GroupFootprint({ groupId }: GroupFootprintProps) {
   const group = useEditor((s) => s.system.groups.find((g) => g.id === groupId));
   const { addGroupFootprint, deleteGroupFootprint } = useEditorCommands().groups;
   const { setViewMode } = useDocumentView();
@@ -198,27 +190,21 @@ function GroupFootprint({ groupId, readOnly }: GroupFootprintProps) {
             Draw a boundary to turn this into a facility complex — visible &amp; editable in the
             Infrastructure view
           </p>
-          {!readOnly && (
-            <button className="add-btn" onClick={drawBoundary}>
-              <Icon name="plus" size={17} /> Draw boundary
-            </button>
-          )}
+          <button className="add-btn" onClick={drawBoundary}>
+            <Icon name="plus" size={17} /> Draw boundary
+          </button>
         </>
       ) : (
         <>
-          {!readOnly && (
-            <p className="insp-sub">
-              Drag a corner in the Infrastructure view to reshape · Alt-click to erase one
-            </p>
-          )}
+          <p className="insp-sub">
+            Drag a corner in the Infrastructure view to reshape · Alt-click to erase one
+          </p>
           <div className="stats">
             <Stat label="Corners" value={String(group.footprint.length)} />
           </div>
-          {!readOnly && (
-            <button className="danger-btn" onClick={() => deleteGroupFootprint(groupId)}>
-              <Icon name="trash" size={18} /> Remove boundary
-            </button>
-          )}
+          <button className="danger-btn" onClick={() => deleteGroupFootprint(groupId)}>
+            <Icon name="trash" size={18} /> Remove boundary
+          </button>
         </>
       )}
     </>
@@ -230,10 +216,9 @@ function GroupFootprint({ groupId, readOnly }: GroupFootprintProps) {
 // or add something already on the map (arms Select to pick the next click).
 interface GroupPlacementProps {
   groupId: string;
-  readOnly: boolean;
 }
 
-function GroupPlacement({ groupId, readOnly }: GroupPlacementProps) {
+function GroupPlacement({ groupId }: GroupPlacementProps) {
   const draftFacilityTypeId = useEditor((s) => s.draftFacilityTypeId);
   const placingFor = useEditor((s) => s.placingFacilityForGroupId);
   const pickingFor = useEditor((s) => s.pickingMemberForGroupId);
@@ -241,7 +226,6 @@ function GroupPlacement({ groupId, readOnly }: GroupPlacementProps) {
   const { startPlacingFacility, cancelPlacingFacility, startPickingMember, cancelPickingMember } =
     useEditorCommands().groups;
 
-  if (readOnly) return null;
   const placing = placingFor === groupId;
   const picking = pickingFor === groupId;
 
