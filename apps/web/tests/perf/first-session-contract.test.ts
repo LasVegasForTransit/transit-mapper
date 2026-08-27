@@ -43,6 +43,7 @@ function driverWithout(phase: PerfNetworkPhaseName, editor = false): FirstSessio
   return {
     navigate: () => Promise.resolve(),
     waitForInteractive: () => Promise.resolve(),
+    waitForFirstSystemPaint: () => Promise.resolve(),
     waitForAutomaticBoundary: () => Promise.resolve(),
     readTimeline: (networkIdleMs) =>
       Promise.resolve({

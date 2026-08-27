@@ -20,6 +20,7 @@ import type {
 export interface FirstSessionPageDriver {
   navigate(): Promise<void>;
   waitForInteractive(): Promise<void>;
+  waitForFirstSystemPaint(): Promise<void>;
   waitForAutomaticBoundary(): Promise<void>;
   readTimeline(networkIdleMs: number | null): Promise<PerfFirstSessionTimeline>;
   readResourceTimings(): Promise<readonly PerfResourceTimingAttribution[]>;
@@ -108,6 +109,7 @@ export async function captureFirstSession(
 ): Promise<PerfFirstSessionSample> {
   await options.driver.navigate();
   await options.driver.waitForInteractive();
+  await options.driver.waitForFirstSystemPaint();
   await options.driver.waitForAutomaticBoundary();
   const initialTimeline = await options.driver.readTimeline(null);
   const window = {

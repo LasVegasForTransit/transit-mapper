@@ -8,6 +8,7 @@ import {
 } from '../../src/perf/first-session-timeline';
 import {
   FIRST_SESSION_MARK_NAMES,
+  FIRST_SYSTEM_PAINT_MARK,
   INTERACTIVE_MARK,
   type FirstSessionMarkName,
 } from '../../src/perf/startup-marks';
@@ -96,6 +97,14 @@ class PlaywrightFirstSessionDriver implements FirstSessionPageDriver {
       (markName) => performance.getEntriesByName(markName, 'mark').length > 0,
       INTERACTIVE_MARK,
       { timeout: 30_000 },
+    );
+  }
+
+  async waitForFirstSystemPaint(): Promise<void> {
+    await this.measuredPage().waitForFunction(
+      (markName) => performance.getEntriesByName(markName, 'mark').length > 0,
+      FIRST_SYSTEM_PAINT_MARK,
+      { timeout: 60_000 },
     );
   }
 

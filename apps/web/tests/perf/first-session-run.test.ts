@@ -62,6 +62,10 @@ describe('the automatic first-session capture', () => {
         calls.push('interactive');
         return Promise.resolve();
       },
+      waitForFirstSystemPaint: () => {
+        calls.push('system-paint');
+        return Promise.resolve();
+      },
       waitForAutomaticBoundary: () => {
         calls.push('boundary');
         return Promise.resolve();
@@ -134,6 +138,7 @@ describe('the automatic first-session capture', () => {
     expect(calls).toEqual([
       'navigate',
       'interactive',
+      'system-paint',
       'boundary',
       'timeline:null',
       'requests:1000000:60000',
@@ -156,6 +161,7 @@ describe('the automatic first-session capture', () => {
     const driver: FirstSessionPageDriver = {
       navigate: () => Promise.resolve(),
       waitForInteractive: () => Promise.resolve(),
+      waitForFirstSystemPaint: () => Promise.resolve(),
       waitForAutomaticBoundary: () => Promise.resolve(),
       readTimeline: () => {
         timelineReads += 1;
@@ -215,6 +221,7 @@ describe('the automatic first-session capture', () => {
     const driver: FirstSessionPageDriver = {
       navigate: () => Promise.resolve(),
       waitForInteractive: () => Promise.resolve(),
+      waitForFirstSystemPaint: () => Promise.resolve(),
       waitForAutomaticBoundary: () => Promise.resolve(),
       readTimeline: (networkIdleMs) =>
         Promise.resolve({
@@ -286,6 +293,7 @@ describe('the automatic first-session capture', () => {
     const driver: FirstSessionPageDriver = {
       navigate: () => Promise.resolve(),
       waitForInteractive: () => Promise.resolve(),
+      waitForFirstSystemPaint: () => Promise.resolve(),
       waitForAutomaticBoundary: () => Promise.resolve(),
       readTimeline: (networkIdleMs) =>
         Promise.resolve({
