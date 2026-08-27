@@ -38,6 +38,11 @@ not edit the version, changelog, release tag, or build revision by hand; the
 root manifest, conventional commits, and GitHub event are their canonical
 sources.
 
+An explicit `Release-As` marker must include a tracked change. This repository
+uses rebase merges, and GitHub drops an empty commit instead of adding it to
+`main`. Pair the marker with the operations or release documentation change
+that explains why the non-releasable commits must ship.
+
 Release builds embed the field-sampling policy alongside their public build
 identity. Defaults are enabled, 100 ordinary basis points (1%), and 500 release
 basis points (5%) until 24 hours after the build. A deployment can set
