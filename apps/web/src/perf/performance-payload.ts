@@ -1,6 +1,6 @@
 import type { PerformanceSample } from '@transitmapper/core/performance/contract';
 
-export const MAX_FIELD_SAMPLE_BODY_BYTES = 8 * 1024;
+const MAX_FIELD_SAMPLE_BODY_BYTES = 8 * 1024;
 
 interface FinalizedPerformanceSample {
   sample: PerformanceSample;
