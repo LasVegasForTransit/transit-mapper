@@ -1,13 +1,4 @@
-import {
-  Component,
-  lazy,
-  Suspense,
-  useLayoutEffect,
-  useMemo,
-  type ErrorInfo,
-  type ReactNode,
-} from 'react';
-import { SHELL_MOUNTED_MARK, markOnce } from '../perf/startup-marks';
+import { Component, lazy, Suspense, useMemo, type ErrorInfo, type ReactNode } from 'react';
 import { parseRouteIntent } from './route-intent';
 import type { RouteHostLoader } from './route-host';
 import './app-root.css';
@@ -65,10 +56,6 @@ export function AppRoot({
   const routeHostLoader =
     routeIntent.kind === 'editor' ? loadEditorApplication : loadViewerApplication;
   const RouteHost = useMemo(() => lazy(routeHostLoader), [routeHostLoader]);
-
-  useLayoutEffect(() => {
-    markOnce(SHELL_MOUNTED_MARK);
-  }, []);
 
   return (
     <RouteErrorBoundary>

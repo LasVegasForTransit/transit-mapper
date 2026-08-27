@@ -5,6 +5,7 @@ import { decodeMapViewState } from '@transitmapper/views';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SHELL_MOUNTED_MARK } from '../../src/perf/startup-marks';
 import { ViewerApplication, type ViewerSessionResolver } from '../../src/viewer/viewer-application';
 
 let container: HTMLDivElement;
@@ -17,6 +18,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.append(container);
   window.history.replaceState(null, '', '/');
+  performance.clearMarks();
   root = createRoot(container);
   vi.stubGlobal(
     'ResizeObserver',
@@ -32,6 +34,7 @@ afterEach(() => {
   container.remove();
   Reflect.deleteProperty(navigator, 'clipboard');
   Reflect.deleteProperty(document, 'execCommand');
+  performance.clearMarks();
   vi.unstubAllGlobals();
 });
 
@@ -78,6 +81,7 @@ describe('ViewerApplication', () => {
 
     expect(container.querySelector('[data-workbench]')).not.toBeNull();
     expect(container.textContent).toContain('Opening shared map…');
+    expect(performance.getEntriesByName(SHELL_MOUNTED_MARK, 'mark')).toHaveLength(1);
 
     await act(async () => {
       finish?.();

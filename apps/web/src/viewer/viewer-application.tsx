@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { createMapViewStore, createSelectionController } from '@transitmapper/map/state';
 import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
 import type { RouteHostProps } from '../app/route-host';
+import { SHELL_MOUNTED_MARK, markOnce } from '../perf/startup-marks';
 import { attachViewLink, copyViewLink } from '../views/view-link';
 import { resolveViewerSession, type ViewerSession } from './viewer-session';
 import {
@@ -68,6 +69,9 @@ export function ViewerApplication({
   onCopyLink = copyCurrentLink,
   resolveFeatureDetails,
 }: ViewerApplicationProps) {
+  useLayoutEffect(() => {
+    markOnce(SHELL_MOUNTED_MARK);
+  }, []);
   const [viewStore] = useState(() => createMapViewStore(createDocumentPresentationState()));
   const [selection] = useState(() => createSelectionController());
   const [status, setStatus] = useState<ViewerStatus>('loading');
