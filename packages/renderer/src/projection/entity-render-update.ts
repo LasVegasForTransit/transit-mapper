@@ -35,8 +35,8 @@ import {
   SRC_STATIONS,
   SRC_WAY_LABELS,
   SRC_WAYS,
-} from './layers/constants';
-import type { MapSystemFeatureSourceId } from './system-feature-sources';
+} from '../layers/constants';
+import type { MapSystemFeatureSourceId } from '../system-feature-sources';
 
 type EntityRenderFullReason = RenderProjectionFullReason | 'unsupported-domain';
 

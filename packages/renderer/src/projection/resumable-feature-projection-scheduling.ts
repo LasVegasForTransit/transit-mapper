@@ -12,7 +12,7 @@ import type { ResumableGeographicFeatureProjectionPlan } from './resumable-featu
 import {
   createSourceFeatureProjectionCounts,
   type SourceFeatureProjectionCounts,
-} from './sourceFeatureProjection';
+} from './source-feature-projection';
 
 type ReadyProjectionPlan = Extract<ResumableGeographicFeatureProjectionPlan, { kind: 'ready' }>;
 

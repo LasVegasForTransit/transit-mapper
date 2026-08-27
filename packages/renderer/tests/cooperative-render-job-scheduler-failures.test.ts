@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   CooperativeRenderUnitBudgetError,
   createCooperativeRenderJobScheduler,
-} from '../src/cooperative-render-job-scheduler';
+} from '../src/projection/cooperative-render-job-scheduler';
 
 class FailureClock {
   nowMs = 0;

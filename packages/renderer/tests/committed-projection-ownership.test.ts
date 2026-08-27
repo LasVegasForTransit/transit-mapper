@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CommittedFeatureProjectionSubmission } from '../src/committed-feature-projection';
-import { createCommittedProjectionOwnership } from '../src/committed-feature-projection';
+import type { CommittedFeatureProjectionSubmission } from '../src/projection/committed-feature-projection';
+import { createCommittedProjectionOwnership } from '../src/projection/committed-feature-projection';
 
 function aSubmission(cancel: () => boolean): CommittedFeatureProjectionSubmission {
   return { generation: 1, settled: Promise.resolve(), cancel };

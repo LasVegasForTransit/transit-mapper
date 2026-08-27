@@ -14,7 +14,7 @@ import {
   emptySystemFeatures,
   SYSTEM_FEATURE_NAME_BY_SOURCE,
   type MapSystemFeatureSourceId,
-} from './system-feature-sources';
+} from '../system-feature-sources';
 
 export type {
   GeographicFeatureProjectionUnit,

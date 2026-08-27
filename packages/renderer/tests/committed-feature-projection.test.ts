@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import { aRoad, aSystem } from '@transitmapper/core/testing/fixtures';
-import { createCooperativeRenderJobScheduler } from '../src/cooperative-render-job-scheduler';
+import { createCooperativeRenderJobScheduler } from '../src/projection/cooperative-render-job-scheduler';
 import { SRC_WAYS } from '../src/layers/constants';
 import { submitSynchronousCommittedFeatureProjection } from './support/committed-feature-projection.test';
 

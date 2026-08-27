@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSourceFeatureProjectionAccounting } from '../src/committed-feature-projection';
+import { createSourceFeatureProjectionAccounting } from '../src/projection/committed-feature-projection';
 
 describe('source feature projection accounting', () => {
   it('publishes only accepted generation-local counts when projections overlap', () => {

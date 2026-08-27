@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createCooperativeRenderJobScheduler } from '../src/cooperative-render-job-scheduler';
-import type { ResumableGeographicFeatureProjectionPlan } from '../src/resumable-feature-projection';
-import { submitResumableGeographicFeatureProjection } from '../src/resumable-feature-projection-scheduling';
+import { createCooperativeRenderJobScheduler } from '../src/projection/cooperative-render-job-scheduler';
+import type { ResumableGeographicFeatureProjectionPlan } from '../src/projection/resumable-feature-projection';
+import { submitResumableGeographicFeatureProjection } from '../src/projection/resumable-feature-projection-scheduling';
 import { emptySystemFeatures } from '../src/system-feature-sources';
 
 class FrameClock {

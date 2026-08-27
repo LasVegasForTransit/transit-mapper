@@ -9,7 +9,7 @@ import type {
   CooperativeRenderJobScheduler,
   CooperativeRenderJobSchedulerStats,
   CooperativeRenderJobUnitSequence,
-} from './cooperative-render-job-scheduler';
+} from './projection/cooperative-render-job-scheduler';
 import type { SceneUpdate } from './accepted-scene-store';
 import type {
   RenderDomainIdentity,

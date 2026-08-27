@@ -89,6 +89,9 @@ bounded entries include `driver`, `snapshot`, `layers`, `projection`, `runtime`,
 and `stats`.
 
 `packages/renderer/src/layers` owns stable source and layer identities.
+`packages/renderer/src/projection` owns feature building, preparation,
+cooperative scheduling, resumable work, and projection measurements behind the
+bounded `projection` entry.
 `packages/renderer/src/workers` keeps each worker client beside its protocol,
 entry point, request lifecycle, and publication submission boundary.
 `packages/renderer/src/presentation.ts` owns the document map definition and

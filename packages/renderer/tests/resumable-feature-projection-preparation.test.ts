@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import { aRoad, aSystem } from '@transitmapper/core/testing/fixtures';
 import { SRC_WAYS } from '../src/layers/constants';
-import { prepareResumableGeographicFeatureProjection } from '../src/resumable-feature-projection';
+import { prepareResumableGeographicFeatureProjection } from '../src/projection/resumable-feature-projection';
 
 describe('resumable geographic feature projection preparation', () => {
   it('reports cold preparation separately when it exceeds the cooperative budget', () => {

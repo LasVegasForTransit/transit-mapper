@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createSourceFeatureProjectionCounts } from '../src/sourceFeatureProjection';
-import { createRendererProjectionMeasurement } from '../src/renderer-projection-measurement';
+import { createSourceFeatureProjectionCounts } from '../src/projection/source-feature-projection';
+import { createRendererProjectionMeasurement } from '../src/projection/renderer-projection-measurement';
 import { createRendererStatsCollector } from '../src/renderer-stats';
 
 describe('renderer projection measurement', () => {

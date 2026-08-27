@@ -4,7 +4,7 @@ import {
   renderFeatureId,
   systemFeatureSourceId,
 } from '@transitmapper/core/render/render-identity';
-import { createCooperativeRenderJobScheduler } from '../src/cooperative-render-job-scheduler';
+import { createCooperativeRenderJobScheduler } from '../src/projection/cooperative-render-job-scheduler';
 import type { SceneDraft } from '../src/scene-draft';
 import { publishSceneDraft } from '../src/scene-publication';
 import { emptySystemFeatures } from '../src/system-feature-sources';

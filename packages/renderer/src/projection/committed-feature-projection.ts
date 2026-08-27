@@ -34,10 +34,10 @@ import {
   mergeSourceFeatureProjectionCounts,
   type SourceFeatureProjectionCounts,
 } from './feature-projection-counts';
-import type { FeatureProjectionClient } from './workers/feature-projection-worker';
-import { submitWorkerFeatureProjection } from './workers/worker-feature-projection-submission';
-import type { SourceUploadTransition } from './sourceUploadPlan';
-import type { MapSystemFeatureSourceId } from './system-feature-sources';
+import type { FeatureProjectionClient } from '../workers/feature-projection-worker';
+import { submitWorkerFeatureProjection } from '../workers/worker-feature-projection-submission';
+import type { SourceUploadTransition } from '../sourceUploadPlan';
+import type { MapSystemFeatureSourceId } from '../system-feature-sources';
 
 interface SourceFeatureProjectionCountTransaction {
   readonly counts: SourceFeatureProjectionCounts;

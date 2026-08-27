@@ -1,4 +1,4 @@
-import { createFrameFallbackScheduler } from './frame-fallback-scheduler';
+import { createFrameFallbackScheduler } from './projection/frame-fallback-scheduler';
 import type { DocumentMapScheduler } from './document-map-driver-types';
 
 interface DocumentMapSchedulerPlatform {

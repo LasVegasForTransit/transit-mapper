@@ -11,7 +11,7 @@ import { renderDomainIdentity, renderFeatureId } from '@transitmapper/core/rende
 import {
   createCooperativeRenderJobScheduler,
   type CooperativeRenderJobSchedulerStats,
-} from '../src/cooperative-render-job-scheduler';
+} from '../src/projection/cooperative-render-job-scheduler';
 import { SRC_FOOTPRINTS, SRC_WAYS } from '../src/layers/constants';
 import { publishSceneDraft } from '../src/scene-publication';
 import { SYSTEM_FEATURE_SOURCE_BY_NAME } from '../src/system-feature-sources';

@@ -16,11 +16,11 @@ import {
   systemFeatureSourceId,
   type RenderDomainIdentity,
 } from '@transitmapper/core/render/render-identity';
-import type { CooperativeRenderJobSchedulerStats } from './cooperative-render-job-scheduler';
+import type { CooperativeRenderJobSchedulerStats } from './projection/cooperative-render-job-scheduler';
 import {
   createCooperativeRenderJobScheduler,
   type CooperativeRenderJobScheduler,
-} from './cooperative-render-job-scheduler';
+} from './projection/cooperative-render-job-scheduler';
 import {
   createAcceptedSceneStore,
   type AcceptedSceneStore,
@@ -43,12 +43,12 @@ import {
   DocumentProjector,
   type DiagramLayoutResolver,
   type DocumentProjectionRequest,
-} from './document-projection';
+} from './projection/document-projection';
 import type { FeatureProjectionClient } from './workers/feature-projection-worker';
 import {
   createSourceFeatureProjectionAccounting,
   type SourceFeatureProjectionAccounting,
-} from './committed-feature-projection';
+} from './projection/committed-feature-projection';
 import type { SourceUploadTransition } from './sourceUploadPlan';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 import { createRendererStatsCollector, type RendererStatsCollector } from './renderer-stats';

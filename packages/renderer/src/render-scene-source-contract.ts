@@ -10,7 +10,7 @@ import type { Feature, FeatureCollection } from 'geojson';
 import type { SystemFeatureSourceId } from '@transitmapper/core/render/render-identity';
 import type { RenderScenePatch } from '@transitmapper/core/render/render-scene-diff';
 import type { RenderScene } from '@transitmapper/core/render/render-scene';
-import type { CooperativeRenderJobUnitSequence } from './cooperative-render-job-scheduler';
+import type { CooperativeRenderJobUnitSequence } from './projection/cooperative-render-job-scheduler';
 
 export interface GeoJsonSourceUpdate {
   add?: Feature[];
