@@ -1,27 +1,52 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  createMapStartupMilestones,
+  type MapRuntime,
+  type ObservableMapStartupMilestones,
+} from '@transitmapper/map';
+import * as startupMarks from '../../src/perf/startup-marks';
 
-interface StartupMarksModule {
-  FIRST_SESSION_MARK_NAMES: readonly string[];
-  BOOTSTRAP_START_MARK: string;
-  SHELL_MOUNTED_MARK: string;
-  STORAGE_READ_START_MARK: string;
-  STORAGE_READ_END_MARK: string;
-  DESERIALIZE_START_MARK: string;
-  DESERIALIZE_END_MARK: string;
-  SYSTEM_COMMITTED_MARK: string;
-  MAP_STYLE_READY_MARK: string;
-  FIRST_SYSTEM_PAINT_MARK: string;
-  INTERACTIVE_MARK: string;
-  SERVICE_WORKER_READY_MARK: string;
-  markOnce: (name: string) => void;
+interface StyleLifecycle {
+  readonly map: MapRuntime['map'];
+  finishLoading(): void;
 }
 
-const performanceModules = import.meta.glob('../../src/perf/*.ts', { eager: true });
+function createStyleLifecycle(initiallyLoaded: boolean): StyleLifecycle {
+  let loaded = initiallyLoaded;
+  const listeners = new Set<() => void>();
+  const map = {
+    isStyleLoaded: () => loaded,
+    on: (event: string, listener: () => void) => {
+      if (event === 'style.load') listeners.add(listener);
+      return map;
+    },
+    off: (event: string, listener: () => void) => {
+      if (event === 'style.load') listeners.delete(listener);
+      return map;
+    },
+  } as unknown as MapRuntime['map'];
+  return {
+    map,
+    finishLoading() {
+      loaded = true;
+      for (const listener of listeners) listener();
+    },
+  };
+}
 
-function startupMarks(): StartupMarksModule {
-  const module = performanceModules['../../src/perf/startup-marks.ts'];
-  expect(module, 'the shipping startup-marks module exists').toBeDefined();
-  return module as StartupMarksModule;
+function createRuntime(
+  style: StyleLifecycle,
+  milestones: ObservableMapStartupMilestones = createMapStartupMilestones(),
+): MapRuntime {
+  return {
+    host: { map: style.map, reportError: () => {} },
+    map: style.map,
+    milestones,
+    requestTheme: () => Promise.resolve(),
+    flushTheme: () => Promise.resolve(),
+    refreshPadding: () => {},
+    dispose: () => {},
+  };
 }
 
 afterEach(() => {
@@ -32,9 +57,7 @@ afterEach(() => {
 
 describe('first-session User Timing marks', () => {
   it('publishes the complete canonical milestone vocabulary', () => {
-    const marks = startupMarks();
-
-    expect(marks.FIRST_SESSION_MARK_NAMES).toEqual([
+    expect(startupMarks.FIRST_SESSION_MARK_NAMES).toEqual([
       'tm:bootstrap-start',
       'tm:shell-mounted',
       'tm:storage-read-start',
@@ -48,41 +71,77 @@ describe('first-session User Timing marks', () => {
       'tm:service-worker-ready',
     ]);
     expect([
-      marks.BOOTSTRAP_START_MARK,
-      marks.SHELL_MOUNTED_MARK,
-      marks.STORAGE_READ_START_MARK,
-      marks.STORAGE_READ_END_MARK,
-      marks.DESERIALIZE_START_MARK,
-      marks.DESERIALIZE_END_MARK,
-      marks.SYSTEM_COMMITTED_MARK,
-      marks.MAP_STYLE_READY_MARK,
-      marks.FIRST_SYSTEM_PAINT_MARK,
-      marks.INTERACTIVE_MARK,
-      marks.SERVICE_WORKER_READY_MARK,
-    ]).toEqual(marks.FIRST_SESSION_MARK_NAMES);
+      startupMarks.BOOTSTRAP_START_MARK,
+      startupMarks.SHELL_MOUNTED_MARK,
+      startupMarks.STORAGE_READ_START_MARK,
+      startupMarks.STORAGE_READ_END_MARK,
+      startupMarks.DESERIALIZE_START_MARK,
+      startupMarks.DESERIALIZE_END_MARK,
+      startupMarks.SYSTEM_COMMITTED_MARK,
+      startupMarks.MAP_STYLE_READY_MARK,
+      startupMarks.FIRST_SYSTEM_PAINT_MARK,
+      startupMarks.INTERACTIVE_MARK,
+      startupMarks.SERVICE_WORKER_READY_MARK,
+    ]).toEqual(startupMarks.FIRST_SESSION_MARK_NAMES);
   });
 
   it('records a milestone at most once', () => {
-    const { BOOTSTRAP_START_MARK, markOnce } = startupMarks();
     const mark = vi.spyOn(performance, 'mark');
 
-    markOnce(BOOTSTRAP_START_MARK);
-    markOnce(BOOTSTRAP_START_MARK);
+    startupMarks.markOnce(startupMarks.BOOTSTRAP_START_MARK);
+    startupMarks.markOnce(startupMarks.BOOTSTRAP_START_MARK);
 
     expect(mark).toHaveBeenCalledTimes(1);
-    expect(mark).toHaveBeenCalledWith(BOOTSTRAP_START_MARK);
+    expect(mark).toHaveBeenCalledWith(startupMarks.BOOTSTRAP_START_MARK);
   });
 
   it('never makes startup fail when User Timing is unavailable or throws', () => {
-    const { SHELL_MOUNTED_MARK, STORAGE_READ_START_MARK, markOnce } = startupMarks();
     vi.spyOn(performance, 'mark').mockImplementation(() => {
       throw new Error('User Timing rejected the mark.');
     });
 
-    expect(() => markOnce(SHELL_MOUNTED_MARK)).not.toThrow();
+    expect(() => startupMarks.markOnce(startupMarks.SHELL_MOUNTED_MARK)).not.toThrow();
 
     vi.restoreAllMocks();
     vi.stubGlobal('performance', undefined);
-    expect(() => markOnce(STORAGE_READ_START_MARK)).not.toThrow();
+    expect(() => startupMarks.markOnce(startupMarks.STORAGE_READ_START_MARK)).not.toThrow();
+  });
+
+  it('publishes map content and interaction milestones to User Timing', () => {
+    const milestones = createMapStartupMilestones();
+    const detach = startupMarks.attachMapRuntimeStartupMarks(
+      createRuntime(createStyleLifecycle(false), milestones),
+    );
+
+    milestones.contentCommitted();
+    milestones.interactive();
+
+    expect(performance.getEntriesByName(startupMarks.SYSTEM_COMMITTED_MARK, 'mark')).toHaveLength(
+      1,
+    );
+    expect(performance.getEntriesByName(startupMarks.INTERACTIVE_MARK, 'mark')).toHaveLength(1);
+    detach();
+  });
+
+  it('publishes map style readiness that predates host attachment', () => {
+    const detach = startupMarks.attachMapRuntimeStartupMarks(
+      createRuntime(createStyleLifecycle(true)),
+    );
+
+    expect(performance.getEntriesByName(startupMarks.MAP_STYLE_READY_MARK, 'mark')).toHaveLength(1);
+    detach();
+  });
+
+  it('stops observing map startup after its runtime detaches', () => {
+    const style = createStyleLifecycle(false);
+    const milestones = createMapStartupMilestones();
+    const detach = startupMarks.attachMapRuntimeStartupMarks(createRuntime(style, milestones));
+
+    detach();
+    style.finishLoading();
+    milestones.interactive();
+
+    expect(performance.getEntriesByName(startupMarks.MAP_STYLE_READY_MARK, 'mark')).toHaveLength(0);
+    expect(performance.getEntriesByName(startupMarks.INTERACTIVE_MARK, 'mark')).toHaveLength(0);
   });
 });

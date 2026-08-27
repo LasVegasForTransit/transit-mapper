@@ -1,3 +1,5 @@
+import type { MapRuntime, MapStartupMilestoneSnapshot } from '@transitmapper/map';
+
 export const BOOTSTRAP_START_MARK = 'tm:bootstrap-start';
 export const SHELL_MOUNTED_MARK = 'tm:shell-mounted';
 export const STORAGE_READ_START_MARK = 'tm:storage-read-start';
@@ -38,4 +40,44 @@ export function markOnce(name: FirstSessionMarkName): void {
     // User Timing is observability only. A restricted or partial
     // implementation must never become a startup failure.
   }
+}
+
+function publishMapRuntimeSnapshot(snapshot: MapStartupMilestoneSnapshot): void {
+  if (snapshot.contentCommitted) markOnce(SYSTEM_COMMITTED_MARK);
+  if (snapshot.interactive) markOnce(INTERACTIVE_MARK);
+}
+
+/**
+ * The shared map runtime owns startup state, while the web host owns browser
+ * diagnostics. This adapter keeps User Timing out of the runtime packages and
+ * makes runtime replacement detach the old observers before MapLibre disposal.
+ */
+export function attachMapRuntimeStartupMarks(runtime: MapRuntime): () => void {
+  let attached = true;
+  const publishStyleReady = () => {
+    if (attached) markOnce(MAP_STYLE_READY_MARK);
+  };
+  const unsubscribe = runtime.milestones.subscribe(publishMapRuntimeSnapshot);
+  publishMapRuntimeSnapshot(runtime.milestones.getSnapshot());
+
+  let observingStyle = false;
+  try {
+    runtime.map.on('style.load', publishStyleReady);
+    observingStyle = true;
+    if (runtime.map.isStyleLoaded()) publishStyleReady();
+  } catch {
+    // Map diagnostics cannot take ownership of the runtime lifecycle.
+  }
+
+  return () => {
+    if (!attached) return;
+    attached = false;
+    unsubscribe();
+    if (!observingStyle) return;
+    try {
+      runtime.map.off('style.load', publishStyleReady);
+    } catch {
+      // Map diagnostics cannot make runtime disposal fail.
+    }
+  };
 }

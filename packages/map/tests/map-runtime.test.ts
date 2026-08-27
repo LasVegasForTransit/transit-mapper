@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Style lifecycle cases share one asynchronous MapLibre fake. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { StyleSpecification } from 'maplibre-gl';
-import type { ObservableMapStartupMilestones } from '../src/index';
 import {
   createHarness,
   deferred,
@@ -48,7 +47,7 @@ describe('createMapRuntime', () => {
 
   it('settles every public operation without changing state after disposal', async () => {
     const { runtime, map, observer, fetchStyle, recoverDocumentLayers } = createHarness();
-    const milestones = runtime.milestones as ObservableMapStartupMilestones;
+    const milestones = runtime.milestones;
     const initialPaddingCount = map.paddings.length;
 
     runtime.dispose();
