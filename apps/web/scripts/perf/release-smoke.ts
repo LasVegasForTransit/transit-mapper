@@ -8,7 +8,6 @@ import { generatePerfFixture } from '../../src/perf/fixtures';
 import { PERF_SCENARIOS } from '../../src/perf/scenarios';
 import { closeContext, configureSurfaceRoutes, seedIndexedDbFixture } from './browser';
 import {
-  buildPublicApp,
   PERFORMANCE_PUBLIC_OUTPUT_DIRECTORY,
   startPreview,
   stopPreview,
@@ -122,7 +121,6 @@ async function main(): Promise<void> {
   let preview: RunningPreview | undefined;
   let browser: Browser | undefined;
   try {
-    if (!process.argv.includes('--skip-build')) await buildPublicApp();
     preview = await startPreview('public');
     browser = await chromium.launch({ channel: 'chrome', headless: true });
     await exerciseEditor(browser, preview.url);
