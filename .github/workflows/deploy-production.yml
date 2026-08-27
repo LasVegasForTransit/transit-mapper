@@ -14,6 +14,10 @@ on:
         description: Reason for continuing after failed performance gates
         required: false
         type: string
+      deploy_existing_tag:
+        description: Existing release tag at this commit to deploy
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -66,8 +70,8 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      release_created: ${{ steps.existing-release.outputs.release_created || steps.release.outputs.release_created }}
+      tag_name: ${{ steps.existing-release.outputs.tag_name || steps.release.outputs.tag_name }}
     steps:
       - name: Record performance gate override
         if: needs.performance.result != 'success'
@@ -88,8 +92,33 @@ jobs:
             echo "Reason: $OVERRIDE_REASON"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Resolve existing release
+        id: existing-release
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy_existing_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.deploy_existing_tag }}
+        run: |
+          set -euo pipefail
+          release=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,tagName,targetCommitish)
+          tag=$(jq -er '.tagName' <<< "$release")
+          target=$(jq -er '.targetCommitish' <<< "$release")
+          draft=$(jq -er '.isDraft' <<< "$release")
+          if [ "$draft" != 'false' ]; then
+            echo "Release $tag is still a draft." >&2
+            exit 1
+          fi
+          if [ "$target" != "$GITHUB_SHA" ]; then
+            echo "Release $tag targets $target, but this run validates $GITHUB_SHA." >&2
+            exit 1
+          fi
+          echo "release_created=true" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Run Release Please
         id: release
+        if: github.event_name != 'workflow_dispatch' || inputs.deploy_existing_tag == ''
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           config-file: release-please-config.json
@@ -113,7 +142,13 @@ jobs:
   deploy:
     name: Attest and deploy release to Cloudflare Workers
     needs: [validate, release]
-    if: needs.release.outputs.release_created == 'true'
+    if: >-
+      ${{
+        always() &&
+        needs.validate.result == 'success' &&
+        needs.release.result == 'success' &&
+        needs.release.outputs.release_created == 'true'
+      }}
     permissions:
       attestations: write
       contents: write
@@ -135,6 +170,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+          ref: ${{ needs.release.outputs.tag_name }}
 
       - name: Setup Node + pnpm
         uses: ./.github/actions/setup-node-pnpm
