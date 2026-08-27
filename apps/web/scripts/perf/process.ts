@@ -110,13 +110,17 @@ async function allocatePreviewPort(): Promise<number> {
   });
 }
 
+export async function buildPublicApp(): Promise<void> {
+  const publicBuildEnvironment = { ...process.env };
+  delete publicBuildEnvironment.VITE_PERF_BUILD;
+  await runCommand('pnpm', performancePublicBuildArguments(), publicBuildEnvironment);
+}
+
 export async function buildPerformanceApp(): Promise<void> {
   // First-session bytes must come from the public artifact. Keep the private
   // browser seams in a separate output directory so offline/interaction
   // proofs cannot change the files the network ledger measures.
-  const publicBuildEnvironment = { ...process.env };
-  delete publicBuildEnvironment.VITE_PERF_BUILD;
-  await runCommand('pnpm', performancePublicBuildArguments(), publicBuildEnvironment);
+  await buildPublicApp();
   await runCommand(
     'pnpm',
     ['exec', 'vite', 'build', '--outDir', PERFORMANCE_HARNESS_OUTPUT_DIRECTORY],

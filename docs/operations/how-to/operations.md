@@ -13,10 +13,10 @@ samples.
 ## Deploy
 
 Releases and deploys are automatic. Conventional commits merged to `main`
-first run `Validate` and production-build smokes for RTC, the public first
-session, and onboarding. These smokes prove that each browser journey works.
-They record performance diagnostics, but numeric budgets do not veto a release.
-Release Please runs only after all four gates pass.
+first run `Validate` and production-build smokes for RTC, the public routes,
+and onboarding. These smokes prove that each browser journey works. The RTC
+smoke records performance diagnostics, but numeric budgets do not veto a
+release. Release Please runs only after all four gates pass.
 It creates or updates one release pull request with the calculated version and
 changelog. Merging that pull request creates the matching tag and GitHub
 release. The same workflow then builds and attests a deployment archive,
