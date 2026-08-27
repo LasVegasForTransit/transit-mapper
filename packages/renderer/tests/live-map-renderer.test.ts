@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { renderFeatureId, systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
 import { SRC_HANDLES, SRC_WAYS } from '../src/layers/constants';
 import { createLiveMapRenderer, type LiveMapRendererHost } from '../src/live-map-renderer';
-import type { FeatureProjectionClient } from '../src/feature-projection-worker';
+import type { FeatureProjectionClient } from '../src/workers/feature-projection-worker';
 import { emptySystemFeatures } from '../src/system-feature-sources';
 import type { GeoJsonSourceTarget, GeoJsonSourceUpdate } from '../src/render-scene-source-updater';
 

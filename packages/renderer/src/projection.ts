@@ -4,14 +4,17 @@ export {
   scheduleRenderProjectionFailureRetry,
   type SourceFeatureProjectionAccounting,
 } from './committed-feature-projection';
-export { createDiagramLayoutWorker, type DiagramLayoutWorker } from './diagram-layout-worker';
+export {
+  createDiagramLayoutWorker,
+  type DiagramLayoutWorker,
+} from './workers/diagram-layout-worker';
 export { mergeSourceFeatureProjectionCounts } from './feature-projection-counts';
 export {
   createFeatureProjectionWorker,
   type FeatureProjectionClient,
   type FeatureProjectionClientInput,
   type FeatureProjectionWorkerClient,
-} from './feature-projection-worker';
+} from './workers/feature-projection-worker';
 export {
   buildFeaturesForSources,
   type SourceFeatureProjectionCounts,

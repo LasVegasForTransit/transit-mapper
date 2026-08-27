@@ -5,11 +5,11 @@ import {
   createFeatureProjectionWorker,
   type FeatureProjectionClientInput,
   type FeatureProjectionWorker,
-} from '../src/feature-projection-worker';
+} from '../src/workers/feature-projection-worker';
 import type {
   FeatureProjectionWorkerEvent,
   FeatureProjectionWorkerRequest,
-} from '../src/feature-projection-worker-protocol';
+} from '../src/workers/feature-projection-worker-protocol';
 import { emptySystemFeatures } from '../src/system-feature-sources';
 import { SRC_WAYS } from '../src/layers/constants';
 import type { RenderPreparedSnapshot } from '@transitmapper/core/render/render-preparation';

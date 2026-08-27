@@ -13,7 +13,7 @@ import { createRendererStatsCollector } from '../src/renderer-stats';
 import type {
   FeatureProjectionResult,
   FeatureProjectionClient,
-} from '../src/feature-projection-worker';
+} from '../src/workers/feature-projection-worker';
 import { emptySystemFeatures } from '../src/system-feature-sources';
 import { renderScene } from './support/render-scene-source-updater.test';
 

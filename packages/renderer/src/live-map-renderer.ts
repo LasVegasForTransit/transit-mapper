@@ -44,7 +44,7 @@ import {
   type DiagramLayoutResolver,
   type DocumentProjectionRequest,
 } from './document-projection';
-import type { FeatureProjectionClient } from './feature-projection-worker';
+import type { FeatureProjectionClient } from './workers/feature-projection-worker';
 import {
   createSourceFeatureProjectionAccounting,
   type SourceFeatureProjectionAccounting,

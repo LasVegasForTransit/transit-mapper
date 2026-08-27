@@ -22,11 +22,14 @@ import {
   type CommittedCameraCoverage,
   type PresentationRefreshScheduler,
 } from './camera-render-preload';
-import { createDiagramLayoutWorker, type DiagramLayoutWorkerClient } from './diagram-layout-worker';
+import {
+  createDiagramLayoutWorker,
+  type DiagramLayoutWorkerClient,
+} from './workers/diagram-layout-worker';
 import {
   createFeatureProjectionWorker,
   type FeatureProjectionClient,
-} from './feature-projection-worker';
+} from './workers/feature-projection-worker';
 import { SRC_HIT_FEATURES } from './layers/constants';
 import { createLiveMapRenderer, type LiveMapRendererHost } from './live-map-renderer';
 import { renderPresentationFromMap } from './render-presentation';
