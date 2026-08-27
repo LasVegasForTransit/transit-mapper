@@ -29,11 +29,13 @@ ratio 3. Synthetic touch events pass where real fingers do not, so the touch
 row below is a hardware row and no automated result substitutes for it. The exact budgets and repetition policy are in
 [Measure browser performance](../how-to/measure-performance.md).
 
-Pull requests run one candidate-only cold/warm RTC smoke. That smoke proves
-the production graph and critical browser journey complete, but it is not
-treated as statistical timing evidence. The five-run desktop/mobile matrix and
-ten-minute leak audit run only when the Performance workflow is deliberately
-dispatched.
+Web- and core-affecting pull requests run the repeated desktop RTC audit. The
+reusable release workflow runs one functional RTC smoke plus the public first
+session and onboarding smokes. Release smokes prove that the production graph
+and critical browser journeys work. They keep the collected diagnostics, but
+they do not treat one CI run as statistical timing evidence. The complete
+desktop and mobile matrix and the ten-minute leak audit run only when the
+Performance workflow is deliberately dispatched.
 
 Empty editor startup remains a required release row but is not yet in the
 fixed automated fixture union. Record it with the manual startup-and-recovery

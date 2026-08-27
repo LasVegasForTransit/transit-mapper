@@ -94,8 +94,15 @@ jobs:
         run: |
           echo "CURRENT_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-rtc" >> "$GITHUB_ENV"
 
+      - name: Run the release RTC smoke
+        if: steps.relevance.outputs.run == 'true' && inputs.scope == 'release'
+        run: >-
+          xvfb-run -a --server-args="$XVFB_ARGS"
+          pnpm perf -- --smoke --profile desktop --scenario rtc
+          --output "$CURRENT_ARTIFACT"
+
       - name: Run the repeated RTC audit
-        if: steps.relevance.outputs.run == 'true'
+        if: steps.relevance.outputs.run == 'true' && inputs.scope != 'release'
         run: >-
           xvfb-run -a --server-args="$XVFB_ARGS"
           pnpm perf -- --profile desktop --scenario rtc

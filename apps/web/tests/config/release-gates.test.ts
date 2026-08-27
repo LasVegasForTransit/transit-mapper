@@ -21,7 +21,6 @@ describe('release performance gates', () => {
     expect(workflow).not.toMatch(/pull_request:\n(?:.|\n)*?paths:/);
     expect(workflow).toContain('Run the repeated RTC audit');
     expect(workflow).toContain('pnpm perf -- --profile desktop --scenario rtc');
-    expect(workflow).not.toContain('pnpm perf -- --smoke --profile desktop --scenario rtc');
     expect(workflow).toContain('Skip the RTC audit for an unrelated pull request');
     for (const relevantPath of [
       'apps/web',
@@ -43,7 +42,9 @@ describe('release performance gates', () => {
     expect(performance).toContain('workflow_call:');
     expect(performance).toContain('name: Public first-session smoke (desktop)');
     expect(performance).toContain('name: Onboarding smoke (desktop)');
-    expect(performance).toContain('pnpm perf -- --profile desktop --scenario rtc');
+    expect(performance).toContain('name: Run the release RTC smoke');
+    expect(performance).toContain("inputs.scope == 'release'");
+    expect(performance).toContain('pnpm perf -- --smoke --profile desktop --scenario rtc');
     expect(performance).toContain('pnpm perf -- --smoke --profile desktop --first-session');
     expect(performance).toContain('pnpm perf -- --smoke --profile desktop --onboarding');
     expect(deploy).toContain('uses: ./.github/workflows/performance.yml');

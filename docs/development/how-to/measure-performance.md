@@ -126,8 +126,8 @@ the production control, and advances each slide with trusted pointer clicks.
 It reads the production onboarding DOM and browser request stream. Harness-only
 instrumentation counts preview canvases, WebGL contexts, and long tasks. The
 phase fails if the dialog creates more than one preview canvas or WebGL
-context, reconstructs the map, requests an OpenFreeMap style, or records a
-slide-change task longer than 50 ms.
+context, reconstructs the map, or requests an OpenFreeMap style. A full audit
+also fails when it records a slide-change task longer than 50 ms.
 
 Add `--smoke` to any standalone phase when CI needs functional evidence without
 numeric baseline comparison:
@@ -137,6 +137,12 @@ pnpm perf -- --smoke --scenario rtc
 pnpm perf -- --smoke --first-session
 pnpm perf -- --smoke --onboarding
 ```
+
+A successful smoke requires the production build and browser journey to work.
+It still writes timing, request, and bundle diagnostics into the report. It
+does not turn those observations into timing, settlement, or bundle
+violations. Run the phase without `--smoke` when those budgets are the subject
+of the audit.
 
 `--scenario`, `--first-session`, and `--onboarding` cannot be combined with
 `perf:record`. A partial report must never replace the complete baseline. A
