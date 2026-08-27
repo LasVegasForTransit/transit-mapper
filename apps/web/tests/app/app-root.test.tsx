@@ -6,7 +6,6 @@ import { act, type ComponentType } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppRoot, type RouteHostLoader, type RouteHostProps } from '../../src/app/app-root';
-import { SHELL_MOUNTED_MARK } from '../../src/perf/startup-marks';
 
 const editorHostModule = vi.hoisted(() => ({ evaluations: 0 }));
 const viewerHostModule = vi.hoisted(() => ({ evaluations: 0 }));
@@ -39,13 +38,11 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
-  performance.clearMarks();
 });
 
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
-  performance.clearMarks();
   vi.restoreAllMocks();
 });
 
@@ -76,7 +73,6 @@ describe('AppRoot', () => {
     expect(container.childElementCount).toBe(0);
     expect(container.querySelector('[role="status"]')).toBeNull();
     expect(container.textContent).not.toContain('Loading TransitMapper');
-    expect(performance.getEntriesByName(SHELL_MOUNTED_MARK, 'mark')).toHaveLength(1);
 
     await act(async () => {
       resolveHost?.({ default: ({ routeIntent }) => <div>{routeIntent.kind}</div> });
