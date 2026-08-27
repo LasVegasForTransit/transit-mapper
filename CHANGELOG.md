@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.3](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.7.2...v0.7.3) (2026-08-27)
+
+
+### Bug Fixes
+
+* **ci:** Build workspace packages before route smoke ([78ff43e](https://github.com/LasVegasForTransit/transit-mapper/commit/78ff43ee17c6eee2662f4430f3a771a639b4f7c2))
+* **ci:** Gate releases on working map routes ([86ec216](https://github.com/LasVegasForTransit/transit-mapper/commit/86ec216954e179cc44ac430f2b4a97e7fcbeccae))
+* **ci:** Keep functional smokes free of timing budgets ([6156511](https://github.com/LasVegasForTransit/transit-mapper/commit/61565114c5fde57e42390f9cb4ac31f98f40f70b))
+* **ci:** Separate release smokes from performance audits ([27e1e29](https://github.com/LasVegasForTransit/transit-mapper/commit/27e1e2996d5cefa04ece0920084db27b518e7e6d))
+* **web:** Paint transit before loading the basemap ([70c80aa](https://github.com/LasVegasForTransit/transit-mapper/commit/70c80aa09e2aba5579ba76b50362d03b73503853))
+* **web:** Wait for first system paint before capture ([a155c2a](https://github.com/LasVegasForTransit/transit-mapper/commit/a155c2acba81ed3edc5c8bb1fbdcbcdc02636d42))
+
 ## [0.7.2](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.7.1...v0.7.2) (2026-08-27)
 
 
