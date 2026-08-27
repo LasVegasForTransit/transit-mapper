@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { GeoJSONSource, PaddingOptions, StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
@@ -39,6 +39,7 @@ import { PointerBadge } from './PointerBadge';
 import { getMap, setMap } from './mapRef';
 import { basemapStyleForScheme, localBlankStyleForScheme } from './mapTheme';
 import type { EditorMapDriverPorts, EditorMapStyleBridge } from './editor-map-ports';
+import { createEditorMapStartupScheduler } from './editor-map-startup';
 
 export interface EditorMapSurfaceFrameProps {
   readonly driver: MapDriver;
@@ -77,44 +78,13 @@ export function EditorMapSurfaceFrame({
     runtimeRef.current = runtime;
     onRuntimeChange?.(runtime);
   });
-  const scheduleAfterInitialTheme = useCallback<MapSurfaceAttachmentScheduler>((start) => {
-    let cancelled = false;
-    const startAfterTheme = () => {
-      if (cancelled) return;
-      const runtime = runtimeRef.current;
-      if (runtime === null) {
-        start();
-        return;
-      }
-      let request: Promise<void>;
-      try {
-        request = runtime.requestTheme(themeRef.current);
-      } catch (error) {
-        runtime.host.reportError(error);
-        start();
-        return;
-      }
-      void request.then(
-        () => {
-          if (!cancelled) start();
-        },
-        (error: unknown) => {
-          runtime.host.reportError(error);
-          if (!cancelled) start();
-        },
-      );
-    };
-    const cancelScheduled = scheduleAttachmentRef.current
-      ? scheduleAttachmentRef.current(startAfterTheme)
-      : (() => {
-          startAfterTheme();
-          return () => {};
-        })();
-    return () => {
-      cancelled = true;
-      cancelScheduled();
-    };
-  }, []);
+  const [scheduleAfterInitialTheme] = useState(() =>
+    createEditorMapStartupScheduler({
+      runtime: () => runtimeRef.current,
+      theme: () => themeRef.current,
+      scheduler: () => scheduleAttachmentRef.current,
+    }),
+  );
   return (
     <>
       <MapSurface

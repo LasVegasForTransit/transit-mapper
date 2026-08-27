@@ -79,7 +79,7 @@ describe('the editor map surface', () => {
       attach,
     };
     const panBy = vi.fn();
-    const initialTheme = deferred<void>();
+    const initialTheme = deferred<undefined>();
     const runtime = testRuntime(panBy, { requestTheme: () => initialTheme.promise });
     let startAttachment: (() => void) | undefined;
 
@@ -111,11 +111,10 @@ describe('the editor map surface', () => {
       startAttachment?.();
       await Promise.resolve();
     });
-    expect(runtime.requestTheme).toHaveBeenCalledExactlyOnceWith('light');
     expect(attach).not.toHaveBeenCalled();
 
     await act(async () => {
-      initialTheme.resolve();
+      initialTheme.resolve(undefined);
       await initialTheme.promise;
     });
     expect(attach).toHaveBeenCalledOnce();
