@@ -27,7 +27,13 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve: resolvePromise };
 }
 
-function testRuntime(panBy: () => void, dispose: () => void = vi.fn()): MapRuntime<'light'> {
+function testRuntime(
+  panBy: () => void,
+  options: {
+    readonly requestTheme?: () => Promise<void>;
+    readonly dispose?: () => void;
+  } = {},
+): MapRuntime<'light'> {
   return {
     host: {
       map: { panBy } as never,
@@ -35,10 +41,10 @@ function testRuntime(panBy: () => void, dispose: () => void = vi.fn()): MapRunti
     },
     map: { panBy } as never,
     milestones: createMapStartupMilestones(),
-    requestTheme: vi.fn(() => Promise.resolve()),
+    requestTheme: vi.fn(options.requestTheme ?? (() => Promise.resolve())),
     flushTheme: vi.fn(() => Promise.resolve()),
     refreshPadding: vi.fn(),
-    dispose,
+    dispose: options.dispose ?? vi.fn(),
   };
 }
 
@@ -73,7 +79,8 @@ describe('the editor map surface', () => {
       attach,
     };
     const panBy = vi.fn();
-    const runtime = testRuntime(panBy);
+    const initialTheme = deferred<void>();
+    const runtime = testRuntime(panBy, { requestTheme: () => initialTheme.promise });
     let startAttachment: (() => void) | undefined;
 
     act(() => {
@@ -104,6 +111,13 @@ describe('the editor map surface', () => {
       startAttachment?.();
       await Promise.resolve();
     });
+    expect(runtime.requestTheme).toHaveBeenCalledExactlyOnceWith('light');
+    expect(attach).not.toHaveBeenCalled();
+
+    await act(async () => {
+      initialTheme.resolve();
+      await initialTheme.promise;
+    });
     expect(attach).toHaveBeenCalledOnce();
   });
 
@@ -121,7 +135,7 @@ describe('the editor map surface', () => {
       attach: () => attachment.promise,
     };
     const disposeRuntime = vi.fn();
-    const runtime = testRuntime(vi.fn(), disposeRuntime);
+    const runtime = testRuntime(vi.fn(), { dispose: disposeRuntime });
 
     await act(async () => {
       root.render(
