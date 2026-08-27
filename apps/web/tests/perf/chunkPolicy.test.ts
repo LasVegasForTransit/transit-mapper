@@ -56,6 +56,17 @@ describe('performance chunk policy', () => {
     expect(performanceChunkName('/repo/packages/renderer/src/layers/constants.ts')).toBe(
       'renderer-display',
     );
+    expect(
+      performanceChunkName('/repo/packages/renderer/src/workers/feature-projection-worker.ts'),
+    ).toBe('renderer-projection');
+    expect(
+      performanceChunkName(
+        '/repo/packages/renderer/dist/workers/feature-projection-worker-protocol.js',
+      ),
+    ).toBe('renderer-projection');
+    expect(
+      performanceChunkName('/repo/packages/renderer/src/workers/worker-request-lifecycle.ts'),
+    ).toBe('renderer-projection');
     expect(performanceChunkName('/repo/packages/renderer/dist/sources/source-bank-layers.js')).toBe(
       'renderer-display',
     );

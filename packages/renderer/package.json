@@ -36,6 +36,14 @@
       "types": "./dist/projection.d.ts",
       "import": "./dist/projection.js"
     },
+    "./projection-worker": {
+      "development": {
+        "types": "./src/workers/feature-projection-worker.ts",
+        "import": "./src/workers/feature-projection-worker.ts"
+      },
+      "types": "./dist/workers/feature-projection-worker.d.ts",
+      "import": "./dist/workers/feature-projection-worker.js"
+    },
     "./presentation": {
       "development": {
         "types": "./src/presentation.ts",
