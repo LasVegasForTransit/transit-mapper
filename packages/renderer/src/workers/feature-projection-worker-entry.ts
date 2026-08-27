@@ -4,8 +4,8 @@ import {
   type SystemFeatureSourceMap,
 } from '@transitmapper/core/render/system-render-scene';
 import { systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
-import { buildFeaturesForSources } from './sourceFeatureProjection';
-import { createSourceFeatureProjectionCounts } from './feature-projection-counts';
+import { buildFeaturesForSources } from '../sourceFeatureProjection';
+import { createSourceFeatureProjectionCounts } from '../feature-projection-counts';
 import type {
   FeatureProjectionWorkerEvent,
   FeatureProjectionWorkerRequest,

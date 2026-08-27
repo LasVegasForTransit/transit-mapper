@@ -24,7 +24,7 @@ import type { PlanResumableGeographicFeatureProjectionOptions } from './resumabl
 import type { ScenePublicationSubmission } from './scene-publication';
 import type { SourceUploadTransition } from './sourceUploadPlan';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
-import type { FeatureProjectionClient } from './feature-projection-worker';
+import type { FeatureProjectionClient } from './workers/feature-projection-worker';
 
 export type DiagramLayoutResolver = (
   system: TransitSystem,

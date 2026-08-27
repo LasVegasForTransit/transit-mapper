@@ -28,7 +28,7 @@ import type {
   FeatureProjectionClient,
   FeatureProjectionClientInput,
   FeatureProjectionResult,
-} from '../../src/feature-projection-worker';
+} from '../../src/workers/feature-projection-worker';
 
 type MapListener = (event?: unknown) => void;
 

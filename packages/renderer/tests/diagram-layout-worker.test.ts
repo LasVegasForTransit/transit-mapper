@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { aRoad, aSystem } from '@transitmapper/core/testing/fixtures';
 import { layoutDiagram } from '@transitmapper/core/model/diagramLayout';
-import { createDiagramLayoutWorker, type DiagramLayoutWorker } from '../src/diagram-layout-worker';
+import {
+  createDiagramLayoutWorker,
+  type DiagramLayoutWorker,
+} from '../src/workers/diagram-layout-worker';
 import type {
   DiagramLayoutWorkerEvent,
   DiagramLayoutWorkerRequest,
-} from '../src/diagram-layout-worker-protocol';
+} from '../src/workers/diagram-layout-worker-protocol';
 
 class RecordingDiagramWorker implements DiagramLayoutWorker {
   onmessage: ((event: MessageEvent<DiagramLayoutWorkerEvent>) => void) | null = null;

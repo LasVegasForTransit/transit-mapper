@@ -6,11 +6,11 @@ import { SRC_WAYS } from '../src/layers/constants';
 import {
   submitWorkerFeatureProjection,
   type WorkerFeatureProjectionClient,
-} from '../src/worker-feature-projection-submission';
+} from '../src/workers/worker-feature-projection-submission';
 import type {
   FeatureProjectionClientInput,
   FeatureProjectionResult,
-} from '../src/feature-projection-worker';
+} from '../src/workers/feature-projection-worker';
 
 function projectionInput(): FeatureProjectionClientInput {
   return {

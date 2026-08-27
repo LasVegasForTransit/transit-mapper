@@ -88,8 +88,9 @@ to either driver. The package depends on core, map, views, and MapLibre. Its
 bounded entries include `driver`, `snapshot`, `layers`, `projection`, `runtime`,
 and `stats`.
 
-`packages/renderer/src/layers` owns stable source and layer identities. Worker
-clients remain beside their projection modules until that directory moves.
+`packages/renderer/src/layers` owns stable source and layer identities.
+`packages/renderer/src/workers` keeps each worker client beside its protocol,
+entry point, request lifecycle, and publication submission boundary.
 `packages/renderer/src/presentation.ts` owns the document map definition and
 the default document View. It also converts portable View filters to renderer
 presentation values. The editor, viewer, and non-React embed use those same
@@ -251,7 +252,7 @@ React nor editor code. `/e/:id` applies the same synthetic default View as
 #### Viewer
 
 `apps/web/src/viewer` resolves shared-system and published-View sessions. It
-composes reader controls around `MapWorkspace`, attaches the document driver,
+composes reader controls around `MapWorkspace`, attaches the snapshot driver,
 and resolves selected feature details. It may lazy-load the editor persistence
 path only after someone chooses Fork and edit.
 
