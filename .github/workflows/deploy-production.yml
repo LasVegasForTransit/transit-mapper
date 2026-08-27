@@ -110,7 +110,7 @@ jobs:
           set -euo pipefail
           release=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG")
           tag=$(jq -er '.tag_name' <<< "$release")
-          draft=$(jq -er '.draft' <<< "$release")
+          draft=$(jq -er '.draft | tostring' <<< "$release")
           if [ "$draft" != 'false' ]; then
             echo "Release $tag is still a draft." >&2
             exit 1
