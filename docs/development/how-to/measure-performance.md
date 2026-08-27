@@ -228,9 +228,11 @@ It includes:
 - `report.json`, with every raw sample, min/median/p95/max, variance, standard
   deviation, coefficient of variation, cache hits/misses, source uploads, and
   full/gesture projection phase counters;
-- `bundle-report.json`, covering each entry's complete static and dynamic
-  import graph in raw, gzip, and Brotli bytes plus every emitted JavaScript
-  chunk's raw size and budget;
+- `bundle-report.json`, covering each entry's eager transfer graph, lazy
+  transfer graph, complete transfer graph, and complete JavaScript closure in
+  raw, gzip, and Brotli bytes. The report keeps first-load transfer violations
+  separate from JavaScript closure launch-gate violations. It also records
+  every emitted JavaScript chunk's raw size and budget;
 - `pwa-report.json`, the deterministic build-graph/precache comparison; and
 - `pwa-runtime-report.json`, proof that an installed editor reopened offline
   after Chrome's HTTP cache was cleared, populated a system overlay on its

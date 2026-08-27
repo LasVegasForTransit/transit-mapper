@@ -4,8 +4,12 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BUNDLE_BUDGETS } from '../../perf.config';
-import { evaluateBundleBudgets, type BundleEntrySize } from '../../src/perf/bundleBudget';
+import { BUNDLE_BUDGETS, JAVASCRIPT_CLOSURE_BUDGETS } from '../../perf.config';
+import {
+  evaluateBundleBudgets,
+  type BundleBudgetViolation,
+  type BundleEntrySize,
+} from '../../src/perf/bundleBudget';
 import {
   evaluateChunkSizes,
   isMapEngineChunkName,
@@ -267,12 +271,40 @@ export function initialDeliverySizes(entries: readonly BundleEntryReport[]): Bun
   }));
 }
 
+export function javascriptClosureSizes(entries: readonly BundleEntryReport[]): BundleEntrySize[] {
+  return entries.map(({ entry, javascriptClosure }) => ({
+    entry,
+    rawBytes: javascriptClosure.rawBytes,
+    gzipBytes: javascriptClosure.gzipBytes,
+    brotliBytes: javascriptClosure.brotliBytes,
+  }));
+}
+
+export interface DeliveryBudgetEvaluation {
+  initialTransfer: BundleBudgetViolation[];
+  javascriptClosure: BundleBudgetViolation[];
+}
+
+export function evaluateDeliveryBudgets(
+  entries: readonly BundleEntryReport[],
+): DeliveryBudgetEvaluation {
+  return {
+    initialTransfer: evaluateBundleBudgets(initialDeliverySizes(entries), BUNDLE_BUDGETS),
+    javascriptClosure: evaluateBundleBudgets(
+      javascriptClosureSizes(entries),
+      JAVASCRIPT_CLOSURE_BUDGETS,
+    ),
+  };
+}
+
 async function main(arguments_: readonly string[]): Promise<void> {
   const command = parseBundleReportArguments(arguments_);
   const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8')) as ViteManifest;
   const graphs = createDeliveryGraphs({ manifest, files: await outputFiles() });
   const chunks = await reportChunks();
-  const violations = evaluateBundleBudgets(initialDeliverySizes(graphs.entries), BUNDLE_BUDGETS);
+  const budgetEvaluation = evaluateDeliveryBudgets(graphs.entries);
+  const violations = budgetEvaluation.initialTransfer;
+  const javascriptClosureViolations = budgetEvaluation.javascriptClosure;
   const chunkViolations = evaluateChunkSizes(chunks);
   const report: BundleReport = {
     schemaVersion: 3,
@@ -280,6 +312,7 @@ async function main(arguments_: readonly string[]): Promise<void> {
     ...graphs,
     chunks,
     violations,
+    javascriptClosureViolations,
     chunkViolations,
   };
   const comparison = await writeBundleReportArtifacts(report, {
@@ -295,6 +328,7 @@ async function main(arguments_: readonly string[]): Promise<void> {
     logGraph(`bundle ${entry.entry} eager`, entry.eager);
     logGraph(`bundle ${entry.entry} lazy`, entry.lazy);
     logGraph(`bundle ${entry.entry} complete`, entry.complete);
+    logGraph(`bundle ${entry.entry} JavaScript closure`, entry.javascriptClosure);
   }
   logGraph('dedicated Workers', report.workers);
   logGraph('service Worker', report.serviceWorker);
@@ -317,6 +351,9 @@ async function main(arguments_: readonly string[]): Promise<void> {
     console.log(`bundle N-1 comparison: ${COMPARISON_PATH}`);
   }
   for (const violation of violations) console.error(`bundle budget: ${violation.message}`);
+  for (const violation of javascriptClosureViolations) {
+    console.error(`JavaScript closure launch gate: ${violation.message}`);
+  }
   for (const violation of chunkViolations) console.error(`chunk budget: ${violation.message}`);
   if (violations.length > 0 || chunkViolations.length > 0) process.exitCode = 1;
 }

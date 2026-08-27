@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { evaluateBundleBudgets } from '../../src/perf/bundleBudget';
 import type { BundleBudget, BundleEntrySize } from '../../src/perf/bundleBudget';
-import { BUNDLE_BUDGETS } from '../../perf.config';
+import { BUNDLE_BUDGETS, JAVASCRIPT_CLOSURE_BUDGETS } from '../../perf.config';
 
 const budgets: BundleBudget[] = [
   {
@@ -45,6 +45,19 @@ describe('bundle budgets', () => {
       maximumGzipBytes: 307_200,
       maximumBrotliBytes: 256_000,
     });
+  });
+
+  it('rejects JavaScript closures above each launch ceiling', () => {
+    const violations = evaluateBundleBudgets(
+      [
+        { entry: 'main', rawBytes: 900_000, gzipBytes: 450_001, brotliBytes: 400_000 },
+        { entry: 'viewer', rawBytes: 600_000, gzipBytes: 300_001, brotliBytes: 250_000 },
+        { entry: 'embed', rawBytes: 600_000, gzipBytes: 300_000, brotliBytes: 250_000 },
+      ],
+      JAVASCRIPT_CLOSURE_BUDGETS,
+    );
+
+    expect(violations.map((violation) => violation.entry)).toEqual(['main', 'viewer']);
   });
 
   it('gates delivered bytes without treating raw module size as a product ceiling', () => {

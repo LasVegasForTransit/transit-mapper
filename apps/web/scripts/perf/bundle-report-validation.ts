@@ -121,6 +121,26 @@ function sameFile(left: BundleFileReport, right: BundleFileReport): boolean {
   );
 }
 
+function graphFromFiles(files: readonly BundleFileReport[]): BundleGraphReport {
+  return {
+    files: [...files],
+    rawBytes: files.reduce((total, file) => total + file.rawBytes, 0),
+    gzipBytes: files.reduce((total, file) => total + file.gzipBytes, 0),
+    brotliBytes: files.reduce((total, file) => total + file.brotliBytes, 0),
+  };
+}
+
+function derivedJavaScriptClosure(complete: BundleGraphReport): BundleGraphReport {
+  return graphFromFiles(complete.files.filter((file) => /\.(?:m?js)$/.test(file.path)));
+}
+
+function sameGraph(left: BundleGraphReport, right: BundleGraphReport): boolean {
+  return (
+    left.files.length === right.files.length &&
+    left.files.every((file, index) => sameFile(file, right.files[index]))
+  );
+}
+
 interface EntryGraphAlgebraOptions {
   eager: BundleGraphReport;
   lazy: BundleGraphReport;
@@ -162,6 +182,21 @@ function entries(value: unknown, reportPath: string): BundleReport['entries'] {
     const eager = bundleGraph(candidate.eager, reportPath, `entries.${entry}.eager`);
     const lazy = bundleGraph(candidate.lazy, reportPath, `entries.${entry}.lazy`);
     const complete = bundleGraph(candidate.complete, reportPath, `entries.${entry}.complete`);
+    const expectedJavaScript = derivedJavaScriptClosure(complete);
+    const javascriptClosure =
+      candidate.javascriptClosure === undefined
+        ? expectedJavaScript
+        : bundleGraph(
+            candidate.javascriptClosure,
+            reportPath,
+            `entries.${entry}.javascriptClosure`,
+          );
+    if (!sameGraph(javascriptClosure, expectedJavaScript)) {
+      invalid(
+        reportPath,
+        `entries.${entry}.javascriptClosure must contain every JavaScript file in its complete graph`,
+      );
+    }
     validateEntryGraphAlgebra({ eager, lazy, complete, reportPath, entry });
     for (const metric of ['rawBytes', 'gzipBytes', 'brotliBytes'] as const) {
       if (
@@ -178,6 +213,7 @@ function entries(value: unknown, reportPath: string): BundleReport['entries'] {
       eager,
       lazy,
       complete,
+      javascriptClosure,
     };
   });
 }
@@ -203,6 +239,14 @@ export function validateFrozenBundleReport(value: unknown, reportPath: string): 
     precache: bundleGraph(report.precache, reportPath, 'precache'),
     chunks: array(report.chunks, reportPath, 'chunks') as BundleReport['chunks'],
     violations: array(report.violations, reportPath, 'violations') as BundleReport['violations'],
+    javascriptClosureViolations:
+      report.javascriptClosureViolations === undefined
+        ? []
+        : (array(
+            report.javascriptClosureViolations,
+            reportPath,
+            'javascriptClosureViolations',
+          ) as BundleReport['javascriptClosureViolations']),
     chunkViolations: array(
       report.chunkViolations,
       reportPath,

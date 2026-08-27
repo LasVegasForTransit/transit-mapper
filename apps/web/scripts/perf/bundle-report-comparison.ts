@@ -106,6 +106,7 @@ function namedGraphs(report: BundleReport): Map<string, BundleGraphReport> {
       ['eager', entry.eager],
       ['lazy', entry.lazy],
       ['complete', entry.complete],
+      ['javascriptClosure', entry.javascriptClosure],
     ] as const) {
       const name = `entries.${entry.entry}.${kind}`;
       if (graphs.has(name)) throw new Error(`Bundle report repeats graph "${name}".`);

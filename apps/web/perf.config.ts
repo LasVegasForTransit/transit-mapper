@@ -52,3 +52,27 @@ export const BUNDLE_BUDGETS: BundleBudget[] = [
     maximumBrotliBytes: 256_000,
   },
 ];
+
+/**
+ * These launch gates cover every JavaScript module that an entry can reach,
+ * including modules behind dynamic imports. They exclude HTML, CSS, fonts,
+ * images, and other transferred assets because those belong to the separate
+ * first-load and network byte budgets above.
+ */
+export const JAVASCRIPT_CLOSURE_BUDGETS: BundleBudget[] = [
+  {
+    entry: 'main',
+    maximumGzipBytes: 450_000,
+    maximumBrotliBytes: 450_000,
+  },
+  {
+    entry: 'viewer',
+    maximumGzipBytes: 300_000,
+    maximumBrotliBytes: 300_000,
+  },
+  {
+    entry: 'embed',
+    maximumGzipBytes: 300_000,
+    maximumBrotliBytes: 300_000,
+  },
+];
