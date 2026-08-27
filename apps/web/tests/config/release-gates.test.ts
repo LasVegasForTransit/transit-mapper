@@ -40,12 +40,12 @@ describe('release performance gates', () => {
     const deploy = repositorySource('.github/workflows/deploy-production.yml');
 
     expect(performance).toContain('workflow_call:');
-    expect(performance).toContain('name: Public first-session smoke (desktop)');
+    expect(performance).toContain('name: Functional route smoke (desktop)');
     expect(performance).toContain('name: Onboarding smoke (desktop)');
     expect(performance).toContain('name: Run the release RTC smoke');
     expect(performance).toContain("inputs.scope == 'release'");
     expect(performance).toContain('pnpm perf -- --smoke --profile desktop --scenario rtc');
-    expect(performance).toContain('pnpm perf -- --smoke --profile desktop --first-session');
+    expect(performance).toContain('pnpm --filter @transitmapper/web smoke:release');
     expect(performance).toContain('pnpm perf -- --smoke --profile desktop --onboarding');
     expect(deploy).toContain('uses: ./.github/workflows/performance.yml');
     expect(deploy).toContain('needs: [validate, performance]');

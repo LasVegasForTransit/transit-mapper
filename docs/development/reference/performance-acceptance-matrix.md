@@ -30,8 +30,8 @@ row below is a hardware row and no automated result substitutes for it. The exac
 [Measure browser performance](../how-to/measure-performance.md).
 
 Web- and core-affecting pull requests run the repeated desktop RTC audit. The
-reusable release workflow runs one functional RTC smoke plus the public first
-session and onboarding smokes. Release smokes prove that the production graph
+reusable release workflow runs one functional RTC smoke plus the public route
+and onboarding smokes. Release smokes prove that the production graph
 and critical browser journeys work. They keep the collected diagnostics, but
 they do not treat one CI run as statistical timing evidence. The complete
 desktop and mobile matrix and the ten-minute leak audit run only when the

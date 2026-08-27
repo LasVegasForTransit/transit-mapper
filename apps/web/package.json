@@ -13,6 +13,7 @@
     "perf": "tsx scripts/perf/run.ts",
     "perf:record": "tsx scripts/perf/run.ts --record",
     "perf:live-production": "tsx scripts/perf/live-production-smoke.ts",
+    "smoke:release": "tsx scripts/perf/release-smoke.ts",
     "perf:freeze-497a549": "tsx scripts/perf/freeze-497a549-baseline.ts",
     "perf:soak": "tsx scripts/perf/run.ts --soak",
     "renderer:capture": "tsx scripts/renderer-capture/run.ts",

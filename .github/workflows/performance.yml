@@ -117,8 +117,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  first-session:
-    name: Public first-session smoke (desktop)
+  functional-routes:
+    name: Functional route smoke (desktop)
     if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.scope != 'soak')
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -138,24 +138,10 @@ jobs:
           google-chrome --version
           command -v xvfb-run
 
-      - name: Configure artifact path
-        run: |
-          echo "CURRENT_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-first-session" >> "$GITHUB_ENV"
-
-      - name: Run the public first-session smoke
+      - name: Run the functional route smoke
         run: >-
           xvfb-run -a --server-args="$XVFB_ARGS"
-          pnpm perf -- --smoke --profile desktop --first-session
-          --output "$CURRENT_ARTIFACT"
-
-      - name: Upload public first-session report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: performance-first-session-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.CURRENT_ARTIFACT }}
-          if-no-files-found: warn
-          retention-days: 14
+          pnpm --filter @transitmapper/web smoke:release
 
   onboarding:
     name: Onboarding smoke (desktop)
