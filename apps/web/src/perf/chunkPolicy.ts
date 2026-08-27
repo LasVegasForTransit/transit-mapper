@@ -4,6 +4,7 @@ export type PerformanceChunkName =
   | 'views'
   | 'map'
   | 'map-state'
+  | 'media-query'
   | 'workspace'
   | 'map-surface'
   | 'renderer'
@@ -70,6 +71,9 @@ export function performanceChunkName(moduleId: string): PerformanceChunkName | u
     )
   ) {
     return 'map-state';
+  }
+  if (stablePackageModule(normalizedId, 'workspace', /^(?:src|dist)\/media-query-store\.[^.]+$/)) {
+    return 'media-query';
   }
   if (stablePackageModule(normalizedId, 'workspace', /^(?:src|dist)\/map-surface\.[^.]+$/)) {
     return 'map-surface';

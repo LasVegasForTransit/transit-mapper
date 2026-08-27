@@ -230,6 +230,40 @@ describe('bundle report delivery graphs', () => {
     expect(paths(embed.lazy)).toEqual([]);
   });
 
+  it('rejects React and Workbench chunks from the embed closure by semantic name', () => {
+    const buildManifest: ViteManifest = {
+      ...manifest,
+      'embed.html': {
+        ...required(manifest['embed.html'], 'embed entry'),
+        dynamicImports: ['src/embed-runtime.ts'],
+      },
+      'src/embed-runtime.ts': {
+        file: 'assets/embed-runtime.js',
+        imports: ['_react-runtime.js', '_workspace.js'],
+      },
+      '_react-runtime.js': {
+        file: 'assets/react-runtime.js',
+        name: 'react-runtime',
+      },
+      '_workspace.js': {
+        file: 'assets/workspace.js',
+        name: 'workspace',
+      },
+    };
+    const files = {
+      ...fixtureFiles(),
+      ...encodedFiles({
+        'assets/embed-runtime.js': 'const runtime=true;',
+        'assets/react-runtime.js': 'const react=true;',
+        'assets/workspace.js': 'const workbench=true;',
+      }),
+    };
+
+    expect(() => deliveryGraphs(files, buildManifest)).toThrow(
+      'Embed entry imports forbidden chunks: react-runtime, workspace.',
+    );
+  });
+
   it('reports the viewer route host as its own static delivery graph', () => {
     const viewer = required(
       deliveryGraphs().entries.find((entry) => entry.entry === 'viewer'),

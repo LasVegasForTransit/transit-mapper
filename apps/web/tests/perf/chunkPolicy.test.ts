@@ -38,6 +38,9 @@ describe('performance chunk policy', () => {
     expect(performanceChunkName('/repo/packages/map/src/state.ts')).toBe('map-state');
     expect(performanceChunkName('/repo/packages/map/dist/map-view-store.js')).toBe('map-state');
     expect(performanceChunkName('/repo/packages/workspace/src/workbench.tsx')).toBe('workspace');
+    expect(performanceChunkName('/repo/packages/workspace/dist/media-query-store.js')).toBe(
+      'media-query',
+    );
     expect(performanceChunkName('/repo/packages/workspace/src/map-surface.tsx')).toBe(
       'map-surface',
     );
