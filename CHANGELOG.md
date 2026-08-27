@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.1](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.7.0...v0.7.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* **ci:** Deploy approved releases after failed gates ([2a50f22](https://github.com/LasVegasForTransit/transit-mapper/commit/2a50f221552af0ce65a81559e81d7849525b7378))
+* **ci:** Read published release draft state ([b588793](https://github.com/LasVegasForTransit/transit-mapper/commit/b58879345269aff431a776b3f19c1bb6b72d1f80))
+* **ci:** Resume published releases without repeated gates ([b3ccf71](https://github.com/LasVegasForTransit/transit-mapper/commit/b3ccf71d9fef3f60969b28805d8a0ee654869031))
+* **ci:** Validate resumed releases from their tag ([11a7b12](https://github.com/LasVegasForTransit/transit-mapper/commit/11a7b12bdc6d90fe25886ca34f95fd0e1442c10d))
+* **web:** Measure the visible viewer shell ([8b6513a](https://github.com/LasVegasForTransit/transit-mapper/commit/8b6513aeda5b6bc8f32a8e8e89792771457a7ee6))
+* **web:** Report viewer shell startup ([8ba22b0](https://github.com/LasVegasForTransit/transit-mapper/commit/8ba22b069d99b00c4c4d2da8fa9fafd813dc601d))
+* **web:** Restore map startup milestones ([2be14c0](https://github.com/LasVegasForTransit/transit-mapper/commit/2be14c0e699a74c428351514f6c0db6e85311260))
+* **web:** Verify production map interaction directly ([04cde83](https://github.com/LasVegasForTransit/transit-mapper/commit/04cde83421c9c467aca1656a22057408a739eaf7))
+
 ## [0.7.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.6.1...v0.7.0) (2026-08-26)
 
 
