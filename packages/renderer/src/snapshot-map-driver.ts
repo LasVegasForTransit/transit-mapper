@@ -6,7 +6,6 @@ import type {
   MapEventType,
 } from 'maplibre-gl';
 import {
-  buildFeatures,
   type Highlight,
   type SystemFeatures,
   type ViewOptions,
@@ -23,10 +22,12 @@ import { documentMapFeatureDetails } from './document-map-feature-details';
 import { renderPresentationFromMap } from './render-presentation';
 import { applyRendererVisibilityFilters } from './render-visibility';
 import {
+  ALL_SYSTEM_FEATURE_SOURCES,
   COMMITTED_SYSTEM_FEATURE_SOURCES,
   SYSTEM_FEATURE_NAME_BY_SOURCE,
   type MapSystemFeatureSourceId,
 } from './system-feature-sources';
+import type { FeatureProjectionClient } from './workers/feature-projection-worker';
 
 export interface SnapshotMapScheduler {
   scheduleFrame(callback: () => void): number;
@@ -61,6 +62,7 @@ export interface SnapshotMapDriverOptions {
   resolvePresentation(state: MapPresentationStateV1): SnapshotMapPresentation;
   setupStaticSources?(map: MapLibreMap): void;
   readonly scheduler?: SnapshotMapScheduler;
+  createFeatureProjectionWorker(): FeatureProjectionClient;
   attachSession?(
     session: SnapshotMapSession,
     signal: AbortSignal,
@@ -155,6 +157,7 @@ function sameLayerOrder(left: readonly string[], right: readonly string[]): bool
 class SnapshotMapAttachment implements MapDriverAttachment {
   private readonly map: MapLibreMap;
   private readonly scheduler: SnapshotMapScheduler;
+  private readonly featureProjection: FeatureProjectionClient;
   private presentation: SnapshotMapPresentation;
   private retainedFeatures: SystemFeatures | null = null;
   private scheduledProjection: number | null = null;
@@ -169,6 +172,7 @@ class SnapshotMapAttachment implements MapDriverAttachment {
   ) {
     this.map = attachOptions.host.map;
     this.scheduler = options.scheduler ?? browserScheduler();
+    this.featureProjection = options.createFeatureProjectionWorker();
     this.presentation = options.resolvePresentation(attachOptions.viewStore.getSnapshot());
   }
 
@@ -209,6 +213,7 @@ class SnapshotMapAttachment implements MapDriverAttachment {
     for (const cleanup of this.listenerCleanups.splice(0)) {
       cleanupSafely(this.attachOptions, cleanup);
     }
+    cleanupSafely(this.attachOptions, () => this.featureProjection.dispose());
     const attachedExtension = this.extension;
     this.extension = undefined;
     cleanupSafely(
@@ -269,12 +274,18 @@ class SnapshotMapAttachment implements MapDriverAttachment {
             this.options.system,
           )
         : this.options.system;
-    return buildFeatures(
-      system,
-      documentHighlight(this.attachOptions.selection.getSnapshot()),
-      [],
-      { ...presentation, presentation: presentationFromMap(this.map) },
+    const result = await this.featureProjection.project(
+      {
+        system,
+        selection: documentHighlight(this.attachOptions.selection.getSnapshot()),
+        handleWayIds: [],
+        view: { ...presentation, presentation: presentationFromMap(this.map) },
+        sourceIds: ALL_SYSTEM_FEATURE_SOURCES,
+        sceneRevision: `snapshot:${system.id}`,
+      },
+      this.attachOptions.signal,
     );
+    return result.features;
   }
 
   private commit(features: SystemFeatures): void {
@@ -343,12 +354,13 @@ class SnapshotMapDriver implements MapDriver {
     if (attachOptions.signal.aborted) {
       return Promise.resolve({ resolveFeature: () => Promise.resolve(null), dispose() {} });
     }
-    const attachment = new SnapshotMapAttachment(this.options, attachOptions);
+    let attachment: SnapshotMapAttachment | undefined;
     try {
+      attachment = new SnapshotMapAttachment(this.options, attachOptions);
       await attachment.start();
       return attachment;
     } catch (error) {
-      attachment.dispose();
+      attachment?.dispose();
       throw error instanceof Error ? error : new Error(String(error));
     }
   }

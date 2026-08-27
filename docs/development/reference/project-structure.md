@@ -83,10 +83,11 @@ The package depends on map, treats React as a peer, and imports no editor state.
 `packages/renderer` owns document projection, source banks, recovery, workers,
 and two `MapDriver` implementations. `DocumentMapDriver` publishes changing
 editor documents through `LiveMapRenderer`. `SnapshotMapDriver` projects one
-fixed system directly for readers. Hosts can attach neutral session extensions
-to either driver. The package depends on core, map, views, and MapLibre. Its
-bounded entries include `driver`, `snapshot`, `layers`, `projection`, `runtime`,
-and `stats`.
+fixed system for readers through an injected feature-projection Worker. Hosts
+construct the Worker client and can attach neutral session extensions to either
+driver. The package depends on core, map, views, and MapLibre. Its bounded
+entries include `driver`, `snapshot`, `layers`, `projection`,
+`projection-worker`, `runtime`, and `stats`.
 
 `packages/renderer/src/layers` owns stable source and layer identities.
 `packages/renderer/src/projection` owns feature building, preparation,
@@ -314,7 +315,7 @@ flowchart LR
   Surface --> DocumentDriver
   Surface --> SnapshotDriver
   DocumentDriver --> Renderer[LiveMapRenderer]
-  SnapshotDriver --> Projection[Fixed-system projection]
+  SnapshotDriver --> Projection[Feature projection Worker]
   DocumentDriver --> ViewStore[MapViewStore]
   SnapshotDriver --> ViewStore
   Editor --> ViewStore

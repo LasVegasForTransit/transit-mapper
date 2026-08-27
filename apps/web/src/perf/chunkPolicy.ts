@@ -9,6 +9,7 @@ export type PerformanceChunkName =
   | 'map-surface'
   | 'renderer'
   | 'renderer-display'
+  | 'renderer-projection'
   | 'feature-details'
   | 'editor-interactions';
 export type PerformanceChunkKind = 'map-engine' | 'standard';
@@ -78,6 +79,15 @@ export function performanceChunkName(moduleId: string): PerformanceChunkName | u
   }
   if (stablePackageModule(normalizedId, 'workspace', /^(?:src|dist)\/map-surface\.[^.]+$/)) {
     return 'map-surface';
+  }
+  if (
+    stablePackageModule(
+      normalizedId,
+      'renderer',
+      /^(?:src|dist)\/workers\/(?:feature-projection-worker|feature-projection-worker-protocol|worker-request-lifecycle)\.[^.]+$/,
+    )
+  ) {
+    return 'renderer-projection';
   }
   if (
     stablePackageModule(

@@ -8,6 +8,7 @@ import {
   type SnapshotMapPresentation,
   type SnapshotMapSession,
 } from '@transitmapper/renderer/snapshot';
+import { createFeatureProjectionWorker } from '@transitmapper/renderer/projection-worker';
 import {
   COMMITTED_SYSTEM_FEATURE_SOURCES,
   LYR_LANDMARKS,
@@ -174,6 +175,7 @@ export function createViewerDocumentMap(options: CreateViewerDocumentMapOptions)
     layerSpecs: () => layerSpecsForScheme(options.style.current),
     layerSpecsForPresentation: viewerLayerSpecsForPresentation,
     resolvePresentation: resolveDocumentMapPresentation,
+    createFeatureProjectionWorker,
     setupStaticSources: (map) => addStaticSources(map, options.style.current),
     attachSession: (session) => {
       options.onSessionChange?.(session);
