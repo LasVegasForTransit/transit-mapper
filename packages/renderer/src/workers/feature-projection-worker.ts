@@ -30,7 +30,7 @@ export interface FeatureProjectionWorker {
 }
 
 export interface FeatureProjectionWorkerOptions {
-  workerFactory?(): FeatureProjectionWorker;
+  readonly workerFactory?: () => FeatureProjectionWorker;
 }
 
 export interface FeatureProjectionResult {
@@ -86,16 +86,23 @@ function workerInput(input: FeatureProjectionClientInput): FeatureProjectionWork
  * MapLibre renderer where they can be transacted together.
  */
 export class FeatureProjectionWorkerClient implements FeatureProjectionClient {
-  private readonly worker: FeatureProjectionWorker;
+  private readonly workerFactory: () => FeatureProjectionWorker;
+  private worker: FeatureProjectionWorker;
   private readonly pending = new Map<number, PendingProjection>();
   private nextRequestId = 1;
   private disposed = false;
 
   constructor(options: FeatureProjectionWorkerOptions = {}) {
-    this.worker = (options.workerFactory ?? defaultWorkerFactory)();
-    this.worker.onmessage = (event) => this.handleMessage(event.data);
-    this.worker.onerror = (event) =>
+    this.workerFactory = options.workerFactory ?? defaultWorkerFactory;
+    this.worker = this.createWorker();
+  }
+
+  private createWorker(): FeatureProjectionWorker {
+    const worker = this.workerFactory();
+    worker.onmessage = (event) => this.handleMessage(event.data);
+    worker.onerror = (event) =>
       this.failPending(new Error(event.message || 'Feature Worker failed.'));
+    return worker;
   }
 
   project(
@@ -106,7 +113,7 @@ export class FeatureProjectionWorkerClient implements FeatureProjectionClient {
     if (signal?.aborted) return Promise.reject(projectionAbortedError());
     const requestId = this.nextRequestId++;
     return new Promise<FeatureProjectionResult>((resolve, reject) => {
-      const abort = () => this.rejectRequest(requestId, projectionAbortedError());
+      const abort = () => this.replaceWorker(projectionAbortedError());
       signal?.addEventListener('abort', abort, { once: true });
       this.pending.set(requestId, {
         resolve,
@@ -146,6 +153,16 @@ export class FeatureProjectionWorkerClient implements FeatureProjectionClient {
 
   private failPending(error: Error): void {
     rejectAllPendingWorkerRequests(this.pending, error);
+  }
+
+  private replaceWorker(error: Error): void {
+    if (this.disposed || this.pending.size === 0) return;
+    const previous = this.worker;
+    previous.onmessage = null;
+    previous.onerror = null;
+    previous.terminate();
+    this.failPending(error);
+    this.worker = this.createWorker();
   }
 }
 

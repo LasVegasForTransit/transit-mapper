@@ -15,6 +15,7 @@ import {
   LYR_FACILITIES,
   LYR_GESTURE_POINT,
   LYR_HANDLES,
+  LYR_LINE_STRIPE_HIT,
   LYR_PHYSICAL_HANDLES,
   LYR_SERVICE_TERMINI_HIT,
   LYR_SERVICES_HIT,
@@ -128,6 +129,25 @@ function serviceFeature(wayId: string): MapGeoJSONFeature {
     source: 'tm-services',
     sourceLayer: '',
     layer: { id: LYR_SERVICES_HIT, type: 'line', source: 'tm-services' },
+    state: {},
+  } as unknown as MapGeoJSONFeature;
+}
+
+function lineStripeFeature(lineId: string): MapGeoJSONFeature {
+  return {
+    type: 'Feature',
+    id: `line-stripe-${lineId}`,
+    properties: { routeRole: 'stripe', lineId },
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [-115.25, 36.1],
+        [-115.2, 36.1],
+      ],
+    },
+    source: 'tm-services',
+    sourceLayer: '',
+    layer: { id: LYR_LINE_STRIPE_HIT, type: 'line', source: 'tm-services' },
     state: {},
   } as unknown as MapGeoJSONFeature;
 }
@@ -1413,6 +1433,21 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
+  it('keeps Shift-click on a Network Line stripe as Line multi-selection', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.lines = [{ id: 'public-line', name: 'Public Line', color: '#e5252a', serviceIds: [] }];
+    store.commands.document.setSystem(system);
+    const map = createMap(lineStripeFeature('public-line'));
+    const detach = attach(map, store);
+
+    map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }, { shiftKey: true }));
+
+    expect(store.getState().multiSelection).toEqual([{ kind: 'line', id: 'public-line' }]);
+    detach();
+  });
+
   it('drags all selected Network items when starting from a stop', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
@@ -1594,6 +1629,22 @@ describe('pointer work coalescing', () => {
 
     expect(store.getState().selection).toEqual({ kind: 'service', id: 'service' });
     expect(store.getState().activePatternId).toBe('service');
+    detach();
+  });
+
+  it('selects a Line stripe without selecting a Service or pattern', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.lines = [{ id: 'public-line', name: 'Public Line', color: '#e5252a', serviceIds: [] }];
+    store.commands.document.setSystem(system);
+    const map = createMap(lineStripeFeature('public-line'));
+    const detach = attach(map, store);
+
+    map.fire('click', mouseEvent(map, map.project([-115.23, 36.1])));
+
+    expect(store.getState().selection).toEqual({ kind: 'line', id: 'public-line' });
+    expect(store.getState().activePatternId).toBeNull();
     detach();
   });
 

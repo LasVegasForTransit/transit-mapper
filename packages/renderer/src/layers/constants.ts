@@ -57,6 +57,14 @@ export const LYR_SERVICES_SOLID_CASING = 'tm-services-solid-casing';
 export const LYR_SERVICES_UNDERGROUND_CASING = 'tm-services-underground-casing';
 /** Invisible per-occurrence geometry used only for exact service actions. */
 export const LYR_SERVICES_HIT = 'tm-services-hit';
+/** The Network view draws one neutral casing for each visible Line corridor. */
+export const LYR_LINE_CASING = 'tm-line-casing';
+/** Each Line receives one ordered colored stripe inside its corridor casing. */
+export const LYR_LINE_STRIPE = 'tm-line-stripe';
+/** Selection state belongs on the stripe because a shared casing has no Line identity. */
+export const LYR_LINE_STRIPE_SELECTED = 'tm-line-stripe-selected';
+/** The stripe itself is the only Network hit geometry. */
+export const LYR_LINE_STRIPE_HIT = 'tm-line-stripe-hit';
 export const LYR_STATIONS = 'tm-stations';
 export const LYR_STATION_SELECTED = 'tm-station-selected';
 export const LYR_VEHICLES = 'tm-vehicles';

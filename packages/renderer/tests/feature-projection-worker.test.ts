@@ -104,4 +104,39 @@ describe('Feature projection worker', () => {
     client.dispose();
     expect(worker.terminated).toBe(true);
   });
+
+  it('replaces a superseded Worker before a fresh projection can publish', async () => {
+    const staleWorker = new RecordingFeatureProjectionWorker();
+    const currentWorker = new RecordingFeatureProjectionWorker();
+    const workers = [staleWorker, currentWorker];
+    const client = createFeatureProjectionWorker({
+      workerFactory: () => {
+        const worker = workers.shift();
+        if (!worker) throw new Error('Expected a replacement projection Worker.');
+        return worker;
+      },
+    });
+    const abort = new AbortController();
+    const stale = client.project(requestInput(), abort.signal);
+    const staleAssertion = expect(stale).rejects.toMatchObject({ name: 'AbortError' });
+
+    abort.abort();
+    expect(staleWorker.terminated).toBe(true);
+    const current = client.project(requestInput());
+    staleWorker.respond({
+      kind: 'done',
+      requestId: 1,
+      features: emptySystemFeatures(),
+      counts: null,
+    });
+    currentWorker.respond({
+      kind: 'done',
+      requestId: 2,
+      features: emptySystemFeatures(),
+      counts: null,
+    });
+
+    await staleAssertion;
+    await expect(current).resolves.toEqual({ features: emptySystemFeatures(), counts: null });
+  });
 });

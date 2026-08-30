@@ -5,7 +5,12 @@ import {
   createEditorFeatureState,
   type RenderedFeatureIdentity,
 } from '../../src/map/editor-feature-state';
-import { LYR_SERVICES_SOLID, LYR_WAY_SELECTED, SRC_WAYS } from '@transitmapper/renderer/layers';
+import {
+  LYR_LINE_STRIPE_SELECTED,
+  LYR_SERVICES_SOLID,
+  LYR_WAY_SELECTED,
+  SRC_WAYS,
+} from '@transitmapper/renderer/layers';
 import type { LiveMapRenderer } from '@transitmapper/renderer/runtime';
 
 interface FeatureStateChange {
@@ -99,6 +104,10 @@ describe('editor feature state', () => {
       value: true,
     });
     expect(renderer.visibility).toContainEqual({ layerId: LYR_WAY_SELECTED, value: 'visible' });
+    expect(renderer.visibility).toContainEqual({
+      layerId: LYR_LINE_STRIPE_SELECTED,
+      value: 'visible',
+    });
     expect(renderer.paint).toContainEqual({
       layerId: LYR_SERVICES_SOLID,
       property: 'line-opacity',

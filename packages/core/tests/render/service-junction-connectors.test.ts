@@ -49,6 +49,25 @@ function throughJunction() {
 }
 
 describe('service junction connectors', () => {
+  it('binds Line-only service visuals to their public Line', () => {
+    const stripe = {
+      type: 'Feature' as const,
+      id: 'line-stripe',
+      properties: { routeRole: 'stripe', lineId: 'line-a' },
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: [
+          [-115.2, 36.14],
+          [-115.16, 36.14],
+        ],
+      },
+    };
+
+    expect(renderFeatureDomainIdentities('services', stripe)).toEqual([
+      renderDomainIdentity('line', 'line-a'),
+    ]);
+  });
+
   it('routes a service between its resolved lane endpoints through the junction', () => {
     const { node, west, east, waysById, trims } = throughJunction();
     const service = aService('route', [aPattern('pattern', [west, east], [west.id, east.id])]);

@@ -55,6 +55,7 @@ import {
   LYR_FACILITIES,
   LYR_GESTURE_POINT,
   LYR_HANDLES,
+  LYR_LINE_STRIPE_HIT,
   LYR_SERVICE_TERMINI_HIT,
   LYR_JUNCTIONS,
   LYR_LANE_SURFACES,
@@ -78,7 +79,12 @@ interface ScreenPoint {
   y: number;
 }
 
-const SERVICE_LAYERS = [LYR_SERVICES_HIT, LYR_SERVICES_SOLID, LYR_SERVICES_UNDERGROUND];
+const SERVICE_LAYERS = [
+  LYR_SERVICES_HIT,
+  LYR_LINE_STRIPE_HIT,
+  LYR_SERVICES_SOLID,
+  LYR_SERVICES_UNDERGROUND,
+];
 // Street lanes retain the corridor domain ID, so hit-testing works across LOD tiers.
 const WAY_LAYERS = [LYR_WAYS_SOLID, LYR_WAYS_DASHED, LYR_LANE_SURFACES];
 const HIT_TEST_LAYERS = [
@@ -569,6 +575,16 @@ export function attachInteractions(
     return typeof wayId === 'string' ? wayId : undefined;
   };
 
+  const stringFeatureProperty = (
+    feature: MapGeoJSONFeature | undefined,
+    key: string,
+  ): string | undefined => {
+    const properties: unknown = feature?.properties;
+    if (!properties || typeof properties !== 'object') return undefined;
+    const value = (properties as Record<string, unknown>)[key];
+    return typeof value === 'string' ? value : undefined;
+  };
+
   const isCompatibleNetworkWay = (
     state: Pick<EditorState, 'system' | 'draftModeId'>,
     wayId: string | undefined,
@@ -656,7 +672,9 @@ export function attachInteractions(
       // use that exact carrier rather than treating a colored overlay as an
       // unrelated line body or guessing from whatever layer drew first.
       const wayId = networkWayId(serviceLine) ?? networkWayId(wayLine);
-      return isCompatibleNetworkWay(state, wayId) ? 'compatible-corridor' : 'empty';
+      return isCompatibleNetworkWay(state, wayId) || networkRouteAnchorAt(e) !== null
+        ? 'compatible-corridor'
+        : 'empty';
     }
     return 'corridor';
   };
@@ -2455,7 +2473,8 @@ export function attachInteractions(
         startPan(e, false);
         return;
       }
-      if (pointerIntent.primaryOperation === 'select-line-and-branch') return;
+      if (pointerIntent.primaryOperation === 'select-line-and-branch' && !channels.constrain)
+        return;
     }
 
     if (pointerIntent.primaryOperation === 'erase-points' && handle) {
@@ -2567,9 +2586,12 @@ export function attachInteractions(
             // Lines, not two technical Services or the streets beneath them.
             const wayHit = featureAt(e, WAY_LAYERS);
             const serviceHit = wayHit ? undefined : featureAt(e, SERVICE_LAYERS);
+            const lineId = stringFeatureProperty(serviceHit, 'lineId');
             const serviceId = serviceHit?.properties.serviceId as string | undefined;
             const wayId = wayHit ? (wayHit.properties.id as string) : undefined;
-            if (serviceId) {
+            if (typeof lineId === 'string') {
+              commands.selection.extendSelection({ kind: 'line', id: lineId });
+            } else if (serviceId) {
               const line = lineForService(st.system, serviceId);
               commands.selection.extendSelection(
                 line ? { kind: 'line', id: line.id } : { kind: 'service', id: serviceId },
@@ -2748,6 +2770,9 @@ export function attachInteractions(
           commands.selection.select({ kind: 'way', id: hit.properties.wayId as string });
         } else if (WAY_LAYERS.includes(featureLayerId(hit))) {
           commands.selection.select({ kind: 'way', id: hit.properties.id as string });
+        } else if (stringFeatureProperty(hit, 'routeRole') === 'stripe') {
+          const lineId = stringFeatureProperty(hit, 'lineId');
+          if (lineId) commands.selection.select({ kind: 'line', id: lineId });
         } else {
           // A rendered Service belongs to a public Line. The first click stays
           // at that understandable public identity; clicking the same Line
@@ -2859,6 +2884,10 @@ export function attachInteractions(
     }
     if (featureLayerId(hit) === LYR_HANDLES)
       return { target: { kind: 'way', id: hit.properties.wayId as string }, anchor: lngLatOf(e) };
+    if (stringFeatureProperty(hit, 'routeRole') === 'stripe') {
+      const lineId = stringFeatureProperty(hit, 'lineId');
+      return lineId ? { target: { kind: 'line', id: lineId }, anchor: lngLatOf(e) } : null;
+    }
     if (WAY_LAYERS.includes(featureLayerId(hit))) {
       const wayId = hit.properties.id as string;
       const way = st.system.ways.find((candidate) => candidate.id === wayId);

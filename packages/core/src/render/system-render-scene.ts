@@ -60,6 +60,7 @@ interface DomainPropertyBinding {
 const DOMAIN_BINDINGS: Record<SystemFeatureName, readonly DomainPropertyBinding[]> = {
   ways: [{ kind: 'way', propertyKeys: ['id'] }],
   services: [
+    { kind: 'line', propertyKeys: ['lineId'] },
     { kind: 'service', propertyKeys: ['serviceId'] },
     { kind: 'way', propertyKeys: ['wayId'] },
     // A Street-tier service connector changes when its junction moves even
