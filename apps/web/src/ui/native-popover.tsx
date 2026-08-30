@@ -70,16 +70,9 @@ const FOCUSABLE =
   'button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])';
 const NATIVE_POPOVER_ATTRIBUTE = { popover: 'auto' } as const;
 
-function supportsAnchorPositioning(): boolean {
-  return (
-    typeof CSS !== 'undefined' &&
-    CSS.supports('anchor-name: --tm-anchor') &&
-    CSS.supports('position-anchor: --tm-anchor')
-  );
-}
-
-function updateFallbackPlacement(input: PlacementInput): void {
-  if (supportsAnchorPositioning()) return;
+function updatePlacement(input: PlacementInput): void {
+  // Anchor-positioning support only proves the syntax is present. The top-layer
+  // popover still needs this collision calculation to stay inside the viewport.
   const anchor = input.trigger.getBoundingClientRect();
   const bounds = input.surface.getBoundingClientRect();
   const position = positionFloatingSurface({
@@ -137,7 +130,7 @@ function useSurfaceLifecycle(
       side,
       gap,
     };
-    const update = () => updateFallbackPlacement(placement);
+    const update = () => updatePlacement(placement);
     const handleToggle = (event: Event) => {
       const isOpen = (event as PopoverToggleEvent).newState === 'open';
       shown = isOpen;

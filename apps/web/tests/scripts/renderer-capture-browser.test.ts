@@ -139,14 +139,14 @@ describe('renderer capture browser lifecycle', () => {
         }
         if (role === 'button') {
           return {
-            getAttribute: () => Promise.resolve('View: Infrastructure'),
+            getAttribute: () => Promise.resolve('View: Network'),
             click: () => {
               clicked.push('trigger');
               return Promise.resolve();
             },
           };
         }
-        if (role === 'menuitem') {
+        if (role === 'menuitemradio') {
           return {
             click: () => {
               clicked.push(String(options.name));
@@ -164,6 +164,6 @@ describe('renderer capture browser lifecycle', () => {
       viewMode: 'infrastructure',
     });
 
-    expect(clicked).toEqual([]);
+    expect(clicked).toEqual(['trigger', 'Infrastructure']);
   });
 });
