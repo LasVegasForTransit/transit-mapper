@@ -436,8 +436,8 @@ function NetworkOutline({
         open={normalized.length > 0 || !presentation.expanded.has('collapsed:lines')}
         onToggle={() => toggle('collapsed:lines')}
       >
-        {visibleLines.items.length === 0 && (
-          <SidebarEmpty>{normalized ? 'No matching lines.' : 'Draw a line to begin.'}</SidebarEmpty>
+        {visibleLines.items.length === 0 && normalized && (
+          <SidebarEmpty>No matching lines.</SidebarEmpty>
         )}
         {visibleLines.items.map((row) => (
           <NetworkLineTreeItem
@@ -463,10 +463,8 @@ function NetworkOutline({
         open={normalized.length > 0 || !presentation.expanded.has('collapsed:stops')}
         onToggle={() => toggle('collapsed:stops')}
       >
-        {visibleStops.items.length === 0 && (
-          <SidebarEmpty>
-            {normalized ? 'No matching stops.' : 'Place a stop to mark a boarding point.'}
-          </SidebarEmpty>
+        {visibleStops.items.length === 0 && normalized && (
+          <SidebarEmpty>No matching stops.</SidebarEmpty>
         )}
         {visibleStops.items.map((stop) => (
           <SidebarPlaceRow
@@ -492,10 +490,8 @@ function NetworkOutline({
         open={normalized.length > 0 || !presentation.expanded.has('collapsed:stations')}
         onToggle={() => toggle('collapsed:stations')}
       >
-        {visibleStations.items.length === 0 && (
-          <SidebarEmpty>
-            {normalized ? 'No matching stations.' : 'Draw a station in Infrastructure.'}
-          </SidebarEmpty>
+        {visibleStations.items.length === 0 && normalized && (
+          <SidebarEmpty>No matching stations.</SidebarEmpty>
         )}
         {visibleStations.items.map((station) => (
           <SidebarPlaceRow
@@ -882,13 +878,9 @@ function InfrastructureStopsSection({
       open={normalized.length > 0 || !expanded.has('collapsed:stops')}
       onToggle={() => toggle('collapsed:stops')}
     >
-      {stops.items.length === 0 && (
+      {stops.items.length === 0 && normalized && (
         <SidebarEmpty>
-          {normalized && allCount > 0
-            ? 'Refine your search to see more matching stops.'
-            : normalized
-              ? 'No matching stops.'
-              : 'Place a stop to mark a boarding point.'}
+          {allCount > 0 ? 'Refine your search to see more matching stops.' : 'No matching stops.'}
         </SidebarEmpty>
       )}
       {stops.items.map((stop) => (
@@ -922,10 +914,8 @@ function InfrastructureStationsSection({
       open={normalized.length > 0 || !expanded.has('collapsed:stations')}
       onToggle={() => toggle('collapsed:stations')}
     >
-      {stations.items.length === 0 && (
-        <SidebarEmpty>
-          {normalized ? 'No matching stations.' : 'Draw a station boundary to group nearby stops.'}
-        </SidebarEmpty>
+      {stations.items.length === 0 && normalized && (
+        <SidebarEmpty>No matching stations.</SidebarEmpty>
       )}
       {stations.items.map((station) => (
         <SidebarPlaceRow
