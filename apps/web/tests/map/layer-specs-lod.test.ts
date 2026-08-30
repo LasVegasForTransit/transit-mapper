@@ -19,6 +19,9 @@ import {
   LYR_SERVICES_SOLID_CASING,
   LYR_SERVICES_UNDERGROUND,
   LYR_SERVICES_UNDERGROUND_CASING,
+  LYR_LINE_CASING,
+  LYR_LINE_STRIPE,
+  LYR_LINE_STRIPE_SELECTED,
   LYR_STOP_BARS,
   LYR_WAYS_DASHED,
   LYR_WAYS_DASHED_CASING,
@@ -164,6 +167,14 @@ describe('screen-space LOD layer specifications', () => {
       0.1,
       0,
     ]);
+    expectCameraTierOpacity(LYR_LINE_STRIPE_SELECTED, 'line-opacity', [
+      'case',
+      ['boolean', ['feature-state', 'selected'], false],
+      0.18,
+      ['boolean', ['feature-state', 'hover'], false],
+      0.1,
+      0,
+    ]);
   });
 
   it('does not use a fixed zoom gate for physical LOD layers', () => {
@@ -195,6 +206,7 @@ describe('screen-space LOD layer specifications', () => {
     ];
     expectCameraTierOpacity(LYR_WAY_SELECTED, 'line-opacity', selectionOpacity);
     expectCameraTierOpacity(LYR_SERVICE_SELECTED, 'line-opacity', selectionOpacity);
+    expectCameraTierOpacity(LYR_LINE_STRIPE_SELECTED, 'line-opacity', selectionOpacity);
     expectCameraTierOpacity(LYR_JUNCTION_SELECTED, 'line-opacity', [
       'case',
       ['boolean', ['feature-state', 'selected'], false],
@@ -234,6 +246,9 @@ describe('screen-space LOD layer specifications', () => {
       LYR_SERVICES_SOLID,
       LYR_SERVICES_UNDERGROUND_CASING,
       LYR_SERVICES_UNDERGROUND,
+      LYR_LINE_CASING,
+      LYR_LINE_STRIPE,
+      LYR_LINE_STRIPE_SELECTED,
     ]) {
       expect(layout(id, 'line-sort-key'), id).toEqual(sortKey);
     }
@@ -255,12 +270,14 @@ describe('screen-space LOD layer specifications', () => {
     expect(filter(LYR_SERVICES_ELEVATED)).toEqual([
       'all',
       ['!', ['get', 'hitTarget']],
+      ['!', ['has', 'routeRole']],
       ['get', 'elevated'],
     ]);
     expectCameraTierOpacity(LYR_SERVICES_ELEVATED, 'line-opacity', 0.32);
     expect(filter(LYR_SERVICES_UNDERGROUND)).toEqual([
       'all',
       ['!', ['get', 'hitTarget']],
+      ['!', ['has', 'routeRole']],
       ['get', 'underground'],
     ]);
     expect(paint(LYR_SERVICES_UNDERGROUND_CASING, 'line-dasharray')).toEqual([2.5, 2]);

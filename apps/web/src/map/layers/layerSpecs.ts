@@ -1,4 +1,4 @@
-import type { LayerSpecification } from 'maplibre-gl';
+import type { FilterSpecification, LayerSpecification } from 'maplibre-gl';
 import {
   FOOTPRINT_FILL_OPACITY,
   PLATFORM_FILL_OPACITY,
@@ -41,6 +41,10 @@ import {
   LYR_LANE_LINES,
   LYR_LANE_SURFACES,
   LYR_LANE_TRACKS,
+  LYR_LINE_CASING,
+  LYR_LINE_STRIPE,
+  LYR_LINE_STRIPE_SELECTED,
+  LYR_LINE_STRIPE_HIT,
   LYR_RAIL_TIES,
   LYR_MARQUEE_FILL,
   LYR_MARQUEE_STROKE,
@@ -634,6 +638,17 @@ function corridorPaintLayerSpecs(theme: MapTheme): LayerSpecification[] {
   ];
 }
 
+function legacyServiceGradeFilter(underground: boolean): FilterSpecification {
+  return underground
+    ? ['all', ['!', ['get', 'hitTarget']], ['!', ['has', 'routeRole']], ['get', 'underground']]
+    : [
+        'all',
+        ['!', ['get', 'hitTarget']],
+        ['!', ['has', 'routeRole']],
+        ['!', ['get', 'underground']],
+      ];
+}
+
 function serviceLineLayerSpecs(theme: MapTheme): LayerSpecification[] {
   return [
     {
@@ -641,7 +656,12 @@ function serviceLineLayerSpecs(theme: MapTheme): LayerSpecification[] {
       id: LYR_SERVICES_ELEVATED,
       type: 'line',
       source: SRC_SERVICES,
-      filter: ['all', ['!', ['get', 'hitTarget']], ['get', 'elevated']],
+      filter: [
+        'all',
+        ['!', ['get', 'hitTarget']],
+        ['!', ['has', 'routeRole']],
+        ['get', 'elevated'],
+      ],
       layout: {
         'line-cap': 'round',
         'line-join': 'round',
@@ -658,7 +678,7 @@ function serviceLineLayerSpecs(theme: MapTheme): LayerSpecification[] {
       id: LYR_SERVICE_SELECTED,
       type: 'line',
       source: SRC_SERVICES,
-      filter: ['!', ['get', 'hitTarget']],
+      filter: ['all', ['!', ['get', 'hitTarget']], ['!', ['has', 'routeRole']]],
       // feature-state driven (see LYR_WAY_SELECTED). Selecting a way also lights
       // its rider services here — MapCanvas sets state on their serviceIds.
       layout: {
@@ -694,7 +714,7 @@ function servicePaintLayerSpecs(theme: MapTheme): LayerSpecification[] {
       id: LYR_SERVICES_SOLID_CASING,
       type: 'line',
       source: SRC_SERVICES,
-      filter: ['all', ['!', ['get', 'hitTarget']], ['!', ['get', 'underground']]],
+      filter: legacyServiceGradeFilter(false),
       layout: {
         'line-cap': 'round',
         'line-join': 'round',
@@ -711,7 +731,7 @@ function servicePaintLayerSpecs(theme: MapTheme): LayerSpecification[] {
       id: LYR_SERVICES_SOLID,
       type: 'line',
       source: SRC_SERVICES,
-      filter: ['all', ['!', ['get', 'hitTarget']], ['!', ['get', 'underground']]],
+      filter: legacyServiceGradeFilter(false),
       layout: {
         'line-cap': 'round',
         'line-join': 'round',
@@ -729,7 +749,7 @@ function servicePaintLayerSpecs(theme: MapTheme): LayerSpecification[] {
       id: LYR_SERVICES_UNDERGROUND_CASING,
       type: 'line',
       source: SRC_SERVICES,
-      filter: ['all', ['!', ['get', 'hitTarget']], ['get', 'underground']],
+      filter: legacyServiceGradeFilter(true),
       layout: {
         'line-cap': 'butt',
         'line-join': 'round',
@@ -747,7 +767,7 @@ function servicePaintLayerSpecs(theme: MapTheme): LayerSpecification[] {
       id: LYR_SERVICES_UNDERGROUND,
       type: 'line',
       source: SRC_SERVICES,
-      filter: ['all', ['!', ['get', 'hitTarget']], ['get', 'underground']],
+      filter: legacyServiceGradeFilter(true),
       layout: {
         'line-cap': 'butt',
         'line-join': 'round',
@@ -780,6 +800,92 @@ function serviceHitLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'line-opacity': 0,
         // The hit surface must sit on the same fanned/lane path as the line it
         // names; otherwise a bundled repeated line catches clicks at its center.
+        'line-offset': ['get', 'offset'],
+      },
+    },
+  ];
+}
+
+function lineSceneLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
+    {
+      id: LYR_LINE_CASING,
+      type: 'line',
+      source: SRC_SERVICES,
+      filter: ['==', ['get', 'routeRole'], 'casing'],
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
+      paint: {
+        'line-color': theme.routeCasing,
+        'line-width': SERVICE_CASING_WIDTH_EXPR as never,
+        'line-opacity': tierOpacityExpr(0.72) as never,
+        'line-offset': ['get', 'offset'],
+      },
+    },
+    {
+      id: LYR_LINE_STRIPE,
+      type: 'line',
+      source: SRC_SERVICES,
+      filter: ['==', ['get', 'routeRole'], 'stripe'],
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': SERVICE_WIDTH_EXPR as never,
+        'line-opacity': TIER_OPACITY_EXPR as never,
+        'line-offset': ['get', 'offset'],
+      },
+    },
+    {
+      // A shared casing has no Line identity, so Line selection only lights
+      // the stripe that carries lineId.
+      id: LYR_LINE_STRIPE_SELECTED,
+      type: 'line',
+      source: SRC_SERVICES,
+      filter: ['==', ['get', 'routeRole'], 'stripe'],
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
+      paint: {
+        'line-color': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          theme.selection,
+          theme.hover,
+        ],
+        'line-width': SELECT_HALO_WIDTH_EXPR as never,
+        'line-opacity': tierOpacityExpr([
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          0.18,
+          ['boolean', ['feature-state', 'hover'], false],
+          0.1,
+          0,
+        ]) as never,
+        'line-offset': ['get', 'offset'],
+      },
+    },
+    {
+      // Network selection comes from the visible Line stripe. No per-Service
+      // hit feature exists in this view, so shared corridors remain clickable
+      // without multiplying invisible geometry.
+      id: LYR_LINE_STRIPE_HIT,
+      type: 'line',
+      source: SRC_SERVICES,
+      filter: ['==', ['get', 'routeRole'], 'stripe'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': theme.ink,
+        'line-width': 24,
+        'line-opacity': 0,
         'line-offset': ['get', 'offset'],
       },
     },
@@ -1331,6 +1437,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
     ...serviceLineLayerSpecs(theme),
     ...servicePaintLayerSpecs(theme),
     ...serviceHitLayerSpecs(theme),
+    ...lineSceneLayerSpecs(theme),
     ...serviceControlLayerSpecs(theme),
     ...stationLayerSpecs(theme),
     ...vehicleLayerSpecs(theme),

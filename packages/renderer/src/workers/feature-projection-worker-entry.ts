@@ -4,6 +4,8 @@ import {
   type SystemFeatureSourceMap,
 } from '@transitmapper/core/render/system-render-scene';
 import { systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
+import { SRC_SERVICE_ARROWS, SRC_SERVICES } from '../layers/constants';
+import { projectLineScene, type LineSceneCache } from '../line/line-scene';
 import { buildFeaturesForSources } from '../projection/source-feature-projection';
 import { createSourceFeatureProjectionCounts } from '../projection/feature-projection-counts';
 import type {
@@ -18,6 +20,7 @@ interface FeatureProjectionWorkerScope {
 
 const workerScope = globalThis as unknown as FeatureProjectionWorkerScope;
 const tierStateResolver = createRenderTierStateResolver();
+let lineSceneCache: LineSceneCache | undefined;
 
 // Static callers ask the worker for only ordered visual collections. The
 // temporary source names below never leave this worker: their sole purpose is
@@ -47,14 +50,38 @@ const WORKER_VISUAL_SOURCE_IDS: SystemFeatureSourceMap = {
  * That avoids passing a function across `postMessage` while retaining the
  * same per-document, per-corridor 3/2 and 12/9 behavior. */
 workerScope.onmessage = (event) => {
-  const request = event.data;
+  void project(event.data);
+};
+
+async function project(request: FeatureProjectionWorkerRequest): Promise<void> {
   try {
     const counts = createSourceFeatureProjectionCounts();
-    const projected = buildFeaturesForSources({
+    const networkLineScene = request.input.view.viewMode === 'network';
+    const sourceIds = networkLineScene
+      ? request.input.sourceIds.filter(
+          (sourceId) => sourceId !== SRC_SERVICES && sourceId !== SRC_SERVICE_ARROWS,
+        )
+      : request.input.sourceIds;
+    let projected = buildFeaturesForSources({
       ...request.input,
+      sourceIds,
       view: { ...request.input.view, tierStateResolver },
       counts,
     });
+    if (networkLineScene && request.input.sourceIds.includes(SRC_SERVICES)) {
+      const lineScene = await projectLineScene({
+        system: request.input.system,
+        cache: lineSceneCache,
+      });
+      lineSceneCache = lineScene.cache;
+      projected = { ...projected, services: lineScene.features };
+    }
+    if (networkLineScene && request.input.sourceIds.includes(SRC_SERVICE_ARROWS)) {
+      projected = {
+        ...projected,
+        serviceArrows: { type: 'FeatureCollection', features: [] },
+      };
+    }
     const features = request.input.normalizeVisualScene
       ? createOrderedSystemRenderVisuals({
           revision: request.input.sceneRevision ?? `static:${request.input.system.id}`,
@@ -70,4 +97,4 @@ workerScope.onmessage = (event) => {
       message: error instanceof Error ? error.message : 'Feature projection Worker failed.',
     });
   }
-};
+}
