@@ -10,6 +10,9 @@ import {
   bankedLayerId,
   bankedSourceId,
 } from '@transitmapper/renderer/layers';
+import * as rendererLayers from '@transitmapper/renderer/layers';
+import { documentLayerSpecsForViewMode } from '@transitmapper/renderer/driver';
+import { LAYER_SPECS } from '../../src/map/layers';
 import {
   editorMapSurfaceLayerSpecs,
   installEditorMapLayers,
@@ -22,6 +25,35 @@ const CATALOG: readonly LayerSpecification[] = [
 ];
 
 describe('editor map layers', () => {
+  it('keeps the Pattern overlay out of document map compositions', () => {
+    const sourceKeys = [
+      'SRC_PATTERN_OVERLAY',
+      'SRC_PATTERN_OVERLAY_ARROWS',
+      'SRC_PATTERN_OVERLAY_TERMINI',
+    ];
+    const overlaySources = sourceKeys.map(
+      (key) => (rendererLayers as Record<string, unknown>)[key],
+    );
+
+    expect(overlaySources).toSatisfy((sources) =>
+      sources.every((source) => typeof source === 'string'),
+    );
+    const sources = new Set(
+      overlaySources.filter((source): source is string => typeof source === 'string'),
+    );
+    const catalog = LAYER_SPECS;
+    const overlayLayers = catalog.filter(
+      (spec) => 'source' in spec && typeof spec.source === 'string' && sources.has(spec.source),
+    );
+    const documentLayers = documentLayerSpecsForViewMode(catalog, 'network');
+
+    expect(overlayLayers).not.toHaveLength(0);
+    expect(editorMapSurfaceLayerSpecs(catalog, documentLayers)).toEqual(
+      expect.arrayContaining(overlayLayers),
+    );
+    expect(documentLayers).not.toEqual(expect.arrayContaining(overlayLayers));
+  });
+
   it('composes document and editor layers in catalog order', () => {
     expect(editorMapSurfaceLayerSpecs(CATALOG, [CATALOG[0]])).toEqual([CATALOG[0], CATALOG[2]]);
   });

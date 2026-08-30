@@ -41,6 +41,11 @@ export const SRC_CONNECTORS = 'tm-connectors';
  * separate from renderer-owned connector geometry so editor clicks never
  * mutate or desynchronise the retained RenderScene. */
 export const SRC_JUNCTION_GUIDES = 'tm-junction-guides';
+/** One explicitly opened operational Pattern. This source is editor-only and
+ * must never join the committed Line scene or a portable document map. */
+export const SRC_PATTERN_OVERLAY = 'tm-pattern-overlay';
+export const SRC_PATTERN_OVERLAY_ARROWS = 'tm-pattern-overlay-arrows';
+export const SRC_PATTERN_OVERLAY_TERMINI = 'tm-pattern-overlay-termini';
 export const SRC_WAY_LABELS = 'tm-way-labels';
 export const SRC_LANDMARKS = 'tm-landmarks';
 
@@ -65,6 +70,12 @@ export const LYR_LINE_STRIPE = 'tm-line-stripe';
 export const LYR_LINE_STRIPE_SELECTED = 'tm-line-stripe-selected';
 /** The stripe itself is the only Network hit geometry. */
 export const LYR_LINE_STRIPE_HIT = 'tm-line-stripe-hit';
+export const LYR_PATTERN_OVERLAY_CASING = 'tm-pattern-overlay-casing';
+export const LYR_PATTERN_OVERLAY = 'tm-pattern-overlay';
+export const LYR_PATTERN_OVERLAY_HIT = 'tm-pattern-overlay-hit';
+export const LYR_PATTERN_OVERLAY_ARROWS = 'tm-pattern-overlay-arrows';
+export const LYR_PATTERN_OVERLAY_TERMINI = 'tm-pattern-overlay-termini';
+export const LYR_PATTERN_OVERLAY_TERMINI_HIT = 'tm-pattern-overlay-termini-hit';
 export const LYR_STATIONS = 'tm-stations';
 export const LYR_STATION_SELECTED = 'tm-station-selected';
 export const LYR_VEHICLES = 'tm-vehicles';
