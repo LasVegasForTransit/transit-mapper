@@ -6,7 +6,7 @@ import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 import { createEditorStore } from '../../src/editor/store';
 
 describe('active service path focus', () => {
-  it('selecting a service focuses its singular path transiently', () => {
+  it('keeps a selected service in inspection until its path is opened explicitly', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [
@@ -36,13 +36,11 @@ describe('active service path focus', () => {
 
     store.commands.selection.select({ kind: 'service', id: 'line' });
 
-    expect(
-      (
-        store.getState() as ReturnType<typeof store.getState> & {
-          activePatternId?: string | null;
-        }
-      ).activePatternId,
-    ).toBe('line');
+    expect(store.getState().activePatternId).toBeNull();
+
+    store.commands.selection.setActivePattern('line');
+
+    expect(store.getState().activePatternId).toBe('line');
   });
 
   it('clears the active path id when its service is deleted', () => {

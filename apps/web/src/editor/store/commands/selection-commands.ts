@@ -16,11 +16,6 @@ function sameSelection(a: Selection, b: Selection): boolean {
   return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
-function activePatternFor(runtime: EditorRuntime, selection: Selection): string | null {
-  if (selection?.kind !== 'service') return null;
-  return runtime.read().system.services.find((service) => service.id === selection.id)?.id ?? null;
-}
-
 function contains(items: MultiSelectItem[], candidate: MultiSelectItem): boolean {
   return items.some((item) => item.kind === candidate.kind && item.id === candidate.id);
 }
@@ -43,15 +38,20 @@ function createFocusCommands(runtime: EditorRuntime): FocusCommands {
   return {
     select(selection) {
       const state = runtime.read();
-      const activePatternId = activePatternFor(runtime, selection);
       if (
         sameSelection(state.selection, selection) &&
         state.multiSelection.length === 0 &&
-        state.activePatternId === activePatternId
+        state.activePatternId === null &&
+        state.armedTerminus === null
       ) {
         return;
       }
-      runtime.updateTransient({ selection, multiSelection: [], activePatternId });
+      runtime.updateTransient({
+        selection,
+        multiSelection: [],
+        activePatternId: null,
+        armedTerminus: null,
+      });
     },
     setOutlineHover(outlineHover) {
       if (!sameSelection(runtime.read().outlineHover, outlineHover))
@@ -71,7 +71,8 @@ function createFocusCommands(runtime: EditorRuntime): FocusCommands {
       runtime.updateTransient({
         selection,
         multiSelection: [],
-        activePatternId: activePatternFor(runtime, selection),
+        activePatternId: null,
+        armedTerminus: null,
         cameraFocusToken: state.cameraFocusToken + 1,
       });
     },
