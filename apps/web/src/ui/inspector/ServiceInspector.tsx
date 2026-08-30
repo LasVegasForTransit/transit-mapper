@@ -53,15 +53,10 @@ const VehicleKindsDialog = lazy(() =>
  * so a copy regression cannot quietly turn model names into interface terms. */
 export const ROUTE_INSPECTOR_COPY = {
   pathShape: 'Path shape',
-  moveService:
-    'Moves this Service beneath another public Line without changing its mode, path, or schedule.',
   adoptTitle:
     'Re-route this Service onto nearby infrastructure and remove its redundant sketch geometry',
   adoptRefusal:
     "No adoptable infrastructure was found near this Service's endpoints. Build or import its path first.",
-  adoptHelp: 'Fits this Service path to nearby infrastructure; anchored stops move with it.',
-  pathHelp:
-    'Drag a control point or endpoint to reshape · click the path to add a control point · Ctrl/⌘-drag an endpoint to extend it · Alt/Option-drag to erase a section · Ctrl/⌘-click a control point to split the path there',
 } as const;
 
 export function segmentCountLabel(count: number): string {
@@ -92,6 +87,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const lines = useEditor((s) => s.system.lines);
   const ways = useEditor((s) => s.system.ways);
   const stops = useEditor((s) => s.system.stops);
+  const activePatternId = useEditor((s) => s.activePatternId);
   const selectedStopId = useEditor((s) =>
     s.selection?.kind === 'service' && s.selection.id === id ? s.selection.stopId : undefined,
   );
@@ -165,6 +161,10 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     { id: 'schedule', label: 'Schedule' },
     { id: 'route', label: 'Path' },
   ];
+  const changeTab = (nextTab: string) => {
+    setTab(nextTab);
+    if (nextTab !== 'route') setActivePattern(null);
+  };
 
   return (
     <Panel slot="right" aria-label="Selection details">
@@ -182,7 +182,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
         onNameKeyDown={blurOnEnter}
       />
 
-      <InspectorTabs tabs={tabs} active={tab} onChange={setTab} />
+      <InspectorTabs tabs={tabs} active={tab} onChange={changeTab} />
 
       {tab === 'line' && (
         <div className="insp-section" role="tabpanel">
@@ -324,13 +324,9 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
         >
           Adopt existing infrastructure
         </button>
-        <p className="insp-sub" style={{ marginBottom: 12 }}>
-          {ROUTE_INSPECTOR_COPY.adoptHelp}
-        </p>
         {singleWay && (
           <>
             <label className="field-label">{ROUTE_INSPECTOR_COPY.pathShape}</label>
-            <p className="insp-sub">{ROUTE_INSPECTOR_COPY.pathHelp}</p>
             <div className="chip-row" role="group" aria-label={ROUTE_INSPECTOR_COPY.pathShape}>
               {GEOMETRY_OPTIONS.map(([g, label]) => (
                 <button
@@ -352,11 +348,6 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
           </>
         )}
 
-        <label className="field-label">Service path</label>
-        <p className="insp-sub">
-          This is the one path operated by this service. Add another service when the public line
-          has a branch, express pattern, or temporary shuttle.
-        </p>
         <ul className="pattern-list">
           {[singlePattern].map((p) => {
             const pWay = ways.find((w) => w.id === patternLegs(p)[0]?.wayId);
@@ -366,11 +357,14 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                   type="button"
                   className="pattern-open"
                   disabled={!pWay}
-                  onClick={() => setActivePattern(p.id)}
+                  onClick={() => setActivePattern(activePatternId === p.id ? null : p.id)}
                 >
                   <span className="dot ring" />
-                  <span className="pattern-name">{serviceLabel}</span>
+                  <span className="pattern-name">
+                    {activePatternId === p.id ? 'Done editing' : 'Edit path'}
+                  </span>
                   <span className="pattern-meta">
+                    {serviceLabel} ·{' '}
                     {formatDistance(pathLengthMeters(patternPath(ways, p)), unitSystem)} ·{' '}
                     {segmentCountLabel(patternLegs(p).length)}
                   </span>
@@ -400,7 +394,6 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
             <label className="field-label" htmlFor="move-to-line-select">
               Move to another Line
             </label>
-            <p className="insp-sub">{ROUTE_INSPECTOR_COPY.moveService}</p>
             <select
               id="move-to-line-select"
               className="opt-select"
