@@ -2,10 +2,11 @@ import { patternLegs } from '../geo/servicePaths';
 import { validateLineServiceMembership } from '../line-service';
 import type { PatternLeg, TransitSystem } from '../system';
 import { parseHhMm } from '../../transit/service-time';
+import { legacyEntityReferences } from './legacy-references';
 import type { SchemaV16MigrationIssue } from './migration-types';
 
 export function schemaV16MigrationIssues(system: TransitSystem): SchemaV16MigrationIssue[] {
-  return [...membershipIssues(system), ...valueIssues(system)];
+  return [...membershipIssues(system), ...groupMembershipIssues(system), ...valueIssues(system)];
 }
 
 function membershipIssues(system: TransitSystem): SchemaV16MigrationIssue[] {
@@ -27,6 +28,27 @@ function membershipIssues(system: TransitSystem): SchemaV16MigrationIssue[] {
     }
     return [{ code: 'invalid-legacy-line-membership', serviceId: issue.serviceId }];
   });
+}
+
+function groupMembershipIssues(system: TransitSystem): SchemaV16MigrationIssue[] {
+  const references = legacyEntityReferences(system);
+  return system.groups.flatMap((group) =>
+    group.memberIds.flatMap<SchemaV16MigrationIssue>((memberId) => {
+      const candidates = references.get(memberId) ?? [];
+      if (candidates.length === 0) {
+        return [{ code: 'missing-legacy-group-member', groupId: group.id, memberId }];
+      }
+      if (candidates.length === 1) return [];
+      return [
+        {
+          code: 'ambiguous-legacy-group-member',
+          groupId: group.id,
+          memberId,
+          entityKinds: Array.from(new Set(candidates.map((candidate) => candidate.kind))),
+        },
+      ];
+    }),
+  );
 }
 
 function valueIssues(system: TransitSystem): SchemaV16MigrationIssue[] {

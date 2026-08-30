@@ -181,10 +181,11 @@ export interface Facility {
   geometry: LngLat | LngLat[];
 }
 
+/** A named collection whose members retain their entity kind. */
 export interface Group {
   id: string;
   name?: string;
-  memberIds: string[];
+  members: TransitEntityRef[];
   footprint?: LngLat[];
   color?: string;
 }
