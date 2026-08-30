@@ -74,33 +74,6 @@ function importedWaysResult(system: TransitSystem, incoming: ImportedNetwork): I
   };
 }
 
-type GtfsPieces = Parameters<ImportCommands['importGtfs']>[0];
-
-function withGtfsPieces(system: TransitSystem, pieces: GtfsPieces): TransitSystem {
-  const imported = {
-    ...system,
-    ways: [...system.ways, ...pieces.ways],
-    lines: [...system.lines, ...pieces.lines],
-    services: [...system.services, ...pieces.services],
-    stops: [...system.stops, ...pieces.stops],
-    stations: [...system.stations, ...(pieces.stations ?? [])],
-  };
-  return withCrossings(
-    imported,
-    pieces.ways.map((way) => way.id),
-  );
-}
-
-function hasGtfsPieces(pieces: GtfsPieces): boolean {
-  return (
-    pieces.ways.length > 0 ||
-    pieces.lines.length > 0 ||
-    pieces.services.length > 0 ||
-    pieces.stops.length > 0 ||
-    (pieces.stations?.length ?? 0) > 0
-  );
-}
-
 export function createImportCommands(runtime: EditorRuntime): ImportCommands {
   return {
     importWays(incoming) {
@@ -126,28 +99,13 @@ export function createImportCommands(runtime: EditorRuntime): ImportCommands {
       });
     },
 
-    importGtfs(pieces) {
-      runtime.commitContent(undefined, (state) => {
-        if (!hasGtfsPieces(pieces)) {
-          return { system: state.system, result: undefined };
-        }
-        return {
-          system: withGtfsPieces(state.system, pieces),
-          result: undefined,
-        };
-      });
-    },
-
-    applyGtfsImportBatch({ targetSystemId, pieces }) {
+    applyCompletedGtfsImport({ targetSystemId, expectedSystem, result }) {
       return runtime.commitContent(false, (state) => {
-        if (state.system.id !== targetSystemId) {
+        if (state.system.id !== targetSystemId || state.system !== expectedSystem) {
           return { system: state.system, result: false };
         }
-        if (!hasGtfsPieces(pieces)) {
-          return { system: state.system, result: true };
-        }
         return {
-          system: withGtfsPieces(state.system, pieces),
+          system: result.system,
           result: true,
         };
       });
@@ -157,16 +115,6 @@ export function createImportCommands(runtime: EditorRuntime): ImportCommands {
       return runtime.commitContent(0, (state) => {
         const result = reconcileImportedSystem(state.system, serviceIds);
         return { system: result.system, result: result.reconciled };
-      });
-    },
-
-    applyImportedReconciliation({ expectedSystem, result }) {
-      return runtime.commitContent(false, (state) => {
-        const accepted = state.system === expectedSystem;
-        return {
-          system: accepted && result.reconciled > 0 ? result.system : state.system,
-          result: accepted,
-        };
       });
     },
   };

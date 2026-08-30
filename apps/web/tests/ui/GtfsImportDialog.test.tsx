@@ -19,8 +19,7 @@ vi.mock('../../src/import/stream-gtfs-feed', () => ({
 vi.mock('../../src/editor/EditorProvider', () => ({
   useEditorCommands: () => ({
     imports: {
-      applyGtfsImportBatch: vi.fn(),
-      applyImportedReconciliation: vi.fn(),
+      applyCompletedGtfsImport: vi.fn(),
     },
   }),
   useBackgroundImportStore: () => ({

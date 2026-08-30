@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
+import { aPattern, aRoad, aService } from '@transitmapper/core/testing/fixtures';
+import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { GtfsImportBatch } from '@transitmapper/core/model/gtfsImport';
 import type { ImportProgress } from '../../src/ui/UiProvider';
 import { startGtfsImport, type StartGtfsImportOptions } from '../../src/import/run-gtfs-import';
@@ -23,8 +25,29 @@ const FEED = {
   region: 'Portland, Oregon',
 };
 
+const IMPORTED_WAY = aRoad('imported-way', [
+  [-115.16, 36.14],
+  [-115.12, 36.14],
+]);
+const IMPORTED_SERVICE = aService('imported-service', [
+  aPattern('imported-pattern', [IMPORTED_WAY], [IMPORTED_WAY.id]),
+]);
+
 const BATCH: GtfsImportBatch = {
-  pieces: { ways: [], lines: [], services: [], stops: [], stations: [] },
+  pieces: {
+    ways: [IMPORTED_WAY],
+    lines: [
+      {
+        id: 'imported-line',
+        name: 'Imported line',
+        color: '#123456',
+        serviceIds: [IMPORTED_SERVICE.id],
+      },
+    ],
+    services: [IMPORTED_SERVICE],
+    stops: [],
+    stations: [],
+  },
   routesDone: 1,
   routesTotal: 1,
 };
@@ -32,36 +55,66 @@ const BATCH: GtfsImportBatch = {
 interface ImportHarness {
   options: StartGtfsImportOptions;
   progress: () => ImportProgress | null;
-  appliedBatches: () => number;
+  system: () => TransitSystem;
+  completedImports: () => number;
+  interruptNextPublication: () => void;
 }
 
 function importHarness(): ImportHarness {
-  const system = createEmptySystem();
+  let system = createEmptySystem();
   let progress: ImportProgress | null = null;
-  let appliedBatches = 0;
+  let completedImports = 0;
+  let interruptNextPublication = false;
+  const listeners = new Set<(state: { system: TransitSystem; documentStatus: 'ready' }) => void>();
+  const replaceSystem = (next: TransitSystem) => {
+    system = next;
+    for (const listener of listeners) listener({ system, documentStatus: 'ready' });
+  };
   const options: StartGtfsImportOptions = {
     feed: FEED,
     store: {
       getState: () => ({ system, documentStatus: 'ready' }),
-      subscribe: () => () => undefined,
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
     },
     commands: {
       importWays: () => ({ added: 0, skipped: 0 }),
       applyImportedNetwork: () => null,
-      importGtfs: () => undefined,
-      applyGtfsImportBatch: () => {
-        appliedBatches += 1;
+      applyCompletedGtfsImport: ({
+        expectedSystem,
+        result,
+      }: {
+        expectedSystem: TransitSystem;
+        result: { system: TransitSystem };
+      }) => {
+        if (interruptNextPublication) {
+          interruptNextPublication = false;
+          replaceSystem({ ...system, name: 'Edited while importing' });
+          return false;
+        }
+        if (system !== expectedSystem) return false;
+        completedImports += 1;
+        replaceSystem(result.system);
         return true;
       },
       reconcileImportedServices: () => 0,
-      applyImportedReconciliation: () => true,
     },
     setImportProgress: (update) => {
       progress = typeof update === 'function' ? update(progress) : update;
     },
     onStarted: vi.fn(),
   };
-  return { options, progress: () => progress, appliedBatches: () => appliedBatches };
+  return {
+    options,
+    progress: () => progress,
+    system: () => system,
+    completedImports: () => completedImports,
+    interruptNextPublication: () => {
+      interruptNextPublication = true;
+    },
+  };
 }
 
 async function settleImport(): Promise<void> {
@@ -70,6 +123,7 @@ async function settleImport(): Promise<void> {
 
 afterEach(() => {
   vi.clearAllTimers();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -79,21 +133,25 @@ describe('managed GTFS import operation', () => {
       await Promise.resolve();
       yield BATCH;
     });
-    harness.reconcile.mockResolvedValue({});
+    harness.reconcile.mockImplementation(async (system: TransitSystem) => ({
+      system,
+      reconciled: 0,
+    }));
     const run = importHarness();
 
     startGtfsImport(run.options);
     expect(run.progress()?.label).toBe('Downloading TriMet…');
     await settleImport();
 
-    expect(run.appliedBatches()).toBe(1);
+    expect(run.completedImports()).toBe(1);
+    expect(run.system().lines.map(({ id }) => id)).toEqual(['imported-line']);
     expect(run.progress()).toMatchObject({
       label: 'Imported 1 routes from TriMet',
       state: 'done',
     });
   });
 
-  it('keeps an applied batch when cancellation stops the remaining feed', async () => {
+  it('discards the candidate when cancellation stops the remaining feed', async () => {
     harness.stream.mockImplementation(async function* (options: { signal?: AbortSignal }) {
       yield BATCH;
       await new Promise<never>((_resolve, reject) => {
@@ -113,8 +171,37 @@ describe('managed GTFS import operation', () => {
     run.progress()?.cancel?.();
     await settleImport();
 
-    expect(run.appliedBatches()).toBe(1);
+    expect(run.completedImports()).toBe(0);
+    expect(run.system().lines).toEqual([]);
     expect(run.progress()).toMatchObject({ state: 'canceled' });
-    expect(run.progress()?.label).toContain('Routes already added remain in the original system.');
+    expect(run.progress()?.label).not.toContain('Routes already added remain');
+  });
+
+  it('rebuilds the candidate from the edited document before publishing it', async () => {
+    vi.useFakeTimers();
+    harness.stream.mockImplementation(async function* () {
+      yield BATCH;
+    });
+    harness.reconcile.mockImplementation(async (system: TransitSystem) => ({
+      system,
+      reconciled: 0,
+    }));
+    const run = importHarness();
+    run.interruptNextPublication();
+
+    startGtfsImport(run.options);
+    await settleImport();
+
+    expect(run.progress()?.label).toBe('Waiting for editing to settle before merging routes…');
+    await vi.advanceTimersByTimeAsync(500);
+    await settleImport();
+
+    expect(run.completedImports()).toBe(1);
+    expect(run.system().name).toBe('Edited while importing');
+    expect(run.system().lines.map(({ id }) => id)).toEqual(['imported-line']);
+    expect(run.progress()).toMatchObject({
+      label: 'Imported 1 routes from TriMet',
+      state: 'done',
+    });
   });
 });

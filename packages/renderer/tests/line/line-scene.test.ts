@@ -57,6 +57,39 @@ describe('Line scene', () => {
     }
   });
 
+  it('renders multiple Services in one Line as one passenger stripe on a shared carrier', async () => {
+    const way = aRoad('shared-carrier', [
+      [-115.2, 36.14],
+      [-115.16, 36.14],
+    ]);
+    const local = aService('local-service', [aPattern('local-pattern', [way], [way.id])]);
+    const express = aService('express-service', [aPattern('express-pattern', [way], [way.id])]);
+    const system = aSystem({
+      ways: [way],
+      services: [local, express],
+      lines: [
+        {
+          id: 'shared-line',
+          name: 'Shared line',
+          color: '#123456',
+          serviceIds: [local.id, express.id],
+        },
+      ],
+    });
+
+    const scene = await projectLineScene({ system });
+    const casings = scene.features.features.filter(
+      (feature) => feature.properties?.routeRole === 'casing',
+    );
+    const stripes = scene.features.features.filter(
+      (feature) => feature.properties?.routeRole === 'stripe',
+    );
+
+    expect(casings).toHaveLength(1);
+    expect(stripes).toHaveLength(1);
+    expect(stringProperty(stripes[0]!, 'lineId')).toBe('shared-line');
+  });
+
   it('keeps a singleton Line as one casing and one stripe', async () => {
     const way = aRoad('singleton-way', [
       [-115.2, 36.14],
