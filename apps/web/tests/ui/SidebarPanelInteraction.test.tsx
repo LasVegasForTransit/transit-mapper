@@ -69,6 +69,29 @@ afterEach(() => {
 });
 
 describe('SidebarPanel interactions', () => {
+  it('keeps empty sections quiet while retaining search feedback', () => {
+    const store = createEditorStore();
+    store.commands.document.setSystem(aSystem());
+
+    renderSidebar(store);
+
+    expect(container.textContent).not.toContain('Draw a line to begin.');
+    expect(container.textContent).not.toContain('Place a stop to mark a boarding point.');
+    expect(container.textContent).not.toContain('Draw a station in Infrastructure.');
+
+    search('missing');
+
+    expect(container.textContent).toContain('No matching lines.');
+    expect(container.textContent).toContain('No matching stops.');
+    expect(container.textContent).toContain('No matching stations.');
+
+    search('');
+    renderSidebar(store, 'infrastructure');
+
+    expect(container.textContent).not.toContain('Place a stop to mark a boarding point.');
+    expect(container.textContent).not.toContain('Draw a station boundary to group nearby stops.');
+  });
+
   it('publishes row hover without changing durable selection', () => {
     const store = createEditorStore();
     store.commands.document.setSystem(aSystem({ services: [aService('red', [])] }));
