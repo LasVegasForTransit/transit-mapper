@@ -179,6 +179,61 @@ describe('floating surfaces', () => {
     expect(trigger('Actions').getAttribute('aria-expanded')).toBe('true');
   });
 
+  it('keeps a menu inside the viewport when anchor CSS is available', () => {
+    const css = Object.getOwnPropertyDescriptor(globalThis, 'CSS');
+    const bounds = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
+    const height = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    const width = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    Object.defineProperty(globalThis, 'CSS', {
+      configurable: true,
+      value: { supports: () => true },
+    });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 600 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: function getBoundingClientRect(this: HTMLElement): DOMRect {
+        if (this.getAttribute('aria-label') === 'Actions') {
+          return {
+            top: 550,
+            right: 300,
+            bottom: 590,
+            left: 200,
+            width: 100,
+            height: 40,
+          } as DOMRect;
+        }
+        if (this.getAttribute('role') === 'menu') {
+          return { top: 0, right: 120, bottom: 100, left: 0, width: 120, height: 100 } as DOMRect;
+        }
+        return { top: 0, right: 0, bottom: 0, left: 0, width: 0, height: 0 } as DOMRect;
+      },
+    });
+
+    try {
+      render(
+        <DropdownMenu align="start" trigger={<button aria-label="Actions">Actions</button>}>
+          <DropdownMenuItem onSelect={() => undefined}>Export</DropdownMenuItem>
+        </DropdownMenu>,
+      );
+
+      activate(trigger('Actions'));
+      const menu = document.querySelector<HTMLElement>('[role="menu"]');
+      const top = Number.parseFloat(menu?.style.top ?? '');
+      const left = Number.parseFloat(menu?.style.left ?? '');
+      expect(top).toBeGreaterThanOrEqual(12);
+      expect(top + 100).toBeLessThanOrEqual(window.innerHeight - 12);
+      expect(left).toBeGreaterThanOrEqual(12);
+      expect(left + 120).toBeLessThanOrEqual(window.innerWidth - 12);
+    } finally {
+      if (css) Object.defineProperty(globalThis, 'CSS', css);
+      else Reflect.deleteProperty(globalThis, 'CSS');
+      if (bounds) Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', bounds);
+      if (height) Object.defineProperty(window, 'innerHeight', height);
+      if (width) Object.defineProperty(window, 'innerWidth', width);
+    }
+  });
+
   it('provides wrapping arrow-key focus and typeahead in menus', () => {
     render(
       <DropdownMenu trigger={<button aria-label="Actions">Actions</button>}>

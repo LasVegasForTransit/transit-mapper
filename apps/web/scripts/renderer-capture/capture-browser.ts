@@ -155,7 +155,7 @@ export async function selectView(page: Page, capture: RendererViewSelection): Pr
   const trigger = page.getByRole('button', { name: /^View:/ });
   if ((await trigger.getAttribute('aria-label')) !== `View: ${label}`) {
     await trigger.click();
-    await page.getByRole('menuitem', { name: label }).click();
+    await page.getByRole('menuitemradio', { name: label }).click();
   }
 }
 
