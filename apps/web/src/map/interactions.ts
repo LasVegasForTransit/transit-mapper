@@ -56,6 +56,8 @@ import {
   LYR_GESTURE_POINT,
   LYR_HANDLES,
   LYR_LINE_STRIPE_HIT,
+  LYR_PATTERN_OVERLAY_HIT,
+  LYR_PATTERN_OVERLAY_TERMINI_HIT,
   LYR_SERVICE_TERMINI_HIT,
   LYR_JUNCTIONS,
   LYR_LANE_SURFACES,
@@ -80,15 +82,19 @@ interface ScreenPoint {
 }
 
 const SERVICE_LAYERS = [
+  // This source is empty until Path editing is explicit. Once opened, its
+  // occurrence targets take precedence over the Line stripe beneath it.
+  LYR_PATTERN_OVERLAY_HIT,
   LYR_SERVICES_HIT,
   LYR_LINE_STRIPE_HIT,
   LYR_SERVICES_SOLID,
   LYR_SERVICES_UNDERGROUND,
 ];
+const SERVICE_TERMINUS_LAYERS = [LYR_PATTERN_OVERLAY_TERMINI_HIT, LYR_SERVICE_TERMINI_HIT];
 // Street lanes retain the corridor domain ID, so hit-testing works across LOD tiers.
 const WAY_LAYERS = [LYR_WAYS_SOLID, LYR_WAYS_DASHED, LYR_LANE_SURFACES];
 const HIT_TEST_LAYERS = [
-  LYR_SERVICE_TERMINI_HIT,
+  ...SERVICE_TERMINUS_LAYERS,
   LYR_WAY_ENDPOINTS,
   LYR_HANDLES,
   LYR_PHYSICAL_HANDLES,
@@ -516,6 +522,17 @@ export function attachInteractions(
     return selected;
   };
 
+  const serviceTerminusAt = (e: MapMouseEvent): MapGeoJSONFeature | undefined =>
+    featureAt(e, SERVICE_TERMINUS_LAYERS);
+
+  const isServiceTerminus = (feature: MapGeoJSONFeature | undefined): boolean =>
+    Boolean(
+      feature &&
+      SERVICE_TERMINUS_LAYERS.includes(
+        featureLayerId(feature) as (typeof SERVICE_TERMINUS_LAYERS)[number],
+      ),
+    );
+
   const stopFeatureAt = (e: MapMouseEvent): MapGeoJSONFeature | undefined => {
     // A committed stop remains masked for the few frames in which its
     // one-feature source diff settles. Its visible gesture point must retain
@@ -599,7 +616,7 @@ export function attachInteractions(
     if (opts.isNetworkMode() && state.tool === 'way' && state.activeWayId) return 'empty';
     if (opts.isNetworkMode() && state.tool === 'way' && networkOpenEndpointAt(e))
       return state.routeDraft ? 'compatible-corridor' : 'endpoint';
-    const serviceTerminus = featureAt(e, [LYR_SERVICE_TERMINI_HIT]);
+    const serviceTerminus = serviceTerminusAt(e);
     if (serviceTerminus) {
       const armed = state.armedTerminus;
       if (
@@ -2383,7 +2400,7 @@ export function attachInteractions(
     const endpoint = featureAt(e, [LYR_WAY_ENDPOINTS]);
     const handle = endpoint ?? featureAt(e, [LYR_HANDLES]);
     const physicalHandle = featureAt(e, [LYR_PHYSICAL_HANDLES]);
-    const serviceTerminus = featureAt(e, [LYR_SERVICE_TERMINI_HIT]);
+    const serviceTerminus = serviceTerminusAt(e);
     const stop = stopFeatureAt(e);
     const facility = featureAt(e, [LYR_FACILITIES]);
 
@@ -2748,7 +2765,7 @@ export function attachInteractions(
       case 'select': {
         // Stops/handles/lines outrank the junction footprint under them.
         const hit =
-          featureAt(e, [LYR_SERVICE_TERMINI_HIT]) ??
+          serviceTerminusAt(e) ??
           stopFeatureAt(e) ??
           featureAt(e, [LYR_FACILITIES, LYR_HANDLES, ...SERVICE_LAYERS, ...WAY_LAYERS]) ??
           featureAt(e, [LYR_JUNCTIONS]);
@@ -2756,7 +2773,7 @@ export function attachInteractions(
           commands.selection.select(null);
         } else if (featureLayerId(hit) === LYR_JUNCTIONS) {
           commands.selection.select({ kind: 'node', id: hit.properties.nodeId as string });
-        } else if (featureLayerId(hit) === LYR_SERVICE_TERMINI_HIT) {
+        } else if (isServiceTerminus(hit)) {
           commands.selection.select({ kind: 'service', id: hit.properties.serviceId as string });
           commands.selection.setActivePattern(hit.properties.patternId as string);
         } else if (
@@ -2770,6 +2787,13 @@ export function attachInteractions(
           commands.selection.select({ kind: 'way', id: hit.properties.wayId as string });
         } else if (WAY_LAYERS.includes(featureLayerId(hit))) {
           commands.selection.select({ kind: 'way', id: hit.properties.id as string });
+        } else if (featureLayerId(hit) === LYR_PATTERN_OVERLAY_HIT) {
+          const serviceId = hit.properties.serviceId;
+          const patternId = hit.properties.patternId;
+          if (typeof serviceId === 'string' && typeof patternId === 'string') {
+            commands.selection.select({ kind: 'service', id: serviceId });
+            commands.selection.setActivePattern(patternId);
+          }
         } else if (stringFeatureProperty(hit, 'routeRole') === 'stripe') {
           const lineId = stringFeatureProperty(hit, 'lineId');
           if (lineId) commands.selection.select({ kind: 'line', id: lineId });
@@ -2799,8 +2823,6 @@ export function attachInteractions(
           } else {
             commands.selection.select({ kind: 'service', id: serviceId });
           }
-          const patternId = hit.properties.patternId;
-          if (typeof patternId === 'string') commands.selection.setActivePattern(patternId);
         }
         break;
       }
@@ -2842,7 +2864,7 @@ export function attachInteractions(
       stopFeatureAt(e) ??
       featureAt(e, [
         LYR_FACILITIES,
-        LYR_SERVICE_TERMINI_HIT,
+        ...SERVICE_TERMINUS_LAYERS,
         LYR_HANDLES,
         ...SERVICE_LAYERS,
         ...WAY_LAYERS,
@@ -2855,7 +2877,7 @@ export function attachInteractions(
       return { target: { kind: 'stop', id: hit.properties.id as string }, anchor: lngLatOf(e) };
     if (featureLayerId(hit) === LYR_FACILITIES)
       return { target: { kind: 'facility', id: hit.properties.id as string }, anchor: lngLatOf(e) };
-    if (featureLayerId(hit) === LYR_SERVICE_TERMINI_HIT) {
+    if (isServiceTerminus(hit)) {
       const { serviceId, patternId, side } = hit.properties;
       const anchor =
         hit.geometry.type === 'Point' ? (hit.geometry.coordinates as LngLat) : lngLatOf(e);
@@ -2952,7 +2974,8 @@ export function attachInteractions(
     }
     let { target } = hit;
     const { serviceHit, corridorHit, anchor } = hit;
-    const terminus = featureAt(e, [LYR_SERVICE_TERMINI_HIT]);
+    const terminus = serviceTerminusAt(e);
+    const overlay = featureAt(e, [LYR_PATTERN_OVERLAY_HIT]);
     target = publicLineTarget(st, target, Boolean(terminus));
     // A terminus owns its menu: its side-aware conversion cannot safely share
     // a two-service merge group. Service-body right-clicks retain the ordinary
@@ -2965,7 +2988,7 @@ export function attachInteractions(
     const isSelected = st.selection?.kind === target.kind && st.selection.id === target.id;
     if (!inGroup && !isSelected) commands.selection.select(target);
     if (hit.target.kind === 'service') {
-      const patternId = terminus?.properties.patternId;
+      const patternId = terminus?.properties.patternId ?? overlay?.properties.patternId;
       if (typeof patternId === 'string') commands.selection.setActivePattern(patternId);
     }
     // The map coordinate travels with the screen one: an action that cuts a

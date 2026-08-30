@@ -16,12 +16,16 @@ import {
   LYR_GESTURE_POINT,
   LYR_HANDLES,
   LYR_LINE_STRIPE_HIT,
+  LYR_PATTERN_OVERLAY_HIT,
+  LYR_PATTERN_OVERLAY_TERMINI_HIT,
   LYR_PHYSICAL_HANDLES,
   LYR_SERVICE_TERMINI_HIT,
   LYR_SERVICES_HIT,
   LYR_STATIONS,
   LYR_WAYS_SOLID,
   SRC_ENDPOINT_HINT,
+  SRC_PATTERN_OVERLAY,
+  SRC_PATTERN_OVERLAY_TERMINI,
   SRC_PREVIEW,
   SRC_SHARING,
 } from '@transitmapper/renderer/layers';
@@ -133,6 +137,13 @@ function serviceFeature(wayId: string): MapGeoJSONFeature {
   } as unknown as MapGeoJSONFeature;
 }
 
+function patternOverlayFeature(wayId: string): MapGeoJSONFeature {
+  const feature = serviceFeature(wayId);
+  feature.source = SRC_PATTERN_OVERLAY;
+  feature.layer = { id: LYR_PATTERN_OVERLAY_HIT, type: 'line', source: SRC_PATTERN_OVERLAY };
+  return feature;
+}
+
 function lineStripeFeature(lineId: string): MapGeoJSONFeature {
   return {
     type: 'Feature',
@@ -189,9 +200,13 @@ function terminusFeature(
     id: `terminus-${patternId}-${side}`,
     properties: { serviceId: 'service', patternId, side },
     geometry: { type: 'Point', coordinates: at },
-    source: 'tm-service-termini',
+    source: SRC_PATTERN_OVERLAY_TERMINI,
     sourceLayer: '',
-    layer: { id: LYR_SERVICE_TERMINI_HIT, type: 'circle', source: 'tm-service-termini' },
+    layer: {
+      id: LYR_PATTERN_OVERLAY_TERMINI_HIT,
+      type: 'circle',
+      source: SRC_PATTERN_OVERLAY_TERMINI,
+    },
     state: {},
   } as unknown as MapGeoJSONFeature;
 }
@@ -1595,7 +1610,7 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
-  it('selects the public Line first and descends to its Service on a second click', () => {
+  it('selects the public Line first and keeps a second-click Service in inspection', () => {
     installBrowserGlobals();
     const store = createEditorStore();
     const system = createEmptySystem();
@@ -1624,6 +1639,32 @@ describe('pointer work coalescing', () => {
 
     expect(store.getState().system).toEqual(before);
     expect(store.getState().selection).toEqual({ kind: 'line', id: 'public-line' });
+
+    map.fire('click', mouseEvent(map, map.project([-115.23, 36.1])));
+
+    expect(store.getState().selection).toEqual({ kind: 'service', id: 'service' });
+    expect(store.getState().activePatternId).toBeNull();
+    detach();
+  });
+
+  it('keeps an opened Pattern active when its exact overlay is clicked', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
+      },
+    ];
+    store.commands.document.setSystem(system);
+    store.commands.selection.select({ kind: 'service', id: 'service' });
+    store.commands.selection.setActivePattern('service');
+    const map = createMap(patternOverlayFeature('erasable'));
+    const detach = attach(map, store);
 
     map.fire('click', mouseEvent(map, map.project([-115.23, 36.1])));
 
@@ -1677,7 +1718,8 @@ describe('pointer work coalescing', () => {
 
     map.fire('click', mouseEvent(map, map.project([-115.23, 36.1002])));
 
-    expect(store.getState().activePatternId).toBe('service');
+    expect(store.getState().selection).toEqual({ kind: 'service', id: 'service' });
+    expect(store.getState().activePatternId).toBeNull();
     detach();
   });
 
@@ -1733,7 +1775,8 @@ describe('pointer work coalescing', () => {
 
     map.fire('click', mouseEvent(map, map.project([-115.23, 36.1])));
 
-    expect(store.getState().activePatternId).toBe('service');
+    expect(store.getState().selection).toEqual({ kind: 'service', id: 'service' });
+    expect(store.getState().activePatternId).toBeNull();
     detach();
   });
 
