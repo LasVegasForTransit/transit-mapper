@@ -120,7 +120,7 @@ describe('reconciling imported services conflates a shuttle onto the trunk way i
     store.commands.tools.setDraftMode('bus');
 
     // Both lines are laid as DELIBERATELY separate infrastructure, which is the
-    // state a GTFS import arrives in — importGtfs mints one way per shape and
+    // state a GTFS import arrives in — the GTFS parser mints one way per shape and
     // never goes through finishWay, so nothing conflates them on the way in.
     // Drawing them by hand would now share them at commit, which is the whole
     // point of this test: reconcile is what fixes the mess an import leaves.

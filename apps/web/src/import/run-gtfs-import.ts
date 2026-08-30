@@ -1,5 +1,12 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { PublishedGtfsFeed } from '@transitmapper/core/model/gtfs-feed';
+import {
+  appendGtfsImportBatch,
+  createGtfsImportDraft,
+  gtfsImportServiceIds,
+  materializeGtfsImportDraft,
+  type GtfsImportDraft,
+} from '@transitmapper/core/model/gtfs-import-staging';
 import type { EditorCommands } from '../editor/store';
 import type { ImportProgress } from '../ui/UiProvider';
 import {
@@ -25,11 +32,11 @@ interface ImportRun extends StartGtfsImportOptions {
   targetSystemId: string;
   controller: AbortController;
   cancel: () => void;
+  draft: GtfsImportDraft;
 }
 
 interface ImportedFeedSummary {
   routesTotal: number;
-  serviceIds: string[];
 }
 
 let nextImportOperationId = 0;
@@ -46,18 +53,8 @@ function abortImport(run: ImportRun, message: string): never {
   throw reason;
 }
 
-function requireAcceptedBatch(run: ImportRun, accepted: boolean): void {
-  if (accepted) return;
-  const blocked = backgroundImportBlockMessage(run.store, run.targetSystemId, run.feed.name);
-  abortImport(
-    run,
-    blocked ?? `${run.feed.name} import stopped because the target rejected this batch.`,
-  );
-}
-
 async function importFeedBatches(run: ImportRun): Promise<ImportedFeedSummary> {
   let routesTotal = 0;
-  const serviceIds: string[] = [];
   for await (const { pieces, routesDone, routesTotal: total } of streamGtfsFeedBatches({
     feed: run.feed,
     signal: run.controller.signal,
@@ -76,11 +73,7 @@ async function importFeedBatches(run: ImportRun): Promise<ImportedFeedSummary> {
       });
     },
   })) {
-    requireAcceptedBatch(
-      run,
-      run.commands.applyGtfsImportBatch({ targetSystemId: run.targetSystemId, pieces }),
-    );
-    serviceIds.push(...pieces.services.map((service) => service.id));
+    run.draft = appendGtfsImportBatch(run.draft, pieces);
     routesTotal = total;
     run.setImportProgress({
       operationId: run.operationId,
@@ -91,13 +84,14 @@ async function importFeedBatches(run: ImportRun): Promise<ImportedFeedSummary> {
       cancel: run.cancel,
     });
   }
-  return { routesTotal, serviceIds };
+  return { routesTotal };
 }
 
 async function reconcileImportedFeed(run: ImportRun, summary: ImportedFeedSummary): Promise<void> {
   for (;;) {
     if (run.controller.signal.aborted) throw signalError(run.controller.signal);
     const expectedSystem = run.store.getState().system;
+    const candidate = materializeGtfsImportDraft(expectedSystem, run.draft);
     const attempt = new AbortController();
     const relayCancel = () => attempt.abort(signalError(run.controller.signal));
     run.controller.signal.addEventListener('abort', relayCancel, { once: true });
@@ -107,10 +101,18 @@ async function reconcileImportedFeed(run: ImportRun, summary: ImportedFeedSummar
       }
     });
     try {
-      const result = await reconcileGtfs(expectedSystem, summary.serviceIds, {
+      const result = await reconcileGtfs(candidate, gtfsImportServiceIds(run.draft), {
         signal: attempt.signal,
       });
-      if (run.commands.applyImportedReconciliation({ expectedSystem, result })) return;
+      if (
+        run.commands.applyCompletedGtfsImport({
+          targetSystemId: run.targetSystemId,
+          expectedSystem,
+          result,
+        })
+      ) {
+        return;
+      }
       const blocked = backgroundImportBlockMessage(run.store, run.targetSystemId, run.feed.name);
       if (blocked) abortImport(run, blocked);
     } catch (error) {
@@ -139,7 +141,7 @@ function reportImportFailure(run: ImportRun, error: unknown): void {
   const message = error instanceof Error ? error.message : fallback;
   run.setImportProgress({
     operationId: run.operationId,
-    label: canceled ? `${message} Routes already added remain in the original system.` : message,
+    label: message,
     done: 0,
     total: 0,
     state: canceled ? 'canceled' : 'error',
@@ -187,7 +189,14 @@ export function startGtfsImport(options: StartGtfsImportOptions): void {
       ),
     );
   });
-  const run: ImportRun = { ...options, operationId, targetSystemId, controller, cancel };
+  const run: ImportRun = {
+    ...options,
+    operationId,
+    targetSystemId,
+    controller,
+    cancel,
+    draft: createGtfsImportDraft(),
+  };
   options.setImportProgress({
     operationId,
     label: `Downloading ${options.feed.name}…`,

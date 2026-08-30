@@ -4,28 +4,30 @@ import { osmElementsToNetwork } from '@transitmapper/core/model/import';
 import { createEditorStore } from '../../src/editor/store';
 
 describe('streaming GTFS import ownership', () => {
-  it('never applies a late batch after the active document changes', () => {
+  it('never publishes a completed candidate after the active document changes', () => {
     const store = createEditorStore();
     const target = createEmptySystem();
     const other = createEmptySystem();
     store.commands.document.setSystem(target);
     store.commands.document.setSystem(other);
 
-    const applied = store.commands.imports.applyGtfsImportBatch({
+    const applied = store.commands.imports.applyCompletedGtfsImport({
       targetSystemId: target.id,
-      pieces: {
-        ways: [],
-        stops: [],
-        lines: [],
-        services: [
-          {
-            id: 'late-service',
-            name: 'Late service',
-            modeId: 'bus',
+      expectedSystem: target,
+      result: {
+        reconciled: 0,
+        system: {
+          ...target,
+          services: [
+            {
+              id: 'late-service',
+              name: 'Late service',
+              modeId: 'bus',
 
-            path: { id: 'late-service', sections: [] },
-          },
-        ],
+              path: { id: 'late-service', sections: [] },
+            },
+          ],
+        },
       },
     });
 

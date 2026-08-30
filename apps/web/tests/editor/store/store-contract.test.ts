@@ -295,7 +295,13 @@ describe('the editor store contract', () => {
 
     expect(store.commands.ways.beginWay('road', 'straight')).toBeNull();
     store.commands.network.setDrivingSide('left');
-    store.commands.imports.importGtfs({ ways: [], lines: [], services: [], stops: [] });
+    expect(
+      store.commands.imports.applyCompletedGtfsImport({
+        targetSystemId: system.id,
+        expectedSystem: system,
+        result: { system: { ...system }, reconciled: 0 },
+      }),
+    ).toBe(false);
     expect(store.commands.routing.createRoutedService([])).toBeNull();
     expect(store.commands.services.addServiceToWay('way')).toBeNull();
     expect(store.commands.stops.addStop([-115.14, 36.1])).toBeNull();

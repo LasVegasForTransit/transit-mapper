@@ -1,5 +1,10 @@
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
+import {
+  appendGtfsImportBatch,
+  createGtfsImportDraft,
+  materializeGtfsImportDraft,
+} from '@transitmapper/core/model/gtfs-import-staging';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createImportCommands } from '../../../src/editor/store/commands/import-commands';
 import { createEditorRuntime } from '../../../src/editor/store/runtime';
@@ -48,14 +53,15 @@ describe('import command factories', () => {
     expect(runtime.read().system).toBe(replacement);
   });
 
-  it('accepts reconciliation only while its exact input snapshot is current', () => {
+  it('accepts a completed GTFS candidate only while its exact source snapshot is current', () => {
     const { runtime, commands } = createCommands();
     const expectedSystem = createEmptySystem();
     const reconciled = { ...expectedSystem, name: 'Reconciled' };
     runtime.installDocument(expectedSystem, { tool: 'select' });
 
     expect(
-      commands.applyImportedReconciliation({
+      commands.applyCompletedGtfsImport({
+        targetSystemId: expectedSystem.id,
         expectedSystem,
         result: { system: reconciled, reconciled: 1 },
       }),
@@ -64,7 +70,8 @@ describe('import command factories', () => {
 
     const current = runtime.read().system;
     expect(
-      commands.applyImportedReconciliation({
+      commands.applyCompletedGtfsImport({
+        targetSystemId: expectedSystem.id,
         expectedSystem,
         result: { system: { ...reconciled, name: 'Stale' }, reconciled: 1 },
       }),
@@ -72,15 +79,16 @@ describe('import command factories', () => {
     expect(runtime.read().system).toBe(current);
   });
 
-  it('accepts a no-op worker reconciliation without replacing content or history', () => {
+  it('accepts an unchanged completed candidate without replacing content or history', () => {
     const { runtime, commands } = createCommands();
     const expectedSystem = createEmptySystem();
     runtime.installDocument(expectedSystem, { tool: 'select' });
 
     expect(
-      commands.applyImportedReconciliation({
+      commands.applyCompletedGtfsImport({
+        targetSystemId: expectedSystem.id,
         expectedSystem,
-        result: { system: { ...expectedSystem }, reconciled: 0 },
+        result: { system: expectedSystem, reconciled: 0 },
       }),
     ).toBe(true);
     expect(runtime.read().system).toBe(expectedSystem);
@@ -102,16 +110,17 @@ describe('import command factories', () => {
 
     expect(commands.importWays(network)).toEqual({ added: 0, skipped: 0 });
     expect(commands.applyImportedNetwork({ targetSystemId: system.id, network })).toBeNull();
-    commands.importGtfs({ ways: [], lines: [], services: [], stops: [] });
     expect(
-      commands.applyGtfsImportBatch({
+      commands.applyCompletedGtfsImport({
         targetSystemId: system.id,
-        pieces: { ways: [], lines: [], services: [], stops: [] },
+        expectedSystem: system,
+        result: { system: { ...system }, reconciled: 0 },
       }),
     ).toBe(false);
     expect(commands.reconcileImportedServices([])).toBe(0);
     expect(
-      commands.applyImportedReconciliation({
+      commands.applyCompletedGtfsImport({
+        targetSystemId: system.id,
         expectedSystem: system,
         result: { system: { ...system, name: 'Blocked' }, reconciled: 1 },
       }),
@@ -119,22 +128,7 @@ describe('import command factories', () => {
     expect(runtime.read().system).toBe(system);
   });
 
-  it('accepts an empty current-document batch without a history entry', () => {
-    const { runtime, commands } = createCommands();
-    const system = createEmptySystem();
-    runtime.installDocument(system, { tool: 'select' });
-
-    expect(
-      commands.applyGtfsImportBatch({
-        targetSystemId: system.id,
-        pieces: { ways: [], lines: [], services: [], stops: [] },
-      }),
-    ).toBe(true);
-    expect(runtime.read().system).toBe(system);
-    expect(runtime.read().canUndo).toBe(false);
-  });
-
-  it('commits imported ways and crossing formation as one history entry', () => {
+  it('commits a completed GTFS candidate and its crossings as one history entry', () => {
     const runtime = createEditorRuntime();
     const system = createEmptySystem();
     system.ways = [
@@ -157,45 +151,57 @@ describe('import command factories', () => {
       if (next.system !== previous.system) systemWrites++;
     });
 
-    commands.importGtfs({
-      lines: [{ id: 'line', name: 'Line 1', color: '#123456', serviceIds: ['service'] }],
-      services: [
-        {
-          id: 'service',
-          modeId: 'bus',
-          path: {
+    const candidate = materializeGtfsImportDraft(
+      system,
+      appendGtfsImportBatch(createGtfsImportDraft(), {
+        lines: [{ id: 'line', name: 'Line 1', color: '#123456', serviceIds: ['service'] }],
+        services: [
+          {
             id: 'service',
-            sections: [
-              {
-                kind: 'shared',
-                legs: [
-                  {
-                    wayId: 'way',
-                    direction: 'withPoints',
-                    extent: { kind: 'whole' },
-                    lane: { kind: 'auto' },
-                  },
-                ],
-              },
+            modeId: 'bus',
+            path: {
+              id: 'service',
+              sections: [
+                {
+                  kind: 'shared',
+                  legs: [
+                    {
+                      wayId: 'way',
+                      direction: 'withPoints',
+                      extent: { kind: 'whole' },
+                      lane: { kind: 'auto' },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+        stops: [],
+        stations: [],
+        ways: [
+          {
+            id: 'way',
+            typeId: 'road',
+            geometry: 'straight',
+            grade: 'atGrade',
+            profile: defaultProfileFor('road'),
+            points: [
+              [-115.2, 36.1],
+              [-115.1, 36.1],
             ],
           },
-        },
-      ],
-      stops: [],
-      ways: [
-        {
-          id: 'way',
-          typeId: 'road',
-          geometry: 'straight',
-          grade: 'atGrade',
-          profile: defaultProfileFor('road'),
-          points: [
-            [-115.2, 36.1],
-            [-115.1, 36.1],
-          ],
-        },
-      ],
-    });
+        ],
+      }),
+    );
+
+    expect(
+      commands.applyCompletedGtfsImport({
+        targetSystemId: system.id,
+        expectedSystem: system,
+        result: { system: candidate, reconciled: 0 },
+      }),
+    ).toBe(true);
 
     expect(runtime.read().system.nodes).toHaveLength(1);
     const refWayIds = runtime.read().system.nodes[0]?.refs.map((ref) => ref.wayId) ?? [];
