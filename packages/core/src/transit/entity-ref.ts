@@ -20,6 +20,7 @@ export type TransitEntityRef =
   | { kind: 'group'; id: string }
   | { kind: 'node'; id: string }
   | { kind: 'named-way'; id: string }
+  | { kind: 'vehicle-kind'; id: string }
   | { kind: 'median'; id: string }
   | { kind: 'lane-connector'; id: string }
   | { kind: 'turn-restriction'; id: string }

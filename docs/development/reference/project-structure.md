@@ -117,7 +117,8 @@ reporting. `MapSurface` owns the stable MapLibre runtime. An injected
 transfer values. `transit/authored-system.ts` owns the schema-v17 authored
 document contract. `model/schema-v17-system` owns pure compatibility transforms
 from legacy documents and must not import renderer, browser, storage, or host
-state.
+state. A compatibility transform reports ambiguous legacy references instead
+of assigning them a new meaning.
 
 #### Domain model
 
