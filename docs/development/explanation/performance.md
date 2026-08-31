@@ -1,9 +1,32 @@
 # Performance
 
-This page is the entry point for performance work. It states what the
-application protects, which numbers gate a change, what each module owns, and
-what the measurement suite should look like versus what it looks like today.
-The browser protocol lives in
+TransitMapper is a drawing tool, and performance reaches its users in three
+concrete ways. An advocate sketching a bus network holds the pointer down
+for minutes at a time and corrects the line against what the screen shows,
+so every frame the editor drops during the gesture makes the drawing less
+accurate. The finished map gets posted in a council thread or a group chat,
+where a reader who clicked out of mild curiosity gives the page a few
+seconds before leaving. And the drawing itself lives in the browser, so an
+afternoon of volunteer work is exactly as safe as the save that follows the
+last edit. Frames during a drag, seconds before a shared page appears, and
+edits that survive a reload: everything this page defines exists to protect
+one of those three.
+
+The application is exposed on all three at once. Validation, simulation,
+autosave, and import share the one thread MapLibre paints on, so background
+work competes directly with the gesture in progress. Documents grow to
+agency scale — the RTC fixture holds 3,800 ways and 121,000 points — while
+the people drawing them use ordinary laptops and phones. And the
+[design principles](../../product/explanation/design-principles.md) promise
+that waiting is something the app does, never something it imposes, which
+rules out the easy fix of blocking input while work catches up.
+
+This page is the entry point for holding those promises. It defines the
+four classes of work a delay can interrupt, the numbers that gate a change
+and the fidelity counters that keep them honest, what each module owns, and
+what the measurement suite should look like versus what it looks like
+today. Read it before arguing with a failed number. The mechanics live
+elsewhere: the browser protocol in
 [Measure browser performance](../how-to/measure-performance.md) and the
 release checklist in the
 [performance acceptance matrix](../reference/performance-acceptance-matrix.md).
@@ -23,9 +46,11 @@ release checklist in the
 
 ## Classes of work
 
-Whether a user notices a delay depends on what the application is doing when
-the delay happens, not on which surface it happens on. There are four cases,
-and every budget in the suite protects one of them.
+Whether a user notices a delay depends on what they are doing when the
+delay happens, not on which surface it happens on. A 40 ms stall mid-drag
+ruins the line they are drawing; the same 40 ms while they read an
+inspector panel costs nothing. There are four cases, and every budget in
+the suite protects one of them.
 
 ### Continuous gestures
 
