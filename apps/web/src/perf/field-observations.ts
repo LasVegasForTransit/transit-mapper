@@ -73,6 +73,9 @@ export function createVitalAccumulator(): VitalAccumulator {
     },
     snapshot() {
       const durations = [...interactions.values()].sort((left, right) => right - left);
+      // Deliberately not the suite's shared percentile: this descending
+      // one-per-fifty rank mirrors the web-vitals INP estimator, and moving
+      // it to ceil-rank would shift field samples against their history.
       const inpRank = Math.min(durations.length - 1, Math.floor(durations.length / 50));
       return {
         lcpMs,

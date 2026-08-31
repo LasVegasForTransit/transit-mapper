@@ -1,3 +1,5 @@
+import { percentile } from './statistics';
+
 export interface DisplayCadenceSummary {
   displayFrameIntervalMedianMs: number;
   estimatedDisplayRefreshHz: number;
@@ -12,7 +14,7 @@ export function summarizeDisplayCadence(samplesMs: number[]): DisplayCadenceSumm
     throw new Error('Display cadence samples must be finite positive numbers.');
   }
   const sorted = [...samplesMs].sort((left, right) => left - right);
-  const displayFrameIntervalMedianMs = sorted[Math.floor(sorted.length / 2)];
+  const displayFrameIntervalMedianMs = percentile(sorted, 50);
   return {
     displayFrameIntervalMedianMs,
     estimatedDisplayRefreshHz: 1_000 / displayFrameIntervalMedianMs,

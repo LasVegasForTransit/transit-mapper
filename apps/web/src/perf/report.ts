@@ -9,6 +9,7 @@ import type {
   PerfScenario,
   PerfScenarioSummary,
 } from './types';
+import { percentile } from './statistics';
 
 export const PERF_METRIC_NAMES: PerfMetricName[] = [
   'loadMs',
@@ -27,12 +28,6 @@ export const PERF_METRIC_NAMES: PerfMetricName[] = [
   'warmCumulativeLayoutShift',
   'warmInputToNextPaintP95Ms',
 ];
-
-function percentile(sorted: number[], percentileValue: number): number {
-  if (sorted.length === 0) return 0;
-  const index = Math.max(0, Math.ceil((percentileValue / 100) * sorted.length) - 1);
-  return sorted[Math.min(index, sorted.length - 1)];
-}
 
 export function summarizeMetric(values: number[]): PerfMetricSummary {
   if (values.length === 0) {
