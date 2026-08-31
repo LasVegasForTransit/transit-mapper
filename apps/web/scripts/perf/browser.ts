@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import type { Browser, BrowserContext, CDPSession, Page } from 'playwright-core';
 import { summarizeDisplayCadence } from '../../src/perf/calibration';
+import { percentile } from '../../src/perf/statistics';
 import { classifyPersistence } from '../../src/perf/persistencePolicy';
 import { FIRST_SYSTEM_MAP_PAINT_MARK } from '../../src/perf/mapPaintMark';
 import {
@@ -182,7 +183,7 @@ export async function seedIndexedDbFixture(
           }
         };
         request.onsuccess = () => resolvePromise(request.result);
-        request.onerror = () => reject(request.error);
+        request.onerror = () => reject(request.error ?? new Error('The IndexedDB open failed.'));
       });
       await new Promise<void>((resolvePromise, reject) => {
         const transaction = database.transaction(
@@ -203,8 +204,10 @@ export async function seedIndexedDbFixture(
           updatedAt: seed.updatedAt,
         });
         transaction.oncomplete = () => resolvePromise();
-        transaction.onerror = () => reject(transaction.error);
-        transaction.onabort = () => reject(transaction.error);
+        transaction.onerror = () =>
+          reject(transaction.error ?? new Error('The seed transaction failed.'));
+        transaction.onabort = () =>
+          reject(transaction.error ?? new Error('The seed transaction aborted.'));
       });
       database.close();
     },
@@ -530,7 +533,7 @@ export async function runCalibration(
     return {
       benchmark: 'integer-mix-v1',
       samplesMs,
-      medianMs: sorted[Math.floor(sorted.length / 2)],
+      medianMs: percentile(sorted, 50),
       displayFrameIntervalSamplesMs,
       ...displayCadence,
     };

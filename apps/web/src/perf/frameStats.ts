@@ -1,6 +1,8 @@
 // Development/performance-build instrumentation. Ordinary production builds
 // compile out the harness at the MapCanvas boundary (see perf/index.ts).
 
+import { percentile } from './statistics';
+
 /** Summary of a set of frame durations (milliseconds between painted frames). */
 export interface FrameStats {
   samples: number;
@@ -16,12 +18,6 @@ export interface FrameStats {
 
 const FRAME_60HZ_MS = 1000 / 60;
 const FRAME_30HZ_MS = 1000 / 30;
-
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.min(sorted.length - 1, Math.max(0, Math.round((p / 100) * (sorted.length - 1))));
-  return sorted[idx];
-}
 
 /** Reduce raw frame durations to a FrameStats summary. Pure — the same shape
  *  the overlay and the scripted pan benchmark both report, so before/after
