@@ -84,6 +84,9 @@ For people changing the code rather than using the app.
   radius, and how to rotate it.
 - [Architecture](development/explanation/architecture.md) — what the pieces
   are and which boundaries are load-bearing.
+- [Performance](development/explanation/performance.md) — the entry point:
+  what the app protects, which numbers gate a change, what each module owns,
+  and where the suite should shrink.
 - [Checks](development/reference/checks.md) — every check, what makes it
   fail, and the command that fixes it.
 - [Performance acceptance matrix](development/reference/performance-acceptance-matrix.md) —
