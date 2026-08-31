@@ -1,5 +1,10 @@
 # Performance acceptance matrix
 
+Every row protects one of the four classes of work — continuous gestures,
+discrete commits, deferred work, and load — defined in
+[Performance](../explanation/performance.md). Read that page first to know
+which class a failing number belongs to and whether it matters.
+
 This matrix is the release checklist for changes that can affect editor
 responsiveness. The numeric Chrome gate is automated by `pnpm perf`; the
 manual rows cover browser and failure-path behavior that a deterministic lab
