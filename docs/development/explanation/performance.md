@@ -148,10 +148,11 @@ Three findings say the structure is wrong, not just large:
   regression half of the interactive gates — the 10% median rule, variance,
   coefficient of variation, CPU calibration — currently compares against
   nothing. The absolute budgets carry the entire gate.
-- The tree carries tooling for exactly one dead commit:
-  `freeze-497a549-baseline.ts`, `historic-baseline.ts`, and
-  `legacy-first-session-marks.ts` exist to measure build `497a549`, and
-  `perf:freeze-497a549` is wired into `package.json` as if it were routine.
+- The tree carried tooling for exactly one dead commit until it was removed:
+  three scripts and a `package.json` entry existed to measure build
+  `497a549`. The checked baseline still carries that build's observer
+  provenance, so the report types accept the legacy value until the baseline
+  is re-frozen from a current run.
 - `frameStats.ts` and `report.ts` each implement percentile with different
   rounding, and the suite has two frame-summary shapes. Two implementations
   of one statistic eventually disagree in a report nobody can explain.
@@ -173,9 +174,12 @@ compiling.
 
 ### Removals
 
-- The `497a549` archaeology: both scripts, the legacy marks module, the
-  `perf:freeze-497a549` script entry, and their tests. Historical evidence
-  belongs in an artifact archive, not in the build graph.
+- Done: the `497a549` archaeology — both scripts, the legacy marks module,
+  the `perf:freeze-497a549` script entry, and their tests. Historical
+  evidence belongs in an artifact archive, not in the build graph. The
+  remaining follow-up is re-freezing `apps/web/perf/baseline.json` from a
+  current run, which retires the legacy provenance value the types still
+  accept.
 - The interactive-regression apparatus, until a real baseline exists. The
   bundle baseline stays; it has data and it works.
 

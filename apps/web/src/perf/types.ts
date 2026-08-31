@@ -315,6 +315,11 @@ export interface PerfFirstSessionSample {
  */
 interface PerfReportProvenance {
   artifactRevision: string;
+  /**
+   * The legacy member survives only so readBaseline can parse the frozen
+   * checked baseline, which was recorded through the retired 497a549
+   * observer. Re-freezing the baseline from a current run retires it.
+   */
   milestoneMarkSource: 'shipping' | 'legacy-497a549-observer-v1';
 }
 

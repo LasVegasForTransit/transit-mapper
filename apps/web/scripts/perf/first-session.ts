@@ -33,15 +33,12 @@ export interface FirstSessionRecorder {
   createReport(options: CreateNetworkByteReportOptions): PerfNetworkByteReport;
 }
 
-export type FirstSessionServiceWorkerPolicy = 'current' | 'legacy-497a549';
-
 interface CaptureFirstSessionOptions {
   driver: FirstSessionPageDriver;
   recorder: FirstSessionRecorder;
   journey: PerfFirstSessionJourney;
   surface: PerfSurface;
   cacheState: PerfCacheState;
-  serviceWorkerPolicy?: FirstSessionServiceWorkerPolicy;
 }
 
 const REQUIRED_FIRST_SESSION_PHASES = [
@@ -82,18 +79,16 @@ interface ServiceWorkerPolicyOptions {
   count: number;
   timeline: PerfFirstSessionTimeline;
   report: PerfNetworkByteReport;
-  policy: FirstSessionServiceWorkerPolicy;
 }
 
 function assertServiceWorkerPolicy(options: ServiceWorkerPolicyOptions): void {
-  const { surface, count, timeline, report, policy } = options;
+  const { surface, count, timeline, report } = options;
   if (surface === 'editor' && count === 0) {
     throw new Error('The new-user editor did not register its service worker.');
   }
   if (surface === 'editor' && timeline.milestones.serviceWorkerReadyMs === null) {
     throw new Error('The editor service-worker installation did not become ready.');
   }
-  if (policy === 'legacy-497a549') return;
   if (surface !== 'editor' && count > 0) {
     const label = surface === 'share' ? 'public share' : 'cross-site embed';
     throw new Error(`The ${label} registered ${count} service worker${count === 1 ? '' : 's'}.`);
@@ -135,7 +130,6 @@ export async function captureFirstSession(
     count: await options.driver.readServiceWorkerRegistrationCount(),
     timeline,
     report: network,
-    policy: options.serviceWorkerPolicy ?? 'current',
   });
   return {
     journey: options.journey,

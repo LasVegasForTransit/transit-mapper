@@ -196,7 +196,7 @@ describe('the checked performance baseline', () => {
     await expect(readBaseline(path)).rejects.toThrow('must use schema version 3');
   });
 
-  it('records the exact revision when a frozen report needs the legacy mark adapter', async () => {
+  it('still reads the legacy observer provenance on the frozen baseline', async () => {
     const directory = await mkdtemp(resolve(tmpdir(), 'tm-perf-baseline-provenance-'));
     const path = resolve(directory, 'baseline.json');
     const frozen = {

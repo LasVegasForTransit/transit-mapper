@@ -168,6 +168,9 @@ function validateProvenance(value: unknown, reportPath: string): void {
     'provenance.artifactRevision',
   );
   const milestoneMarkSource = provenance.milestoneMarkSource;
+  // The legacy value is accepted only because the frozen checked baseline
+  // carries it; the recorder that produced it is gone. Re-freezing the
+  // baseline retires both branches below.
   if (milestoneMarkSource !== 'shipping' && milestoneMarkSource !== 'legacy-497a549-observer-v1') {
     invalid(reportPath, 'provenance.milestoneMarkSource is unsupported');
   }
