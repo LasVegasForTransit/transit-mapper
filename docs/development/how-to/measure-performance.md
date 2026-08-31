@@ -154,7 +154,9 @@ of the audit.
 `--scenario`, `--first-session`, and `--onboarding` cannot be combined with
 `perf:record`. A partial report must never replace the complete baseline. A
 normal `pnpm perf` still runs the complete instrumented matrix and the public
-first-session phase for checked-baseline comparison.
+first-session phase, comparing bundle and first-session bytes against the
+checked baseline. A missing baseline downgrades those comparisons to a
+notice and leaves the absolute budgets as the gate.
 
 A web- or core-affecting pull request runs the candidate-only RTC audit:
 
@@ -251,19 +253,14 @@ It includes:
   after Chrome's HTTP cache was cleared, populated a system overlay on its
   local blank map, and committed a real station edit.
 
-`perf:record` also writes one Chrome trace per measured run and refreshes the
-checked baseline at a stable path:
-
-```bash
-pnpm perf:record
-# apps/web/perf/baseline.json
-
-pnpm perf:record -- --profile mobile
-# apps/web/perf/baseline-mobile.json
-```
-
-Review baseline diffs as measurement evidence. Do not update one simply to
-make a regression disappear.
+`perf:record` also writes one Chrome trace per measured run and routes the
+output under `artifacts/performance/recorded/<profile>/<timestamp>` so a
+recorded audit never overwrites the current diagnostics. It does not touch
+the checked baseline: `apps/web/perf/baseline.json` is written only by an
+explicit `--freeze-baseline` run, and the freeze hard-links the file so an
+existing baseline cannot be refreshed in place. Review a baseline diff as
+measurement evidence. Do not update one simply to make a regression
+disappear.
 
 Every requested phase has a `passed`, `failed`, or `unavailable` entry in
 `report.json`. A later failure writes a `partial` report and returns a nonzero
@@ -328,14 +325,15 @@ median:
   each scenario.
 
 A value exactly at the stated maximum passes except the dropped-frame ratio:
-“fewer than 1%” means exactly 1% fails. A checked or base-revision median more
-than 10% worse also fails. Duration regressions are normalized by the report's
-deterministic four-times-throttled CPU calibration; absolute user-facing gates
-are never normalized. Calibration also records 60 consecutive rAF intervals,
-their median, and the inferred display refresh rate so the headed environment
-is auditable. Display cadence is diagnostic only and never changes a budget or
-normalizes a regression. Gzip and Brotli bytes that a browser automatically
-transfers get the same 10% regression check during a full audit. Raw graph
+“fewer than 1%” means exactly 1% fails. Interactive timings gate on these
+absolute values alone: the checked baseline holds no scenario samples, so
+there is no timing-regression comparison until a maintainer freezes one and
+commits to reviewing it. The report still records the CPU calibration
+benchmark, 60 consecutive rAF intervals, their median, and the inferred
+display refresh rate so the headed environment is auditable; none of that
+changes a budget. Gzip and Brotli bytes that a browser automatically
+transfers get a 10% regression check against the checked baseline during a
+full audit. Raw graph
 size remains in the report for
 diagnosis, but it is not an absolute or regression gate; browser measurements
 own parse and responsiveness costs. The compressed absolute limits are round

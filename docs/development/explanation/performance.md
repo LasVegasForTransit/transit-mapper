@@ -144,10 +144,11 @@ getting.
 
 Three findings say the structure is wrong, not just large:
 
-- `apps/web/perf/baseline.json` contains no scenario or sample data. The
-  regression half of the interactive gates — the 10% median rule, variance,
-  coefficient of variation, CPU calibration — currently compares against
-  nothing. The absolute budgets carry the entire gate.
+- `apps/web/perf/baseline.json` contains no scenario or sample data, so the
+  interactive-regression machinery — the 10% median rule and its CPU
+  calibration — compared against nothing on every run. It has been removed;
+  absolute budgets carry the interactive gate, and the bundle and
+  first-session byte comparisons keep the baseline.
 - The tree carried tooling for exactly one dead commit until it was removed:
   three scripts and a `package.json` entry existed to measure build
   `497a549`. The checked baseline still carries that build's observer
@@ -180,8 +181,10 @@ compiling.
   remaining follow-up is re-freezing `apps/web/perf/baseline.json` from a
   current run, which retires the legacy provenance value the types still
   accept.
-- The interactive-regression apparatus, until a real baseline exists. The
-  bundle baseline stays; it has data and it works.
+- Done: the interactive-regression apparatus. The bundle and first-session
+  byte baseline stays; it has data and it works. Timing regression
+  comparison returns only when a maintainer freezes a scenario baseline and
+  commits to reviewing it.
 
 ### Rewrites
 
