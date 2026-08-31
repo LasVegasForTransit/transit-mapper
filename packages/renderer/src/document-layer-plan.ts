@@ -15,7 +15,7 @@ import {
 } from './layers/constants';
 import { COMMITTED_SYSTEM_FEATURE_SOURCES } from './system-feature-sources';
 
-const NETWORK_ONLY_LAYER_IDS: ReadonlySet<string> = new Set([
+const PASSENGER_LINE_LAYER_IDS: ReadonlySet<string> = new Set([
   LYR_LINE_CASING,
   LYR_LINE_STRIPE,
   LYR_LINE_STRIPE_SELECTED,
@@ -59,7 +59,7 @@ export function documentLayerSpecsForViewMode(
         ? DIAGRAM_SOURCES
         : NETWORK_SOURCES;
   return specs.filter((spec) => {
-    if (viewMode !== 'network' && NETWORK_ONLY_LAYER_IDS.has(spec.id)) return false;
+    if (viewMode === 'infrastructure' && PASSENGER_LINE_LAYER_IDS.has(spec.id)) return false;
     const source = layerSource(spec);
     return source !== null && allowed.has(source);
   });

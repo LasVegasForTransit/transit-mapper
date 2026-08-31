@@ -70,19 +70,26 @@ describe('document layer plan', () => {
   });
 
   it('keeps diagram rendering independent from geographic context layers', () => {
-    expect(ids('diagram')).toEqual(['ways', 'services', 'hits', 'stations']);
+    expect(ids('diagram')).toEqual([
+      'ways',
+      'services',
+      LYR_LINE_CASING,
+      LYR_LINE_STRIPE,
+      LYR_LINE_STRIPE_SELECTED,
+      LYR_LINE_STRIPE_HIT,
+      'hits',
+      'stations',
+    ]);
   });
 
-  it('keeps Line scene paint and hit layers out of non-Network views', () => {
-    for (const viewMode of ['infrastructure', 'diagram'] as const) {
-      for (const layerId of [
-        LYR_LINE_CASING,
-        LYR_LINE_STRIPE,
-        LYR_LINE_STRIPE_SELECTED,
-        LYR_LINE_STRIPE_HIT,
-      ]) {
-        expect(ids(viewMode)).not.toContain(layerId);
-      }
+  it('keeps Line scene paint and hit layers out of Infrastructure', () => {
+    for (const layerId of [
+      LYR_LINE_CASING,
+      LYR_LINE_STRIPE,
+      LYR_LINE_STRIPE_SELECTED,
+      LYR_LINE_STRIPE_HIT,
+    ]) {
+      expect(ids('infrastructure')).not.toContain(layerId);
     }
   });
 

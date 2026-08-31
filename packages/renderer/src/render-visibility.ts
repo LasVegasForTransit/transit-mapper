@@ -161,8 +161,16 @@ export function planViewRenderUpdate(
   const modeChanged = before.viewMode !== after.viewMode;
   const modesChanged = before.visibleModes !== after.visibleModes;
   const wayTypesChanged = before.visibleWayTypes !== after.visibleWayTypes;
+  const passengerLinesVisible =
+    before.viewMode === 'network' ||
+    before.viewMode === 'diagram' ||
+    after.viewMode === 'network' ||
+    after.viewMode === 'diagram';
   return {
-    reproject: modeChanged,
+    // Line geometry has no one scalar mode. The worker rebuilds its selected
+    // Line spans when a passenger-mode filter changes, so paint filters never
+    // leave an excluded Service inside a visible Line stripe.
+    reproject: modeChanged || (passengerLinesVisible && modesChanged),
     updateFilters: modeChanged || modesChanged || wayTypesChanged,
     notifyVehicles: modeChanged || modesChanged,
   };
