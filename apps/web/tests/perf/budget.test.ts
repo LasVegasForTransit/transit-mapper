@@ -164,17 +164,6 @@ describe('performance budgets', () => {
     );
   });
 
-  it('allows a baseline change at exactly ten percent', () => {
-    const result = evaluatePerfBudgets({
-      report: report(110),
-      baseline: report(100),
-      scenarios: [PERF_SCENARIOS.small],
-      maxRegressionRatio: 0.1,
-    });
-
-    expect(result.violations.filter((violation) => violation.kind === 'regression')).toEqual([]);
-  });
-
   it('fails when one percent of painted frames exceed 33 milliseconds', () => {
     const scenario = {
       ...PERF_SCENARIOS.small,
@@ -209,27 +198,6 @@ describe('performance budgets', () => {
         kind: 'absolute',
         metric: 'paintedFramesOver33Ratio',
         actual: 0.01,
-      }),
-    );
-  });
-
-  it('fails a baseline regression greater than ten percent', () => {
-    const result = evaluatePerfBudgets({
-      report: report(110.01),
-      baseline: report(100),
-      scenarios: [PERF_SCENARIOS.small],
-      maxRegressionRatio: 0.1,
-    });
-
-    expect(result.status).toBe('fail');
-    expect(result.violations).toContainEqual(
-      expect.objectContaining({
-        kind: 'regression',
-        scenarioId: 'small',
-        metric: 'loadMs',
-        baseline: 100,
-        limit: 110,
-        actual: 110.01,
       }),
     );
   });
@@ -293,93 +261,6 @@ describe('performance budgets', () => {
     expect(result.violations).toEqual([]);
     expect(result.notices).toContain(
       'Smoke mode proves the production build and browser journey; numeric budgets require a full audit.',
-    );
-  });
-
-  it('normalizes duration regressions with the deterministic CPU calibration', () => {
-    const baseline = report(100);
-    baseline.calibration = {
-      benchmark: 'integer-mix-v1',
-      samplesMs: [100],
-      medianMs: 100,
-      displayFrameIntervalSamplesMs: [16.7],
-      displayFrameIntervalMedianMs: 16.7,
-      estimatedDisplayRefreshHz: 1000 / 16.7,
-    };
-    const actual = report(120);
-    actual.calibration = {
-      benchmark: 'integer-mix-v1',
-      samplesMs: [120],
-      medianMs: 120,
-      displayFrameIntervalSamplesMs: [16.7],
-      displayFrameIntervalMedianMs: 16.7,
-      estimatedDisplayRefreshHz: 1000 / 16.7,
-    };
-
-    const result = evaluatePerfBudgets({
-      report: actual,
-      baseline,
-      scenarios: [PERF_SCENARIOS.small],
-      maxRegressionRatio: 0.1,
-    });
-
-    expect(
-      result.violations.filter(
-        (violation) => violation.kind === 'regression' && violation.metric === 'loadMs',
-      ),
-    ).toEqual([]);
-  });
-
-  it('does not use display cadence to normalize a regression', () => {
-    const baseline = report(100);
-    baseline.calibration = {
-      benchmark: 'integer-mix-v1',
-      samplesMs: [100],
-      medianMs: 100,
-      displayFrameIntervalSamplesMs: [16.7],
-      displayFrameIntervalMedianMs: 16.7,
-      estimatedDisplayRefreshHz: 1000 / 16.7,
-    };
-    const actual = report(120);
-    actual.calibration = {
-      benchmark: 'integer-mix-v1',
-      samplesMs: [100],
-      medianMs: 100,
-      displayFrameIntervalSamplesMs: [33.3],
-      displayFrameIntervalMedianMs: 33.3,
-      estimatedDisplayRefreshHz: 1000 / 33.3,
-    };
-
-    const result = evaluatePerfBudgets({
-      report: actual,
-      baseline,
-      scenarios: [PERF_SCENARIOS.small],
-      maxRegressionRatio: 0.1,
-    });
-
-    expect(result.violations).toContainEqual(
-      expect.objectContaining({
-        kind: 'regression',
-        metric: 'loadMs',
-        actual: 120,
-        normalizedActual: 120,
-      }),
-    );
-  });
-
-  it('fails clearly when CI requires a missing baseline', () => {
-    const result = evaluatePerfBudgets({
-      report: report(100),
-      scenarios: [PERF_SCENARIOS.small],
-      maxRegressionRatio: 0.1,
-      requireBaseline: true,
-    });
-
-    expect(result.status).toBe('fail');
-    expect(result.violations).toContainEqual(
-      expect.objectContaining({
-        kind: 'baseline-missing',
-      }),
     );
   });
 

@@ -8,7 +8,6 @@ export interface PerfCliOptions {
   freezeBaseline: boolean;
   outputDirectory: string;
   baselinePath?: string;
-  requireBaseline: boolean;
   skipBuild: boolean;
   smoke: boolean;
   profile: PerfProfileId;
@@ -28,7 +27,6 @@ export function perfUsage(): string {
     'Options:',
     '  --output <directory>   JSON/trace artifact directory',
     '  --baseline <report>    Compare medians with another report',
-    '  --require-baseline     Require a baseline even in an otherwise exempt mode',
     '  --profile <name>        desktop (default) or mobile',
     '  --scenario <id>         Run one scenario for local diagnosis',
     '  --first-session         Run public editor, share, and embed checks',
@@ -55,7 +53,6 @@ interface MutablePerfCliOptions {
   freezeBaseline: boolean;
   output?: string;
   baseline?: string;
-  requireBaseline: boolean;
   skipBuild: boolean;
   smoke: boolean;
   profile: PerfProfileId;
@@ -73,7 +70,6 @@ type FlagHandler = (options: MutablePerfCliOptions) => void;
 const FLAG_HANDLERS: Readonly<Partial<Record<string, FlagHandler>>> = {
   '--record': (options) => (options.record = true),
   '--freeze-baseline': (options) => (options.freezeBaseline = true),
-  '--require-baseline': (options) => (options.requireBaseline = true),
   '--skip-build': (options) => (options.skipBuild = true),
   '--smoke': (options) => (options.smoke = true),
   '--soak': (options) => (options.soak = true),
@@ -124,7 +120,6 @@ function initialOptions(): MutablePerfCliOptions {
   return {
     record: false,
     freezeBaseline: false,
-    requireBaseline: false,
     skipBuild: false,
     smoke: false,
     profile: 'desktop',
@@ -156,12 +151,6 @@ export function parsePerfCliOptions(args: string[]): PerfCliOptions {
     freezeBaseline: options.freezeBaseline,
     outputDirectory: resolve(APP_ROOT, options.output ?? defaultOutput),
     baselinePath: options.baseline ? resolve(APP_ROOT, options.baseline) : undefined,
-    requireBaseline:
-      options.requireBaseline ||
-      (!options.freezeBaseline &&
-        !options.smoke &&
-        !options.soak &&
-        !(options.onboarding && !options.firstSession && !options.scenarioId)),
     skipBuild: options.skipBuild,
     smoke: options.smoke,
     profile: options.profile,

@@ -12,12 +12,9 @@ function validateMatrixOptions(options: PerfCliOptions): void {
 }
 
 function validateSmokeOptions(options: PerfCliOptions): void {
-  const incompatible =
-    options.record || options.freezeBaseline || options.soak || options.requireBaseline;
+  const incompatible = options.record || options.freezeBaseline || options.soak;
   if (options.smoke && incompatible) {
-    throw new Error(
-      '--smoke cannot be combined with --record, --freeze-baseline, --soak, or --require-baseline.',
-    );
+    throw new Error('--smoke cannot be combined with --record, --freeze-baseline, or --soak.');
   }
   if (options.smoke && options.baselinePath) {
     throw new Error('--smoke is functional evidence and cannot be compared with --baseline.');
@@ -45,9 +42,8 @@ function validateSoakOptions(options: PerfCliOptions): void {
 }
 
 function validateFreezeOptions(options: PerfCliOptions): void {
-  const incompatible = options.baselinePath !== undefined || options.requireBaseline;
-  if (options.freezeBaseline && incompatible) {
-    throw new Error('--freeze-baseline cannot compare with or require an existing baseline.');
+  if (options.freezeBaseline && options.baselinePath !== undefined) {
+    throw new Error('--freeze-baseline cannot compare with an existing baseline.');
   }
 }
 

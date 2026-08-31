@@ -145,7 +145,6 @@ async function writeMeasuredAudit(options: WriteAuditOptions): Promise<void> {
     firstSessionBudgets: options.requestedPhases.includes('first-session')
       ? PERF_FIRST_SESSION_BYTE_BUDGETS
       : [],
-    requireBaseline: options.cli.requireBaseline,
     enforceNumericBudgets: !options.cli.smoke,
   });
   report.evaluation = evaluation;

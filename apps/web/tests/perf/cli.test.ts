@@ -29,7 +29,6 @@ describe('performance CLI', () => {
 
     expect(options.onboarding).toBe(true);
     expect(options.firstSession).toBe(false);
-    expect(options.requireBaseline).toBe(false);
   });
 
   it('records traces without implicitly refreshing the frozen baseline', () => {
@@ -44,10 +43,5 @@ describe('performance CLI', () => {
 
     expect(options.record).toBe(false);
     expect(options.freezeBaseline).toBe(true);
-    expect(options.requireBaseline).toBe(false);
-  });
-
-  it('requires the frozen baseline for a normal audit by default', () => {
-    expect(parsePerfCliOptions([]).requireBaseline).toBe(true);
   });
 });

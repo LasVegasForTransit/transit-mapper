@@ -373,9 +373,7 @@ export interface CreateUnavailablePerfReportOptions {
 
 type PerfBudgetViolationKind =
   | 'absolute'
-  | 'regression'
   | 'bundle-regression'
-  | 'baseline-missing'
   | 'baseline-incompatible'
   | 'first-session-unsettled'
   | 'first-session-byte-target'
@@ -387,7 +385,6 @@ export interface PerfBudgetViolation {
   scenarioId?: PerfScenarioId;
   metric?: PerfMetricName;
   actual?: number;
-  normalizedActual?: number;
   baseline?: number;
   limit?: number;
   bundleEntry?: string;
@@ -420,7 +417,6 @@ export interface EvaluatePerfBudgetsOptions {
   scenarios: PerfScenario[];
   maxRegressionRatio: number;
   firstSessionBudgets?: readonly PerfFirstSessionByteBudget[];
-  requireBaseline?: boolean;
   /** A smoke proves that the production build and browser journey complete.
    * One sample is deliberately not treated as statistical timing evidence. */
   enforceNumericBudgets?: boolean;

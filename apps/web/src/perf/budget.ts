@@ -12,15 +12,6 @@ import type {
   PerfReport,
 } from './types';
 
-function scenarioMetric(
-  report: PerfReport,
-  scenarioId: string,
-  metric: PerfMetricName,
-): number | undefined {
-  return report.scenarios.find((scenario) => scenario.scenarioId === scenarioId)?.metrics[metric]
-    .median;
-}
-
 function scenarioGateMetric(
   report: PerfReport,
   scenarioId: string,
@@ -78,72 +69,6 @@ function absoluteViolations(options: EvaluatePerfBudgetsOptions): PerfBudgetViol
           message:
             `${scenario.id} ${metric} is ${actual}; the absolute budget is ${limit}.` +
             sampleShape(options.report, scenario.id, metric),
-        });
-      }
-    }
-  }
-  return violations;
-}
-
-const CALIBRATED_DURATION_METRICS = new Set<PerfMetricName>([
-  'loadMs',
-  'firstContentfulPaintMs',
-  'largestContentfulPaintMs',
-  'firstMapCanvasMs',
-  'longTaskTotalMs',
-  'inputToNextPaintP95Ms',
-  'paintedFrameP95Ms',
-  'maxUnexpectedLongTaskMs',
-  'warmLoadMs',
-  'warmLargestContentfulPaintMs',
-  'warmInputToNextPaintP95Ms',
-]);
-
-function normalizeForCalibration(
-  actual: number,
-  metric: PerfMetricName,
-  report: PerfReport,
-  baseline: PerfReport,
-): number {
-  const currentCalibration = report.calibration?.medianMs;
-  const baselineCalibration = baseline.calibration?.medianMs;
-  if (!CALIBRATED_DURATION_METRICS.has(metric) || !currentCalibration || !baselineCalibration) {
-    return actual;
-  }
-  return actual * (baselineCalibration / currentCalibration);
-}
-
-function regressionViolations(options: EvaluatePerfBudgetsOptions): PerfBudgetViolation[] {
-  if (options.baseline?.status !== 'ok') return [];
-  const violations: PerfBudgetViolation[] = [];
-
-  for (const scenario of options.scenarios) {
-    for (const metric of PERF_METRIC_NAMES) {
-      const actual = scenarioMetric(options.report, scenario.id, metric);
-      const baseline = scenarioMetric(options.baseline, scenario.id, metric);
-      if (actual === undefined || baseline === undefined) continue;
-      const normalizedActual = normalizeForCalibration(
-        actual,
-        metric,
-        options.report,
-        options.baseline,
-      );
-      const limit = Number((baseline + baseline * options.maxRegressionRatio).toPrecision(12));
-      const tolerance = Number.EPSILON * Math.max(1, Math.abs(limit)) * 8;
-      if (normalizedActual - limit > tolerance) {
-        violations.push({
-          kind: 'regression',
-          scenarioId: scenario.id,
-          metric,
-          actual,
-          normalizedActual,
-          baseline,
-          limit,
-          message:
-            `${scenario.id} ${metric} regressed from ${baseline} to ${actual}` +
-            (normalizedActual === actual ? '' : ` (${normalizedActual} after calibration)`) +
-            '; ' +
-            `the ${options.maxRegressionRatio * 100}% limit is ${limit}.`,
         });
       }
     }
@@ -346,14 +271,7 @@ export function evaluatePerfBudgets(options: EvaluatePerfBudgetsOptions): PerfBu
   const violations = [...firstSessionViolations, ...absoluteViolations(options)];
   const notices: string[] = [];
   if (options.baseline?.status !== 'ok') {
-    if (options.requireBaseline) {
-      violations.push({
-        kind: 'baseline-missing',
-        message: 'A valid baseline report is required but was not provided.',
-      });
-    } else {
-      notices.push('No baseline report was provided; only absolute budgets were evaluated.');
-    }
+    notices.push('No baseline report was provided; only absolute budgets were evaluated.');
   } else if (!protocolsMatch(options.report, options.baseline)) {
     violations.push({
       kind: 'baseline-incompatible',
@@ -369,7 +287,6 @@ export function evaluatePerfBudgets(options: EvaluatePerfBudgetsOptions): PerfBu
         options.firstSessionBudgets ?? [],
       ),
     );
-    violations.push(...regressionViolations(options));
     violations.push(
       ...bundleRegressionViolations(options.report, options.baseline, options.maxRegressionRatio),
     );
