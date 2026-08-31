@@ -5,7 +5,11 @@ import {
 } from '@transitmapper/core/render/system-render-scene';
 import { systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
 import { SRC_SERVICE_ARROWS, SRC_SERVICES } from '../layers/constants';
-import { projectLineScene, type LineSceneCache } from '../line/line-scene';
+import {
+  lineSceneFeatures,
+  projectSchemaV16LineScene,
+  usesPassengerLineScene,
+} from '../line/line-scene';
 import { projectPatternOverlay } from '../projection/pattern-overlay-projection';
 import { buildFeaturesForSources } from '../projection/source-feature-projection';
 import { createSourceFeatureProjectionCounts } from '../projection/feature-projection-counts';
@@ -21,7 +25,6 @@ interface FeatureProjectionWorkerScope {
 
 const workerScope = globalThis as unknown as FeatureProjectionWorkerScope;
 const tierStateResolver = createRenderTierStateResolver();
-let lineSceneCache: LineSceneCache | undefined;
 
 // Static callers ask the worker for only ordered visual collections. The
 // temporary source names below never leave this worker: their sole purpose is
@@ -69,8 +72,8 @@ async function project(request: FeatureProjectionWorkerRequest): Promise<void> {
       return;
     }
     const counts = createSourceFeatureProjectionCounts();
-    const networkLineScene = request.input.view.viewMode === 'network';
-    const sourceIds = networkLineScene
+    const passengerLineScene = usesPassengerLineScene(request.input.view.viewMode);
+    const sourceIds = passengerLineScene
       ? request.input.sourceIds.filter(
           (sourceId) => sourceId !== SRC_SERVICES && sourceId !== SRC_SERVICE_ARROWS,
         )
@@ -81,15 +84,16 @@ async function project(request: FeatureProjectionWorkerRequest): Promise<void> {
       view: { ...request.input.view, tierStateResolver },
       counts,
     });
-    if (networkLineScene && request.input.sourceIds.includes(SRC_SERVICES)) {
-      const lineScene = await projectLineScene({
-        system: request.input.system,
-        cache: lineSceneCache,
+    if (passengerLineScene && request.input.sourceIds.includes(SRC_SERVICES)) {
+      const lineScene = await projectSchemaV16LineScene({
+        system: request.input.diagramSystem ?? request.input.system,
+        view: request.input.view,
+        sceneRevision:
+          request.input.sceneRevision ?? `line:${request.input.system.id}:${request.requestId}`,
       });
-      lineSceneCache = lineScene.cache;
-      projected = { ...projected, services: lineScene.features };
+      projected = { ...projected, services: lineSceneFeatures(lineScene) };
     }
-    if (networkLineScene && request.input.sourceIds.includes(SRC_SERVICE_ARROWS)) {
+    if (passengerLineScene && request.input.sourceIds.includes(SRC_SERVICE_ARROWS)) {
       projected = {
         ...projected,
         serviceArrows: { type: 'FeatureCollection', features: [] },

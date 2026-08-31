@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { aPattern, aRoad, aService, aSystem } from '@transitmapper/core/testing/fixtures';
-import { projectLineScene } from '../../src/line/line-scene';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
+import {
+  projectLineScene,
+  projectSchemaV16LineScene,
+  usesPassengerLineScene,
+} from '../../src/line/line-scene';
 
 function stringProperty(
   feature: { readonly properties: unknown },
@@ -12,6 +17,57 @@ function stringProperty(
 }
 
 describe('Line scene', () => {
+  it('uses passenger Lines in Network and Diagram but not Infrastructure', () => {
+    expect(usesPassengerLineScene('network')).toBe(true);
+    expect(usesPassengerLineScene('diagram')).toBe(true);
+    expect(usesPassengerLineScene('infrastructure')).toBe(false);
+  });
+
+  it('resolves only the current camera bounds and mode selection', async () => {
+    const busWay = aRoad('bus-way', [
+      [-115.2, 36.14],
+      [-115.16, 36.14],
+    ]);
+    const railWay = aRoad('rail-way', [
+      [-112.2, 36.14],
+      [-112.16, 36.14],
+    ]);
+    const bus = aService('bus-service', [aPattern('bus-pattern', [busWay], [busWay.id])]);
+    const rail = aService('rail-service', [aPattern('rail-pattern', [railWay], [railWay.id])], {
+      modeId: 'lightRail',
+    });
+    const system = aSystem({
+      ways: [busWay, railWay],
+      services: [bus, rail],
+      lines: [
+        { id: 'bus-line', name: 'Bus', color: '#00a8e8', serviceIds: [bus.id] },
+        { id: 'rail-line', name: 'Rail', color: '#e4572e', serviceIds: [rail.id] },
+      ],
+    });
+
+    const projected = await projectSchemaV16LineScene({
+      system,
+      view: {
+        viewMode: 'network',
+        visibleModes: new Set(['bus']),
+        visibleWayTypes: new Set(['road']),
+        presentation: renderPresentationForViewport({
+          center: [-115.18, 36.14],
+          zoom: 14,
+          width: 1_280,
+          height: 720,
+        }),
+      },
+      sceneRevision: 'current-map-query',
+    });
+    const features = [...projected.scene.featuresBySource.values()].flatMap(
+      (collection) => collection.features,
+    );
+    const stripes = features.filter((feature) => feature.properties?.routeRole === 'stripe');
+
+    expect(stripes.map((feature) => stringProperty(feature, 'lineId'))).toEqual(['bus-line']);
+  });
+
   it('renders one casing and ordered Line stripes for a shared corridor', async () => {
     const way = aRoad('shared-way', [
       [-115.2, 36.14],
