@@ -8,6 +8,8 @@ export type PerformanceChunkName =
   | 'workspace'
   | 'map-surface'
   | 'renderer'
+  | 'map-host'
+  | 'map-snapshot'
   | 'map-display'
   | 'renderer-display'
   | 'renderer-projection'
@@ -63,66 +65,97 @@ function isEditorInteractionModule(moduleId: string): boolean {
   return normalizedModuleId(moduleId).endsWith('/apps/web/src/map/interactions.ts');
 }
 
+interface StablePackageCarveOut {
+  packageName: string;
+  file: RegExp;
+  chunk: PerformanceChunkName;
+}
+
+/**
+ * Modules a light host may reach, named one file at a time. A module nobody
+ * lists falls through to its package's own chunk, so forgetting an entry costs
+ * a light host nothing; listing the heavy half instead would put every new
+ * module in a light chunk by default, and a reader would silently inherit the
+ * editor again.
+ */
+const STABLE_PACKAGE_CARVE_OUTS: readonly StablePackageCarveOut[] = [
+  {
+    packageName: 'map',
+    file: /^(?:src|dist)\/(?:state|map-view-store|selection-controller|map-definition-state|map-driver|base-style-controller)\.[^.]+$/,
+    chunk: 'map-state',
+  },
+  {
+    packageName: 'map',
+    file: /^(?:src|dist)\/(?:presentation|layers|sources\/source-bank|sources\/source-bank-layers)\.[^.]+$/,
+    chunk: 'map-display',
+  },
+  {
+    packageName: 'map',
+    file: /^(?:src|dist)\/document-map-feature-details\.[^.]+$/,
+    chunk: 'feature-details',
+  },
+  // Owning a MapLibre instance is separate from drawing a live scene into it.
+  // The reader creates a map and never builds a frame, so these three must not
+  // share a chunk with the drivers in `map`, every one of which statically
+  // imports the renderer's scene machinery.
+  {
+    packageName: 'map',
+    file: /^(?:src|dist)\/(?:map-runtime|deferred-map-driver|startup-milestones)\.[^.]+$/,
+    chunk: 'map-host',
+  },
+  // The read-only snapshot path paints a System the projection Worker already
+  // built, and reaches nothing past layer identities. Keeping it out of `map`
+  // is what stops the reader from inheriting the live scene pipeline and
+  // core's main-thread feature builder behind it. These four rode in
+  // `renderer-display` until they changed packages; that carve-out matches on
+  // package name, so the move dropped them into the heavy chunk with no
+  // failure anywhere.
+  {
+    packageName: 'map',
+    file: /^(?:src|dist)\/(?:snapshot|snapshot-map-driver|document-layer-plan|render-visibility)\.[^.]+$/,
+    chunk: 'map-snapshot',
+  },
+  {
+    packageName: 'workspace',
+    file: /^(?:src|dist)\/media-query-store\.[^.]+$/,
+    chunk: 'media-query',
+  },
+  {
+    packageName: 'workspace',
+    file: /^(?:src|dist)\/map-surface\.[^.]+$/,
+    chunk: 'map-surface',
+  },
+  {
+    packageName: 'renderer',
+    file: /^(?:src|dist)\/workers\/(?:feature-projection-worker|feature-projection-worker-protocol|worker-request-lifecycle)\.[^.]+$/,
+    chunk: 'renderer-projection',
+  },
+  {
+    packageName: 'renderer',
+    file: /^(?:src|dist)\/(?:render-presentation|layers|layers\/constants|system-feature-sources)\.[^.]+$/,
+    chunk: 'renderer-display',
+  },
+];
+
+function isReactRuntimeModule(moduleId: string): boolean {
+  return (
+    moduleId.includes('/node_modules/.pnpm/react@') ||
+    moduleId.includes('/node_modules/.pnpm/react-dom@') ||
+    moduleId.includes('/node_modules/.pnpm/scheduler@')
+  );
+}
+
 export function performanceChunkName(moduleId: string): PerformanceChunkName | undefined {
   const normalizedId = normalizedModuleId(moduleId);
   if (isMapEngineModule(normalizedId)) return 'map-engine';
-  if (
-    stablePackageModule(
-      normalizedId,
-      'map',
-      /^(?:src|dist)\/(?:state|map-view-store|selection-controller|map-definition-state|map-driver|base-style-controller)\.[^.]+$/,
-    )
-  ) {
-    return 'map-state';
-  }
-  if (
-    stablePackageModule(
-      normalizedId,
-      'map',
-      /^(?:src|dist)\/(?:presentation|layers|sources\/source-bank|sources\/source-bank-layers)\.[^.]+$/,
-    )
-  ) {
-    return 'map-display';
-  }
-  if (
-    stablePackageModule(normalizedId, 'map', /^(?:src|dist)\/document-map-feature-details\.[^.]+$/)
-  ) {
-    return 'feature-details';
-  }
-  if (stablePackageModule(normalizedId, 'workspace', /^(?:src|dist)\/media-query-store\.[^.]+$/)) {
-    return 'media-query';
-  }
-  if (stablePackageModule(normalizedId, 'workspace', /^(?:src|dist)\/map-surface\.[^.]+$/)) {
-    return 'map-surface';
-  }
-  if (
-    stablePackageModule(
-      normalizedId,
-      'renderer',
-      /^(?:src|dist)\/workers\/(?:feature-projection-worker|feature-projection-worker-protocol|worker-request-lifecycle)\.[^.]+$/,
-    )
-  ) {
-    return 'renderer-projection';
-  }
-  if (
-    stablePackageModule(
-      normalizedId,
-      'renderer',
-      /^(?:src|dist)\/(?:render-presentation|layers|layers\/constants|system-feature-sources)\.[^.]+$/,
-    )
-  ) {
-    return 'renderer-display';
-  }
+  const carveOut = STABLE_PACKAGE_CARVE_OUTS.find((candidate) =>
+    stablePackageModule(normalizedId, candidate.packageName, candidate.file),
+  );
+  if (carveOut) return carveOut.chunk;
   const packageChunk = stablePackageChunk(normalizedId);
   if (packageChunk) return packageChunk;
   if (isEditorInteractionModule(normalizedId)) return 'editor-interactions';
-  if (
-    normalizedId.includes('/node_modules/.pnpm/react@') ||
-    normalizedId.includes('/node_modules/.pnpm/react-dom@') ||
-    normalizedId.includes('/node_modules/.pnpm/scheduler@')
-  ) {
-    return 'react-runtime';
-  }
+  if (isReactRuntimeModule(normalizedId)) return 'react-runtime';
   return undefined;
 }
 
