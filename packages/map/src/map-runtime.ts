@@ -16,8 +16,6 @@ import {
   type ObservableMapStartupMilestones,
 } from './startup-milestones';
 
-export const INITIAL_STYLE_FALLBACK_TIMEOUT_MS = 1_500;
-
 export interface MapRuntimeResizeObserver {
   observe(target: Element): void;
   disconnect(): void;

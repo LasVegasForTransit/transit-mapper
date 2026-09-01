@@ -12,6 +12,14 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./base-style": {
+      "development": {
+        "types": "./src/base-style-controller.ts",
+        "import": "./src/base-style-controller.ts"
+      },
+      "types": "./dist/base-style-controller.d.ts",
+      "import": "./dist/base-style-controller.js"
+    },
     "./driver": {
       "development": {
         "types": "./src/driver.ts",
