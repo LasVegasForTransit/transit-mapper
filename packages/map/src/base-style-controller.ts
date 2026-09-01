@@ -1,5 +1,10 @@
 import type { Map as MapLibreMap, StyleSpecification } from 'maplibre-gl';
 
+/** How long the initial remote style may stall before a host paints the local
+ * fallback. It lives beside the controller that applies it so a light host —
+ * the embed — can take style recovery without the map drivers behind it. */
+export const INITIAL_STYLE_FALLBACK_TIMEOUT_MS = 1_500;
+
 export interface BaseStyleController<ThemeId extends string> {
   request(theme: ThemeId): Promise<void>;
   selectLocal(theme: ThemeId): Promise<void>;

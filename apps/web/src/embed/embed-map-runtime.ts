@@ -1,6 +1,6 @@
 import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { INITIAL_STYLE_FALLBACK_TIMEOUT_MS } from '@transitmapper/map';
+import { INITIAL_STYLE_FALLBACK_TIMEOUT_MS } from '@transitmapper/map/base-style';
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { resolveDocumentMapPresentation } from '@transitmapper/map/presentation';

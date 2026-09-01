@@ -44,15 +44,11 @@ describe('performance chunk policy', () => {
     expect(performanceChunkName('/repo/packages/workspace/src/map-surface.tsx')).toBe(
       'map-surface',
     );
-    expect(performanceChunkName('/repo/packages/renderer/dist/presentation.js')).toBe(
-      'renderer-display',
-    );
+    expect(performanceChunkName('/repo/packages/map/dist/presentation.js')).toBe('map-display');
     expect(performanceChunkName('/repo/packages/renderer/src/render-presentation.ts')).toBe(
       'renderer-display',
     );
-    expect(performanceChunkName('/repo/packages/renderer/dist/snapshot-map-driver.js')).toBe(
-      'renderer-display',
-    );
+    expect(performanceChunkName('/repo/packages/map/dist/snapshot-map-driver.js')).toBe('map');
     expect(performanceChunkName('/repo/packages/renderer/src/layers/constants.ts')).toBe(
       'renderer-display',
     );
@@ -67,13 +63,13 @@ describe('performance chunk policy', () => {
     expect(
       performanceChunkName('/repo/packages/renderer/src/workers/worker-request-lifecycle.ts'),
     ).toBe('renderer-projection');
-    expect(performanceChunkName('/repo/packages/renderer/dist/sources/source-bank-layers.js')).toBe(
-      'renderer-display',
+    expect(performanceChunkName('/repo/packages/map/dist/sources/source-bank-layers.js')).toBe(
+      'map-display',
     );
     expect(performanceChunkName('/repo/packages/renderer/src/scene-draft.ts')).toBe('renderer');
-    expect(
-      performanceChunkName('/repo/packages/renderer/src/document-map-feature-details.ts'),
-    ).toBe('feature-details');
+    expect(performanceChunkName('/repo/packages/map/src/document-map-feature-details.ts')).toBe(
+      'feature-details',
+    );
     expect(performanceChunkName('/repo/packages/renderer/dist/scene-publication.js')).toBe(
       'renderer',
     );

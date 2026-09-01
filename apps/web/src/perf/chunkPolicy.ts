@@ -8,6 +8,7 @@ export type PerformanceChunkName =
   | 'workspace'
   | 'map-surface'
   | 'renderer'
+  | 'map-display'
   | 'renderer-display'
   | 'renderer-projection'
   | 'feature-details'
@@ -69,10 +70,24 @@ export function performanceChunkName(moduleId: string): PerformanceChunkName | u
     stablePackageModule(
       normalizedId,
       'map',
-      /^(?:src|dist)\/(?:state|map-view-store|selection-controller|map-definition-state|map-driver)\.[^.]+$/,
+      /^(?:src|dist)\/(?:state|map-view-store|selection-controller|map-definition-state|map-driver|base-style-controller)\.[^.]+$/,
     )
   ) {
     return 'map-state';
+  }
+  if (
+    stablePackageModule(
+      normalizedId,
+      'map',
+      /^(?:src|dist)\/(?:presentation|layers|sources\/source-bank|sources\/source-bank-layers)\.[^.]+$/,
+    )
+  ) {
+    return 'map-display';
+  }
+  if (
+    stablePackageModule(normalizedId, 'map', /^(?:src|dist)\/document-map-feature-details\.[^.]+$/)
+  ) {
+    return 'feature-details';
   }
   if (stablePackageModule(normalizedId, 'workspace', /^(?:src|dist)\/media-query-store\.[^.]+$/)) {
     return 'media-query';
@@ -93,19 +108,10 @@ export function performanceChunkName(moduleId: string): PerformanceChunkName | u
     stablePackageModule(
       normalizedId,
       'renderer',
-      /^(?:src|dist)\/(?:document-layer-plan|presentation|render-presentation|render-visibility|snapshot|snapshot-map-driver|layers|layers\/constants|sources\/source-bank|sources\/source-bank-layers|system-feature-sources)\.[^.]+$/,
+      /^(?:src|dist)\/(?:render-presentation|layers|layers\/constants|system-feature-sources)\.[^.]+$/,
     )
   ) {
     return 'renderer-display';
-  }
-  if (
-    stablePackageModule(
-      normalizedId,
-      'renderer',
-      /^(?:src|dist)\/document-map-feature-details\.[^.]+$/,
-    )
-  ) {
-    return 'feature-details';
   }
   const packageChunk = stablePackageChunk(normalizedId);
   if (packageChunk) return packageChunk;

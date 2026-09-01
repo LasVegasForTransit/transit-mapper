@@ -2,7 +2,7 @@ import {
   createBaseStyleController,
   type BaseStyleController,
   type BaseStyleControllerOptions,
-} from '@transitmapper/map';
+} from '@transitmapper/map/base-style';
 import type { StyleSpecification } from 'maplibre-gl';
 import type { ColorScheme } from '../theme/color-scheme';
 import { documentOverlayIsRetained } from '../map/document-style-carry';
