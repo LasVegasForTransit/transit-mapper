@@ -48,7 +48,19 @@ describe('performance chunk policy', () => {
     expect(performanceChunkName('/repo/packages/renderer/src/render-presentation.ts')).toBe(
       'renderer-display',
     );
-    expect(performanceChunkName('/repo/packages/map/dist/snapshot-map-driver.js')).toBe('map');
+    expect(performanceChunkName('/repo/packages/map/dist/snapshot-map-driver.js')).toBe(
+      'map-snapshot',
+    );
+    expect(performanceChunkName('/repo/packages/map/src/render-visibility.ts')).toBe(
+      'map-snapshot',
+    );
+    expect(performanceChunkName('/repo/packages/map/dist/document-layer-plan.js')).toBe(
+      'map-snapshot',
+    );
+    expect(performanceChunkName('/repo/packages/map/src/map-runtime.ts')).toBe('map-host');
+    expect(performanceChunkName('/repo/packages/map/dist/deferred-map-driver.js')).toBe('map-host');
+    expect(performanceChunkName('/repo/packages/map/dist/live-map-renderer.js')).toBe('map');
+    expect(performanceChunkName('/repo/packages/map/src/document-map-driver.ts')).toBe('map');
     expect(performanceChunkName('/repo/packages/renderer/src/layers/constants.ts')).toBe(
       'renderer-display',
     );
