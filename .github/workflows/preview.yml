@@ -204,8 +204,15 @@ jobs:
           # Through a file, not --body: the body carries backticks and
           # newlines, which is exactly what an inline argument mangles.
           body="$RUNNER_TEMP/preview-comment.md"
-          printf '### Preview\n\n%s\n\nWorker `%s`, commit `%s`. It shares one throwaway `transitmapper-preview` database with every other open pull request, and is deleted when this one closes.\n' \
-            "$PREVIEW_URL" "$PREVIEW_NAME" "${HEAD_SHA:0:7}" > "$body"
+          {
+            printf '## Deployment Preview\n\n'
+            printf 'This PR has generated a preview deployment here: %s\n\n' "$PREVIEW_URL"
+            printf 'Built from `%s`. Additional pushes to this PR will trigger additional\n' "${HEAD_SHA:0:7}"
+            printf 'preview deployments. Its database is shared scratch, and the preview is\n'
+            printf 'deleted when this PR closes.\n\n'
+            printf '[Learn more about previews](%s/blob/main/docs/development/explanation/preview-deployments.md)\n' \
+              "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          } > "$body"
           # One comment per pull request, edited in place, so a long-running
           # branch does not accumulate one per push.
           gh pr comment "$PR" --edit-last --create-if-none --body-file "$body"
