@@ -358,8 +358,15 @@ function createLoadedStyleBridge(
       registerMapIcons(session.map, theme);
     },
     recover: () => session.recoverStyle(),
+    // Publication counts as an interaction only once there is an accepted scene
+    // to protect: applying a style rebuilds layers, which would disturb a live
+    // one. Before that first scene there are no document layers to lose, and
+    // treating publication as an interaction there is what left the basemap
+    // deferred behind the whole cold projection — the style arrived in under
+    // two seconds and was not applied for another six.
     interactionActive: () =>
-      attachment.isInteractionActive() || session.renderer.publicationInProgress(),
+      attachment.isInteractionActive() ||
+      (session.renderer.hasAcceptedScene() && session.renderer.publicationInProgress()),
     resized: () => session.scheduleProjection(),
   };
 }
