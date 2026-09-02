@@ -176,21 +176,24 @@ function lowerTierOpacity(baseOpacity: unknown, upperWeight: unknown[]): unknown
   ];
 }
 
+/** One zoom sample of the tier cross-fade.
+ *
+ * Every value here is bound once with `let`. Without the bindings the
+ * projected width, the two interpolation weights, and the four availability
+ * predicates are each rebuilt at every point they are read, which made this
+ * sample roughly 440 nodes; `buildTierOpacityExpr` then repeats the sample at
+ * 65 zoom stops, so the paint property reached 28,867 nodes and MapLibre
+ * evaluated the two bracketing samples of it per feature per layer. That was
+ * measured as the dominant cost of a cold RTC load. `let` changes no
+ * arithmetic — it only stops the same subtree being walked repeatedly. */
 function tierOpacityAtZoom(zoom: number, baseOpacity: unknown): unknown[] {
-  const corridorWidthAtZ14 = ['coalesce', ['get', 'corridorDisplayW14'], ['get', 'corridorW14']];
-  const projectedWidth = ['*', corridorWidthAtZ14, 2 ** (zoom - 14)];
-  const districtWeight = ['interpolate', ['linear'], projectedWidth, 2, 0, 4, 1];
-  const streetWeight = ['interpolate', ['linear'], projectedWidth, 9, 0, 12, 1];
-  const hasAvailabilityContract = [
-    'all',
-    ['has', 'projectedWidthPx'],
-    ['has', 'hasOverviewTier'],
-    ['has', 'hasDistrictTier'],
-    ['has', 'hasStreetTier'],
-  ];
-  const hasOverview = ['boolean', ['get', 'hasOverviewTier'], false];
-  const hasDistrict = ['boolean', ['get', 'hasDistrictTier'], false];
-  const hasStreet = ['boolean', ['get', 'hasStreetTier'], false];
+  const projectedWidth = ['var', 'pw'];
+  const districtWeight = ['var', 'dw'];
+  const streetWeight = ['var', 'sw'];
+  const hasAvailabilityContract = ['var', 'hc'];
+  const hasOverview = ['var', 'ho'];
+  const hasDistrict = ['var', 'hd'];
+  const hasStreet = ['var', 'hs'];
   const availableTierOpacity = [
     'match',
     ['get', 'renderTier'],
@@ -227,22 +230,65 @@ function tierOpacityAtZoom(zoom: number, baseOpacity: unknown): unknown[] {
     ],
     ['*', baseOpacity, LEGACY_TIER_OPACITY_EXPR],
   ];
-  return [
+  const body = [
     'case',
     ['all', ['has', 'corridorW14'], ['has', 'renderTier']],
     availableTierOpacity,
     ['*', baseOpacity, LEGACY_TIER_OPACITY_EXPR],
   ];
+  // Nested rather than one `let`: MapLibre evaluates a binding in the scope
+  // enclosing its own `let`, so `dw` and `sw` cannot read `pw` unless `pw` is
+  // bound by an outer one. A linear interpolate clamped at both ends is
+  // exactly a clamped ramp, and `interpolate` refuses a variable as its
+  // input, so the two weights are written as arithmetic.
+  return [
+    'let',
+    'pw',
+    ['*', ['var', 'cw'], 2 ** (zoom - 14)],
+    [
+      'let',
+      'dw',
+      ['max', 0, ['min', 1, ['/', ['-', ['var', 'pw'], 2], 2]]],
+      'sw',
+      ['max', 0, ['min', 1, ['/', ['-', ['var', 'pw'], 9], 3]]],
+      body,
+    ],
+  ];
 }
 
+/** Samples `tierOpacityAtZoom` across the LOD range, because MapLibre accepts
+ * `zoom` only as the input of a top-level curve. The feature-dependent values
+ * that do not vary with zoom are bound once around that curve rather than at
+ * every stop — MapLibre permits `let` to wrap a curve, and hoisting them keeps
+ * 65 copies of the corridor-width lookup and the four availability predicates
+ * out of the property. */
 function buildTierOpacityExpr(baseOpacity: unknown): unknown[] {
-  const expression: unknown[] = ['interpolate', ['exponential', 2], ['zoom']];
+  const curve: unknown[] = ['interpolate', ['exponential', 2], ['zoom']];
   const stopCount = Math.round((MAX_LOD_ZOOM - MIN_LOD_ZOOM) / LOD_ZOOM_STEP);
   for (let index = 0; index <= stopCount; index += 1) {
     const zoom = MIN_LOD_ZOOM + index * LOD_ZOOM_STEP;
-    expression.push(zoom, tierOpacityAtZoom(zoom, baseOpacity));
+    curve.push(zoom, tierOpacityAtZoom(zoom, baseOpacity));
   }
-  return expression;
+  return [
+    'let',
+    'cw',
+    ['coalesce', ['get', 'corridorDisplayW14'], ['get', 'corridorW14']],
+    'hc',
+    [
+      'all',
+      ['has', 'projectedWidthPx'],
+      ['has', 'hasOverviewTier'],
+      ['has', 'hasDistrictTier'],
+      ['has', 'hasStreetTier'],
+    ],
+    'ho',
+    ['boolean', ['get', 'hasOverviewTier'], false],
+    'hd',
+    ['boolean', ['get', 'hasDistrictTier'], false],
+    'hs',
+    ['boolean', ['get', 'hasStreetTier'], false],
+    curve,
+  ];
 }
 
 const TIER_OPACITY_EXPRESSIONS = new Map<number, unknown[]>();
