@@ -24,10 +24,10 @@ branches pushed to this repository, which already requires write access — see
 [pull request previews](../../development/explanation/preview-deployments.md).
 
 `CLOUDFLARE_ACCOUNT_ID` is an environment variable rather than a repository
-variable. Both workflows read it from inside a job that names an environment,
-so either would work — but an environment variable does not reach a job that
-does not name that environment, which is the failure mode worth knowing about
-when adding a third workflow.
+variable. Every workflow that reads it does so from inside a job that names an
+environment, so either scope would work — but an environment variable does not
+reach a job that does not name that environment. The preview workflow reads it
+from three separate jobs, and each one names `preview` for that reason.
 
 **There are no application secrets in production.** The Worker reads
 `SITE_URL` (a plain var) plus platform bindings for assets, D1, R2, rate

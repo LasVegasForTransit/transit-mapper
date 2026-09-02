@@ -6,9 +6,9 @@ any of this.
 
 Production is one Cloudflare Worker (`transitmapper`) on
 `map.lasvegasfortransit.org`, serving the built SPA as static assets and
-handling `/api/*`, `/s/*` and `/e/*` itself, with one D1 database (also
-`transitmapper`) holding shared systems and short-lived anonymous performance
-samples.
+handling `/api/*`, `/s/*`, `/v/*`, `/e/*` and `/embed/*` itself, with one D1
+database (also `transitmapper`) holding shared systems and short-lived
+anonymous performance samples.
 
 ## Deploy
 
@@ -149,9 +149,11 @@ Check which step failed before anything else; they fail for unrelated reasons.
   exact failure kept every deploy red for four days while the site quietly
   served a build from before the sharing surfaces existed, which is why the
   smoke test below exists.
-- **Smoke test production** — the deploy uploaded something, but the live
+- **Verify the deployed site** — the deploy uploaded something, but the live
   site isn't serving the routes this build defines. Do not retry blindly; see
-  "Roll back" and read what the failing assertion actually checked.
+  "Roll back" and read what the failing assertion actually checked. The step
+  runs `.github/actions/verify-deployed-site`, shared with the pull request
+  preview deploy, so the same assertions cover both.
 - **Exercise the deployed editor and onboarding** — the expected bundle reached
   production, but its RTC editor interaction or onboarding walkthrough failed
   in headless Chrome. The Worker is already deployed, so fix forward or roll
@@ -421,7 +423,7 @@ database.
 Stated plainly so nobody assumes otherwise:
 
 - **No alerting.** See above.
-- **No staging environment.** Pull request previews (below) deploy the same
+- **No staging environment.** Pull request previews (above) deploy the same
   code to a throwaway Worker and database, which is close, but nothing
   rehearses the production deploy itself: `wrangler dev --remote` still runs
   your local code against the **production** D1, and a manual `pnpm run deploy`

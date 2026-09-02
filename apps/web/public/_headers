@@ -1,8 +1,9 @@
 # Response headers for assets served straight from Cloudflare, without the
 # Worker running. That is now most of the site — the Worker is scoped to
-# /api/*, /s/* and /e/* (see run_worker_first in apps/worker/wrangler.toml) —
-# so the editor's own HTML, JS and CSS never pass through Worker code and
-# can't be given headers there. This file is the only place to set them.
+# /api/*, /s/*, /v/*, /e/* and /embed/* (see run_worker_first in
+# apps/worker/wrangler.toml) — so the editor's own HTML, JS and CSS never pass
+# through Worker code and can't be given headers there. This file is the only
+# place to set them.
 #
 # Worker-generated responses ignore this file entirely; those set their own
 # headers in apps/worker/src/index.ts.
