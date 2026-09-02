@@ -1,9 +1,8 @@
 import { log, note } from '@clack/prompts';
 import { runCommand, shellEscape, tryOpenInBrowser } from '../lib/shell.js';
 import { printToolTable, promptConfirm, promptSecret } from '../lib/ui.js';
+import { REQUIRED_ENVIRONMENTS } from '../standards.js';
 import type { PhaseResult } from './auth.js';
-
-const GITHUB_ENVIRONMENT = 'production';
 
 /**
  * Account-scoped API token page: tokens created here are bound to a single
@@ -88,9 +87,9 @@ export function ciEnvironmentState(
   };
 }
 
-function readCiEnvironment(accountId: string): CiEnvironmentState | null {
-  const secrets = runCommand(`gh secret list --env ${GITHUB_ENVIRONMENT} --json name`);
-  const variables = runCommand(`gh variable list --env ${GITHUB_ENVIRONMENT} --json name,value`);
+function readCiEnvironment(accountId: string, environment: string): CiEnvironmentState | null {
+  const secrets = runCommand(`gh secret list --env ${environment} --json name`);
+  const variables = runCommand(`gh variable list --env ${environment} --json name,value`);
   if (!secrets.ok || !variables.ok) return null;
   try {
     const secretRows = JSON.parse(secrets.stdout) as { name: string }[];
@@ -105,17 +104,20 @@ function readCiEnvironment(accountId: string): CiEnvironmentState | null {
   }
 }
 
-function ciEnvironmentRows(state: CiEnvironmentState): Parameters<typeof printToolTable>[1] {
+function ciEnvironmentRows(
+  state: CiEnvironmentState,
+  environment: string,
+): Parameters<typeof printToolTable>[1] {
   return [
     state.tokenReady
-      ? { label: 'CLOUDFLARE_API_TOKEN', status: 'ready', detail: GITHUB_ENVIRONMENT }
+      ? { label: 'CLOUDFLARE_API_TOKEN', status: 'ready', detail: environment }
       : {
           label: 'CLOUDFLARE_API_TOKEN',
           status: 'failed',
-          detail: `not set on the "${GITHUB_ENVIRONMENT}" environment`,
+          detail: `not set on the "${environment}" environment`,
         },
     state.accountIdReady
-      ? { label: 'CLOUDFLARE_ACCOUNT_ID', status: 'ready', detail: GITHUB_ENVIRONMENT }
+      ? { label: 'CLOUDFLARE_ACCOUNT_ID', status: 'ready', detail: environment }
       : {
           label: 'CLOUDFLARE_ACCOUNT_ID',
           status: 'failed',
@@ -124,13 +126,58 @@ function ciEnvironmentRows(state: CiEnvironmentState): Parameters<typeof printTo
   ];
 }
 
+interface CiEnvironment {
+  environment: string;
+  state: CiEnvironmentState;
+}
+
+function readCiEnvironments(accountId: string): CiEnvironment[] | null {
+  const environments: CiEnvironment[] = [];
+  for (const environment of REQUIRED_ENVIRONMENTS) {
+    const state = readCiEnvironment(accountId, environment);
+    if (!state) {
+      log.error(`Could not read the "${environment}" GitHub Environment credentials.`);
+      return null;
+    }
+    environments.push({ environment, state });
+  }
+  return environments;
+}
+
+/**
+ * Runs one `gh ... set` per environment, stopping at the first refusal.
+ *
+ * Both credentials are written the same way and fail the same way, so they
+ * share the loop; only the hint after a failure differs, and that belongs at
+ * the call site that knows which credential it was writing.
+ */
+function setOnEnvironments(
+  environments: readonly string[],
+  command: (environment: string) => string,
+  label: string,
+): boolean {
+  for (const environment of environments) {
+    const result = runCommand(command(environment));
+    if (!result.ok) {
+      log.error(`Failed to set ${label} on "${environment}": ${result.stderr || result.stdout}`);
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Prompts for a Cloudflare API token, derives the account id from
  * `wrangler whoami` (no need to ask the user to hunt it down and paste it),
- * and writes both into the repo's `production` GitHub Environment via `gh`.
- * The token is passed straight to `gh secret set` and never touches the
- * general subprocess environment (see the denylist in lib/shell.ts) or any
- * on-disk file.
+ * and writes both into every GitHub Environment the deployment workflows use
+ * (see REQUIRED_ENVIRONMENTS) via `gh`. The token is passed straight to
+ * `gh secret set` and never touches the general subprocess environment (see
+ * the denylist in lib/shell.ts) or any on-disk file.
+ *
+ * The same token for every environment, because Cloudflare has no per-script
+ * token scope: any token that can deploy a preview Worker can also overwrite
+ * the production one. Separate environments buy separate deployment records
+ * and somewhere to put a narrower token the day one exists — not isolation.
  */
 export async function runCiSecretsPhase(
   options: { doctor: boolean } = { doctor: false },
@@ -149,14 +196,14 @@ export async function runCiSecretsPhase(
   }
   log.info(`Using Cloudflare account id ${accountId} (from \`wrangler whoami\`).`);
 
-  const existing = readCiEnvironment(accountId);
-  if (!existing) {
-    log.error(`Could not read the "${GITHUB_ENVIRONMENT}" GitHub Environment credentials.`);
-    return { success: false };
-  }
+  const environments = readCiEnvironments(accountId);
+  if (!environments) return { success: false };
 
-  if (existing.tokenReady && existing.accountIdReady) {
-    printToolTable('CI secrets', ciEnvironmentRows(existing));
+  const names = environments.map((entry) => entry.environment);
+  const rows = environments.flatMap((entry) => ciEnvironmentRows(entry.state, entry.environment));
+
+  if (environments.every((entry) => entry.state.tokenReady && entry.state.accountIdReady)) {
+    printToolTable('CI secrets', rows);
     return { success: true };
   }
 
@@ -164,49 +211,48 @@ export async function runCiSecretsPhase(
   // interactive, which defeats running it in a script or a fresh shell to
   // find out what is wrong.
   if (options.doctor) {
-    printToolTable('CI secrets', ciEnvironmentRows(existing));
+    printToolTable('CI secrets', rows);
     return { success: false };
   }
 
   const proceed = await promptConfirm(
-    `Set missing CI credentials on the "${GITHUB_ENVIRONMENT}" GitHub Environment now?`,
+    `Set missing CI credentials on the ${names.map((name) => `"${name}"`).join(' and ')} GitHub Environments now?`,
     true,
   );
-  if (!proceed) {
-    return { success: false };
-  }
+  if (!proceed) return { success: false };
 
-  if (!existing.tokenReady) {
+  // Prompted once even when several environments need it. Asking twice for the
+  // same token invites two different tokens, and then one environment deploys
+  // with credentials nobody knows about.
+  const needsToken = environments.filter((entry) => !entry.state.tokenReady);
+  if (needsToken.length > 0) {
     note(tokenPromptBody(accountId), 'Cloudflare API token');
     tryOpenInBrowser(tokenDashboardUrl(accountId));
-
     const token = await promptSecret('Paste the Cloudflare API token:');
-    const setToken = runCommand(
-      `gh secret set CLOUDFLARE_API_TOKEN --env ${GITHUB_ENVIRONMENT} --body ${shellEscape(token)}`,
+    const written = setOnEnvironments(
+      needsToken.map((entry) => entry.environment),
+      (environment) =>
+        `gh secret set CLOUDFLARE_API_TOKEN --env ${environment} --body ${shellEscape(token)}`,
+      'CLOUDFLARE_API_TOKEN',
     );
-    if (!setToken.ok) {
-      log.error(`Failed to set CLOUDFLARE_API_TOKEN: ${setToken.stderr || setToken.stdout}`);
+    if (!written) {
       log.info(
-        `If the "${GITHUB_ENVIRONMENT}" environment doesn't exist yet, create it first: repo Settings → Environments → New environment.`,
+        'If an environment does not exist yet, run `pnpm bootstrap` — the repository governance phase creates it.',
       );
       return { success: false };
     }
   }
 
-  if (!existing.accountIdReady) {
-    const setAccountId = runCommand(
-      `gh variable set CLOUDFLARE_ACCOUNT_ID --env ${GITHUB_ENVIRONMENT} --body ${shellEscape(accountId)}`,
-    );
-    if (!setAccountId.ok) {
-      log.error(
-        `Failed to set CLOUDFLARE_ACCOUNT_ID: ${setAccountId.stderr || setAccountId.stdout}`,
-      );
-      return { success: false };
-    }
-  }
+  const wroteAccountId = setOnEnvironments(
+    environments.filter((entry) => !entry.state.accountIdReady).map((entry) => entry.environment),
+    (environment) =>
+      `gh variable set CLOUDFLARE_ACCOUNT_ID --env ${environment} --body ${shellEscape(accountId)}`,
+    'CLOUDFLARE_ACCOUNT_ID',
+  );
+  if (!wroteAccountId) return { success: false };
 
   log.success(
-    `CLOUDFLARE_API_TOKEN (secret) and CLOUDFLARE_ACCOUNT_ID (variable) are set on "${GITHUB_ENVIRONMENT}". CI deploys should work on the next push to main.`,
+    `CLOUDFLARE_API_TOKEN (secret) and CLOUDFLARE_ACCOUNT_ID (variable) are set on ${names.join(' and ')}. CI deploys should work on the next push to main.`,
   );
   return { success: true };
 }

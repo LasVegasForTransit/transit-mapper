@@ -89,12 +89,25 @@ export const ACTIONS_SETTINGS = {
 } as const;
 
 /**
+ * GitHub Environments the deployment workflows scope credentials to.
+ *
+ * `production` gates the release deploy; `preview` gates the per-pull-request
+ * Workers. Declared here rather than assumed by the phase that writes secrets,
+ * because until this existed nothing created them: `ci-secrets` set a secret
+ * on an environment it expected to already be there, and printed a hint to go
+ * make one by hand after the failure.
+ */
+export const REQUIRED_ENVIRONMENTS = ['production', 'preview'] as const;
+
+/**
  * Mutating governance calls in dependency order.
  *
  * Dependabot security updates require the dependency graph and vulnerability
- * alerts, so the alerts endpoint must succeed first.
+ * alerts, so the alerts endpoint must succeed first. Environments come first
+ * of all: the `ci-secrets` phase writes into them and runs after this one.
  */
 export const GOVERNANCE_APPLY_ORDER = [
+  'environments',
   'ruleset',
   'security',
   'vulnerability-alerts',

@@ -538,32 +538,41 @@ flowchart TD
     db[(D1)]
     cron[Scheduled trigger]
   end
+  subgraph pv [Pull request preview]
+    pw[Preview Worker]
+    pdb[(Preview D1)]
+  end
   browser --> assets
   browser --> w
   w --> db
   cron --> w
+  browser --> pw
+  pw --> pdb
 ```
 
-There is one environment. Default-branch commits update a generated release
-pull request. Merging it runs the checks, attests one archive, applies its
-migrations, deploys its Worker and assets, checks the live fingerprint and
-routes, then runs RTC and onboarding in headless Chrome. GitHub records the
-release and deployment; About shows their version, revision, and provenance.
+Default-branch commits update a generated release pull request. Merging it
+attests one archive, applies its migrations, deploys its Worker and assets,
+then verifies the live fingerprint, routes, and browser journeys. About shows
+the resulting version, revision, and provenance.
 
-| Element           | Detail                                                                                |
-| ----------------- | ------------------------------------------------------------------------------------- |
-| Static assets     | Served without invoking the Worker, keeping them off the metered invocation allowance |
-| Worker            | Invoked only for API paths, share pages, and embeds                                   |
-| D1                | One database of snapshot rows, migrated by the deploy pipeline                        |
-| Scheduled trigger | Daily expiry sweep                                                                    |
+| Element           | Detail                                  |
+| ----------------- | --------------------------------------- |
+| Static assets     | Served without invoking the Worker      |
+| Worker            | API paths, share pages, and embeds only |
+| D1                | Snapshot rows, migrated by the deploy   |
+| Scheduled trigger | Daily expiry sweep                      |
 
-The split between assets and Worker matters. Route every request through the
-Worker and the daily invocation allowance goes on files that need no logic,
-and running out takes down every path at once instead of one feature.
+Routing every request through the Worker would spend the daily invocation
+allowance on files needing no logic, and running out takes every path down.
+
+Each open pull request gets [a Worker of its own](preview-deployments.md), from
+the `[env.preview]` block of the same `wrangler.toml`, over a shared throwaway
+database with neither route nor cron. Cloudflare generates no per-version
+preview URL for a Worker implementing a Durable Object.
 
 Migrations apply before the Worker deploys, and rolling back does not undo
-them. Every migration has to be safe against the Worker still running, which
-means additive. Procedure is in
+them, so every migration has to be additive and safe against the Worker still
+running. Procedure is in
 [operations](../../operations/how-to/operations.md).
 
 ## 8. Crosscutting Concepts

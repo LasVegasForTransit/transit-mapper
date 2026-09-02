@@ -90,6 +90,9 @@ For people changing the code rather than using the app.
   automated gates and the manual browser/failure-path release checklist.
 - [The enforcement model](development/explanation/enforcement-model.md) —
   why the harness is shaped this way.
+- [Pull request previews](development/explanation/preview-deployments.md) —
+  how every pull request gets its own deployed URL, and why it is a separate
+  Worker over a shared throwaway database.
 
 Design documents for larger pieces of work live in
 [`superpowers/specs/`](superpowers/specs/).

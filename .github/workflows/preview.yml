@@ -1,0 +1,232 @@
+name: Preview
+
+# Every push to an open pull request, plus close for teardown.
+#
+# Deliberately not gated on CI. A preview exists to be looked at, including
+# when something is failing, and waiting for the full validate graph would
+# make it useless for the fast visual loop it is for.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+permissions:
+  contents: read
+
+# One preview per pull request, newest push wins. Closing shares the group on
+# purpose: it cancels a deploy still in flight so teardown cannot delete a
+# Worker that a straggling job then recreates.
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # A fork's pull_request run gets a read-only token and no environment
+  # secrets, by GitHub's design and correctly so: a preview deploy builds the
+  # branch's own code and publishes it into this project's Cloudflare account.
+  # This job exists so that shows up as an explanation rather than as nothing
+  # at all, which reads as a broken workflow.
+  unavailable:
+    name: Preview unavailable
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain why a fork gets no preview
+        run: |
+          {
+            echo "## No preview for this pull request"
+            echo
+            echo "A preview publishes a Worker into the project's Cloudflare account, so"
+            echo "it is built only for branches in this repository. Pull requests from"
+            echo "forks receive a read-only token and no deployment credentials."
+            echo
+            echo "A maintainer can push the branch to this repository to get one."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy preview
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      # The sticky comment. Nothing else here writes to the repository.
+      pull-requests: write
+    # Scopes the Cloudflare credentials to this environment and records a
+    # deployment against the pull request, so the URL appears in the timeline
+    # even when the comment step does not run.
+    environment:
+      name: preview
+      url: ${{ steps.target.outputs.url }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Resolve the preview target
+        id: target
+        run: |
+          set -euo pipefail
+          name="transitmapper-pr-${{ github.event.pull_request.number }}"
+
+          # The hostname has to be known before the build: VITE_SITE_URL is
+          # substituted into index.html's canonical and og:url at build time,
+          # so a URL discovered after deploying is one the build already got
+          # wrong.
+          #
+          # Read from the account rather than stored as a repository variable.
+          # The subdomain is account state, and a stale copy of it produces a
+          # wrong-but-plausible URL that every step below then asserts against.
+          subdomain=$(curl -sS --fail-with-body \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" \
+            | jq -er '.result.subdomain')
+
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "url=https://$name.$subdomain.workers.dev" >> "$GITHUB_OUTPUT"
+
+      # VITE_SITE_URL reaches vite only because turbo.json lists it in the
+      # @transitmapper/web#build env allowlist; Turborepo runs in strict env
+      # mode, so an unlisted variable is dropped without a word. Listing it
+      # also forks the build hash, which is what stops a preview build and a
+      # production build sharing a cache entry.
+      - name: Build preview
+        env:
+          VITE_SITE_URL: ${{ steps.target.outputs.url }}
+        run: pnpm run build
+
+      # Before the deploy, same order and same reason as production: code that
+      # reads a column the shared preview database does not have would deploy
+      # cleanly and then fail on every share.
+      - name: Apply D1 migrations
+        run: |
+          pnpm --filter @transitmapper/worker exec wrangler d1 migrations apply DB \
+            --remote \
+            --env preview
+
+      - name: Deploy preview
+        id: deploy
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-deploy.json
+          PREVIEW_NAME: ${{ steps.target.outputs.name }}
+          PREVIEW_URL: ${{ steps.target.outputs.url }}
+        run: |
+          set -euo pipefail
+
+          # --name overrides the `-preview` suffix wrangler would otherwise
+          # append to the inherited Worker name. --var overrides the
+          # placeholder SITE_URL in [env.preview.vars], which cannot itself
+          # hold a per-pull-request value: `wrangler types` unions every
+          # environment's literal var values into the committed bindings.
+          pnpm --filter @transitmapper/worker exec wrangler deploy \
+            --env preview \
+            --name "$PREVIEW_NAME" \
+            --var "SITE_URL:$PREVIEW_URL"
+
+          # What wrangler recorded it published, against the name this job
+          # gave it. The record's shape is pinned by
+          # scripts/tests/assert-deployed-worker.test.ts, so a change to it
+          # fails there rather than here, after the Worker has gone out.
+          pnpm exec tsx scripts/assert-deployed-worker.ts \
+            "$WRANGLER_OUTPUT_FILE_PATH" "$PREVIEW_NAME"
+
+      # Before the checks below, not after them: the link depends only on the
+      # deploy, and the verification that follows takes minutes. A preview that
+      # is up but serving something wrong is still the one somebody needs the
+      # link to, so this must not wait on that verdict.
+      - name: Comment the preview URL
+        if: steps.deploy.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          PREVIEW_URL: ${{ steps.target.outputs.url }}
+          PREVIEW_NAME: ${{ steps.target.outputs.name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Through a file, not --body: the body carries backticks and
+          # newlines, which is exactly what an inline argument mangles.
+          body="$RUNNER_TEMP/preview-comment.md"
+          printf '### Preview\n\n%s\n\nWorker `%s`, commit `%s`. It shares one throwaway `transitmapper-preview` database with every other open pull request, and is deleted when this one closes.\n' \
+            "$PREVIEW_URL" "$PREVIEW_NAME" "${HEAD_SHA:0:7}" > "$body"
+          # One comment per pull request, edited in place, so a long-running
+          # branch does not accumulate one per push.
+          gh pr comment "$PR" --edit-last --create-if-none --body-file "$body"
+
+      # The same checks the production release makes, from the same action.
+      - name: Verify the deployed site
+        uses: ./.github/actions/verify-deployed-site
+        with:
+          site: ${{ steps.target.outputs.url }}
+
+  teardown:
+    name: Delete preview
+    if: >-
+      github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    environment:
+      name: preview
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      # No checkout and no install. Deleting a Worker is one REST call, and
+      # pulling the whole workspace down to reach `wrangler` cost a couple of
+      # minutes of runner time per closed pull request to save three seconds
+      # of work.
+      - name: Delete the preview Worker
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          name="transitmapper-pr-$PR"
+
+          # The API deletes whatever name it is handed, so the name is checked
+          # before it is sent. The guard is not doubt about the line above; it
+          # is about every future edit to this step.
+          case "$name" in
+            transitmapper-pr-[0-9]*) ;;
+            *) echo "Refusing to delete '$name'." >&2; exit 1 ;;
+          esac
+
+          # force=true takes the Worker down even when something still refers
+          # to it. The Durable Object namespace and its storage go with the
+          # script; rows this preview wrote to the shared preview database do
+          # not, by design.
+          status=$(curl -sS -o "$RUNNER_TEMP/delete.json" -w '%{http_code}' \
+            -X DELETE \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$name?force=true")
+          cat "$RUNNER_TEMP/delete.json"
+
+          if [ "$status" = "200" ]; then
+            echo "Deleted $name."
+            exit 0
+          fi
+
+          # A pull request closed before its first preview finished has no
+          # Worker to delete, which is not a reason to leave a red run on a
+          # closed pull request. Every OTHER failure is: an expired or
+          # under-scoped token reported as a benign absence would leak a Worker
+          # per closed pull request, with nothing red anywhere to notice, until
+          # deploys start failing against the account's Worker limit.
+          if [ "$status" = "404" ] || grep -q '10007' "$RUNNER_TEMP/delete.json"; then
+            echo "::notice::No preview Worker named $name to delete."
+            exit 0
+          fi
+          echo "Could not delete $name (HTTP $status), and it was not reported as absent." >&2
+          exit 1

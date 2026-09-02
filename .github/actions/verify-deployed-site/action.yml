@@ -1,0 +1,45 @@
+name: Verify deployed site
+description: >-
+  Assert that a deployed origin serves this build, over HTTP and then in a real
+  browser. Shared by the production release and every pull request preview, so
+  a check added here is a check both of them make.
+
+inputs:
+  site:
+    description: Origin to verify, without a trailing slash
+    required: true
+  dist:
+    description: >-
+      Built assets to compare the live entry chunk against. Defaults to the
+      web app's own output, which is what a build in this job produces.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    # The browser step needs real Chrome. Asserting it up front turns a missing
+    # runner image dependency into one clear line instead of a Playwright
+    # launch failure several minutes into a walkthrough.
+    - name: Confirm stable Chrome
+      shell: bash
+      run: google-chrome --version
+
+    - name: Smoke test the deployed routes
+      shell: bash
+      env:
+        SITE: ${{ inputs.site }}
+        DIST: ${{ inputs.dist }}
+      run: |
+        set -euo pipefail
+        if [ -n "$DIST" ]; then
+          pnpm --filter @transitmapper/web smoke:deployed -- --site "$SITE" --dist "$DIST"
+        else
+          pnpm --filter @transitmapper/web smoke:deployed -- --site "$SITE"
+        fi
+
+    - name: Exercise the deployed editor and onboarding
+      shell: bash
+      env:
+        SITE: ${{ inputs.site }}
+      run: pnpm --filter @transitmapper/web perf:live-production -- --site "$SITE"

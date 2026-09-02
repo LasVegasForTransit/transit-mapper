@@ -12,6 +12,7 @@ import {
   ACTIONS_POLICY_SETTINGS,
   ACTIONS_SETTINGS,
   GOVERNANCE_APPLY_ORDER,
+  REQUIRED_ENVIRONMENTS,
   REQUIRES_ORGANIZATION,
 } from '../standards.js';
 import { actionsPolicyBody, booleanEndpointState, settingDrift } from '../governance.js';
@@ -170,7 +171,7 @@ function actionsWorkflowState(): Drift | ToolRow {
     ? {
         label: 'Actions token',
         status: 'ready',
-        detail: `${String(ACTIONS_SETTINGS.default_workflow_permissions)}-only by default`,
+        detail: `${ACTIONS_SETTINGS.default_workflow_permissions}-only by default`,
       }
     : {
         key: 'actions-workflow',
@@ -182,63 +183,71 @@ function actionsWorkflowState(): Drift | ToolRow {
       };
 }
 
+function environmentsState(): Drift | ToolRow {
+  // One call for all of them: the per-environment endpoint would be a `gh`
+  // subprocess and a round trip each, and this list is the standard's to grow.
+  const current = ghApi('repos/:owner/:repo/environments');
+  const environments =
+    current.ok && typeof current.data === 'object' && current.data !== null
+      ? ((current.data as { environments?: { name?: string }[] }).environments ?? [])
+      : [];
+  const present = new Set(environments.map((environment) => environment.name));
+  const missing = REQUIRED_ENVIRONMENTS.filter((name) => !present.has(name));
+
+  if (!current.ok) {
+    return { label: 'Environments', status: 'failed', detail: 'could not read current settings' };
+  }
+
+  return missing.length === 0
+    ? { label: 'Environments', status: 'ready', detail: REQUIRED_ENVIRONMENTS.join(', ') }
+    : {
+        key: 'environments',
+        row: {
+          label: 'Environments',
+          status: 'failed',
+          detail: `${missing.join(', ')} absent — deployment credentials have nowhere to live`,
+        },
+      };
+}
+
+/**
+ * PUT is idempotent here, so this converges whether the environment is absent
+ * or merely absent from the drift report. No body: protection rules are
+ * deliberately not part of the standard, because a required reviewer on
+ * `preview` would stall every push to every pull request.
+ */
+function applyEnvironments(): ToolRow[] {
+  return REQUIRED_ENVIRONMENTS.map((name) => {
+    const result = ghApi(`--method PUT repos/:owner/:repo/environments/${name}`);
+    return result.ok
+      ? { label: `Environment ${name}`, status: 'ready' as const, detail: 'present' }
+      : {
+          label: `Environment ${name}`,
+          status: 'failed' as const,
+          detail: result.error.slice(0, 160),
+        };
+  });
+}
+
 function isDrift(value: Drift | ToolRow): value is Drift {
   return 'key' in value;
 }
 
-export async function runRepoConfigPhase(options: { doctor: boolean }): Promise<PhaseResult> {
-  // Checked first: without admin rights every call below returns 404 rather
-  // than 403, because GitHub hides settings the caller cannot administer.
-  // The resulting errors read as "no such repository" and mislead.
-  if (!canAdminister()) {
-    printToolTable('Repository governance', [
-      {
-        label: 'Permission',
-        status: 'failed',
-        detail: 'the authenticated account cannot administer this repository',
-      },
-    ]);
-    return { success: false };
-  }
-
-  const states = [
-    rulesetState(),
-    securityState(),
-    vulnerabilityAlertsState(),
-    dependabotSecurityUpdatesState(),
-    actionsPolicyState(),
-    actionsWorkflowState(),
-  ];
-  const rows = states.map((s) => (isDrift(s) ? s.row : s));
-  const pending = states.filter(isDrift).map((s) => s.key);
-
-  if (!isOrganizationOwned()) {
-    for (const blocked of REQUIRES_ORGANIZATION) {
-      rows.push({
-        label: blocked.setting,
-        status: 'skipped',
-        detail: `${blocked.reason} — unblocked by ${blocked.unblockedBy}`,
-      });
-    }
-  }
-
-  printToolTable('Repository governance', rows);
-
-  if (pending.length === 0) {
-    return { success: rows.every((row) => row.status !== 'failed') };
-  }
-  if (options.doctor) return { success: false };
-
-  const confirmed = await promptConfirm(
-    'Apply the organization governance standard to this repository?',
-    true,
-  );
-  if (!confirmed) return { success: false };
-
+/**
+ * Converges each pending setting, in dependency order, and reports what
+ * each call did. Separated from the phase so the decision to apply and the
+ * applying itself are readable apart.
+ */
+function applyGovernance(pending: readonly (typeof GOVERNANCE_APPLY_ORDER)[number][]): ToolRow[] {
   const applied: ToolRow[] = [];
 
   for (const key of GOVERNANCE_APPLY_ORDER) {
     if (!pending.includes(key)) continue;
+
+    if (key === 'environments') {
+      applied.push(...applyEnvironments());
+      continue;
+    }
 
     if (key === 'ruleset') {
       // The full body every time. A PUT is a partial update at the top level,
@@ -339,6 +348,61 @@ export async function runRepoConfigPhase(options: { doctor: boolean }): Promise<
         : verified,
     );
   }
+
+  return applied;
+}
+
+export async function runRepoConfigPhase(options: { doctor: boolean }): Promise<PhaseResult> {
+  // Checked first: without admin rights every call below returns 404 rather
+  // than 403, because GitHub hides settings the caller cannot administer.
+  // The resulting errors read as "no such repository" and mislead.
+  if (!canAdminister()) {
+    printToolTable('Repository governance', [
+      {
+        label: 'Permission',
+        status: 'failed',
+        detail: 'the authenticated account cannot administer this repository',
+      },
+    ]);
+    return { success: false };
+  }
+
+  const states = [
+    environmentsState(),
+    rulesetState(),
+    securityState(),
+    vulnerabilityAlertsState(),
+    dependabotSecurityUpdatesState(),
+    actionsPolicyState(),
+    actionsWorkflowState(),
+  ];
+  const rows = states.map((s) => (isDrift(s) ? s.row : s));
+  const pending = states.filter(isDrift).map((s) => s.key);
+
+  if (!isOrganizationOwned()) {
+    for (const blocked of REQUIRES_ORGANIZATION) {
+      rows.push({
+        label: blocked.setting,
+        status: 'skipped',
+        detail: `${blocked.reason} — unblocked by ${blocked.unblockedBy}`,
+      });
+    }
+  }
+
+  printToolTable('Repository governance', rows);
+
+  if (pending.length === 0) {
+    return { success: rows.every((row) => row.status !== 'failed') };
+  }
+  if (options.doctor) return { success: false };
+
+  const confirmed = await promptConfirm(
+    'Apply the organization governance standard to this repository?',
+    true,
+  );
+  if (!confirmed) return { success: false };
+
+  const applied = applyGovernance(pending);
 
   printToolTable('Applied', applied);
   return { success: applied.every((r) => r.status === 'ready') };

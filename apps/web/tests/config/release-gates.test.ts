@@ -52,7 +52,13 @@ describe('release performance gates', () => {
     expect(deploy).toContain(
       'gh workflow run performance.yml --repo "$GITHUB_REPOSITORY" --ref "$release_branch"',
     );
-    expect(deploy).toContain('pnpm --filter @transitmapper/web perf:live-production --');
-    expect(deploy).toContain('--site "$SITE"');
+    // The post-deploy checks live in a composite action shared with the pull
+    // request preview deploy, so assert the release still runs them and that
+    // the action still holds the browser walkthrough.
+    expect(deploy).toContain('uses: ./.github/actions/verify-deployed-site');
+    const verify = repositorySource('.github/actions/verify-deployed-site/action.yml');
+    expect(verify).toContain('pnpm --filter @transitmapper/web perf:live-production --');
+    expect(verify).toContain('pnpm --filter @transitmapper/web smoke:deployed --');
+    expect(verify).toContain('--site "$SITE"');
   });
 });

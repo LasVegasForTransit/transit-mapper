@@ -83,6 +83,11 @@ describe('Turbo task overrides', () => {
       'TRANSITMAPPER_PERFORMANCE_ORDINARY_BASIS_POINTS',
       'TRANSITMAPPER_PERFORMANCE_RELEASE_BASIS_POINTS',
       'VITE_PERF_BUILD',
+      // The preview deploy builds the same tree against a per-pull-request
+      // hostname. Listing it is what lets it reach vite under strict env mode,
+      // and what stops a preview build and a production build sharing a cache
+      // entry despite emitting different absolute URLs.
+      'VITE_SITE_URL',
     ]);
   });
 });

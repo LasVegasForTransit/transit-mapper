@@ -78,6 +78,7 @@
     "knip": "catalog:",
     "lint-staged": "catalog:",
     "prettier": "catalog:",
+    "smol-toml": "catalog:",
     "tsx": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:",

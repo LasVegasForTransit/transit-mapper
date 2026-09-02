@@ -142,3 +142,140 @@ SITE_URL = "https://map.lasvegasfortransit.org"
 # Kept in configuration because Nominatim requires applications to be able to
 # switch providers without shipping new browser or Worker code.
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+
+# --- Pull request previews ---------------------------------------------------
+#
+# Every push to an open pull request from a branch in this repository deploys a
+# separate Worker, `transitmapper-pr-<number>`, from this environment:
+#
+#   wrangler deploy --env preview --name transitmapper-pr-<number> \
+#     --var SITE_URL:https://transitmapper-pr-<number>.<subdomain>.workers.dev
+#
+# A separate Worker rather than a version preview URL: Cloudflare does not
+# generate `wrangler versions upload` preview URLs for a Worker that implements
+# a Durable Object, and this one implements PLACE_SEARCH_GATE.
+#
+# In this file rather than a `wrangler.preview.toml`: scripts/check-config.ts
+# permits exactly one wrangler.toml per module root. A second config file fails
+# its "configuration under a name only its own tool knows" rule.
+#
+# The rest of the reasoning is in
+# docs/development/explanation/preview-deployments.md.
+#
+# Because a named environment now exists, every `wrangler` command without
+# `--env` warns that no target environment was specified. It still acts on the
+# production configuration above, which is what the release deploy wants.
+[env.preview]
+
+# `routes` is an inheritable key, and inheriting it is destructive: an
+# environment that inherits a custom-domain route reassigns that domain to its
+# own Worker on deploy, so every preview would take map.lasvegasfortransit.org
+# away from production. Wrangler warns and then does it. An empty array is not
+# nullish, so it overrides the inherited value rather than falling back to it.
+routes = []
+
+# With no routes the workers.dev subdomain is on by default, but that default is
+# derived from `routes`. Stated so the preview stays reachable independently of
+# the line above.
+workers_dev = true
+
+# Per-version preview URLs are never generated for a Worker implementing a
+# Durable Object. Off, rather than advertising a URL that does not resolve.
+preview_urls = false
+
+# `triggers` is inherited too. Without this, every open pull request would run
+# the daily maintenance cron against the shared preview database.
+[env.preview.triggers]
+crons = []
+
+# Everything below is non-inheritable — vars, d1_databases, r2_buckets,
+# durable_objects and ratelimits are dropped rather than inherited, and wrangler
+# only warns. scripts/tests/wrangler-preview-env.test.ts asserts this block
+# declares the same binding names as the top level, so adding a binding above
+# without adding it here fails `pnpm verify` instead of failing at runtime in a
+# preview whose logs nobody reads.
+[env.preview.vars]
+# A deliberately non-resolving placeholder, replaced per deployment by
+# `wrangler deploy --var SITE_URL:<preview url>`. It cannot hold the real host:
+# `wrangler types` unions the literal value of every environment's vars into
+# __BaseEnv_Env, so a per-pull-request value here would make the committed
+# worker-configuration.d.ts wrong on every pull request.
+SITE_URL = "https://transitmapper-preview.invalid"
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+
+# One shared preview database for every pull request, not one per branch: D1 has
+# no branching primitive, so a database per pull request means creating and
+# destroying an account resource from CI on every open and close. Safe because
+# scripts/check-migrations-append-only.ts already forbids destructive
+# migrations, so an older branch keeps working against a newer branch's schema.
+# It holds nothing worth keeping — reset it by recreating it.
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "transitmapper-preview"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "src/migrations"
+
+# The production bucket, deliberately: the Worker only ever reads GTFS archives,
+# so a preview cannot corrupt it, and a second bucket would need its own feed
+# refresh before it held anything worth previewing against.
+[[env.preview.r2_buckets]]
+binding = "GTFS_ARCHIVES"
+bucket_name = "transitmapper-data"
+
+# `exports` is inheritable, so [exports.PlaceSearchGate] above provisions the
+# SQLite-backed class for this environment too. Only the binding is restated.
+[[env.preview.durable_objects.bindings]]
+name = "PLACE_SEARCH_GATE"
+class_name = "PlaceSearchGate"
+
+# Rate limit namespaces are scoped to the Worker script, so these restate the
+# top-level budgets for the preview Worker rather than sharing them. Same ids
+# and same limits: a preview that throttles differently is a preview of
+# something else.
+[[env.preview.ratelimits]]
+name = "SHARE_CREATE_LIMITER"
+namespace_id = "1001"
+
+  [env.preview.ratelimits.simple]
+  limit = 20
+  period = 60
+
+[[env.preview.ratelimits]]
+name = "VIEW_CREATE_LIMITER"
+namespace_id = "1006"
+
+  [env.preview.ratelimits.simple]
+  limit = 20
+  period = 60
+
+[[env.preview.ratelimits]]
+name = "PERFORMANCE_SAMPLE_LIMITER"
+namespace_id = "1005"
+
+  [env.preview.ratelimits.simple]
+  limit = 10
+  period = 60
+
+[[env.preview.ratelimits]]
+name = "PLACE_SEARCH_LIMITER"
+namespace_id = "1002"
+
+  [env.preview.ratelimits.simple]
+  limit = 10
+  period = 60
+
+[[env.preview.ratelimits]]
+name = "PLACE_UPSTREAM_LIMITER"
+namespace_id = "1004"
+
+  [env.preview.ratelimits.simple]
+  limit = 1
+  period = 10
+
+[[env.preview.ratelimits]]
+name = "OSM_TILE_LIMITER"
+namespace_id = "1003"
+
+  [env.preview.ratelimits.simple]
+  limit = 60
+  period = 60

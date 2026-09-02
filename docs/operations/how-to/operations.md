@@ -111,8 +111,10 @@ pnpm run deploy
 ```
 
 Be aware that this deploys whatever is in your working tree, straight to the
-public site, with no checks — there is no staging environment. Run
-`pnpm typecheck && pnpm verify` first.
+public site, with no checks. Run `pnpm typecheck && pnpm verify` first, or open
+a pull request and look at its [preview](#pull-request-previews) instead —
+a preview is not a rehearsal of the production deploy, but it is a real
+deployment of the same code.
 
 ### When a deploy fails
 
@@ -353,14 +355,73 @@ remove the shared limits, cache, response ceiling, and identifying headers requi
 the [Nominatim policy](https://operations.osmfoundation.org/policies/nominatim/)
 and [Overpass commons guidance](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html).
 
+## Pull request previews
+
+Every push to an open pull request deploys the branch to its own URL and
+comments the link on the pull request:
+
+```
+https://transitmapper-pr-<number>.<subdomain>.workers.dev
+```
+
+It is the same build production gets, pointed at that hostname, and it runs
+the same route smoke and browser walkthrough the production deploy runs.
+Closing the pull request deletes it.
+
+Pull requests from forks get no preview, and the run says so. Why it works
+this way, and what the security boundary actually is, is in
+[pull request previews](../../development/explanation/preview-deployments.md).
+
+### The preview database
+
+Every open pull request shares one D1 database, `transitmapper-preview`. It
+holds nothing worth keeping. If an abandoned branch's migration leaves it in a
+state you no longer want, replace it:
+
+```bash
+wrangler d1 delete transitmapper-preview
+wrangler d1 create transitmapper-preview
+```
+
+Commit the new id into the `[env.preview]` block of
+`apps/worker/wrangler.toml`. Do not drop the tables instead: the
+`d1_migrations` bookkeeping table has to go with the schema, or the next
+deploy believes every migration has already been applied.
+
+Closing a pull request deletes its Worker and the Durable Object storage that
+went with it. It leaves behind whatever that preview wrote to the shared
+database.
+
+### When a preview fails
+
+- **Resolve the preview target** — the token cannot read the account's
+  `workers.dev` subdomain, or the account has never registered one. Register
+  it once in the Cloudflare dashboard under Workers & Pages → Subdomain.
+- **Apply D1 migrations** — usually two pull requests raced each other against
+  the shared database. Re-run the job. If it fails again, look at the
+  migration itself.
+- **Deploy preview**, reporting a Worker name other than the one it asked for
+  — `--name` stopped overriding the environment suffix, so the deploy landed
+  somewhere every other pull request will overwrite in turn. Do not re-run;
+  check `scripts/tests/assert-deployed-worker.test.ts` and wrangler's
+  behaviour first.
+- **Verify the deployed site** — the Worker is up but serving something other
+  than the build. The URL works and the comment has already been posted, so
+  read this exactly as the production smoke failure above.
+- **Delete the preview Worker** — teardown tolerates a Worker that was never
+  created and fails on anything else, so a red teardown means the API refused.
+  Check the token on the `preview` environment. Until it is fixed, every
+  closed pull request leaves a Worker behind.
+
 ## Not yet configured
 
 Stated plainly so nobody assumes otherwise:
 
 - **No alerting.** See above.
-- **No staging environment.** `wrangler.toml` has no `[env.*]` blocks and no
-  `preview_database_id`, so `wrangler dev --remote` runs your local code
-  against the **production** D1, and a manual `pnpm run deploy` publishes
-  straight to the live Worker. There is nowhere to rehearse a migration.
+- **No staging environment.** Pull request previews (below) deploy the same
+  code to a throwaway Worker and database, which is close, but nothing
+  rehearses the production deploy itself: `wrangler dev --remote` still runs
+  your local code against the **production** D1, and a manual `pnpm run deploy`
+  still publishes straight to the live Worker.
 - **No error reporting service.** `console.error` in the Worker goes to the
   log stream and nowhere else.

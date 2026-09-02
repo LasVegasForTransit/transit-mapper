@@ -50,8 +50,9 @@ apps/
   web/            Vite and React editor, embed, and PWA
   worker/         Cloudflare Worker and D1 persistence
 docs/             Product, development, operations, and security documentation
-scripts/          Repository-wide generators and invariant checks
+scripts/          Repository-wide generators, checks, and deploy tooling
 turbo/            Turborepo generators and templates
+.github/          CI, release, and pull request preview workflows
 ```
 
 ## Packages
