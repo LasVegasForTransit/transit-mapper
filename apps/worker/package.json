@@ -19,9 +19,9 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
     "@cloudflare/workers-types": "catalog:",
-    "@lvbt/eslint-config": "github:LasVegasForTransit/repository-tooling#v0.2.1&path:/packages/eslint-config",
-    "@lvbt/typescript-config": "github:LasVegasForTransit/repository-tooling#v0.2.1&path:/packages/typescript-config",
-    "@lvbt/vitest-config": "github:LasVegasForTransit/repository-tooling#v0.2.1&path:/packages/vitest-config",
+    "@lvbt/eslint-config": "github:LasVegasForTransit/repository-tooling#v0.2.2&path:/packages/eslint-config",
+    "@lvbt/typescript-config": "github:LasVegasForTransit/repository-tooling#v0.2.2&path:/packages/typescript-config",
+    "@lvbt/vitest-config": "github:LasVegasForTransit/repository-tooling#v0.2.2&path:/packages/vitest-config",
     "eslint": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
