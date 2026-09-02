@@ -32,7 +32,7 @@ Pull requests land by rebase merge, so your commits reach `main` exactly
 as you wrote them — see [the enforcement
 model](docs/development/explanation/enforcement-model.md#merge-method)
 for why. A `feat` commit is reserved for a capability a person can use or
-observe; use `refactor`, `perf`, `test`, or `chore` for internal preparation.
+observe; use `chore` for internal preparation.
 See [commit messages](docs/development/reference/commit-messages.md) for the
 reasoning and examples.
 
