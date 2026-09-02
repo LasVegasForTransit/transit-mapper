@@ -66,3 +66,8 @@ sequential check() suite.
 `typecheck`, `build`, and `verify` all run through
 [Turborepo](https://turborepo.com) for caching, so a repeat run with
 unchanged inputs replays instantly instead of re-invoking `tsc`/`vite`/`tsx`.
+
+Once the pull request is open, a comment links to that branch running on a
+Worker of its own. Its database is shared scratch, and it is deleted when the
+pull request closes. See [pull request
+previews](../explanation/preview-deployments.md).

@@ -80,6 +80,11 @@ the correct default, and the workflow does not try to work around it. Fork
 pull requests get a job that explains why instead of a failure nobody can act
 on.
 
+A fork gets a job summary rather than a comment, and that is a constraint
+rather than a choice: a `pull_request` run from a fork carries a read-only
+token, so the workflow cannot write a comment even to say why there is no
+preview. Somebody has to open the run to read it.
+
 That guard is the actual security boundary, and it is worth being blunt about
 what it does and does not buy. Cloudflare has no per-script API token scope:
 any token that can deploy a preview Worker can also overwrite the production

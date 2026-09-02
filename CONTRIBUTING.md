@@ -28,6 +28,16 @@ how something looks or behaves in the editor, say how you checked it in
 the description. TransitMapper is in open beta, so current behavior and data
 formats are not a stable compatibility promise.
 
+Every pull request from a branch in this repository gets a comment linking to
+a deployed copy of the editor running that branch. Link to it when a change is
+visual. Anything saved there lands in a scratch database shared with every open
+pull request, and the preview is deleted when the pull request closes.
+
+Forks get none: a preview publishes into the project's Cloudflare account, and
+GitHub gives a fork's workflow no credentials for that. Ask a maintainer to
+push the branch here if a change needs one. See [pull request
+previews](docs/development/explanation/preview-deployments.md).
+
 Pull requests land by rebase merge, so your commits reach `main` exactly
 as you wrote them — see [the enforcement
 model](docs/development/explanation/enforcement-model.md#merge-method)
