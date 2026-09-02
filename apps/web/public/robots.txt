@@ -10,6 +10,10 @@
 # "Fetch this, but don't index it" is what noindex means. Both /s/ and /e/
 # send `X-Robots-Tag: noindex` (see apps/worker/src/index.ts), so unfurlers
 # can read the preview while search engines leave it out.
+# On any origin that is not production, the Sitemap line below is dropped by
+# scripts/deployment/crawl-directives.ts — it names production, and a sitemap
+# for someone else's origin is ignored anyway. Allow stays, for the same reason
+# as above: a crawler has to be able to fetch a page to read its noindex.
 User-agent: *
 Allow: /
 

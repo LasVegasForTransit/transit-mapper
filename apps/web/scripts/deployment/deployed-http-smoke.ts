@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { resolveBuildOutputDirectory } from '../build-output';
+import { PRODUCTION_ORIGIN } from './production-origin';
 import { siteFromArgs } from './site-argument';
 
 /**
@@ -122,6 +123,17 @@ async function probe(url: string, method: 'GET' | 'HEAD'): Promise<Probe> {
   }
 }
 
+/**
+ * What a crawler is told to do with this page, or the reason we could not ask.
+ *
+ * A probe that never completed reports its failure in `status`, and returning
+ * that here keeps it from reading as either answer.
+ */
+function crawlPolicy(probed: Probe): string {
+  if (!/^\d+$/u.test(probed.status)) return probed.status;
+  return probed.headers.get('x-robots-tag')?.toLowerCase() ?? 'indexable';
+}
+
 /** Presence, not an exact count — a header duplicated by some future proxy
  *  rule shouldn't read as "the header is missing". */
 function present(probed: Probe, header: string): string {
@@ -181,9 +193,48 @@ function localEntryChunk(distDirectory: string): string | null {
   }
 }
 
+interface DeployedProbes {
+  url: Record<string, string>;
+  probes: Record<string, Probe>;
+}
+
+/**
+ * Every URL the assertions ask about, fetched once each and all at once.
+ *
+ * The checks are independent, and two of these URLs are asked about twice —
+ * once for a status and once for a header — so one request per URL is both
+ * fewer round trips and one fewer way for two checks to disagree.
+ */
+async function probeDeployedSite(site: string): Promise<DeployedProbes> {
+  const url = {
+    shareApi: `${site}/api/systems/${MISSING_SHARE_ID}`,
+    sharePage: `${site}/s/${MISSING_SHARE_ID}`,
+    previewImage: `${site}/s/${MISSING_SHARE_ID}/preview.png`,
+    ogImage: `${site}/og-image.png`,
+    manifest: `${site}/manifest.json`,
+    embed: `${site}/e/${MISSING_SHARE_ID}`,
+    root: `${site}/`,
+    sitemap: `${site}/sitemap.xml`,
+  };
+  const [shareApi, sharePage, previewImage, ogImage, manifest, embed, root, sitemap] =
+    await Promise.all([
+      probe(url.shareApi, 'GET'),
+      probe(url.sharePage, 'GET'),
+      probe(url.previewImage, 'GET'),
+      probe(url.ogImage, 'GET'),
+      probe(url.manifest, 'GET'),
+      probe(url.embed, 'HEAD'),
+      probe(url.root, 'HEAD'),
+      probe(url.sitemap, 'GET'),
+    ]);
+  return {
+    url,
+    probes: { shareApi, sharePage, previewImage, ogImage, manifest, embed, root, sitemap },
+  };
+}
+
 export async function runDeployedSmoke(options: DeployedSmokeOptions): Promise<CheckResult[]> {
   const { site } = options;
-  const missing = MISSING_SHARE_ID;
   const results: CheckResult[] = [];
 
   const expect = (label: string, url: string, want: string, got: string): void => {
@@ -212,26 +263,8 @@ export async function runDeployedSmoke(options: DeployedSmokeOptions): Promise<C
     );
   }
 
-  // One request per URL, all of them at once: the assertions are independent,
-  // and two of these URLs are asked about twice.
-  const url = {
-    shareApi: `${site}/api/systems/${missing}`,
-    sharePage: `${site}/s/${missing}`,
-    previewImage: `${site}/s/${missing}/preview.png`,
-    ogImage: `${site}/og-image.png`,
-    manifest: `${site}/manifest.json`,
-    embed: `${site}/e/${missing}`,
-    root: `${site}/`,
-  };
-  const [shareApi, sharePage, previewImage, ogImage, manifest, embed, root] = await Promise.all([
-    probe(url.shareApi, 'GET'),
-    probe(url.sharePage, 'GET'),
-    probe(url.previewImage, 'GET'),
-    probe(url.ogImage, 'GET'),
-    probe(url.manifest, 'GET'),
-    probe(url.embed, 'HEAD'),
-    probe(url.root, 'HEAD'),
-  ]);
+  const { url, probes } = await probeDeployedSite(site);
+  const { shareApi, sharePage, previewImage, ogImage, manifest, embed, root, sitemap } = probes;
 
   // The Worker runs for /api — a JSON 404, not the SPA shell.
   expect(
@@ -282,6 +315,30 @@ export async function runDeployedSmoke(options: DeployedSmokeOptions): Promise<C
     present(root, 'content-security-policy'),
   );
   expect('assets carry HSTS', url.root, '1', present(root, 'strict-transport-security'));
+
+  // Only the live site belongs in a search index. A pull request preview is a
+  // public URL posted on a public repository, so without this it would be
+  // indexed as a duplicate of production, with unreleased work in it.
+  //
+  // Asserted against the deployed origin rather than trusting the build step,
+  // so a build that skipped `pnpm build` is still caught. A failed request
+  // leaves its reason in `status`, which matches neither expectation.
+  const indexable = site === PRODUCTION_ORIGIN;
+  expect(
+    indexable ? 'the production origin is indexable' : 'a preview origin is not indexable',
+    url.root,
+    indexable ? 'indexable' : 'noindex',
+    crawlPolicy(root),
+  );
+
+  // The sitemap names production URLs, so it ships only on production. Anywhere
+  // else it is deleted and the path falls through to the SPA shell.
+  expect(
+    indexable ? 'production publishes a sitemap' : 'a preview publishes no sitemap',
+    url.sitemap,
+    indexable ? 'application/xml' : 'text/html',
+    sitemap.contentType,
+  );
 
   for (const result of results) console.log(formatCheck(result));
   return results;

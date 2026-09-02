@@ -6,6 +6,12 @@
 #
 # Worker-generated responses ignore this file entirely; those set their own
 # headers in apps/worker/src/index.ts.
+#
+# A build for anything other than the production origin gets one more header
+# inserted into the /* block below — `X-Robots-Tag: noindex`, added by
+# scripts/deployment/crawl-directives.ts. So a pull request preview serves
+# different bytes here than the file you are reading. That is the only
+# difference, and it is what keeps previews out of search results.
 
 /*
   # The editor is an application surface, not something to be framed. The one
