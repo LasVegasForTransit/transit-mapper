@@ -20,6 +20,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Whether this repository has been given what a preview needs. Its own job
+  # because a job-level `if` cannot read secrets, and gating the deploy on a
+  # job output is the only way to skip it whole rather than fail partway in.
+  #
+  # Until somebody creates the `preview` environment and its credentials,
+  # previews cannot run. That is a setup step, not a defect in the branch under
+  # review, and reporting it as a failed check on every pull request would be a
+  # red mark nobody can act on from the pull request.
+  preflight:
+    name: Preview configuration
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment:
+      name: preview
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - name: Check for deployment credentials
+        id: check
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+
+          # Absent, not invalid. A token that exists and is rejected is a real
+          # failure and still fails the deploy loudly; only a missing one is
+          # read as "this has not been set up yet".
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Preview deployments are not configured"
+            echo
+            echo "This repository has no \`CLOUDFLARE_API_TOKEN\` secret or"
+            echo "\`CLOUDFLARE_ACCOUNT_ID\` variable on its \`preview\` environment, so there is"
+            echo "nowhere to deploy a preview to. Nothing is wrong with this pull request."
+            echo
+            echo "\`pnpm bootstrap\` creates both, along with the shared preview database."
+            echo "See docs/development/explanation/preview-deployments.md."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # A fork's pull_request run gets a read-only token and no environment
   # secrets, by GitHub's design and correctly so: a preview deploy builds the
   # branch's own code and publishes it into this project's Cloudflare account.
@@ -46,9 +91,11 @@ jobs:
 
   deploy:
     name: Deploy preview
+    needs: preflight
     if: >-
       github.event.action != 'closed' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      needs.preflight.outputs.configured == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -171,9 +218,11 @@ jobs:
 
   teardown:
     name: Delete preview
+    needs: preflight
     if: >-
       github.event.action == 'closed' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      needs.preflight.outputs.configured == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
