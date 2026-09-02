@@ -367,4 +367,37 @@ describe('createBaseStyleController', () => {
     controller.dispose();
     vi.useRealTimers();
   });
+
+  it('reports the basemap as available again once a remote style commits', async () => {
+    const map = new FakeMap({
+      container: {},
+      center: [0, 0],
+      zoom: 1,
+      style: localStyle('light'),
+    } as MapOptions);
+    const onUnavailable = vi.fn();
+    const onAvailable = vi.fn();
+    const controller = createBaseStyleController({
+      map: map as unknown as MapLibreMap,
+      initialTheme: 'light',
+      local: localStyle,
+      remoteUrl: (theme) => `https://styles.test/${theme}.json`,
+      fetch: () => Promise.resolve(remoteStyle('dark')),
+      reportError: vi.fn(),
+      timeoutMs: 250,
+      online: () => true,
+      isInteractionActive: () => false,
+      onUnavailable,
+      onAvailable,
+    });
+
+    const request = controller.request('dark');
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(remoteStyle('dark')));
+    map.settleStyle();
+    await request;
+
+    expect(map.style).toEqual(remoteStyle('dark'));
+    expect(onUnavailable).not.toHaveBeenCalled();
+    expect(onAvailable).toHaveBeenCalledOnce();
+  });
 });

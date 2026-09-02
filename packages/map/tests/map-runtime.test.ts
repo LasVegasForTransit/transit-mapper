@@ -152,6 +152,24 @@ describe('createMapRuntime', () => {
     expect(map.style).toEqual(remoteStyle('light'));
   });
 
+  it('does not restart a startup style fetch that a host asks for again', async () => {
+    const { runtime, map, fetchStyle } = createHarness({
+      baseStyleTiming: 'before-content',
+    });
+
+    // The editor's attachment scheduler requests the initial theme a second
+    // time once the map is ready to attach. Restarting there would abort the
+    // fetch already in flight.
+    const reRequest = runtime.requestTheme('light');
+    await vi.waitFor(() => expect(map.pendingStyle).toEqual(remoteStyle('light')));
+    map.settleStyle();
+    await reRequest;
+    await runtime.flushTheme();
+
+    expect(fetchStyle).toHaveBeenCalledOnce();
+    expect(map.style).toEqual(remoteStyle('light'));
+  });
+
   it('waits for MapLibre to load a replacement before applying its theme or recovery mode', async () => {
     const { runtime, map, recoverDocumentLayers } = createHarness();
 

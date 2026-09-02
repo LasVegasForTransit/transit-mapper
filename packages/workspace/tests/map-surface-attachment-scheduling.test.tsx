@@ -2,7 +2,10 @@
 
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { scheduleMapAttachmentAfterFirstPaint } from '../src/map-surface';
+import {
+  MAP_ATTACHMENT_FRAME_FALLBACK_MS,
+  scheduleMapAttachmentAfterFirstPaint,
+} from '../src/map-surface';
 import {
   baseProps,
   createAttachment,
@@ -66,6 +69,75 @@ describe('MapSurface attachment scheduling', () => {
     expect(events).toEqual(['created', 'published', 'scheduled', 'scheduled', 'attached']);
 
     await mounted.unmount();
+  });
+
+  it('attaches without an animation frame when the tab never paints', async () => {
+    vi.useFakeTimers();
+    try {
+      // A hidden or throttled tab schedules the frame and never runs it.
+      vi.stubGlobal(
+        'requestAnimationFrame',
+        vi.fn(() => 41),
+      );
+      const cancelAnimationFrame = vi.fn();
+      vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame);
+      const driver = createDriver('document', () => Promise.resolve(createAttachment()));
+      const runtime = createRuntimeHarness();
+      const mounted = await mountSurface({
+        ...baseProps(driver, () => runtime.runtime),
+        scheduleAttachment: scheduleMapAttachmentAfterFirstPaint,
+      });
+
+      expect(driver.attachSpy).not.toHaveBeenCalled();
+
+      await act(async () => {
+        vi.advanceTimersByTime(MAP_ATTACHMENT_FRAME_FALLBACK_MS);
+        await Promise.resolve();
+      });
+
+      expect(driver.attachSpy).toHaveBeenCalledOnce();
+      expect(cancelAnimationFrame).toHaveBeenCalledExactlyOnceWith(41);
+
+      await mounted.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('attaches once when the frames and the fallback both come due', async () => {
+    vi.useFakeTimers();
+    try {
+      const frames: FrameRequestCallback[] = [];
+      vi.stubGlobal(
+        'requestAnimationFrame',
+        vi.fn((callback: FrameRequestCallback) => {
+          frames.push(callback);
+          return frames.length;
+        }),
+      );
+      vi.stubGlobal('cancelAnimationFrame', vi.fn());
+      const driver = createDriver('document', () => Promise.resolve(createAttachment()));
+      const runtime = createRuntimeHarness();
+      const mounted = await mountSurface({
+        ...baseProps(driver, () => runtime.runtime),
+        scheduleAttachment: scheduleMapAttachmentAfterFirstPaint,
+      });
+
+      await act(async () => {
+        frames.shift()?.(16);
+        await Promise.resolve();
+        frames.shift()?.(32);
+        await Promise.resolve();
+        vi.advanceTimersByTime(MAP_ATTACHMENT_FRAME_FALLBACK_MS * 2);
+        await Promise.resolve();
+      });
+
+      expect(driver.attachSpy).toHaveBeenCalledOnce();
+
+      await mounted.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('cancels a deferred attachment before it can start', async () => {
