@@ -89,6 +89,22 @@ offers one. It is not isolation. What keeps the token away from unreviewed
 code is that previews run only for branches pushed to this repository, and
 pushing here already requires write access.
 
+## When previews are not set up
+
+A preview needs a `CLOUDFLARE_API_TOKEN` secret and a `CLOUDFLARE_ACCOUNT_ID`
+variable on the `preview` GitHub environment, plus the shared database.
+`pnpm bootstrap` creates all three, but until somebody runs it there is
+nowhere to deploy to.
+
+A `Preview configuration` job checks for the credentials first and the deploy
+is skipped when they are missing, with the reason in the job summary. Failing
+instead would put a red check on every pull request for a setup step that
+cannot be done from a pull request, and a check that is always red is one
+people learn to scroll past.
+
+The check is for an _absent_ credential, not a rejected one. A token that
+exists and does not work still fails the deploy, loudly, where it should.
+
 ## What the preview verifies
 
 The same checks the production release runs, from the same composite action

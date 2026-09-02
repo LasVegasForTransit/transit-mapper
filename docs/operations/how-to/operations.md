@@ -368,8 +368,11 @@ It is the same build production gets, pointed at that hostname, and it runs
 the same route smoke and browser walkthrough the production deploy runs.
 Closing the pull request deletes it.
 
-Pull requests from forks get no preview, and the run says so. Why it works
-this way, and what the security boundary actually is, is in
+Pull requests from forks get no preview, and the run says so. So does a
+repository whose `preview` environment has no credentials yet: the deploy is
+skipped rather than failed, because that is a setup step nobody can do from
+the pull request. Why it works this way, and what the security boundary
+actually is, is in
 [pull request previews](../../development/explanation/preview-deployments.md).
 
 ### The preview database
