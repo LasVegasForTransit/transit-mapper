@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aRoad, aSystem } from '../support/fixtures.test';
+import { aRoad, aSystem } from '../support/fixtures';
 import {
   createCrossingOperationCounts,
   crossingsWithoutJoiningChunked,

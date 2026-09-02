@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resyncAutoNamedStations, suggestStopName } from '../../src/model/geo/crossStreetNaming';
 import { defaultProfileFor } from '../../src/model/profile';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures';
 import type { NamedWay, Node, TransitSystem, Way, WayPointRef } from '../../src/model/system';
 
 // Real-meter-scale coordinate helpers — CROSS_STREET_AT_JUNCTION_M (20),

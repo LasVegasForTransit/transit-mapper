@@ -15,7 +15,7 @@ import { preferredLaneKinds, serviceLaneOnWay } from '../../src/model/geo/servic
 import { oneSection, wholeLeg, wayById } from '../../src/model/geo';
 import { defaultLaneFor } from '../../src/model/profile';
 import type { Pattern } from '../../src/model/system';
-import { aRoad } from '../support/fixtures.test';
+import { aRoad } from '../support/fixtures';
 import type { LngLat, Node, TransitSystem, Way } from '../../src/model/system';
 
 const ROADS = { allowedTypeIds: new Set(['road']) };

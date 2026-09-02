@@ -12,7 +12,7 @@ import {
   sharedEndpointNode,
   terminiMeet,
 } from '../../src/model/selectionRelations';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 /** Two ways meeting nose to tail at [-115.20, 36.15], joined by a node — what
  *  splitting one way in half leaves behind. */

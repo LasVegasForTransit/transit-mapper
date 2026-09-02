@@ -10,6 +10,9 @@
   },
   "globs": ["**/*.md"],
   "ignores": [
+    // Playwright output.
+    "**/test-results",
+    "**/playwright-report",
     ".claude/worktrees",
     "node_modules",
     "**/node_modules",

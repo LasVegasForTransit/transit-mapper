@@ -12,7 +12,7 @@ import {
   patternLegs,
   wholeLeg,
 } from '../../src/model/geo';
-import { aPattern, aRoad, aStation } from '../support/fixtures.test';
+import { aPattern, aRoad, aStation } from '../support/fixtures';
 import { dwellStopsForPattern, patternStats, patternStops } from '../../src/sim/serviceStats';
 import type { VehicleMotionProfile } from '../../src/sim/timetable';
 import type { Pattern } from '../../src/model/system';

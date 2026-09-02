@@ -10,7 +10,7 @@ import { parseSystem } from '../../src/model/serialize';
 import { findMismatchedTypeJunctions, validateSystem } from '../../src/model/validate';
 import type { Node } from '../../src/model/system';
 import { patternLegs } from '../../src/model/geo';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures';
 
 /** A road running east-west and a rail line running north-south, both with a
  *  control point at the same coordinate. */
