@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b tsconfig.build.json && vite build && tsx scripts/perf/report-bundle.ts && tsx scripts/perf/verify-pwa-output.ts",
+    "build": "tsc -b tsconfig.build.json && vite build && tsx scripts/perf/report-bundle.ts && tsx scripts/perf/verify-pwa-output.ts && tsx scripts/deployment/crawl-directives.ts",
     "generate:icons": "tsx scripts/generate-app-icons.ts",
     "generate:onboarding-context": "tsx scripts/generate-onboarding-las-vegas-context.ts",
     "check:icons": "tsx scripts/generate-app-icons.ts --check",

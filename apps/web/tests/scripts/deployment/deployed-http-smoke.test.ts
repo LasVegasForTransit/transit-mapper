@@ -115,4 +115,40 @@ describe('the deployed HTTP smoke', () => {
     expect(sharePage?.got).toBe('301');
     expect(sharePage?.ok).toBe(false);
   });
+
+  it('fails the indexing checks when the origin cannot be reached', async () => {
+    // A preview that never answered must not read as "correctly de-indexed".
+    const results = await runDeployedSmoke({
+      site: unreachableSite(),
+      distDirectory: '/nonexistent',
+      propagation: { attempts: 1, intervalMs: 0 },
+    });
+    const indexing = results.filter((result) => result.label.includes('indexable'));
+    expect(indexing).toHaveLength(1);
+    expect(indexing[0]?.ok).toBe(false);
+  });
+
+  it('accepts a non-production origin that sends noindex and drops its sitemap', async () => {
+    server = createServer((request, response) => {
+      if (request.url?.startsWith('/sitemap.xml')) {
+        // Deleted from the build, so the SPA fallback answers instead.
+        response.writeHead(200, { 'content-type': 'text/html' });
+        response.end('<html></html>');
+        return;
+      }
+      response.writeHead(200, { 'content-type': 'text/html', 'x-robots-tag': 'noindex' });
+      response.end('<html></html>');
+    });
+    await new Promise<void>((ready) => server?.listen(0, '127.0.0.1', ready));
+    const address = server.address();
+    const port = typeof address === 'object' && address !== null ? address.port : 0;
+
+    const results = await runDeployedSmoke({
+      site: `http://127.0.0.1:${String(port)}`,
+      distDirectory: '/nonexistent',
+      propagation: { attempts: 1, intervalMs: 0 },
+    });
+    expect(results.find((result) => result.label.includes('not indexable'))?.ok).toBe(true);
+    expect(results.find((result) => result.label.includes('no sitemap'))?.ok).toBe(true);
+  });
 });

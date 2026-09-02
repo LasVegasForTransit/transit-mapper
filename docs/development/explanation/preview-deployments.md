@@ -122,6 +122,49 @@ production workflow, adding a second caller meant copying them, and the copy
 that drifts is the preview one — the copy that would have caught a regression
 first.
 
+## Staying out of search results
+
+A preview URL is public, and it is posted as a comment on a public repository,
+so search engines can reach it. Without anything in the way it would be indexed
+as a duplicate of the live site, with unreleased work in it.
+
+Most of the surface was already safe. Every page the Worker renders — share
+pages, views, embeds, and the catch-all — goes through `withHtmlSecurityHeaders`,
+which sends `X-Robots-Tag: noindex` on every origin. What that never touches is
+the asset store: `run_worker_first` deliberately leaves `/`, `/privacy`,
+`/robots.txt`, `/sitemap.xml` and `/assets/*` to Cloudflare, so no Worker code
+runs for them and no header can be set there.
+
+Cloudflare does not solve this for you. `*.workers.dev` is not automatically
+de-indexed — that behaviour belongs to Pages preview deployments — and the
+documented fix for Workers is the `_headers` file.
+
+So `scripts/deployment/crawl-directives.ts` runs at the end of the build. When
+the origin the build advertises is not production, it adds
+`X-Robots-Tag: noindex` to the `/*` block of `_headers`, drops the `Sitemap:`
+line from `robots.txt`, and deletes `sitemap.xml`. It reads that origin back out
+of the built `index.html`'s canonical link rather than from an environment
+variable, so the header can never disagree with the page.
+
+Three decisions worth recording, because each has an appealing wrong answer:
+
+- **A header, not `Disallow: /`.** `Disallow` stops a crawler fetching the page
+  at all, and a page it cannot fetch is one whose `noindex` it never reads. This
+  is the same reasoning `public/robots.txt` already records about share pages.
+- **The canonical stays pointed at the preview.** Pointing it at production
+  while also sending `noindex` is the one genuinely dangerous configuration:
+  consolidating the two URLs can carry the `noindex` across to the target, which
+  would let a throwaway pull request Worker de-index the live site.
+- **Previews still unfurl.** Link preview bots do not honour `X-Robots-Tag`, and
+  `Allow: /` stays, so a preview link pasted into Slack or the pull request still
+  renders a card from its own `og:` tags. That is the intended outcome, not an
+  oversight to be "fixed" later with a `Disallow`.
+
+`deployed-http-smoke.ts` asserts the result against the origin it was pointed
+at — production must stay indexable and keep its sitemap, anything else must
+send `noindex` and have none — so a build that skipped the step is still caught
+after it deploys.
+
 ## Known limits
 
 - Two pull requests can race each other applying migrations to the shared
