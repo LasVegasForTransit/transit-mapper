@@ -261,7 +261,7 @@ jobs:
       # Applying before deploying is the safe order for additive migrations
       # (a new column the running code simply ignores). A destructive one is
       # not safe in either order and needs to be split across two releases —
-      # see docs/how-to/operations.md.
+      # see docs/operations/how-to/operations.md.
       - name: Apply D1 migrations
         env:
           DEPLOY_ROOT: ${{ steps.extract.outputs.root }}
@@ -306,4 +306,4 @@ jobs:
       - name: Explain a failed smoke test
         if: failure()
         run: |
-          echo "::warning::If 'Smoke test production' failed, the Worker is ALREADY deployed — this step does not roll anything back. See docs/how-to/operations.md#roll-back."
+          echo "::warning::If 'Verify the deployed site' failed, the Worker is ALREADY deployed — this step does not roll anything back. See docs/operations/how-to/operations.md#roll-back."
