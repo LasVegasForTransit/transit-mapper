@@ -1,0 +1,17 @@
+# Files that must exist in dist/ but must never be served.
+#
+# `wrangler deploy --assets` uploads this directory as the public asset store,
+# which is every file in it, including ones written by the build for the
+# build's own use. Same format as .gitignore; the files stay on disk for the
+# scripts that read them and for the deployment artifact.
+#
+# _headers and _redirects are excluded by wrangler already and need no entry.
+
+# Vite's build manifest. Names every source module in the app, and is read
+# after the build by report-bundle.ts, verify-pwa-output.ts and adaptive-assets.ts.
+.vite/
+
+# Build evidence: the bundle delivery graph and the PWA precache report,
+# written by report-bundle.ts and verify-pwa-output.ts and read back by the
+# performance tooling. Internal measurements, not part of the site.
+performance/
