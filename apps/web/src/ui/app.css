@@ -2813,7 +2813,11 @@ input[type='range'] {
   position: fixed;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  /* Centring lives in `translate`, not `transform`. The open and close
+     keyframes animate `transform`, and an animation owns that property for its
+     whole run — folding the offset back into `transform` makes every dialog
+     render half its own size down and to the right until the animation ends. */
+  translate: -50% -50%;
   box-sizing: border-box;
   margin: 0;
   z-index: 21;
@@ -3952,7 +3956,7 @@ button.chip-removable-label:hover {
     top: auto;
     bottom: 0;
     left: 0;
-    transform: none;
+    translate: none;
     width: 100%;
     max-width: none;
     max-height: 92dvh;
