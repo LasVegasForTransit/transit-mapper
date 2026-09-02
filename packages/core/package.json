@@ -16,9 +16,9 @@
     "fflate": "catalog:"
   },
   "devDependencies": {
-    "@lvbt/eslint-config": "github:LasVegasForTransit/repository-tooling#v0.2.2&path:/packages/eslint-config",
-    "@lvbt/typescript-config": "github:LasVegasForTransit/repository-tooling#v0.2.2&path:/packages/typescript-config",
-    "@lvbt/vitest-config": "github:LasVegasForTransit/repository-tooling#v0.2.2&path:/packages/vitest-config",
+    "@lvbt/eslint-config": "github:LasVegasForTransit/repository-tooling#v0.2.3&path:/packages/eslint-config",
+    "@lvbt/typescript-config": "github:LasVegasForTransit/repository-tooling#v0.2.3&path:/packages/typescript-config",
+    "@lvbt/vitest-config": "github:LasVegasForTransit/repository-tooling#v0.2.3&path:/packages/vitest-config",
     "@transitmapper/eslint-plugin": "workspace:*",
     "@types/geojson": "catalog:",
     "@vitest/coverage-v8": "catalog:",
