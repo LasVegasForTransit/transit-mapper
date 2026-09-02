@@ -9,10 +9,25 @@ is accurate as of today either way.
 
 ## Inventory
 
-| Secret                  | Lives in                        | Blast radius if leaked                                             |
-| ----------------------- | ------------------------------- | ------------------------------------------------------------------ |
-| `CLOUDFLARE_API_TOKEN`  | GitHub `production` environment | Deploy Worker code, alter D1 data, and replace managed R2 archives |
-| `CLOUDFLARE_ACCOUNT_ID` | GitHub repository variable      | Not a secret. An identifier, useless without a token               |
+| Secret                  | Lives in                                       | Blast radius if leaked                                             |
+| ----------------------- | ---------------------------------------------- | ------------------------------------------------------------------ |
+| `CLOUDFLARE_API_TOKEN`  | GitHub `production` and `preview` environments | Deploy Worker code, alter D1 data, and replace managed R2 archives |
+| `CLOUDFLARE_ACCOUNT_ID` | The same two environments, as a variable       | Not a secret. An identifier, useless without a token               |
+
+The same token in both environments, and this is not an oversight. Cloudflare
+has no per-script API token scope: any token that can deploy a pull request
+preview Worker can also overwrite the production one. The `preview`
+environment gives previews their own deployment records and somewhere to put a
+narrower token the day Cloudflare offers one. It is not an isolation boundary.
+What keeps the token away from unreviewed code is that previews run only for
+branches pushed to this repository, which already requires write access — see
+[pull request previews](../../development/explanation/preview-deployments.md).
+
+`CLOUDFLARE_ACCOUNT_ID` is an environment variable rather than a repository
+variable. Both workflows read it from inside a job that names an environment,
+so either would work — but an environment variable does not reach a job that
+does not name that environment, which is the failure mode worth knowing about
+when adding a third workflow.
 
 **There are no application secrets in production.** The Worker reads
 `SITE_URL` (a plain var) plus platform bindings for assets, D1, R2, rate

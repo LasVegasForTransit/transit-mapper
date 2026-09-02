@@ -9,20 +9,7 @@
       "count": 1
     }
   },
-  "scripts/bootstrap/phases/cloudflare-verify.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
-  "scripts/bootstrap/phases/provision.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "scripts/bootstrap/phases/repo-config.ts": {
-    "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 1
-    },
     "complexity": {
       "count": 1
     },

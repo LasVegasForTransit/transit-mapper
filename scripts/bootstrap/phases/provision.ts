@@ -1,29 +1,18 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
 import { note } from '@clack/prompts';
 import { runCommand } from '../lib/shell.js';
 import { printToolTable, promptConfirm, type ToolRow } from '../lib/ui.js';
+import {
+  DATABASES,
+  databaseId,
+  databaseName,
+  extractCreatedId,
+  readWranglerToml,
+  WORKER_DIR,
+  WRANGLER_TOML,
+  writeDatabaseId,
+  type DatabasePlan,
+} from '../lib/wrangler-config.js';
 import type { PhaseResult } from './auth.js';
-
-const WORKER_DIR = path.join('apps', 'worker');
-const WRANGLER_TOML = path.join(WORKER_DIR, 'wrangler.toml');
-const PLACEHOLDER_DB_ID = '00000000-0000-0000-0000-000000000000';
-
-/** The database name in wrangler.toml. Read rather than assumed, so renaming
- *  it there does not silently provision something else. */
-function databaseName(toml: string): string | null {
-  return /database_name\s*=\s*"([^"]+)"/.exec(toml)?.[1] ?? null;
-}
-
-function databaseId(toml: string): string | null {
-  const id = /database_id\s*=\s*"([^"]+)"/.exec(toml)?.[1];
-  return !id || id === PLACEHOLDER_DB_ID ? null : id;
-}
-
-/** `wrangler d1 create` prints the new binding block; the id is in it. */
-function extractCreatedId(output: string): string | null {
-  return /database_id\s*=\s*"?([0-9a-f-]{36})"?/i.exec(output)?.[1] ?? null;
-}
 
 /**
  * Creates what the deployment needs and writes the result back into
@@ -42,23 +31,8 @@ function extractCreatedId(output: string): string | null {
  */
 export async function runProvisionPhase(options: { doctor: boolean }): Promise<PhaseResult> {
   const rows: ToolRow[] = [];
-  const toml = readFileSync(WRANGLER_TOML, 'utf8');
-  const name = databaseName(toml);
 
-  if (!name) {
-    printToolTable('Cloudflare resources', [
-      {
-        label: 'wrangler.toml',
-        status: 'failed',
-        detail: 'no database_name found — the [[d1_databases]] block is missing or malformed',
-      },
-    ]);
-    return { success: false };
-  }
-
-  const existingId = databaseId(toml);
   const list = runCommand(`cd ${WORKER_DIR} && wrangler d1 list`);
-
   if (!list.ok) {
     printToolTable('Cloudflare resources', [
       {
@@ -70,33 +44,95 @@ export async function runProvisionPhase(options: { doctor: boolean }): Promise<P
     return { success: false };
   }
 
+  let success = true;
+  for (const plan of DATABASES) {
+    // Read fresh each time: provisioning the previous database rewrote the file.
+    const outcome = await provisionDatabase(plan, list.stdout, options, rows);
+    if (outcome !== 'ready') success = false;
+    // Somebody who declines to create a database in this account is answering
+    // about the account, not about one database. Asking again for the next one
+    // is how a "no" turns into a resource in the wrong place.
+    if (outcome === 'declined') break;
+  }
+
+  printToolTable('Cloudflare resources', rows);
+  return { success };
+}
+
+/** Creates the database and reads its id back, reporting either failure. */
+function createDatabase(name: string, label: string, rows: ToolRow[]): string | null {
+  const created = runCommand(`cd ${WORKER_DIR} && wrangler d1 create ${name}`);
+  if (!created.ok) {
+    rows.push({
+      label,
+      status: 'failed',
+      // First non-blank line, not first line: wrangler sometimes leads with an
+      // empty one, and `??` would happily report that as the reason.
+      detail:
+        created.stderr.split('\n').find((line) => line.trim().length > 0) ??
+        'wrangler d1 create failed',
+    });
+    return null;
+  }
+
+  const newId = extractCreatedId(`${created.stdout}\n${created.stderr}`);
+  if (!newId) {
+    rows.push({
+      label,
+      status: 'failed',
+      detail: 'created, but no database_id could be read back from wrangler output',
+    });
+    return null;
+  }
+  return newId;
+}
+
+type ProvisionOutcome = 'ready' | 'failed' | 'declined';
+
+async function provisionDatabase(
+  plan: DatabasePlan,
+  existingDatabases: string,
+  options: { doctor: boolean },
+  rows: ToolRow[],
+): Promise<ProvisionOutcome> {
+  const toml = readWranglerToml();
+  const name = databaseName(toml, plan.environment);
+
+  if (!name) {
+    rows.push({
+      label: plan.label,
+      status: 'failed',
+      detail: `no database_name found — the ${plan.environment} [[d1_databases]] block is missing or malformed`,
+    });
+    return 'failed';
+  }
+
+  const existingId = databaseId(toml, plan.environment);
+
   // The id in the file is authoritative only if the account can actually see
   // it. An id belonging to someone else's account reads as configured and
   // fails at deploy.
-  if (existingId && list.stdout.includes(existingId)) {
-    rows.push({ label: 'D1 database', status: 'ready', detail: `${name} (${existingId})` });
-    printToolTable('Cloudflare resources', rows);
-    return { success: true };
+  if (existingId && existingDatabases.includes(existingId)) {
+    rows.push({ label: plan.label, status: 'ready', detail: `${name} (${existingId})` });
+    return 'ready';
   }
 
   if (options.doctor) {
-    printToolTable('Cloudflare resources', [
-      {
-        label: 'D1 database',
-        status: 'failed',
-        detail: existingId
-          ? `id in wrangler.toml is not visible to this account — run \`pnpm bootstrap\` to provision`
-          : `"${name}" does not exist yet — run \`pnpm bootstrap\` to create it`,
-      },
-    ]);
-    return { success: false };
+    rows.push({
+      label: plan.label,
+      status: 'failed',
+      detail: existingId
+        ? 'id in wrangler.toml is not visible to this account — run `pnpm bootstrap` to provision'
+        : `"${name}" does not exist yet — run \`pnpm bootstrap\` to create it`,
+    });
+    return 'failed';
   }
 
   note(
     [
       `This will create a D1 database called "${name}" in the Cloudflare`,
       'account you are currently logged into, and write its id into',
-      `${WRANGLER_TOML}.`,
+      `${WRANGLER_TOML}. It backs ${plan.purpose}.`,
       '',
       'D1 is free at this scale. The id is not a secret — it is committed,',
       'because a deployment that cannot be reproduced from the repository',
@@ -107,59 +143,36 @@ export async function runProvisionPhase(options: { doctor: boolean }): Promise<P
 
   const confirmed = await promptConfirm(`Create the D1 database "${name}"?`, true);
   if (!confirmed) {
-    printToolTable('Cloudflare resources', [
-      { label: 'D1 database', status: 'skipped', detail: 'declined — nothing was created' },
-    ]);
-    return { success: false };
+    rows.push({ label: plan.label, status: 'skipped', detail: 'declined — nothing was created' });
+    return 'declined';
   }
 
-  const created = runCommand(`cd ${WORKER_DIR} && wrangler d1 create ${name}`);
-  if (!created.ok) {
-    printToolTable('Cloudflare resources', [
-      {
-        label: 'D1 database',
-        status: 'failed',
-        // First non-blank line, not first line: wrangler sometimes leads with an
-        // empty one, and `??` would happily report that as the reason.
-        detail:
-          created.stderr.split('\n').find((line) => line.trim().length > 0) ??
-          'wrangler d1 create failed',
-      },
-    ]);
-    return { success: false };
-  }
+  const newId = createDatabase(name, plan.label, rows);
+  if (!newId) return 'failed';
 
-  const newId = extractCreatedId(`${created.stdout}\n${created.stderr}`);
-  if (!newId) {
-    printToolTable('Cloudflare resources', [
-      {
-        label: 'D1 database',
-        status: 'failed',
-        detail: 'created, but no database_id could be read back from wrangler output',
-      },
-    ]);
-    return { success: false };
-  }
+  writeDatabaseId(toml, plan.environment, newId);
+  rows.push({ label: plan.label, status: 'ready', detail: `${name} (${newId}) — created` });
 
-  // Replace only the id, leaving every comment in the file intact.
-  writeFileSync(
-    WRANGLER_TOML,
-    toml.replace(/database_id\s*=\s*"[^"]*"/, `database_id = "${newId}"`),
-    'utf8',
+  // Addressed by binding rather than by name, and with the environment named:
+  // wrangler resolves a database out of the configuration for the environment
+  // it was given, and the preview database is not in the production one.
+  const scope = plan.environment === 'production' ? '' : ` --env ${plan.environment}`;
+  const migrated = runCommand(
+    `cd ${WORKER_DIR} && wrangler d1 migrations apply DB --remote${scope}`,
   );
-  rows.push({ label: 'D1 database', status: 'ready', detail: `${name} (${newId}) — created` });
-
-  const migrated = runCommand(`cd ${WORKER_DIR} && wrangler d1 migrations apply ${name} --remote`);
   rows.push(
     migrated.ok
-      ? { label: 'Migrations', status: 'ready', detail: 'applied to the new database' }
+      ? {
+          label: `${plan.label} migrations`,
+          status: 'ready',
+          detail: 'applied to the new database',
+        }
       : {
-          label: 'Migrations',
+          label: `${plan.label} migrations`,
           status: 'failed',
           detail: 'database created, but migrations did not apply — re-run `pnpm bootstrap`',
         },
   );
 
-  printToolTable('Cloudflare resources', rows);
-  return { success: migrated.ok };
+  return migrated.ok ? 'ready' : 'failed';
 }

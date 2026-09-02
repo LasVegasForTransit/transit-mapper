@@ -4,17 +4,7 @@ import { chromium, type Browser } from 'playwright-core';
 import { closeContext, seedIndexedDbFixture } from './browser';
 import { onboardingJourneyFunctionalViolations } from './onboarding-journey';
 import { capturePlaywrightOnboardingJourney } from './playwright-onboarding';
-
-function siteFromArgs(args: readonly string[]): string {
-  const index = args.indexOf('--site');
-  const value = index >= 0 ? args[index + 1] : undefined;
-  if (!value) throw new Error('--site requires the deployed application URL.');
-  const site = new URL(value);
-  if (site.protocol !== 'https:' && site.protocol !== 'http:') {
-    throw new Error('--site must use HTTP or HTTPS.');
-  }
-  return site.href.replace(/\/$/u, '');
-}
+import { siteFromArgs } from '../deployment/site-argument';
 
 async function exerciseRtcEditor(browser: Browser, site: string): Promise<void> {
   const fixture = generatePerfFixture('rtc');
