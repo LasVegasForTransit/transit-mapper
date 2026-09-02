@@ -215,22 +215,79 @@ async function probeDeployedSite(site: string): Promise<DeployedProbes> {
     embed: `${site}/e/${MISSING_SHARE_ID}`,
     root: `${site}/`,
     sitemap: `${site}/sitemap.xml`,
+    buildManifest: `${site}/.vite/manifest.json`,
   };
-  const [shareApi, sharePage, previewImage, ogImage, manifest, embed, root, sitemap] =
-    await Promise.all([
-      probe(url.shareApi, 'GET'),
-      probe(url.sharePage, 'GET'),
-      probe(url.previewImage, 'GET'),
-      probe(url.ogImage, 'GET'),
-      probe(url.manifest, 'GET'),
-      probe(url.embed, 'HEAD'),
-      probe(url.root, 'HEAD'),
-      probe(url.sitemap, 'GET'),
-    ]);
+  const [
+    shareApi,
+    sharePage,
+    previewImage,
+    ogImage,
+    manifest,
+    embed,
+    root,
+    sitemap,
+    buildManifest,
+  ] = await Promise.all([
+    probe(url.shareApi, 'GET'),
+    probe(url.sharePage, 'GET'),
+    probe(url.previewImage, 'GET'),
+    probe(url.ogImage, 'GET'),
+    probe(url.manifest, 'GET'),
+    probe(url.embed, 'HEAD'),
+    probe(url.root, 'HEAD'),
+    probe(url.sitemap, 'GET'),
+    probe(url.buildManifest, 'GET'),
+  ]);
   return {
     url,
-    probes: { shareApi, sharePage, previewImage, ogImage, manifest, embed, root, sitemap },
+    probes: {
+      shareApi,
+      sharePage,
+      previewImage,
+      ogImage,
+      manifest,
+      embed,
+      root,
+      sitemap,
+      buildManifest,
+    },
   };
+}
+
+/**
+ * That the origin is serving the build in dist/, not a previous one.
+ *
+ * Separate from the shape checks below because it is the only one that waits:
+ * Cloudflare's propagation to every edge is a best-effort process that runs
+ * after the upload returns.
+ */
+async function assertServesThisBuild(
+  options: DeployedSmokeOptions,
+  expect: (label: string, url: string, want: string, got: string) => void,
+): Promise<void> {
+  const { site } = options;
+  const { attempts, intervalMs } = options.propagation ?? DEFAULT_PROPAGATION;
+  const entry = localEntryChunk(options.distDirectory);
+
+  if (entry) {
+    console.log(`expecting entry chunk: ${entry}`);
+    const deployed = await waitFor(() => servesEntryChunk(site, entry), attempts, intervalMs);
+    expect('the live site serves the build we just made', `${site}/`, '1', deployed ? '1' : '0');
+    return;
+  }
+
+  // Deliberately a warning, not a failure. The deploy has already happened by
+  // the time this runs, so failing because a local build artifact is missing
+  // would report a broken release on the basis of something that says nothing
+  // about the release. The shape assertions still run.
+  console.log(
+    '::warning::No local build artifact to compare against — skipping the build-identity check.',
+  );
+  await waitFor(
+    async () => (await probe(`${site}/`, 'GET')).status === '200',
+    Math.min(attempts, 5),
+    intervalMs,
+  );
 }
 
 export async function runDeployedSmoke(options: DeployedSmokeOptions): Promise<CheckResult[]> {
@@ -241,30 +298,20 @@ export async function runDeployedSmoke(options: DeployedSmokeOptions): Promise<C
     results.push({ label, url, want, got, ok: got === want });
   };
 
-  const { attempts, intervalMs } = options.propagation ?? DEFAULT_PROPAGATION;
-
-  const entry = localEntryChunk(options.distDirectory);
-  if (entry) {
-    console.log(`expecting entry chunk: ${entry}`);
-    const deployed = await waitFor(() => servesEntryChunk(site, entry), attempts, intervalMs);
-    expect('the live site serves the build we just made', `${site}/`, '1', deployed ? '1' : '0');
-  } else {
-    // Deliberately a warning, not a failure. The deploy has already happened
-    // by the time this runs, so failing because a local build artifact is
-    // missing would report a broken release on the basis of something that
-    // says nothing about the release. The shape assertions below still run.
-    console.log(
-      '::warning::No local build artifact to compare against — skipping the build-identity check.',
-    );
-    await waitFor(
-      async () => (await probe(`${site}/`, 'GET')).status === '200',
-      Math.min(attempts, 5),
-      intervalMs,
-    );
-  }
+  await assertServesThisBuild(options, expect);
 
   const { url, probes } = await probeDeployedSite(site);
-  const { shareApi, sharePage, previewImage, ogImage, manifest, embed, root, sitemap } = probes;
+  const {
+    shareApi,
+    sharePage,
+    previewImage,
+    ogImage,
+    manifest,
+    embed,
+    root,
+    sitemap,
+    buildManifest,
+  } = probes;
 
   // The Worker runs for /api — a JSON 404, not the SPA shell.
   expect(
@@ -338,6 +385,18 @@ export async function runDeployedSmoke(options: DeployedSmokeOptions): Promise<C
     url.sitemap,
     indexable ? 'application/xml' : 'text/html',
     sitemap.contentType,
+  );
+
+  // The build writes its own evidence into dist/ — the Vite manifest, which
+  // names every source module, and the bundle and PWA reports. They have to be
+  // there for the scripts that read them, and .assetsignore is what keeps them
+  // out of the upload. Asserted here because that file is easy to lose in a
+  // build rewrite and nothing else would notice.
+  expect(
+    'the build manifest is not published',
+    url.buildManifest,
+    'text/html',
+    buildManifest.contentType,
   );
 
   for (const result of results) console.log(formatCheck(result));

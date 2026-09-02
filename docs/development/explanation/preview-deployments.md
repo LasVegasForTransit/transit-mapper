@@ -165,6 +165,23 @@ at — production must stay indexable and keep its sitemap, anything else must
 send `noindex` and have none — so a build that skipped the step is still caught
 after it deploys.
 
+## What the asset store publishes
+
+`wrangler deploy --assets` uploads the whole of `dist/`, and the build writes
+files there for its own use: Vite's manifest, which names every source module,
+and the bundle and PWA reports. Those were being served publicly on production.
+
+They cannot simply be deleted after the build, because five scripts read them
+back. `dist/.assetsignore` is the mechanism for this — same format as
+`.gitignore`, read by wrangler from the assets directory root — so the files
+stay on disk for the tooling and in the release artifact, and never reach the
+upload. `adaptive-assets.json` is not excluded: the service worker fetches it
+at runtime.
+
+The deployed smoke asserts `/.vite/manifest.json` is not served, because
+`.assetsignore` is easy to lose in a build rewrite and nothing else would
+notice.
+
 ## Known limits
 
 - Two pull requests can race each other applying migrations to the shared
