@@ -6,6 +6,8 @@
       "outputs": ["dist/**", "*.tsbuildinfo"]
     },
     "@transitmapper/web#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".perf-harness-dist/**", "*.tsbuildinfo"],
       "env": [
         "GITHUB_SHA",
         "TRANSITMAPPER_BUILD_COMMIT",
@@ -63,6 +65,7 @@
         "//#format:check",
         "//#lint:root",
         "//#typecheck:root",
+        "//#verify:root",
         "//#check:filenames",
         "//#check:contract",
         "//#check:docs",
@@ -184,6 +187,10 @@
         "$TURBO_ROOT$/docs/development/reference/checks.md",
         "$TURBO_ROOT$/scripts/generate-checks-reference.ts"
       ],
+      "outputs": []
+    },
+    "//#verify:root": {
+      "cache": false,
       "outputs": []
     }
   }

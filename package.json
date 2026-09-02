@@ -27,7 +27,7 @@
     "worker:dev": "pnpm --filter @transitmapper/worker dev",
     "build": "tsx apps/web/scripts/run-build.ts",
     "typecheck": "turbo run typecheck",
-    "verify": "vitest run scripts/tests --maxWorkers=1 && turbo run verify",
+    "verify": "pnpm verify:root && turbo run verify",
     "deploy": "pnpm run build && pnpm --filter @transitmapper/worker run deploy",
     "bootstrap": "tsx scripts/bootstrap/cold-start.ts",
     "refresh:gtfs": "tsx scripts/refresh-gtfs-feeds.ts",
@@ -60,7 +60,8 @@
     "check:reference": "tsx scripts/generate-checks-reference.ts --check",
     "check:documents": "tsx scripts/check-document-standards.ts",
     "check:repository-tooling": "tsx scripts/check-repository-tooling.ts",
-    "typecheck:root": "tsc -b tsconfig.json --noEmit"
+    "typecheck:root": "tsc -b tsconfig.json --noEmit",
+    "verify:root": "vitest run scripts/tests --maxWorkers=1"
   },
   "devDependencies": {
     "@clack/prompts": "catalog:",
