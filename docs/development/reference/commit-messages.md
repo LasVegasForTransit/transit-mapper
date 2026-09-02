@@ -17,19 +17,18 @@ Lower case, no trailing period, at most 72 characters. Write it as what
 the change does, not what you did: `fix: stop station labels overlapping`,
 not `fixed the label bug`.
 
-| Type       | Use for                                         |
-| ---------- | ----------------------------------------------- |
-| `feat`     | a new capability a person can use or observe    |
-| `fix`      | corrected behaviour                             |
-| `docs`     | documentation only                              |
-| `style`    | formatting with no behaviour change             |
-| `refactor` | restructuring with no behaviour change          |
-| `perf`     | faster or cheaper, same behaviour               |
-| `test`     | tests only                                      |
-| `ci`       | workflows, actions, deployment pipeline         |
-| `chore`    | tooling and maintenance that fits nothing above |
-| `build`    | build system or packaging changes               |
-| `revert`   | a deliberate reversal of a prior change         |
+| Type    | Use for                                      |
+| ------- | -------------------------------------------- |
+| `feat`  | a new capability a person can use or observe |
+| `fix`   | corrected behaviour                          |
+| `chore` | everything else                              |
+
+Three, deliberately. The subject is read as a changelog entry by people who
+did not write the diff, and the only distinction that matters to them is
+whether they are affected. Documentation, tests, refactors, formatting,
+performance work, build and CI changes, and reverts all reach that reader as
+the same thing — upkeep — so they are all `chore`, and which kind it was goes
+in the body where there is room to say it.
 
 Scope is optional. Use one only when the change is confined to a durable
 boundary declared in [`.lvbt/commit-scopes.txt`](../../../.lvbt/commit-scopes.txt).
@@ -38,9 +37,8 @@ temporary implementation detail into a scope.
 
 `feat` is a promise about product behavior, not a label for groundwork. A
 helper, cache, test harness, measurement seam, internal rendering primitive,
-or model refactor that enables a later capability belongs under `refactor`,
-`perf`, `test`, or `chore` until it independently changes what someone can do
-or see. "Needed for a future feature" is not itself a feature.
+or model refactor that enables a later capability is a `chore` until it
+independently changes what someone can do or see. "Needed for a future feature" is not itself a feature.
 
 ## Body
 
