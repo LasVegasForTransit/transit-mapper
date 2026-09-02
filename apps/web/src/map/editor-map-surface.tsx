@@ -40,6 +40,7 @@ import { getMap, setMap } from './mapRef';
 import { basemapStyleForScheme, localBlankStyleForScheme } from './mapTheme';
 import type { EditorMapDriverPorts, EditorMapStyleBridge } from './editor-map-ports';
 import { createEditorMapStartupScheduler } from './editor-map-startup';
+import { initialBaseStyleTiming } from './basemapLoading';
 
 export interface EditorMapSurfaceFrameProps {
   readonly driver: MapDriver;
@@ -105,6 +106,7 @@ export function EditorMapSurfaceFrame({
 export interface EditorMapSurfaceProps {
   selection: SelectionController;
   onBasemapUnavailable?: () => void;
+  onBasemapAvailable?: () => void;
   vehiclePaintingSuspended?: boolean;
 }
 
@@ -168,6 +170,7 @@ function createInitialStyleBridge(
 export function EditorMapSurface({
   selection,
   onBasemapUnavailable,
+  onBasemapAvailable,
   vehiclePaintingSuspended = false,
 }: EditorMapSurfaceProps) {
   const store = useEditorStore();
@@ -191,6 +194,8 @@ export function EditorMapSurface({
   const pointerRefreshRef = useRef<(() => void) | null>(null);
   const basemapFailureRef = useRef(onBasemapUnavailable);
   basemapFailureRef.current = onBasemapUnavailable;
+  const basemapRecoveryRef = useRef(onBasemapAvailable);
+  basemapRecoveryRef.current = onBasemapAvailable;
   const tuningRef = useRef(inputTuningFor(coarsePointer));
   tuningRef.current = inputTuningFor(coarsePointer);
   const runtimeRef = useRef<MapRuntime<ColorScheme> | null>(null);
@@ -273,6 +278,7 @@ export function EditorMapSurface({
           timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
           isInteractionActive: () => styleRef.current.interactionActive(),
           onBaseStyleUnavailable: () => basemapFailureRef.current?.(),
+          onBaseStyleAvailable: () => basemapRecoveryRef.current?.(),
         },
         interaction: {
           dragPan: true,
@@ -289,6 +295,7 @@ export function EditorMapSurface({
           attribution: { position: 'bottom-right', compact: true },
         },
         mapOptions: { fadeDuration: 0, refreshExpiredTiles: false },
+        baseStyleTiming: initialBaseStyleTiming(store.getState().system),
         padding: chromePadding,
         reportError: (error) => console.error('[transitmapper] map runtime', error),
         onResize: () => styleRef.current.resized(),

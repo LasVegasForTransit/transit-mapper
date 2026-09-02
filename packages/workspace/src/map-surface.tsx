@@ -19,23 +19,46 @@ export type MapSurfaceRuntimeFactory<ThemeId extends string> = (
 
 export type MapSurfaceAttachmentScheduler = (start: () => void) => () => void;
 
+/** A hidden, occluded, or throttled tab produces no animation frames, and the
+ * browser never promises a deadline for the next one. Attachment releases the
+ * document overlay, the startup milestones, and the remote base style behind
+ * it, so a frame that never arrives stalls the whole map indefinitely rather
+ * than merely deferring it. This timer is the floor under that wait, not the
+ * normal path: whenever frames flow, the two of them win the race. */
+export const MAP_ATTACHMENT_FRAME_FALLBACK_MS = 500;
+
 export function scheduleMapAttachmentAfterFirstPaint(start: () => void): () => void {
-  let cancelled = false;
-  let firstFrame: number | null = requestAnimationFrame(() => {
-    firstFrame = null;
-    if (cancelled) return;
-    secondFrame = requestAnimationFrame(() => {
-      secondFrame = null;
-      if (!cancelled) start();
-    });
-  });
+  let settled = false;
+  let firstFrame: number | null = null;
   let secondFrame: number | null = null;
-  return () => {
-    cancelled = true;
+  let fallback: ReturnType<typeof setTimeout> | null = null;
+  const cancelPending = () => {
     if (firstFrame !== null) cancelAnimationFrame(firstFrame);
     if (secondFrame !== null) cancelAnimationFrame(secondFrame);
+    if (fallback !== null) clearTimeout(fallback);
     firstFrame = null;
     secondFrame = null;
+    fallback = null;
+  };
+  // Both paths land here, so whichever arrives first attaches exactly once.
+  const settle = () => {
+    if (settled) return;
+    settled = true;
+    cancelPending();
+    start();
+  };
+  firstFrame = requestAnimationFrame(() => {
+    firstFrame = null;
+    if (settled) return;
+    secondFrame = requestAnimationFrame(() => {
+      secondFrame = null;
+      settle();
+    });
+  });
+  fallback = setTimeout(settle, MAP_ATTACHMENT_FRAME_FALLBACK_MS);
+  return () => {
+    settled = true;
+    cancelPending();
   };
 }
 

@@ -10,7 +10,7 @@ import maplibregl, {
 } from 'maplibre-gl';
 import type { MapRuntimeHost } from './map-driver';
 import type { MapViewStore } from './map-view-store';
-import { createBaseStyleController } from './base-style-controller';
+import { createBaseStyleController, type BaseStyleController } from './base-style-controller';
 import {
   createMapStartupMilestones,
   type ObservableMapStartupMilestones,
@@ -64,6 +64,7 @@ export interface MapRuntimeStyleOptions<ThemeId extends string> {
   online?: () => boolean;
   isInteractionActive: () => boolean;
   onBaseStyleUnavailable(error: unknown): void;
+  onBaseStyleAvailable?(): void;
 }
 
 export interface MapRuntimeOptions<ThemeId extends string> {
@@ -218,6 +219,58 @@ function attachMapResize<ThemeId extends string>(
   };
 }
 
+interface ThemeCoordinator<ThemeId extends string> {
+  requestTheme(theme: ThemeId): Promise<void>;
+  contentCommitted(): void;
+  settled(): Promise<void>;
+}
+
+/**
+ * Owns when the remote base style may be asked for. The default order paints
+ * document content on the local bootstrap style first; `before-content` asks
+ * immediately, for a document that has nothing to paint ahead of the map.
+ */
+function createThemeCoordinator<ThemeId extends string>(
+  styleController: BaseStyleController<ThemeId>,
+  initialTheme: ThemeId,
+  beforeContent: boolean,
+): ThemeCoordinator<ThemeId> {
+  let currentRequest: Promise<void> = beforeContent
+    ? styleController.request(initialTheme)
+    : Promise.resolve();
+  // A host that asks for the initial theme again while the before-content
+  // request is still in flight would cancel that fetch and start it over,
+  // spending the head start this timing exists to buy. The dedupe lasts only
+  // until the startup request settles, so a later request still retries.
+  let pendingInitialRequest: Promise<void> | null = null;
+  if (beforeContent) {
+    pendingInitialRequest = currentRequest;
+    const settleInitialRequest = () => {
+      pendingInitialRequest = null;
+    };
+    void currentRequest.then(settleInitialRequest, settleInitialRequest);
+  }
+  let desiredTheme = initialTheme;
+  let contentCommitted = false;
+  const start = (theme: ThemeId) => {
+    currentRequest = styleController.request(theme);
+    return currentRequest;
+  };
+  return {
+    requestTheme(theme) {
+      desiredTheme = theme;
+      if (pendingInitialRequest !== null && theme === initialTheme) return pendingInitialRequest;
+      if (contentCommitted || beforeContent) return start(theme);
+      return styleController.selectLocal(theme);
+    },
+    contentCommitted() {
+      contentCommitted = true;
+      if (!beforeContent) void start(desiredTheme);
+    },
+    settled: () => currentRequest,
+  };
+}
+
 export function createMapRuntime<ThemeId extends string>(
   options: MapRuntimeOptions<ThemeId>,
 ): MapRuntime<ThemeId> {
@@ -233,29 +286,19 @@ export function createMapRuntime<ThemeId extends string>(
     initialStyle: 'local',
     reportError: (error) => options.reportError(error),
     onUnavailable: (error) => options.style.onBaseStyleUnavailable(error),
+    onAvailable: () => options.style.onBaseStyleAvailable?.(),
   });
-  const baseStyleBeforeContent = options.baseStyleTiming === 'before-content';
-  let currentThemeRequest: Promise<void> = baseStyleBeforeContent
-    ? styleController.request(options.initialTheme)
-    : Promise.resolve();
-  let desiredTheme = options.initialTheme;
-  let contentCommitted = false;
+  const themes = createThemeCoordinator(
+    styleController,
+    options.initialTheme,
+    options.baseStyleTiming === 'before-content',
+  );
   let disposed = false;
-  const startThemeRequest = (theme: ThemeId) => {
-    currentThemeRequest = styleController.request(theme);
-    return currentThemeRequest;
-  };
-  const requestTheme = (theme: ThemeId) => {
-    if (disposed) return Promise.resolve();
-    desiredTheme = theme;
-    if (contentCommitted || baseStyleBeforeContent) return startThemeRequest(theme);
-    return styleController.selectLocal(theme);
-  };
+  const requestTheme = (theme: ThemeId) =>
+    disposed ? Promise.resolve() : themes.requestTheme(theme);
   const startupMilestones = createMapStartupMilestones({
     onContentCommitted: () => {
-      if (disposed) return;
-      contentCommitted = true;
-      if (!baseStyleBeforeContent) void startThemeRequest(desiredTheme);
+      if (!disposed) themes.contentCommitted();
     },
   });
   const milestones: ObservableMapStartupMilestones = {
@@ -282,7 +325,7 @@ export function createMapRuntime<ThemeId extends string>(
     requestTheme,
     async flushTheme() {
       if (disposed) return;
-      await currentThemeRequest;
+      await themes.settled();
       await styleController.flush();
     },
     refreshPadding: () => {

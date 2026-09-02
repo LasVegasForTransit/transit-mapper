@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { MapWorkspace, useMapViewStore } from '@transitmapper/workspace';
 import { useEditor, useEditorCommands, useEditorStore } from './editor/EditorProvider';
 import { resolveEditorBootstrap } from './editor/editor-bootstrap';
@@ -38,46 +38,18 @@ import { representationLabel, supplementalDetent } from './ui/workspace-adapter'
 import './ui/app.css';
 import '@transitmapper/workspace/workbench.css';
 
-// Lazy-loaded: pulls in fflate + the GTFS parsing pipeline (packages/core's
-// model/gtfsImport.ts), used nowhere else in the app's eager import graph —
-// no reason to ship that in the editor-host chunk for the common case where
-// this dialog is never opened. EditorSession already renders it conditionally
-// below, which is the shape React.lazy wants.
-const GtfsImportDialog = lazy(() =>
-  import('./ui/GtfsImportDialog').then((m) => ({ default: m.GtfsImportDialog })),
-);
-// Same reasoning applied to every other dialog gated behind an explicit user
-// action (activeDialog === "..."/shortcutsOpen) rather than rendered on
-// initial paint — none of these need to be in the first-paint bundle either.
-const ExportDialog = lazy(() =>
-  import('./ui/ExportDialog').then((m) => ({ default: m.ExportDialog })),
-);
-const ImportDialog = lazy(() =>
-  import('./ui/ImportDialog').then((m) => ({ default: m.ImportDialog })),
-);
-const ShareDialog = lazy(() =>
-  import('./ui/ShareDialog').then((m) => ({ default: m.ShareDialog })),
-);
-const SavedViewsDialog = lazy(() =>
-  import('./ui/saved-views-dialog').then((module) => ({ default: module.SavedViewsDialog })),
-);
-const ShortcutsDialog = lazy(() =>
-  import('./ui/ShortcutsDialog').then((m) => ({ default: m.ShortcutsDialog })),
-);
-const SystemsDialog = lazy(() =>
-  import('./ui/SystemsDialog').then((m) => ({ default: m.SystemsDialog })),
-);
-const SettingsDialog = lazy(() =>
-  import('./ui/SettingsDialog').then((m) => ({ default: m.SettingsDialog })),
-);
-const FirstRunDialogs = lazy(() =>
-  import('./ui/onboarding/first-run-dialogs').then((module) => ({
-    default: module.FirstRunDialogs,
-  })),
-);
-const AboutDialog = lazy(() =>
-  import('./ui/about-dialog').then((m) => ({ default: m.AboutDialog })),
-);
+import {
+  AboutDialog,
+  ExportDialog,
+  FirstRunDialogs,
+  GtfsImportDialog,
+  ImportDialog,
+  SavedViewsDialog,
+  SettingsDialog,
+  ShareDialog,
+  ShortcutsDialog,
+  SystemsDialog,
+} from './ui/lazy-dialogs';
 
 /** How long a document may take to arrive before the silence is worth
  *  explaining. Long enough that a healthy local read never trips it, short
@@ -373,6 +345,12 @@ export function EditorSession() {
           <EditorMapSurface
             selection={selection}
             onBasemapUnavailable={() => setNotice('basemap-unavailable')}
+            // A basemap that recovers on a later attempt must retire its own
+            // notice. Nothing else clears it, so the banner would otherwise
+            // outlive the failure and describe a map that is already drawn.
+            onBasemapAvailable={() =>
+              setNotice((current) => (current === 'basemap-unavailable' ? null : current))
+            }
             vehiclePaintingSuspended={activeDialog === 'onboarding'}
           />
         }

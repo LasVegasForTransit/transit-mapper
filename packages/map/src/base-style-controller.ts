@@ -28,6 +28,10 @@ export interface BaseStyleControllerOptions<ThemeId extends string> {
   isInteractionActive(): boolean;
   reportError(error: unknown): void;
   onUnavailable(error: unknown): void;
+  /** The remote base style committed. A host that surfaced an earlier failure
+   * needs this to retire the notice; without it a basemap that recovers on a
+   * later attempt still reads as broken. */
+  onAvailable?(): void;
 }
 
 type StyleRequestResult =
@@ -302,6 +306,7 @@ class BaseStyleControllerImplementation<
     }
     this.lastUsableStyle = this.options.map.getStyle();
     this.lastUsableTheme = theme;
+    this.options.onAvailable?.();
     const fullRebuild =
       result.fullRebuild ||
       (this.options.isDocumentStateRetained ? !this.options.isDocumentStateRetained() : false);
