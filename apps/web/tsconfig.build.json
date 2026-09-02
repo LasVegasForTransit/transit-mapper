@@ -6,8 +6,15 @@
 // makes this the file that decides what `src` may reference: a source file
 // that reaches for `process` compiles under the wide config and fails here.
 {
-  "extends": "@transitmapper/tsconfig/base.json",
+  "extends": "@lvbt/typescript-config/browser.json",
   "compilerOptions": {
+    // Adoption debt against the organization base: the two flags below are on
+    // in @lvbt/typescript-config and off here until this package's code is
+    // made to pass them (about a thousand findings across the workspace when
+    // the standard arrived). Turn one on, fix what it reports, and delete the
+    // line; never add a new package with them off.
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "allowImportingTsExtensions": true,

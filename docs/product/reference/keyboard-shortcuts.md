@@ -1,10 +1,9 @@
 # Keyboard shortcuts
 
-Press `?` in the editor for this list in a dialog. Everything the keyboard
-does is also reachable by pointer, whether that pointer is a mouse or a
-finger; the touch equivalents are in
-[Editor interactions](editor-interactions.md#touch-equivalents). Shortcuts
-don't fire while you're typing in a text field.
+Press `?` in the editor for this list in a dialog. Everything the keyboard does is also reachable by
+pointer, whether that pointer is a mouse or a finger; the touch equivalents are in
+[Editor interactions](editor-interactions.md#touch-equivalents). Shortcuts don't fire while you're
+typing in a text field.
 
 The single source of truth is `KEY_BINDINGS` in
 [`src/editor/keymap.ts`](../../../apps/web/src/editor/keymap.ts); this page mirrors it.
@@ -40,16 +39,15 @@ The single source of truth is `KEY_BINDINGS` in
 | `Ctrl`/`⌘` + `Z`                             | Undo                                                                                                        |
 | `Ctrl`/`⌘` + `Shift` + `Z`, `Ctrl`/`⌘` + `Y` | Redo                                                                                                        |
 
-Undo/redo are the only browser-style keyboard combos the app claims. `Ctrl`/`⌘`
-also acts as a pointer modifier over corridor control points, as described
-below; other keyboard combos pass through to the browser.
+Undo/redo are the only browser-style keyboard combos the app claims. `Ctrl`/`⌘` also acts as a
+pointer modifier over corridor control points, as described below; other keyboard combos pass
+through to the browser.
 
 ## Pointer modifiers
 
-These change the cursor badge and the operation before pointer-down. They also
-update while the pointer is stationary. Pointer-down locks the primary
-operation for that gesture; after a drag starts, only `Shift` may change its
-geometric constraint.
+These change the cursor badge and the operation before pointer-down. They also update while the
+pointer is stationary. Pointer-down locks the primary operation for that gesture; after a drag
+starts, only `Shift` may change its geometric constraint.
 
 | Modifier              | Pointer meaning                                                                                          |
 | --------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -63,8 +61,8 @@ The full cursor, badge, preview, and result matrix is in
 
 ## Lanes
 
-These act on the way being drawn right now, or else the selected way,
-whichever the cross-section editor is showing.
+These act on the way being drawn right now, or else the selected way, whichever the cross-section
+editor is showing.
 
 | Key       | Action                                                                                     |
 | --------- | ------------------------------------------------------------------------------------------ |

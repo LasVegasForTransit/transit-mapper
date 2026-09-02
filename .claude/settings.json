@@ -1,4 +1,16 @@
 {
+  "extraKnownMarketplaces": {
+    "lvbt": {
+      "source": {
+        "source": "github",
+        "repo": "LasVegasForTransit/repository-tooling",
+        "ref": "v0.2.0"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "lvbt-contributions@lvbt": true
+  },
   "hooks": {
     "PostToolUse": [
       {

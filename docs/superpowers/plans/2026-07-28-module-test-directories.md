@@ -1,85 +1,72 @@
 # Module Test Directories Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use
-> superpowers:subagent-driven-development (recommended) or
-> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
+> (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move every test and test-only support file out of production source
-trees and into a mirrored `tests/` tree at the root of its owning workspace
-module.
+**Goal:** Move every test and test-only support file out of production source trees and into a
+mirrored `tests/` tree at the root of its owning workspace module.
 
-**Architecture:** A "module" is a pnpm workspace package such as `apps/web`,
-`apps/worker`, or `packages/core`. Each module owns one `tests/` directory
-whose children mirror the relevant `src/` areas; production code remains in
-`src/`, and test imports cross that boundary explicitly. Vitest, TypeScript,
-Turborepo, generators, documentation, and the workspace contract all learn
-the same layout so a misplaced test fails instead of being silently skipped.
+**Architecture:** A "module" is a pnpm workspace package such as `apps/web`, `apps/worker`, or
+`packages/core`. Each module owns one `tests/` directory whose children mirror the relevant `src/`
+areas; production code remains in `src/`, and test imports cross that boundary explicitly. Vitest,
+TypeScript, Turborepo, generators, documentation, and the workspace contract all learn the same
+layout so a misplaced test fails instead of being silently skipped.
 
-**Tech Stack:** pnpm 11, Turborepo 2.10, TypeScript 6, Vitest 4, Cloudflare
-Vitest Pool Workers, tsx.
+**Tech Stack:** pnpm 11, Turborepo 2.10, TypeScript 6, Vitest 4, Cloudflare Vitest Pool Workers,
+tsx.
 
 ## Global Constraints
 
-- Treat each pnpm workspace package as one module. The only valid test roots
-  are `<workspace-package>/tests/`.
-- Mirror the former source area below `tests/`: for example,
-  `apps/web/src/map/interactions.test.ts` becomes
-  `apps/web/tests/map/interactions.test.ts`.
-- Do not use `src/<area>/tests/`, `src/__tests__/`, or a flat package-wide
-  test directory. The first two still colocate test and production trees; the
-  last loses the existing area ownership and invites filename collisions.
-- Preserve every test body, case name, assertion, execution environment, and
-  suite order. This is a filesystem refactor, not a test rewrite.
-- Move `apps/web/scripts/verify.ts` and `apps/worker/scripts/verify.ts`
-  wholesale. They build state at module scope and mutate it sequentially;
-  splitting either file changes what it tests.
-- Move `apps/web/scripts/verify-maskable-icon.ts` as a standalone test program.
-  Commit `32f46b7` deliberately moved it out of Vitest, so this refactor
-  changes its location but not its execution mode.
-- Move the test-only `packages/core/src/testing/fixtures.ts` support module
-  into `packages/core/tests/support/fixtures.ts`. Keep the existing
-  `@transitmapper/core/testing/fixtures` import stable through an explicit
-  package export.
-- Do not move `apps/web/src/perf/fixtures.ts` or
-  `apps/web/src/ui/onboarding/fixtureSystem.ts`; both are runtime source.
+- Treat each pnpm workspace package as one module. The only valid test roots are
+  `<workspace-package>/tests/`.
+- Mirror the former source area below `tests/`: for example, `apps/web/src/map/interactions.test.ts`
+  becomes `apps/web/tests/map/interactions.test.ts`.
+- Do not use `src/<area>/tests/`, `src/__tests__/`, or a flat package-wide test directory. The first
+  two still colocate test and production trees; the last loses the existing area ownership and
+  invites filename collisions.
+- Preserve every test body, case name, assertion, execution environment, and suite order. This is a
+  filesystem refactor, not a test rewrite.
+- Move `apps/web/scripts/verify.ts` and `apps/worker/scripts/verify.ts` wholesale. They build state
+  at module scope and mutate it sequentially; splitting either file changes what it tests.
+- Move `apps/web/scripts/verify-maskable-icon.ts` as a standalone test program. Commit `32f46b7`
+  deliberately moved it out of Vitest, so this refactor changes its location but not its execution
+  mode.
+- Move the test-only `packages/core/src/testing/fixtures.ts` support module into
+  `packages/core/tests/support/fixtures.ts`. Keep the existing
+  `@transitmapper/core/testing/fixtures` import stable through an explicit package export.
+- Do not move `apps/web/src/perf/fixtures.ts` or `apps/web/src/ui/onboarding/fixtureSystem.ts`; both
+  are runtime source.
 - Keep repository tooling under `scripts/`: `apps/web/scripts/perf/**`,
-  `apps/web/scripts/perf/verify-pwa-output.ts`,
-  `apps/worker/scripts/check-generated-types.ts`, and root
-  `scripts/check-*.ts` validate builds or repository state rather than test
-  implementation behavior.
+  `apps/web/scripts/perf/verify-pwa-output.ts`, `apps/worker/scripts/check-generated-types.ts`, and
+  root `scripts/check-*.ts` validate builds or repository state rather than test implementation
+  behavior.
 - Do not move, edit, rename, or delete any Worker migration.
-- Do not add an alias merely to shorten the new relative imports. Explicit
-  `../../src/...` imports make the test/production boundary visible without
-  adding another resolution system.
-- Retarget a relative module specifier by resolving it from the test's old
-  `src/` directory and then computing the relative path from its new mirrored
-  `tests/` directory. Most tests move one area deep and use `../../src/...`;
-  nested tests such as `tests/editor/actions/` use `../../../src/...`.
-- Remove `passWithNoTests` once every package has an explicit test glob. A bad
-  glob must fail loudly.
-- Keep production runtime type boundaries intact. Web Node tests stay in the
-  Node-aware config, and the Worker workerd test stays in the Worker-aware
-  config.
-- Update Turborepo inputs before relying on cached commands. A test-only
-  change must invalidate `lint`, `typecheck`, and `verify`.
-- Historical files under `docs/superpowers/specs/` and older plans remain
-  historical records. Update normative documentation only.
-- Use narrow staging commands. Never use `git add -A`, blanket-restage, or
-  include unrelated work.
+- Do not add an alias merely to shorten the new relative imports. Explicit `../../src/...` imports
+  make the test/production boundary visible without adding another resolution system.
+- Retarget a relative module specifier by resolving it from the test's old `src/` directory and then
+  computing the relative path from its new mirrored `tests/` directory. Most tests move one area
+  deep and use `../../src/...`; nested tests such as `tests/editor/actions/` use `../../../src/...`.
+- Remove `passWithNoTests` once every package has an explicit test glob. A bad glob must fail
+  loudly.
+- Keep production runtime type boundaries intact. Web Node tests stay in the Node-aware config, and
+  the Worker workerd test stays in the Worker-aware config.
+- Update Turborepo inputs before relying on cached commands. A test-only change must invalidate
+  `lint`, `typecheck`, and `verify`.
+- Historical files under `docs/superpowers/specs/` and older plans remain historical records. Update
+  normative documentation only.
+- Use narrow staging commands. Never use `git add -A`, blanket-restage, or include unrelated work.
 
 ## Execution Precondition
 
-The repository changed while this plan was being written. The first inventory
-found 72 Vitest files on a dirty branch; the final inventory found 83 files on
-clean commit `60e8f6c`, including the now-committed sidebar work and 11 newer
-tests. Start execution from a clean worktree containing the final inventory
-below. Re-run the inventory before moving anything and extend Appendix A if a
-later commit adds another test.
+The repository changed while this plan was being written. The first inventory found 72 Vitest files
+on a dirty branch; the final inventory found 83 files on clean commit `60e8f6c`, including the
+now-committed sidebar work and 11 newer tests. Start execution from a clean worktree containing the
+final inventory below. Re-run the inventory before moving anything and extend Appendix A if a later
+commit adds another test.
 
-Commit this plan document before beginning execution, or copy it outside the
-execution worktree. The closeout requires a genuinely clean worktree, not one
-whose only untracked file is its own plan.
+Commit this plan document before beginning execution, or copy it outside the execution worktree. The
+closeout requires a genuinely clean worktree, not one whose only untracked file is its own plan.
 
 The observed green baseline was:
 
@@ -106,10 +93,8 @@ The observed green baseline was:
 
 **Interfaces:**
 
-- Produces: `packages/core/tests/**`, including
-  `packages/core/tests/support/fixtures.ts`
-- Produces: the unchanged test-support import
-  `@transitmapper/core/testing/fixtures`
+- Produces: `packages/core/tests/**`, including `packages/core/tests/support/fixtures.ts`
+- Produces: the unchanged test-support import `@transitmapper/core/testing/fixtures`
 - Produces: Turbo task inputs that include `tests/**`
 
 - [ ] **Step 1: Reconfirm the baseline and working-tree boundary**
@@ -122,8 +107,8 @@ pnpm --filter @transitmapper/core typecheck
 pnpm --filter @transitmapper/core verify
 ```
 
-Expected: the status is understood and preserved; core reports 22 passing
-files and 186 passing cases.
+Expected: the status is understood and preserved; core reports 22 passing files and 186 passing
+cases.
 
 - [ ] **Step 2: Add test trees to Turborepo inputs**
 
@@ -160,13 +145,13 @@ Update the three explicit task input lists in `turbo.json`:
 }
 ```
 
-`public/**` keeps the web maskable-icon check cache-correct.
-`wrangler.toml` keeps the Worker pool configuration cache-correct.
+`public/**` keeps the web maskable-icon check cache-correct. `wrangler.toml` keeps the Worker pool
+configuration cache-correct.
 
 - [ ] **Step 3: Move the 22 core test files**
 
-Create the destination directories, then perform the exact core moves in
-Appendix A. Use rename-preserving moves; do not edit test bodies.
+Create the destination directories, then perform the exact core moves in Appendix A. Use
+rename-preserving moves; do not edit test bodies.
 
 ```bash
 mkdir -p packages/core/tests/{geometry,model,render,share,sim,support}
@@ -218,8 +203,7 @@ Package imports and test bodies remain unchanged.
 
 - [ ] **Step 6: Preserve the cross-package fixture import**
 
-Put the specific test-support export before the existing wildcard in
-`packages/core/package.json`:
+Put the specific test-support export before the existing wildcard in `packages/core/package.json`:
 
 ```json
 "exports": {
@@ -228,9 +212,8 @@ Put the specific test-support export before the existing wildcard in
 }
 ```
 
-This keeps the web test import
-`@transitmapper/core/testing/fixtures` stable while taking the implementation
-out of `src/`.
+This keeps the web test import `@transitmapper/core/testing/fixtures` stable while taking the
+implementation out of `src/`.
 
 - [ ] **Step 7: Point TypeScript and Vitest at the new tree**
 
@@ -253,11 +236,10 @@ Delete the stale "No tests here yet" comment and `passWithNoTests`.
 
 - [ ] **Step 8: Keep the project map synchronized**
 
-In `docs/development/reference/project-structure.md`, replace the
-`packages/core/src/testing/` tree entry and section with
-`packages/core/tests/support/`. Explain that module-root test trees mirror
-their production areas and that the explicit test-support export is separate
-from the production wildcard.
+In `docs/development/reference/project-structure.md`, replace the `packages/core/src/testing/` tree
+entry and section with `packages/core/tests/support/`. Explain that module-root test trees mirror
+their production areas and that the explicit test-support export is separate from the production
+wildcard.
 
 Run:
 
@@ -278,8 +260,8 @@ pnpm --filter @transitmapper/core typecheck
 pnpm --filter @transitmapper/core verify
 ```
 
-Expected: no test files remain in core `src`; typecheck passes; Vitest still
-reports 22 files and 186 cases.
+Expected: no test files remain in core `src`; typecheck passes; Vitest still reports 22 files and
+186 cases.
 
 - [ ] **Step 10: Review rename detection**
 
@@ -290,8 +272,7 @@ git diff HEAD --summary --find-renames -- packages/core turbo.json
 git diff HEAD --check -- packages/core turbo.json
 ```
 
-Expected: test files are detected as renames plus import-only edits; no
-production behavior changed.
+Expected: test files are detected as renames plus import-only edits; no production behavior changed.
 
 - [ ] **Step 11: Commit only the core migration**
 
@@ -308,11 +289,9 @@ git commit -m "refactor(test): move core tests out of source"
 
 **Files:**
 
-- Move:
-  `packages/eslint-plugin/src/core-runtime-purity.test.ts` to
+- Move: `packages/eslint-plugin/src/core-runtime-purity.test.ts` to
   `packages/eslint-plugin/tests/core-runtime-purity.test.ts`
-- Move:
-  `packages/pwa-updater/src/reloadAfterFlush.test.ts` to
+- Move: `packages/pwa-updater/src/reloadAfterFlush.test.ts` to
   `packages/pwa-updater/tests/reloadAfterFlush.test.ts`
 - Create: `packages/pwa-updater/vitest.config.ts`
 - Modify: `packages/eslint-plugin/tsconfig.json`
@@ -399,8 +378,7 @@ pnpm --filter @transitmapper/pwa-updater typecheck
 pnpm --filter @transitmapper/pwa-updater verify
 ```
 
-Expected: ESLint plugin reports 1 file and 12 cases; PWA updater reports 1
-file and 1 case.
+Expected: ESLint plugin reports 1 file and 12 cases; PWA updater reports 1 file and 1 case.
 
 - [ ] **Step 6: Commit only these package moves**
 
@@ -421,10 +399,8 @@ git commit -m "refactor(test): move package tests out of source"
 
 **Files:**
 
-- Move: `apps/worker/src/shares.test.ts` to
-  `apps/worker/tests/shares.test.ts`
-- Move: `apps/worker/scripts/verify.ts` to
-  `apps/worker/tests/verify.ts`
+- Move: `apps/worker/src/shares.test.ts` to `apps/worker/tests/shares.test.ts`
+- Move: `apps/worker/scripts/verify.ts` to `apps/worker/tests/verify.ts`
 - Modify: `apps/worker/package.json`
 - Modify: `apps/worker/tsconfig.json`
 - Modify: `apps/worker/tsconfig.scripts.json`
@@ -447,12 +423,12 @@ Do not split or reorder either file.
 
 - [ ] **Step 2: Retarget only the Vitest source import**
 
-In `apps/worker/tests/shares.test.ts`, change `./index` to `../src/index`.
-The sequential verifier already imports `../src/index`, and that path remains
-correct because `scripts/` and `tests/` are at the same depth.
+In `apps/worker/tests/shares.test.ts`, change `./index` to `../src/index`. The sequential verifier
+already imports `../src/index`, and that path remains correct because `scripts/` and `tests/` are at
+the same depth.
 
-In `apps/worker/tests/verify.ts`, change the comparison comment from
-`apps/web/scripts/verify.ts` to `apps/web/tests/verify.ts`.
+In `apps/worker/tests/verify.ts`, change the comparison comment from `apps/web/scripts/verify.ts` to
+`apps/web/tests/verify.ts`.
 
 - [ ] **Step 3: Update Worker discovery and package execution**
 
@@ -462,8 +438,8 @@ In `apps/worker/vitest.config.ts`, change only:
 include: ['tests/**/*.test.ts'],
 ```
 
-Keep `readD1Migrations(resolve(import.meta.dirname, 'src/migrations'))`,
-`cloudflareTest()`, Wrangler configuration, and `TEST_MIGRATIONS` unchanged.
+Keep `readD1Migrations(resolve(import.meta.dirname, 'src/migrations'))`, `cloudflareTest()`,
+Wrangler configuration, and `TEST_MIGRATIONS` unchanged.
 
 In `apps/worker/package.json`:
 
@@ -490,9 +466,8 @@ In `apps/worker/tsconfig.scripts.json`:
 "include": ["scripts", "tests/verify.ts"]
 ```
 
-Update its opening comment to say the config covers Node-run Worker tooling
-and the sequential verifier. Do not add Node globals to the workerd Vitest
-file.
+Update its opening comment to say the config covers Node-run Worker tooling and the sequential
+verifier. Do not add Node globals to the workerd Vitest file.
 
 - [ ] **Step 5: Verify the Worker boundary**
 
@@ -503,8 +478,8 @@ pnpm --filter @transitmapper/worker typecheck
 pnpm --filter @transitmapper/worker verify
 ```
 
-Expected: the sequential suite still passes; Vitest reports 1 file and 8
-cases running in real workerd against D1 with the production migrations.
+Expected: the sequential suite still passes; Vitest reports 1 file and 8 cases running in real
+workerd against D1 with the production migrations.
 
 - [ ] **Step 6: Confirm migrations are untouched**
 
@@ -553,8 +528,8 @@ git status --porcelain=v1
 rg --files apps/web/src | rg '\.(test|spec)\.(ts|tsx)$' | sort
 ```
 
-Expected at the final plan baseline: 58 files.
-If execution finds more, extend the same mirrored mapping before continuing.
+Expected at the final plan baseline: 58 files. If execution finds more, extend the same mirrored
+mapping before continuing.
 
 - [ ] **Step 2: Create the mirrored area directories**
 
@@ -564,10 +539,9 @@ mkdir -p apps/web/tests/{editor/actions,embed,import,map/layers,network,perf,pwa
 
 - [ ] **Step 3: Move all 58 Vitest files**
 
-Perform every web Vitest move in Appendix A. Use `git mv` for tracked files.
-If the execution inventory finds an untracked test, first carry its complete
-feature change into the execution branch; do not commit a test that depends
-on uncommitted implementation.
+Perform every web Vitest move in Appendix A. Use `git mv` for tracked files. If the execution
+inventory finds an untracked test, first carry its complete feature change into the execution
+branch; do not commit a test that depends on uncommitted implementation.
 
 - [ ] **Step 4: Move both standalone test programs whole**
 
@@ -577,8 +551,8 @@ git mv apps/web/scripts/verify-maskable-icon.ts \
   apps/web/tests/verify-maskable-icon.ts
 ```
 
-Both files retain their current relative imports and URLs because their
-directory depth does not change.
+Both files retain their current relative imports and URLs because their directory depth does not
+change.
 
 Update the opening run comment in `apps/web/tests/verify.ts` to:
 
@@ -588,15 +562,13 @@ Update the opening run comment in `apps/web/tests/verify.ts` to:
 
 - [ ] **Step 5: Retarget web Vitest relative imports mechanically**
 
-For every moved test, resolve each relative import from its old location and
-point it at the same absolute source file from the new location:
+For every moved test, resolve each relative import from its old location and point it at the same
+absolute source file from the new location:
 
-- `tests/map/interactions.test.ts`: `./interactions` becomes
-  `../../src/map/interactions`
+- `tests/map/interactions.test.ts`: `./interactions` becomes `../../src/map/interactions`
 - `tests/editor/actions/pointActions.test.ts`: `./pointActions` becomes
   `../../../src/editor/actions/pointActions`
-- `tests/editor/actions/pointActions.test.ts`: `../store` becomes
-  `../../../src/editor/store`
+- `tests/editor/actions/pointActions.test.ts`: `../store` becomes `../../../src/editor/store`
 - package imports such as `@transitmapper/core/...` stay unchanged
 
 Examples:
@@ -615,8 +587,8 @@ Do not alter user-facing strings, test names, assertions, or fixtures.
 
 - [ ] **Step 6: Update the `ExportPreviewMap` mock as one unit**
 
-`apps/web/tests/ui/ExportPreviewMap.test.ts` is the only test with a relative
-`vi.mock`. Update all three references to the same new source path:
+`apps/web/tests/ui/ExportPreviewMap.test.ts` is the only test with a relative `vi.mock`. Update all
+three references to the same new source path:
 
 ```ts
 vi.mock('../../src/map/layers', async (importOriginal) => {
@@ -628,8 +600,8 @@ import { LAYER_SPECS } from '../../src/map/layers';
 import { ExportPreviewMap } from '../../src/ui/ExportPreviewMap';
 ```
 
-The `vi.mock` string, `importOriginal` type, and `LAYER_SPECS` import must all
-resolve to the same `src/map/layers` module.
+The `vi.mock` string, `importOriginal` type, and `LAYER_SPECS` import must all resolve to the same
+`src/map/layers` module.
 
 - [ ] **Step 7: Update web discovery, typing, and execution**
 
@@ -645,8 +617,8 @@ In `apps/web/package.json`:
 "verify": "tsx tests/verify.ts && tsx tests/verify-maskable-icon.ts && vitest run"
 ```
 
-Keep `apps/web/tsconfig.json` source-only. Update its comment to point at
-`tsconfig.scripts.json` for Node tooling and tests.
+Keep `apps/web/tsconfig.json` source-only. Update its comment to point at `tsconfig.scripts.json`
+for Node tooling and tests.
 
 In `apps/web/tsconfig.scripts.json`, keep the Node and Vite type sets and use:
 
@@ -654,9 +626,8 @@ In `apps/web/tsconfig.scripts.json`, keep the Node and Vite type sets and use:
 "include": ["scripts", "tests"]
 ```
 
-Update its opening comment to explain that it typechecks Node-run tooling,
-the sequential suite, the asset verifier, and Vitest files without admitting
-Node globals into the production browser config.
+Update its opening comment to explain that it typechecks Node-run tooling, the sequential suite, the
+asset verifier, and Vitest files without admitting Node globals into the production browser config.
 
 - [ ] **Step 8: Verify the web suite and exact discovery count**
 
@@ -685,9 +656,9 @@ git diff HEAD --summary --find-renames -- apps/web
 git diff HEAD --check -- apps/web
 ```
 
-Review every reported relative specifier and confirm it resolves into the
-module's `src/` tree or intentionally targets test support. No Vitest file may
-still resolve as though it lived under `src/`.
+Review every reported relative specifier and confirm it resolves into the module's `src/` tree or
+intentionally targets test support. No Vitest file may still resolve as though it lived under
+`src/`.
 
 - [ ] **Step 10: Commit only the web migration**
 
@@ -716,14 +687,13 @@ git commit -m "refactor(test): move web tests out of source"
 
 **Interfaces:**
 
-- Produces: `check:contract` failures for test material outside a package's
-  root `tests/` directory
+- Produces: `check:contract` failures for test material outside a package's root `tests/` directory
 - Produces: package and lint-rule generators that emit the new layout
 
 - [ ] **Step 1: Extend the workspace contract's failure model**
 
-In `scripts/check-workspace-contract.ts`, add `relative` to the
-`node:path` import and extend `Failure`:
+In `scripts/check-workspace-contract.ts`, add `relative` to the `node:path` import and extend
+`Failure`:
 
 ```ts
 interface Failure {
@@ -780,16 +750,14 @@ function directVerifyEntries(command: string): string[] {
 }
 ```
 
-This deliberately scans tracked and untracked package files. It ignores
-build output, and it recognizes test filenames, conventional test
-directories, test-support directories, and direct tsx programs invoked by a
-package's `verify` script.
+This deliberately scans tracked and untracked package files. It ignores build output, and it
+recognizes test filenames, conventional test directories, test-support directories, and direct tsx
+programs invoked by a package's `verify` script.
 
 - [ ] **Step 3: Collect layout failures for every code package**
 
-Inside the non-root package branch in `main()`, after checking required
-tasks, collect the filesystem and script findings into one set so a direct
-`*.test.ts` entry produces one failure:
+Inside the non-root package branch in `main()`, after checking required tasks, collect the
+filesystem and script findings into one set so a direct `*.test.ts` entry produces one failure:
 
 ```ts
 const misplacedTests = new Set(await misplacedTestMaterial(path));
@@ -830,8 +798,7 @@ mv apps/web/tests/network/cancelableFlight.test.ts \
 pnpm check:contract
 ```
 
-Expected: FAIL naming
-`apps/web/src/network/cancelableFlight.test.ts` and the `tests/` remediation.
+Expected: FAIL naming `apps/web/src/network/cancelableFlight.test.ts` and the `tests/` remediation.
 
 Restore it immediately:
 
@@ -869,8 +836,8 @@ In `turbo/generators/templates/package/vitest.config.ts.hbs`:
 test: { environment: 'node', include: ['tests/**/*.test.ts'] },
 ```
 
-Update `documentPackage()` in `turbo/generators/config.ts` so the generated
-project-structure section describes both paths:
+Update `documentPackage()` in `turbo/generators/config.ts` so the generated project-structure
+section describes both paths:
 
 ```md
 - `src/index.ts` — replace this line with what the package holds.
@@ -891,8 +858,7 @@ In `turbo/generators/templates/lint-rule/rule.test.ts.hbs`:
 import { {{camelCase name}} } from '../src/{{name}}.ts';
 ```
 
-In `scripts/check-generators.ts`, change the lint-rule scenario's expected
-test path to:
+In `scripts/check-generators.ts`, change the lint-rule scenario's expected test path to:
 
 ```ts
 'packages/eslint-plugin/tests/no-gencheck-placeholder.test.ts',
@@ -900,8 +866,8 @@ test path to:
 
 - [ ] **Step 7: Persist a negative layout scenario in generator validation**
 
-Add `spawnSync` to the `node:child_process` import and `renameSync` to the
-`node:fs` import in `scripts/check-generators.ts`. Add:
+Add `spawnSync` to the `node:child_process` import and `renameSync` to the `node:fs` import in
+`scripts/check-generators.ts`. Add:
 
 ```ts
 function assertTestLayoutGuard(): void {
@@ -926,15 +892,13 @@ function assertTestLayoutGuard(): void {
 }
 ```
 
-Call `assertTestLayoutGuard()` immediately after the generated package first
-passes `pnpm check`. The function temporarily violates the rule, requires
-`check:contract` to name the misplaced test, and restores the generated tree
-even when the assertion fails.
+Call `assertTestLayoutGuard()` immediately after the generated package first passes `pnpm check`.
+The function temporarily violates the rule, requires `check:contract` to name the misplaced test,
+and restores the generated tree even when the assertion fails.
 
 - [ ] **Step 8: Update the generated checks registry**
 
-In `scripts/generate-checks-reference.ts`, change the `check:contract`
-description to:
+In `scripts/generate-checks-reference.ts`, change the `check:contract` description to:
 
 ```ts
 fails:
@@ -950,8 +914,8 @@ pnpm gen:checks
 pnpm check:reference
 ```
 
-Expected: `docs/development/reference/checks.md` names the expanded workspace
-contract and is current.
+Expected: `docs/development/reference/checks.md` names the expanded workspace contract and is
+current.
 
 - [ ] **Step 9: Commit tooling separately**
 
@@ -998,13 +962,13 @@ git commit -m "chore(test): enforce module test directories"
 Add an invariant row:
 
 ```md
-| Tests and test-only support live under the owning module's root `tests/` tree | Production trees stay navigable, and runner globs cannot silently omit a colocated test | `check:contract` |
+| Tests and test-only support live under the owning module's root `tests/` tree | Production trees
+stay navigable, and runner globs cannot silently omit a colocated test | `check:contract` |
 ```
 
 Update the "Add a test" section:
 
-- sequential suites are `apps/web/tests/verify.ts` and
-  `apps/worker/tests/verify.ts`
+- sequential suites are `apps/web/tests/verify.ts` and `apps/worker/tests/verify.ts`
 - new Vitest files go under `<module>/tests/`, mirroring `src/`
 - Worker integration tests live at `apps/worker/tests/shares.test.ts`
 - the sequential suites must still not be split piecemeal
@@ -1021,10 +985,9 @@ In `docs/development/how-to/write-a-test.md`, document:
     map/interactions.test.ts
 ```
 
-State that web discovers `tests/**/*.test.{ts,tsx}`, the TypeScript-only
-modules discover `tests/**/*.test.ts`, test support belongs under
-`tests/support/`, and source-relative imports cross explicitly into `src/`.
-Keep the stateful-suite and real-workerd/D1 explanations.
+State that web discovers `tests/**/*.test.{ts,tsx}`, the TypeScript-only modules discover
+`tests/**/*.test.ts`, test support belongs under `tests/support/`, and source-relative imports cross
+explicitly into `src/`. Keep the stateful-suite and real-workerd/D1 explanations.
 
 - [ ] **Step 3: Update the project map**
 
@@ -1032,26 +995,21 @@ In `docs/development/reference/project-structure.md`:
 
 - add module-root `tests/` trees to the top-level map
 - retain and refine the `packages/core/tests/support/` entry added in Task 1
-- replace every `apps/web/scripts/verify.ts` reference with
-  `apps/web/tests/verify.ts`
-- describe `apps/web/scripts/` as performance/build tooling rather than a test
-  location
-- describe `apps/worker/scripts/` as generated-types tooling rather than a
-  test location
+- replace every `apps/web/scripts/verify.ts` reference with `apps/web/tests/verify.ts`
+- describe `apps/web/scripts/` as performance/build tooling rather than a test location
+- describe `apps/worker/scripts/` as generated-types tooling rather than a test location
 - describe the mirrored suite layout in `## Testing`
 
 Preserve any concurrent sidebar documentation already present in this file.
 
 - [ ] **Step 4: Explain the enforcement choice**
 
-In `docs/development/explanation/enforcement-model.md`, add a
-`test-layout` subsection explaining:
+In `docs/development/explanation/enforcement-model.md`, add a `test-layout` subsection explaining:
 
 - Vitest globs alone are unsafe because a misplaced test is silently skipped
-- `check:contract` already knows the workspace package boundaries and verify
-  scripts
-- the check covers test/spec filenames, test directories, test-support
-  directories, and direct tsx verifier entries
+- `check:contract` already knows the workspace package boundaries and verify scripts
+- the check covers test/spec filenames, test directories, test-support directories, and direct tsx
+  verifier entries
 - the fix is to mirror the source area under the owning package's `tests/`
 
 - [ ] **Step 5: Update contributor and command guides**
@@ -1066,9 +1024,9 @@ Repair current references and examples in:
 - `docs/development/how-to/run-the-checks.md`
 - `docs/product/reference/catalogs.md`
 
-The package and lint-rule guides must show generated tests under `tests/`.
-The migration guide must point at `apps/worker/tests/shares.test.ts`.
-The checks guide must say `check:contract` also rejects misplaced tests.
+The package and lint-rule guides must show generated tests under `tests/`. The migration guide must
+point at `apps/worker/tests/shares.test.ts`. The checks guide must say `check:contract` also rejects
+misplaced tests.
 
 - [ ] **Step 6: Repair live code comments**
 
@@ -1079,8 +1037,7 @@ Update only path wording, not behavior, in:
 - `packages/core/src/render/featureInputs.ts`
 - `apps/web/src/ui/onboarding/fixtureSystem.ts`
 
-Use `apps/web/tests/verify.ts` and
-`@transitmapper/core/testing/fixtures` or
+Use `apps/web/tests/verify.ts` and `@transitmapper/core/testing/fixtures` or
 `packages/core/tests/support/fixtures.ts` as appropriate.
 
 - [ ] **Step 7: Prove no current documentation points at the old layout**
@@ -1096,8 +1053,8 @@ rg -n "scripts/verify\.ts|apps/worker/src/shares\.test\.ts|packages/core/src/tes
   --glob '!dist/**'
 ```
 
-Expected: no current normative reference to the old layout. Historical plans
-and specs are intentionally excluded.
+Expected: no current normative reference to the old layout. Historical plans and specs are
+intentionally excluded.
 
 - [ ] **Step 8: Verify documentation and commit**
 
@@ -1155,8 +1112,8 @@ pnpm check:contract
 rg --files apps packages | rg '\.(test|spec)\.[cm]?[jt]sx?$' | sort
 ```
 
-Expected: every printed test path contains exactly one module-root
-`/tests/` segment; no test/spec file remains under `src/` or `scripts/`.
+Expected: every printed test path contains exactly one module-root `/tests/` segment; no test/spec
+file remains under `src/` or `scripts/`.
 
 - [ ] **Step 2: Confirm all direct verifiers moved**
 
@@ -1185,9 +1142,8 @@ pnpm --filter @transitmapper/web typecheck
 pnpm --filter @transitmapper/web verify
 ```
 
-Expected Vitest totals: 83 files and 517 cases, with the per-module counts
-recorded in the execution precondition. Both sequential suites and the
-maskable-icon verifier also pass.
+Expected Vitest totals: 83 files and 517 cases, with the per-module counts recorded in the execution
+precondition. Both sequential suites and the maskable-icon verifier also pass.
 
 - [ ] **Step 4: Run the complete repository bar**
 
@@ -1197,9 +1153,8 @@ Run:
 pnpm check
 ```
 
-Expected: formatting, lint, typecheck, tests, generated references,
-migrations, structure, documents, and workspace contracts all pass without
-a browser or network.
+Expected: formatting, lint, typecheck, tests, generated references, migrations, structure,
+documents, and workspace contracts all pass without a browser or network.
 
 - [ ] **Step 5: Re-run generators from the clean final tree**
 
@@ -1211,8 +1166,8 @@ pnpm check:generators
 test -z "$(git status --porcelain=v1)"
 ```
 
-Expected: generated package and lint-rule output use module-root `tests/`,
-pass `pnpm check`, and leave the worktree clean.
+Expected: generated package and lint-rule output use module-root `tests/`, pass `pnpm check`, and
+leave the worktree clean.
 
 - [ ] **Step 6: Verify history and handoff**
 
@@ -1223,8 +1178,8 @@ git log --oneline --decorate -8
 git status --porcelain=v1 -b
 ```
 
-Expected: the narrow refactor commits are present, unrelated work is absent,
-and the final worktree is clean.
+Expected: the narrow refactor commits are present, unrelated work is absent, and the final worktree
+is clean.
 
 ## Appendix A: Exact Move Map
 

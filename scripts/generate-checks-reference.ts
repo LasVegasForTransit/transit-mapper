@@ -173,7 +173,9 @@ const ELSEWHERE: Check[] = [
 ];
 
 function table(checks: Check[]): string {
-  const rows = checks.map((c) => `| \`${c.command}\` | ${c.fails} | \`${c.fix}\` |`);
+  // A cell that itself contains a backtick needs the double-backtick form.
+  const code = (s: string) => (s.includes('`') ? `\`\` ${s} \`\`` : `\`${s}\``);
+  const rows = checks.map((c) => `| ${code(c.command)} | ${c.fails} | ${code(c.fix)} |`);
   return ['| Check | Fails when | Fix |', '| --- | --- | --- |', ...rows].join('\n');
 }
 

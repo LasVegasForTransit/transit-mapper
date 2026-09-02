@@ -1,0 +1,15 @@
+# One scope per durable boundary in this repository; omit a scope when a
+# change crosses them.
+web
+worker
+core
+pwa
+editor
+map
+storage
+ui
+embed
+perf
+docs
+ci
+dx

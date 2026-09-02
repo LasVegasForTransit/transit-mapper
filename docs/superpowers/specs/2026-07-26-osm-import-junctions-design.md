@@ -1,43 +1,38 @@
 # OSM import builds real junctions
 
-> **Status.** This began as the design for junction derivation alone. Each
-> section below the first "Deferred work" heading is a follow-on written as
-> that work landed, in order, so an earlier section's "not read yet" may have
-> been answered by a later one. "Still not read", at the end, is the only
-> outstanding list.
+> **Status.** This began as the design for junction derivation alone. Each section below the first
+> "Deferred work" heading is a follow-on written as that work landed, in order, so an earlier
+> section's "not read yet" may have been answered by a later one. "Still not read", at the end, is
+> the only outstanding list.
 
 ## Context
 
-OSM import ([packages/core/src/model/import.ts](../../../packages/core/src/model/import.ts))
-fetches ways from the Overpass API and appends them to `system.ways`. It
-creates no nodes. `importWays` in
-[apps/web/src/editor/store.ts:1433](../../../apps/web/src/editor/store.ts)
-is a one-line append:
+OSM import ([packages/core/src/model/import.ts](../../../packages/core/src/model/import.ts)) fetches
+ways from the Overpass API and appends them to `system.ways`. It creates no nodes. `importWays` in
+[apps/web/src/editor/store.ts:1433](../../../apps/web/src/editor/store.ts) is a one-line append:
 
 ```ts
 importWays: (ways) =>
   set((s) => ({ system: touch({ ...s.system, ways: [...s.system.ways, ...ways] }) })),
 ```
 
-So an imported street grid is a pile of disconnected line segments. Every
-intersection in it is a visual coincidence, not a junction: nothing in
-`system.nodes` says those ways meet. The lane graph
-([routeGraph.ts](../../../packages/core/src/model/routeGraph.ts)) reads
-`system.nodes`, so an imported network is not routable and not lane-connected
-until a person manually runs `splitWayAt`/`mergeWays` across every crossing.
-For a viewport of real streets that is hundreds of manual operations.
+So an imported street grid is a pile of disconnected line segments. Every intersection in it is a
+visual coincidence, not a junction: nothing in `system.nodes` says those ways meet. The lane graph
+([routeGraph.ts](../../../packages/core/src/model/routeGraph.ts)) reads `system.nodes`, so an
+imported network is not routable and not lane-connected until a person manually runs
+`splitWayAt`/`mergeWays` across every crossing. For a viewport of real streets that is hundreds of
+manual operations.
 
-The obvious fix is coordinate snapping: find endpoints that are close enough
-and weld them. This spec does not do that. OSM already stores exact
-topology, Overpass already returns it, and the import throws it away — so
-the fix is to stop discarding it rather than to reconstruct it by guessing.
+The obvious fix is coordinate snapping: find endpoints that are close enough and weld them. This
+spec does not do that. OSM already stores exact topology, Overpass already returns it, and the
+import throws it away — so the fix is to stop discarding it rather than to reconstruct it by
+guessing.
 
 ### Overpass returns node identity, not just geometry
 
-`out geom;` is `out body geom;`. The `body` verbosity includes a way's
-`nodes` array — the OSM node IDs — and `geom` adds the resolved `geometry`
-coordinates. Both arrays are returned, index-aligned. Verified against live
-Overpass data for a 1 km box over West Flamingo Road, Las Vegas
+`out geom;` is `out body geom;`. The `body` verbosity includes a way's `nodes` array — the OSM node
+IDs — and `geom` adds the resolved `geometry` coordinates. Both arrays are returned, index-aligned.
+Verified against live Overpass data for a 1 km box over West Flamingo Road, Las Vegas
 (36.110,-115.180 to 36.120,-115.170):
 
 - 149 ways returned, 149 with a `nodes` array
@@ -46,50 +41,44 @@ Overpass data for a 1 km box over West Flamingo Road, Las Vegas
 - up to 5 ways meeting at a single node
 
 The current parser drops `nodes` on the floor and reads only `geometry`
-([import.ts:94](../../../packages/core/src/model/import.ts)). Recovering it
-is a parsing change, not a geometry algorithm.
+([import.ts:94](../../../packages/core/src/model/import.ts)). Recovering it is a parsing change, not
+a geometry algorithm.
 
 ## Goals
 
-- An OSM import produces a connected network: ways that share an OSM node
-  share a `Node` in `system.nodes`.
-- Junction detection is exact: ways connect exactly where OSM says they do,
-  with no coordinate rounding in the path.
-- Ways that merely overlap without connecting — a tram line down a street,
-  a cycleway beside a road — stay unconnected.
-- The derivation is a pure function over the Overpass response, testable
-  from fixtures without network access, matching how `classifyOsmWay` and
-  `osmElementsToWays` are already tested.
+- An OSM import produces a connected network: ways that share an OSM node share a `Node` in
+  `system.nodes`.
+- Junction detection is exact: ways connect exactly where OSM says they do, with no coordinate
+  rounding in the path.
+- Ways that merely overlap without connecting — a tram line down a street, a cycleway beside a road
+  — stay unconnected.
+- The derivation is a pure function over the Overpass response, testable from fixtures without
+  network access, matching how `classifyOsmWay` and `osmElementsToWays` are already tested.
 
 ## Non-goals
 
-- **Connecting imported ways to ways already in the system.** An import that
-  lands on top of hand-drawn work will not weld itself to that work. That
-  problem genuinely needs coordinate snapping and would reuse the existing
-  `snap()` / `joinWayPointToWay` infrastructure
+- **Connecting imported ways to ways already in the system.** An import that lands on top of
+  hand-drawn work will not weld itself to that work. That problem genuinely needs coordinate
+  snapping and would reuse the existing `snap()` / `joinWayPointToWay` infrastructure
   ([snapIndex.ts:57](../../../packages/core/src/model/geo/snapIndex.ts),
-  [store.ts:614](../../../apps/web/src/editor/store.ts)). It is deferred; see
-  "Deferred work."
-- **Lane profiles from OSM tags.** Not part of the junction work — but built
-  straight after it, once a real import showed every road arriving as the
-  same four-lane two-way default. See "Follow-on: lane profiles."
-- **Traffic control from OSM.** Not part of the junction work: this query
-  returns ways only, so junctions import uncontrolled. Added afterwards, and
-  the naive version of it turned out to do nothing at all — see "Follow-on:
-  grade and traffic control."
-- **Turn restrictions**, which OSM stores as relations. Not part of the
-  junction work either; built later — see "Follow-on: turn-restriction
-  relations."
+  [store.ts:614](../../../apps/web/src/editor/store.ts)). It is deferred; see "Deferred work."
+- **Lane profiles from OSM tags.** Not part of the junction work — but built straight after it, once
+  a real import showed every road arriving as the same four-lane two-way default. See "Follow-on:
+  lane profiles."
+- **Traffic control from OSM.** Not part of the junction work: this query returns ways only, so
+  junctions import uncontrolled. Added afterwards, and the naive version of it turned out to do
+  nothing at all — see "Follow-on: grade and traffic control."
+- **Turn restrictions**, which OSM stores as relations. Not part of the junction work either; built
+  later — see "Follow-on: turn-restriction relations."
 
 ## Architecture
 
 ### Where the node IDs enter the model
 
-`OsmWayElement` gains an optional `nodes: number[]` field alongside the
-existing `geometry`. It is optional because the field's absence must degrade
-to today's behavior rather than throw: a fixture written before this change,
-or a response from an Overpass mirror configured differently, should still
-import ways — just without junctions.
+`OsmWayElement` gains an optional `nodes: number[]` field alongside the existing `geometry`. It is
+optional because the field's absence must degrade to today's behavior rather than throw: a fixture
+written before this change, or a response from an Overpass mirror configured differently, should
+still import ways — just without junctions.
 
 ### Deriving junctions
 
@@ -104,93 +93,76 @@ export interface ImportedNetwork {
 export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork;
 ```
 
-(`ImportedNetwork` gained a third field, `namedWays`, in the follow-on
-below. The reasoning for returning the pieces together is unchanged.)
+(`ImportedNetwork` gained a third field, `namedWays`, in the follow-on below. The reasoning for
+returning the pieces together is unchanged.)
 
-It supersedes `osmElementsToWays` as the entry point, and works in two
-phases:
+It supersedes `osmElementsToWays` as the entry point, and works in two phases:
 
-1. **Collect.** While converting each element to a `Way` (unchanged logic),
-   build `Map<number, WayPointRef[]>` keyed by OSM node ID. For element
-   index `i`, `el.nodes[i]` is the OSM node at `el.geometry[i]`, which
-   becomes `Way.points[i]` — so the ref is `{ wayId: way.id, pointIndex: i }`.
-   The index alignment is what makes this work, and it is the one invariant
-   worth asserting: an element whose `nodes.length !== geometry.length` is
-   treated as having no `nodes` at all, contributing geometry but no refs.
+1. **Collect.** While converting each element to a `Way` (unchanged logic), build
+   `Map<number, WayPointRef[]>` keyed by OSM node ID. For element index `i`, `el.nodes[i]` is the
+   OSM node at `el.geometry[i]`, which becomes `Way.points[i]` — so the ref is
+   `{ wayId: way.id, pointIndex: i }`. The index alignment is what makes this work, and it is the
+   one invariant worth asserting: an element whose `nodes.length !== geometry.length` is treated as
+   having no `nodes` at all, contributing geometry but no refs.
 
-2. **Emit.** For each OSM node ID with two or more refs, emit
-   `Node { id: shortId(), coord, refs }`, where `coord` is the shared
-   point's `LngLat`. IDs with a single ref are ordinary points along one
-   way and produce nothing — a `Node` per vertex would be both wrong and
-   enormous.
+2. **Emit.** For each OSM node ID with two or more refs, emit `Node { id: shortId(), coord, refs }`,
+   where `coord` is the shared point's `LngLat`. IDs with a single ref are ordinary points along one
+   way and produce nothing — a `Node` per vertex would be both wrong and enormous.
 
-Refs from skipped elements never enter the map, since collection happens
-only for elements that survived `classifyOsmWay`. A residential street
-meeting an unimported footpath therefore yields a single-ref node ID and no
-junction, which is correct.
+Refs from skipped elements never enter the map, since collection happens only for elements that
+survived `classifyOsmWay`. A residential street meeting an unimported footpath therefore yields a
+single-ref node ID and no junction, which is correct.
 
-One case looks like a violation of `Node`'s "shared by two or more ways" and
-is not. A closed way — every roundabout and loop road — repeats its first
-node ID last, so that ID collects two refs from a _single_ way and emits a
-junction of one way meeting itself. This is wanted: `routeGraph` keys
-vertices through node identity, so sharing the node is what makes the loop
-close in the graph rather than dead-ending, and it keeps the two ends moving
-together when either is dragged. Pinned by test, since the obvious "fix" —
-requiring two distinct way IDs — would silently break loop routing.
+One case looks like a violation of `Node`'s "shared by two or more ways" and is not. A closed way —
+every roundabout and loop road — repeats its first node ID last, so that ID collects two refs from a
+_single_ way and emits a junction of one way meeting itself. This is wanted: `routeGraph` keys
+vertices through node identity, so sharing the node is what makes the loop close in the graph rather
+than dead-ending, and it keeps the two ends moving together when either is dragged. Pinned by test,
+since the obvious "fix" — requiring two distinct way IDs — would silently break loop routing.
 
 `osmElementsToWays` stays exported and keeps its signature, implemented as
-`osmElementsToNetwork(elements).ways`. It has existing callers and tests;
-nothing is gained by breaking them.
+`osmElementsToNetwork(elements).ways`. It has existing callers and tests; nothing is gained by
+breaking them.
 
-`importOsmWays` returns `ImportedNetwork` instead of `Way[]`. This is a
-breaking change to one call site
-([ImportDialog.tsx:62](../../../apps/web/src/ui/ImportDialog.tsx)) and is
-worth it: a function that returns only half the imported data invites the
-caller to forget the other half.
+`importOsmWays` returns `ImportedNetwork` instead of `Way[]`. This is a breaking change to one call
+site ([ImportDialog.tsx:62](../../../apps/web/src/ui/ImportDialog.tsx)) and is worth it: a function
+that returns only half the imported data invites the caller to forget the other half.
 
 ### Why node identity, and not coordinate matching
 
-The codebase already contains a coordinate-matching junction builder:
-`deriveNodesFromWays` ([serialize.ts:192](../../../packages/core/src/model/serialize.ts))
-groups every way's control points by `coordKey` — a 6-decimal-place string,
-roughly 0.11 m — and emits a `Node` wherever two or more refs land in the
-same bucket. It exists for loading v3 documents that predate stored nodes.
+The codebase already contains a coordinate-matching junction builder: `deriveNodesFromWays`
+([serialize.ts:192](../../../packages/core/src/model/serialize.ts)) groups every way's control
+points by `coordKey` — a 6-decimal-place string, roughly 0.11 m — and emits a `Node` wherever two or
+more refs land in the same bucket. It exists for loading v3 documents that predate stored nodes.
 
-The structure described above is deliberately the same: group refs by a key,
-emit a `Node` where a key has two or more. Only the key differs — an OSM
-node ID instead of a rounded coordinate.
+The structure described above is deliberately the same: group refs by a key, emit a `Node` where a
+key has two or more. Only the key differs — an OSM node ID instead of a rounded coordinate.
 
-It is worth being straight about how much that buys, because the obvious
-argument for it is wrong. The tempting claim is that coordinate matching
-would weld a bridge to the road beneath it. It would not: at a grade
-separation neither OSM way has a control point at the crossing, so there is
-no coordinate to coincide, and both approaches correctly produce nothing.
+It is worth being straight about how much that buys, because the obvious argument for it is wrong.
+The tempting claim is that coordinate matching would weld a bridge to the road beneath it. It would
+not: at a grade separation neither OSM way has a control point at the crossing, so there is no
+coordinate to coincide, and both approaches correctly produce nothing.
 
 The real differences are narrower:
 
-- **Distinct nodes that round together.** Two genuinely separate OSM nodes
-  closer than ~0.11 m collapse into one junction under `coordKey`. This is
-  rare but real in detailed urban mapping, and silent when it happens.
-- **Co-located ways of different modes.** This import fetches several
-  categories at once. A tram line drawn down the middle of a street shares
-  coordinates with the roadway at points without sharing nodes, and a
-  cycleway drawn along a road does the same. Coordinate matching welds them
-  into junctions that do not exist; node identity does not. This is the case
-  most likely to actually bite here, because importing `road` plus
-  `lightRail` together is a normal thing to do in this app.
-- **No dependence on serialization precision.** Overpass emits 7 decimal
-  places and `coordKey` rounds to 6. That happens to be safe today. Node IDs
-  do not rely on it being safe.
+- **Distinct nodes that round together.** Two genuinely separate OSM nodes closer than ~0.11 m
+  collapse into one junction under `coordKey`. This is rare but real in detailed urban mapping, and
+  silent when it happens.
+- **Co-located ways of different modes.** This import fetches several categories at once. A tram
+  line drawn down the middle of a street shares coordinates with the roadway at points without
+  sharing nodes, and a cycleway drawn along a road does the same. Coordinate matching welds them
+  into junctions that do not exist; node identity does not. This is the case most likely to actually
+  bite here, because importing `road` plus `lightRail` together is a normal thing to do in this app.
+- **No dependence on serialization precision.** Overpass emits 7 decimal places and `coordKey`
+  rounds to 6. That happens to be safe today. Node IDs do not rely on it being safe.
 
-Neither approach needs a tolerance to be _tuned_ — `coordKey`'s precision is
-fixed, not a knob. The argument for node IDs is that they are exact and cost
-the same, not that coordinate matching would be a disaster.
+Neither approach needs a tolerance to be _tuned_ — `coordKey`'s precision is fixed, not a knob. The
+argument for node IDs is that they are exact and cost the same, not that coordinate matching would
+be a disaster.
 
-Reusing `deriveNodesFromWays` directly was considered and rejected: it is
-module-private, it takes a whole-system way list rather than an import's,
-and calling it would mean importing OSM data and then throwing away the
-topology OSM handed us in favor of re-deriving a slightly worse version of
-it.
+Reusing `deriveNodesFromWays` directly was considered and rejected: it is module-private, it takes a
+whole-system way list rather than an import's, and calling it would mean importing OSM data and then
+throwing away the topology OSM handed us in favor of re-deriving a slightly worse version of it.
 
 ### Store integration
 
@@ -213,41 +185,38 @@ importWays: ({ ways, nodes }) =>
   })),
 ```
 
-Appending is safe without renumbering because every id is a fresh
-`shortId()` and every ref points at a way created in the same import. No
-existing node's `refs` are touched, so the `shiftNodeRefsFor*` invariants
-that the rest of the store maintains
+Appending is safe without renumbering because every id is a fresh `shortId()` and every ref points
+at a way created in the same import. No existing node's `refs` are touched, so the
+`shiftNodeRefsFor*` invariants that the rest of the store maintains
 ([store.ts:565](../../../apps/web/src/editor/store.ts)) are not disturbed.
 
-The doc comment on `importWays` ([store.ts:235](../../../apps/web/src/editor/store.ts))
-needs updating: it currently contrasts itself with `importGtfs` on the
-grounds that it appends bare ways. It still creates no services or stations,
-which is the real distinction, but it is no longer ways-only.
+The doc comment on `importWays` ([store.ts:235](../../../apps/web/src/editor/store.ts)) needs
+updating: it currently contrasts itself with `importGtfs` on the grounds that it appends bare ways.
+It still creates no services or stations, which is the real distinction, but it is no longer
+ways-only.
 
 ## Testing
 
 `osmElementsToNetwork` is pure, so it is fixture-tested like its neighbors:
 
-- Two ways sharing one node ID mid-path produce one `Node` with two refs at
-  the right `pointIndex` on each.
-- A node ID shared by five ways produces one `Node` with five refs, not four
-  pairwise nodes.
+- Two ways sharing one node ID mid-path produce one `Node` with two refs at the right `pointIndex`
+  on each.
+- A node ID shared by five ways produces one `Node` with five refs, not four pairwise nodes.
 - Ways with no shared IDs produce zero nodes.
-- Two ways with an identical coordinate but different node IDs produce zero
-  nodes — the co-located-modes case (tram on street), and the one that would
-  regress if someone later "helpfully" adds coordinate matching.
+- Two ways with an identical coordinate but different node IDs produce zero nodes — the
+  co-located-modes case (tram on street), and the one that would regress if someone later
+  "helpfully" adds coordinate matching.
 - An element missing `nodes` imports its way and contributes no refs.
 - An element whose `nodes.length !== geometry.length` does the same.
-- A node shared between an imported way and a skipped (unclassified)
-  element produces no junction.
+- A node shared between an imported way and a skipped (unclassified) element produces no junction.
 
-The Flamingo Road response captured while writing this spec is a reasonable
-basis for one realistic fixture, trimmed to a handful of ways.
+The Flamingo Road response captured while writing this spec is a reasonable basis for one realistic
+fixture, trimmed to a handful of ways.
 
 ### Measured against live data
 
-Running the implemented pipeline against the same Overpass box
-(36.110,-115.180 to 36.120,-115.170), streets plus light rail:
+Running the implemented pipeline against the same Overpass box (36.110,-115.180 to 36.120,-115.170),
+streets plus light rail:
 
 |                                                    | result |
 | -------------------------------------------------- | ------ |
@@ -259,46 +228,42 @@ Running the implemented pipeline against the same Overpass box
 | connected components, before                       | 149    |
 | connected components, after                        | 2      |
 
-The component count is the metric that matters, and it is the one to use if
-this is ever measured again. The unjoined-crossing count is not: it was 4
-both before and after, because OSM splits ways at intersections, so ways
-meet end-to-end rather than geometrically crossing, and the crossing
+The component count is the metric that matters, and it is the one to use if this is ever measured
+again. The unjoined-crossing count is not: it was 4 both before and after, because OSM splits ways
+at intersections, so ways meet end-to-end rather than geometrically crossing, and the crossing
 validator never flagged those meetings either way.
 
-All four residual crossings are the same real grade separation — West
-Flamingo Road (`bridge=yes`, `layer=2`) passing over Frank Sinatra Drive —
-which must stay unjoined. The two remaining components are the network and
-a fragment whose continuation lies outside the imported box.
+All four residual crossings are the same real grade separation — West Flamingo Road (`bridge=yes`,
+`layer=2`) passing over Frank Sinatra Drive — which must stay unjoined. The two remaining components
+are the network and a fragment whose continuation lies outside the imported box.
 
 ## Deferred work
 
 Both were considered for this change and cut deliberately.
 
-**Snapping imports onto existing ways.** Needed when a person imports over
-work already _drawn_. It is a different mechanism — `snap()` against the
-current system, then `joinWayPointToWay` per match — with its own tolerance
-question. Still deferred, and deliberately: the case that actually mattered
-turned out to be importing over work already _imported_, which node identity
-solves exactly. See "Follow-on: re-importing".
+**Snapping imports onto existing ways.** Needed when a person imports over work already _drawn_. It
+is a different mechanism — `snap()` against the current system, then `joinWayPointToWay` per match —
+with its own tolerance question. Still deferred, and deliberately: the case that actually mattered
+turned out to be importing over work already _imported_, which node identity solves exactly. See
+"Follow-on: re-importing".
 
-**Lane profiles from OSM tags.** ~~Deferred.~~ Built immediately after this
-change — see "Follow-on: lane profiles" below.
+**Lane profiles from OSM tags.** ~~Deferred.~~ Built immediately after this change — see "Follow-on:
+lane profiles" below.
 
 ## Follow-on: lane profiles from OSM tags
 
-Junctions alone were not enough to make an import look like a real street.
-Every road still arrived as `defaultProfileFor("road")` — four lanes, two-way,
-sidewalks both sides — because the catalog's road type has one
-`defaultProfile` shared by all four classes and `defaultProfileFor` takes no
-class. On the Strip, where nearly every arterial is a pair of one-way
-carriageways, that drew two four-lane two-way streets with a centre line
-each where there should have been two one-way carriageways.
+Junctions alone were not enough to make an import look like a real street. Every road still arrived
+as `defaultProfileFor("road")` — four lanes, two-way, sidewalks both sides — because the catalog's
+road type has one `defaultProfile` shared by all four classes and `defaultProfileFor` takes no
+class. On the Strip, where nearly every arterial is a pair of one-way carriageways, that drew two
+four-lane two-way streets with a centre line each where there should have been two one-way
+carriageways.
 
 ### What is read
 
-`profileFromOsmTags(typeId, classId, tags)` in `import.ts` replaces the flat
-default for roads only — `lanes` and `turn:lanes` are road vocabulary, and
-rail and bike ways are already right with a single bidirectional lane.
+`profileFromOsmTags(typeId, classId, tags)` in `import.ts` replaces the flat default for roads only
+— `lanes` and `turn:lanes` are road vocabulary, and rail and bike ways are already right with a
+single bidirectional lane.
 
 | tag                                           | effect                                             |
 | --------------------------------------------- | -------------------------------------------------- |
@@ -310,287 +275,254 @@ rail and bike ways are already right with a single bidirectional lane.
 | `turn:lanes` (+`:forward`/`:backward`)        | turn-only lanes become `turnPocket`                |
 | `sidewalk`, `sidewalk:left`, `sidewalk:right` | which edges keep a sidewalk                        |
 
-Where OSM says nothing, the class supplies a total (`ROAD_LANES_BY_CLASS`:
-transitway and arterial 4, collector and local 2), halved for a one-way way
-on the reasoning that it is one carriageway of a street that wide.
+Where OSM says nothing, the class supplies a total (`ROAD_LANES_BY_CLASS`: transitway and arterial
+4, collector and local 2), halved for a one-way way on the reasoning that it is one carriageway of a
+street that wide.
 
 ### Decisions worth keeping
 
-- **A lane that can still go straight is not a pocket.** `through;right`
-  stays a travel lane; `turnPocket` means a lane you cannot continue from.
-  `merge_to_left`/`merge_to_right` are travel lanes too.
-- **A mismatched `turn:lanes` is ignored, not truncated.** Padding or
-  truncating would silently put a pocket in the wrong lane, and in real data
-  a mismatch usually means the tag describes a different segment.
-- **`turn:lanes:backward` maps on reversed.** Lanes are stored left-to-right
-  facing forward, but OSM lists turns left-to-right as the _driver_ sees
-  them, so for backward lanes the two orders are opposites.
-- **`sidewalk=separate` drops the sidewalk.** It means OSM maps the footway
-  as its own way; drawing one here as well would double it.
-- **Untrusted counts are clamped** to `MAX_PRIMARY_LANES` before any array is
-  allocated, since `lanes` is user-entered free text and reaches us straight
-  from `JSON.parse`. The clamp is on the **total**, not per tag: clamping
-  each tag alone still let `lanes:forward=999` plus `lanes:backward=999`
-  allocate 64 lanes, which is the ceiling's whole purpose defeated. An
-  over-large split is scaled proportionally rather than truncated on one
-  side, so 30/10 becomes 24/8 rather than 32/0.
+- **A lane that can still go straight is not a pocket.** `through;right` stays a travel lane;
+  `turnPocket` means a lane you cannot continue from. `merge_to_left`/`merge_to_right` are travel
+  lanes too.
+- **A mismatched `turn:lanes` is ignored, not truncated.** Padding or truncating would silently put
+  a pocket in the wrong lane, and in real data a mismatch usually means the tag describes a
+  different segment.
+- **`turn:lanes:backward` maps on reversed.** Lanes are stored left-to-right facing forward, but OSM
+  lists turns left-to-right as the _driver_ sees them, so for backward lanes the two orders are
+  opposites.
+- **`sidewalk=separate` drops the sidewalk.** It means OSM maps the footway as its own way; drawing
+  one here as well would double it.
+- **Untrusted counts are clamped** to `MAX_PRIMARY_LANES` before any array is allocated, since
+  `lanes` is user-entered free text and reaches us straight from `JSON.parse`. The clamp is on the
+  **total**, not per tag: clamping each tag alone still let `lanes:forward=999` plus
+  `lanes:backward=999` allocate 64 lanes, which is the ceiling's whole purpose defeated. An
+  over-large split is scaled proportionally rather than truncated on one side, so 30/10 becomes 24/8
+  rather than 32/0.
 
-`profileWithPrimaryLanes(typeId, primary, edges)` was extracted in
-`profile.ts` to hold the "wrap a block of travel lanes in the type's edge
-lanes" logic that `defaultProfileFor` already had inline; both use it now.
+`profileWithPrimaryLanes(typeId, primary, edges)` was extracted in `profile.ts` to hold the "wrap a
+block of travel lanes in the type's edge lanes" logic that `defaultProfileFor` already had inline;
+both use it now.
 
 ### Measured, same viewport
 
-44 roads imported around Flamingo and Las Vegas Boulevard: 40 one-way and 4
-two-way (was 44 two-way), 15 carrying turn pockets (was 0), travel-lane
-counts spread 1–5 (was 44 ways at exactly 4), and 34 with no sidewalk where
-OSM maps the footway separately (was 44 with two each).
+44 roads imported around Flamingo and Las Vegas Boulevard: 40 one-way and 4 two-way (was 44
+two-way), 15 carrying turn pockets (was 0), travel-lane counts spread 1–5 (was 44 ways at exactly
+4), and 34 with no sidewalk where OSM maps the footway separately (was 44 with two each).
 
 ### Not read at this point
 
-Bus lanes, on-street parking, cycleways tagged as a modifier on the roadway,
-`width`, and left-hand traffic. All but `width` were built in later follow-ons
-below; see "Still not read" at the end of this document for the current list.
+Bus lanes, on-street parking, cycleways tagged as a modifier on the roadway, `width`, and left-hand
+traffic. All but `width` were built in later follow-ons below; see "Still not read" at the end of
+this document for the current list.
 
 ## Follow-on: street names → NamedWay
 
-OSM splits a street into a way per block and per direction, all carrying the
-same `name` — exactly the identity `NamedWay` exists to hold, and unused by
-the import until now. Ways are grouped by name _and_ way type, since a street
-and the tram line along it often share a name in OSM without being one
-facility. A name matching a single way gets no NamedWay; the identity would
-add nothing over the way itself.
+OSM splits a street into a way per block and per direction, all carrying the same `name` — exactly
+the identity `NamedWay` exists to hold, and unused by the import until now. Ways are grouped by name
+_and_ way type, since a street and the tram line along it often share a name in OSM without being
+one facility. A name matching a single way gets no NamedWay; the identity would add nothing over the
+way itself.
 
-Creating the records was not enough to show them. `LinesPanel` labelled every
-row `${type.label} ${i + 1}` with no reference to `namedWays`, so the objects
-list still read "Road 1 … Road 439" after the import was already producing 12
-identities. The label now prefers the identity's name, numbering segments
-within a street — a dozen rows all reading "West Flamingo Road" is no more
-navigable than the ordinals were. `WayInspector` and `NodeInspector` already
-consumed `namedWays`, so those needed nothing.
+Creating the records was not enough to show them. `LinesPanel` labelled every row
+`${type.label} ${i + 1}` with no reference to `namedWays`, so the objects list still read "Road 1 …
+Road 439" after the import was already producing 12 identities. The label now prefers the identity's
+name, numbering segments within a street — a dozen rows all reading "West Flamingo Road" is no more
+navigable than the ordinals were. `WayInspector` and `NodeInspector` already consumed `namedWays`,
+so those needed nothing.
 
 ## Follow-on: grade and traffic control
 
 ### Grade, and the crossing check that ignored it
 
-`bridge`/`tunnel` are the explicit signals and `layer` the fallback, mapping
-onto the existing `Grade`. Everything imported at `atGrade` before this.
+`bridge`/`tunnel` are the explicit signals and `layer` the fallback, mapping onto the existing
+`Grade`. Everything imported at `atGrade` before this.
 
-The more valuable half was a pre-existing defect this exposed:
-`findCrossingsWithoutJoining` never read `Way.grade`, so **any** elevated way
-over a surface street — hand-drawn or imported — was reported as needing a
-junction the user could not correctly create. `CrossSegment` now carries
+The more valuable half was a pre-existing defect this exposed: `findCrossingsWithoutJoining` never
+read `Way.grade`, so **any** elevated way over a surface street — hand-drawn or imported — was
+reported as needing a junction the user could not correctly create. `CrossSegment` now carries
 `grade` and pairs at different grades are skipped.
 
 ### Traffic control, and why the obvious mapping did nothing
 
-`NodeControl` already had `signal`/`stop`/`roundabout`, and OSM tags all
-three. The first implementation matched control nodes to junctions by node
-id — and applied **zero** controls to real data.
+`NodeControl` already had `signal`/`stop`/`roundabout`, and OSM tags all three. The first
+implementation matched control nodes to junctions by node id — and applied **zero** controls to real
+data.
 
-Measured over the same viewport: of 37 control nodes, **none** sat on a
-shared junction node. OSM puts `highway=traffic_signals` on the approach way
-at the stop line, a median of 15 m short of the junction (p90 55 m), so the
-node has one ref, is never a junction, and the mapping silently no-ops.
+Measured over the same viewport: of 37 control nodes, **none** sat on a shared junction node. OSM
+puts `highway=traffic_signals` on the approach way at the stop line, a median of 15 m short of the
+junction (p90 55 m), so the node has one ref, is never a junction, and the mapping silently no-ops.
 
-Control nodes are now walked along their own way to the nearest junction
-within `CONTROL_STOPLINE_METERS` (40 m — claims 25 of 28 while excluding a
-229 m outlier). The walk follows the way rather than taking the nearest
-junction by straight-line distance, which matters precisely here: the two
-carriageways of a boulevard sit 15–20 m apart, the same order as the stop-line
-distance, so a straight-line match would routinely signalize the junction on
-the opposite carriageway. Claims are ranked (signal > stop > roundabout) so a
-junction with any signalized approach is signalized.
+Control nodes are now walked along their own way to the nearest junction within
+`CONTROL_STOPLINE_METERS` (40 m — claims 25 of 28 while excluding a 229 m outlier). The walk follows
+the way rather than taking the nearest junction by straight-line distance, which matters precisely
+here: the two carriageways of a boulevard sit 15–20 m apart, the same order as the stop-line
+distance, so a straight-line match would routinely signalize the junction on the opposite
+carriageway. Claims are ranked (signal > stop > roundabout) so a junction with any signalized
+approach is signalized.
 
-Roundabouts come from the way tag `junction=roundabout`, not a node tag, and
-apply to the junctions along the circulatory way.
+Roundabouts come from the way tag `junction=roundabout`, not a node tag, and apply to the junctions
+along the circulatory way.
 
 ## Follow-on: Overpass endpoint fallback
 
-Overpass returned 504 repeatedly during this work, surfacing as "import
-failed". The import now tries a second public server before giving up.
+Overpass returned 504 repeatedly during this work, surfacing as "import failed". The import now
+tries a second public server before giving up.
 
-Two things learned the hard way. A mirror that answers `curl` is useless if
-it omits CORS headers — `overpass.osm.jp` was in the list until a browser
-check showed it failing preflight, and both remaining endpoints were verified
-from a browser rather than a terminal. And Overpass's _error_ responses often
-drop the CORS headers its successful ones carry, so an overloaded server
-reaches the app as a thrown `TypeError` with no status: the retry loop treats
-a thrown fetch as "try the next mirror", and the failure message says only
-that no server answered rather than claiming the network is down.
+Two things learned the hard way. A mirror that answers `curl` is useless if it omits CORS headers —
+`overpass.osm.jp` was in the list until a browser check showed it failing preflight, and both
+remaining endpoints were verified from a browser rather than a terminal. And Overpass's _error_
+responses often drop the CORS headers its successful ones carry, so an overloaded server reaches the
+app as a thrown `TypeError` with no status: the retry loop treats a thrown fetch as "try the next
+mirror", and the failure message says only that no server answered rather than claiming the network
+is down.
 
 ### Measured end to end
 
-139 ways over the same viewport: 13 named identities covering most of them,
-111 junctions of which 20 signals and 2 stops, 1 elevated way and 1
-underground, and 0 unjoined crossings — down from 4, all of which were the
-same bridge now correctly imported as elevated.
+139 ways over the same viewport: 13 named identities covering most of them, 111 junctions of which
+20 signals and 2 stops, 1 elevated way and 1 underground, and 0 unjoined crossings — down from 4,
+all of which were the same bridge now correctly imported as elevated.
 
 ### Not read at this point
 
-Bus lanes, on-street parking, roadway-modifier cycleways, `width`, `maxspeed`,
-and per-approach control. See "Still not read" at the end for what is
-genuinely outstanding now.
+Bus lanes, on-street parking, roadway-modifier cycleways, `width`, `maxspeed`, and per-approach
+control. See "Still not read" at the end for what is genuinely outstanding now.
 
 ## Follow-on: left-hand traffic
 
-`profileFromOsmTags` built every cross-section right-hand-traffic first and
-stopped there, so a system set to left-hand traffic imported streets mirrored
-— forward traffic on the wrong side of every road. The system already had a
-`drivingSide`; the import simply never asked for it.
+`profileFromOsmTags` built every cross-section right-hand-traffic first and stopped there, so a
+system set to left-hand traffic imported streets mirrored — forward traffic on the wrong side of
+every road. The system already had a `drivingSide`; the import simply never asked for it.
 
-It is threaded from `ImportDialog` through `importOsmWays` and
-`osmElementsToNetwork` into `profileFromOsmTags`.
+It is threaded from `ImportDialog` through `importOsmWays` and `osmElementsToNetwork` into
+`profileFromOsmTags`.
 
-The first implementation mirrored the finished profile — reversed its
-left-to-right order — which was wrong, and wrong in a way the tests then
-enshrined. OSM's `:left`/`:right` suffixes and `turn:lanes` ordering are
-defined against the _way's_ forward direction in every country, so reversing
-moved every tagged side to the wrong kerb. A one-way street is the decisive
-case: all its lanes run one way, so there is no arrangement to mirror, yet a
-London street tagged `busway:left` came out with its bus lane at the offside
-kerb.
+The first implementation mirrored the finished profile — reversed its left-to-right order — which
+was wrong, and wrong in a way the tests then enshrined. OSM's `:left`/`:right` suffixes and
+`turn:lanes` ordering are defined against the _way's_ forward direction in every country, so
+reversing moved every tagged side to the wrong kerb. A one-way street is the decisive case: all its
+lanes run one way, so there is no arrangement to mirror, yet a London street tagged `busway:left`
+came out with its bus lane at the offside kerb.
 
-Only the travel-lane halves swap: the forward block sits on the right under
-right-hand traffic and on the left under left-hand. Kerb lanes stay where the
-tags put them, and a kerb lane's own direction follows the traffic beside it.
+Only the travel-lane halves swap: the forward block sits on the right under right-hand traffic and
+on the left under left-hand. Kerb lanes stay where the tags put them, and a kerb lane's own
+direction follows the traffic beside it.
 
-Changing the setting later does not re-mirror ways already imported; that
-would be a bulk mutation of the user's existing work, not a setting change.
+Changing the setting later does not re-mirror ways already imported; that would be a bulk mutation
+of the user's existing work, not a setting change.
 
 ## Follow-on: re-importing
 
-Import was additive with no memory, so clicking the button twice — or
-importing a viewport that overlaps an earlier one — silently doubled the
-geometry into overlapping ways that look like one street and behave like two.
-Overpass makes the overlap case routine rather than rare: it returns a way
-whole whenever any part of it falls in the box, so neighbouring imports
-always share their boundary streets.
+Import was additive with no memory, so clicking the button twice — or importing a viewport that
+overlaps an earlier one — silently doubled the geometry into overlapping ways that look like one
+street and behave like two. Overpass makes the overlap case routine rather than rare: it returns a
+way whole whenever any part of it falls in the box, so neighbouring imports always share their
+boundary streets.
 
-`withoutAlreadyImported` filters an import against the system's existing
-`Way.source` markers before anything is appended, in the store rather than
-the dialog so no caller can skip it.
+`withoutAlreadyImported` filters an import against the system's existing `Way.source` markers before
+anything is appended, in the store rather than the dialog so no caller can skip it.
 
-The interesting half is not the dropping but the re-pointing. A junction
-between a way already present and a newly imported one is kept, with its ref
-aimed at the existing way — so a second import _joins_ the first instead of
-merely not duplicating it. That is the same node-identity join used within a
-single import, so it still needs no proximity tolerance, and it is why
-snapping remains unnecessary for this case.
+The interesting half is not the dropping but the re-pointing. A junction between a way already
+present and a newly imported one is kept, with its ref aimed at the existing way — so a second
+import _joins_ the first instead of merely not duplicating it. That is the same node-identity join
+used within a single import, so it still needs no proximity tolerance, and it is why snapping
+remains unnecessary for this case.
 
-A way the user has since edited is recognised as a duplicate and dropped, but
-refs into it are not re-pointed: once the point count no longer matches OSM's,
-the indices no longer mean what OSM meant by them, and a junction on the
-wrong vertex of someone's edited street is worse than one they add back
-themselves.
+A way the user has since edited is recognised as a duplicate and dropped, but refs into it are not
+re-pointed: once the point count no longer matches OSM's, the indices no longer mean what OSM meant
+by them, and a junction on the wrong vertex of someone's edited street is worse than one they add
+back themselves.
 
-A street that straddles two imports joins the identity it already has rather
-than gaining a second one. Without that, the shared boundary way sat in two
-`NamedWay`s at once: renaming the street through one left the other stale,
-and the member count that gates the carriageway tools counted the way twice.
-The merge is keyed on way type plus name, so a tram line sharing a street's
-name still stays its own identity.
+A street that straddles two imports joins the identity it already has rather than gaining a second
+one. Without that, the shared boundary way sat in two `NamedWay`s at once: renaming the street
+through one left the other stale, and the member count that gates the carriageway tools counted the
+way twice. The merge is keyed on way type plus name, so a tram line sharing a street's name still
+stays its own identity.
 
-`importWays` returns `{added, skipped}` so the dialog can distinguish
-"imported 0 ways" from "all 149 of these were already here" — the same
-outcome, but only one of them is a mistake worth telling someone about.
+`importWays` returns `{added, skipped}` so the dialog can distinguish "imported 0 ways" from "all
+149 of these were already here" — the same outcome, but only one of them is a mistake worth telling
+someone about.
 
 ## Follow-on: a junction the system already has
 
-`withoutAlreadyImported` re-pointed a duplicate way's refs onto the copy
-already present, but decided whether to emit a `Node` by asking only whether
-the junction touched a kept way. A junction that gains ONE new arm — import
-Streets, then import again with Bike ticked, and a cycleway ends at an
-existing road-road junction — satisfied that and produced a second `Node` at
-the same coordinate.
+`withoutAlreadyImported` re-pointed a duplicate way's refs onto the copy already present, but
+decided whether to emit a `Node` by asking only whether the junction touched a kept way. A junction
+that gains ONE new arm — import Streets, then import again with Bike ticked, and a cycleway ends at
+an existing road-road junction — satisfied that and produced a second `Node` at the same coordinate.
 
-Two Nodes there is not cosmetic. `cascadeMove` finds only the first match, so
-dragging the junction moves that Node's arms and strands the other's; the
-stranded Node keeps claiming the ways are joined at a coordinate they have
-left. `setNodeControl` likewise reaches only one, and the renderer draws two
-overlapping junction polygons.
+Two Nodes there is not cosmetic. `cascadeMove` finds only the first match, so dragging the junction
+moves that Node's arms and strands the other's; the stranded Node keeps claiming the ways are joined
+at a coordinate they have left. `setNodeControl` likewise reaches only one, and the renderer draws
+two overlapping junction polygons.
 
-The function now takes the system's existing nodes and matches an incoming
-junction to an existing one by a shared `(wayId, pointIndex)` arm — exact, and
-needing no coordinate comparison. A match yields a `junctionAdditions` entry
-the store merges into the existing `Node` instead of appending a rival.
+The function now takes the system's existing nodes and matches an incoming junction to an existing
+one by a shared `(wayId, pointIndex)` arm — exact, and needing no coordinate comparison. A match
+yields a `junctionAdditions` entry the store merges into the existing `Node` instead of appending a
+rival.
 
 ## Follow-on: pairing a divided street's carriageways
 
-OSM draws a divided street as two one-way ways. Grouping every same-named way
-into one identity made the whole street a single N-member `NamedWay`, which
-the carriageway tools cannot act on — they work on exactly two.
+OSM draws a divided street as two one-way ways. Grouping every same-named way into one identity made
+the whole street a single N-member `NamedWay`, which the carriageway tools cannot act on — they work
+on exactly two.
 
-Same-named one-way ways are now matched into carriageway pairs, and each pair
-becomes its own two-member identity; whatever has no partner keeps the
-ordinary whole-street identity. The median is captured from the geometry:
-their mean separation less the half-widths each occupies, stored only when
-that gap is positive, so Combine restores the real median rather than a
-default.
+Same-named one-way ways are now matched into carriageway pairs, and each pair becomes its own
+two-member identity; whatever has no partner keeps the ordinary whole-street identity. The median is
+captured from the geometry: their mean separation less the half-widths each occupies, stored only
+when that gap is positive, so Combine restores the real median rather than a default.
 
-Matching is **mutual best match** — a pair forms only if each way is also the
-other's nearest antiparallel candidate within 45 m. That is what stops a
-frontage road or slip lane, which is same-named and parallel and one-way,
-from claiming a carriageway that has a better partner. Two-way ways are never
-candidates, and same-direction ways are never a pair.
+Matching is **mutual best match** — a pair forms only if each way is also the other's nearest
+antiparallel candidate within 45 m. That is what stops a frontage road or slip lane, which is
+same-named and parallel and one-way, from claiming a carriageway that has a better partner. Two-way
+ways are never candidates, and same-direction ways are never a pair.
 
-Measured over a 2 km box across the Strip: 492 ways produced 126 two-member
-identities, 106 of them carrying a captured median, every one an
-`oneway=yes` x `oneway=yes` pair on a genuinely divided arterial (Las Vegas
-Boulevard, Flamingo, Koval, Spring Mountain). 29 identities kept more than
-two members, which is the honest outcome for streets OSM has split into
-segments that do not line up across the median.
+Measured over a 2 km box across the Strip: 492 ways produced 126 two-member identities, 106 of them
+carrying a captured median, every one an `oneway=yes` x `oneway=yes` pair on a genuinely divided
+arterial (Las Vegas Boulevard, Flamingo, Koval, Spring Mountain). 29 identities kept more than two
+members, which is the honest outcome for streets OSM has split into segments that do not line up
+across the median.
 
 ## Follow-on: turn-restriction relations
 
-OSM records a turn ban as a `type=restriction` relation naming a `from` way, a
-`via` node and a `to` way. This model expresses the same thing per lane, as
-the set of ways a lane may still feed, so a ban becomes every arm at the via
-junction except the forbidden one; `only_*` is the inverse and yields just the
-named arm.
+OSM records a turn ban as a `type=restriction` relation naming a `from` way, a `via` node and a `to`
+way. This model expresses the same thing per lane, as the set of ways a lane may still feed, so a
+ban becomes every arm at the via junction except the forbidden one; `only_*` is the inverse and
+yields just the named arm.
 
-Three deliberate limits, each of which would otherwise produce a ban the sign
-never meant:
+Three deliberate limits, each of which would otherwise produce a ban the sign never meant:
 
-- **Via-node only.** A via-_way_ restriction describes a movement through a
-  whole link, which has no expression in a per-lane target set at a single
-  junction.
-- **The vocabulary is checked.** `no_*`/`only_*` values are matched against a
-  known set, so a typo (they occur in real data) is ignored rather than
-  applied as a real ban.
-- **Only lanes that could make the turn.** Restrictions land on drive, bus and
-  turn-pocket lanes on the approach. Without that filter a ban lands on
-  whichever lane is outermost, which on a street with a kerbside cycleway is
-  the bike lane — so a no-right-turn for cars would forbid only the bicycle.
+- **Via-node only.** A via-_way_ restriction describes a movement through a whole link, which has no
+  expression in a per-lane target set at a single junction.
+- **The vocabulary is checked.** `no_*`/`only_*` values are matched against a known set, so a typo
+  (they occur in real data) is ignored rather than applied as a real ban.
+- **Only lanes that could make the turn.** Restrictions land on drive, bus and turn-pocket lanes on
+  the approach. Without that filter a ban lands on whichever lane is outermost, which on a street
+  with a kerbside cycleway is the bike lane — so a no-right-turn for cars would forbid only the
+  bicycle.
 
-A relation naming a way the import skipped is dropped whole, since the
-remaining arms would not describe the real junction.
+A relation naming a way the import skipped is dropped whole, since the remaining arms would not
+describe the real junction.
 
-`touch()`'s lane-component pruning covers these for free: a restriction whose
-lane stops existing is dropped, so an imported ban cannot outlive the profile
-it describes.
+`touch()`'s lane-component pruning covers these for free: a restriction whose lane stops existing is
+dropped, so an imported ban cannot outlive the profile it describes.
 
-Measured over the same 2 km box: 106 relations fetched, 49 of them via-node,
-71 restrictions applied — 45 on drive lanes and 26 on turn pockets, none on a
-bike lane — with no key naming a missing lane and no target naming a missing
-way.
+Measured over the same 2 km box: 106 relations fetched, 49 of them via-node, 71 restrictions applied
+— 45 on drive lanes and 26 on turn pockets, none on a bike lane — with no key naming a missing lane
+and no target naming a missing way.
 
 ## Still not read
 
 The current list, superseding every earlier one:
 
-- `width` — no per-way width field exists; width is derived from the lanes,
-  and a way-level value that can disagree with their sum is a modelling
-  hazard rather than a missing feature.
-- `maxspeed` — no speed field on `Way` at all, so this is a data-model
-  change before it is an import one.
-- **Per-approach control.** `highway=stop` sets the whole junction;
-  `ApproachControl` exists but the import cannot tell which arm a sign faces.
-- **Via-way turn restrictions**, and the `except` qualifier on the ones that
-  are read.
-- **Snapping an import onto hand-drawn ways.** Joining a _previous import_
-  is handled exactly by node identity (see "Follow-on: re-importing"); welding
-  to hand-drawn geometry still needs a proximity tolerance and is not built.
-- **`turn:lanes` whose entry count disagrees with the lane count** is ignored
-  rather than approximated, so turn pockets often do not materialise on real
-  data. Deliberate: a pocket in the wrong lane is worse than none.
+- `width` — no per-way width field exists; width is derived from the lanes, and a way-level value
+  that can disagree with their sum is a modelling hazard rather than a missing feature.
+- `maxspeed` — no speed field on `Way` at all, so this is a data-model change before it is an import
+  one.
+- **Per-approach control.** `highway=stop` sets the whole junction; `ApproachControl` exists but the
+  import cannot tell which arm a sign faces.
+- **Via-way turn restrictions**, and the `except` qualifier on the ones that are read.
+- **Snapping an import onto hand-drawn ways.** Joining a _previous import_ is handled exactly by
+  node identity (see "Follow-on: re-importing"); welding to hand-drawn geometry still needs a
+  proximity tolerance and is not built.
+- **`turn:lanes` whose entry count disagrees with the lane count** is ignored rather than
+  approximated, so turn pockets often do not materialise on real data. Deliberate: a pocket in the
+  wrong lane is worse than none.

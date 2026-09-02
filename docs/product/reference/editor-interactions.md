@@ -1,8 +1,8 @@
 # Editor interactions
 
-This is the normative vocabulary and pointer-intent reference for the editor.
-User-facing copy uses the terms below. Code and model documentation may name
-the TypeScript representation when that distinction helps a maintainer.
+This is the normative vocabulary and pointer-intent reference for the editor. User-facing copy uses
+the terms below. Code and model documentation may name the TypeScript representation when that
+distinction helps a maintainer.
 
 ## Vocabulary reference
 
@@ -22,20 +22,20 @@ the TypeScript representation when that distinction helps a maintainer.
 | Action anchor           | Temporary right-click location marker                   | Ephemeral overlay                  | Inserted network node               |
 | Connection              | Explicit joining operation                              | Editor operation                   | Generic name for every point        |
 
-Use **junction** in the interface and user guides. Use `Node` only when
-describing the saved representation or a code identifier. A visible crossing
-is not a junction until the corridors share topology.
+Use **junction** in the interface and user guides. Use `Node` only when describing the saved
+representation or a code identifier. A visible crossing is not a junction until the corridors share
+topology.
 
 ## Pointer-intent reference
 
-The native cursor and its badge are one contract with the operation dispatched
-on pointer-down. Modifier changes recompute an idle pointer's intent without
-requiring the pointer to move. Once pointer-down starts a gesture, its primary
-operation is locked; only `Shift` may add or remove a geometric constraint.
+The native cursor and its badge are one contract with the operation dispatched on pointer-down.
+Modifier changes recompute an idle pointer's intent without requiring the pointer to move. Once
+pointer-down starts a gesture, its primary operation is locked; only `Shift` may add or remove a
+geometric constraint.
 
-`None` in the Preview column means the interaction does not draw a live
-geometry preview. A **target cue** marks the object the operation will use. An
-**action anchor** is the persistent right-click marker defined above.
+`None` in the Preview column means the interaction does not draw a live geometry preview. A **target
+cue** marks the object the operation will use. An **action anchor** is the persistent right-click
+marker defined above.
 
 | Context               | Target or modifier           | Cursor               | Badge            | Preview                                      | Result                                                   |
 | --------------------- | ---------------------------- | -------------------- | ---------------- | -------------------------------------------- | -------------------------------------------------------- |
@@ -61,17 +61,16 @@ geometry preview. A **target cue** marks the object the operation will use. An
 | Infrastructure        | Right-click corridor         | `default`            | none             | Action anchor at the resolved corridor point | Open **Split corridor here**                             |
 | Read-only or Diagram  | Editable target              | `not-allowed`        | none             | None                                         | Refuse the edit                                          |
 
-Dropping an extension on an invalid target, dismissing the connection chooser,
-or pressing `Escape` changes no saved network data. A successful gesture is
-one undo checkpoint. Service-path edits do not move or split corridors,
-junctions, or stations unless the user explicitly chooses a corridor operation.
+Dropping an extension on an invalid target, dismissing the connection chooser, or pressing `Escape`
+changes no saved network data. A successful gesture is one undo checkpoint. Service-path edits do
+not move or split corridors, junctions, or stations unless the user explicitly chooses a corridor
+operation.
 
 ## Touch equivalents
 
-Touch reaches the operations above through a different grammar, not a reduced
-one. Each row of this table names the mouse gesture it stands in for; the
-resolved operation, badge, and undo behaviour are identical, because both
-grammars dispatch through the same intent resolution.
+Touch reaches the operations above through a different grammar, not a reduced one. Each row of this
+table names the mouse gesture it stands in for; the resolved operation, badge, and undo behaviour
+are identical, because both grammars dispatch through the same intent resolution.
 
 | Touch gesture     | Stands in for              | Result                                                                  |
 | ----------------- | -------------------------- | ----------------------------------------------------------------------- |
@@ -82,20 +81,17 @@ grammars dispatch through the same intent resolution.
 | Double tap        | Double-click               | Finish the current line                                                 |
 | Tap               | Click                      | Select, deselect, or place the next point                               |
 
-A press that has not yet moved past the drag threshold has committed to
-nothing. Lifting it is a tap, moving it starts the tool's gesture, and holding
-it opens the actions menu.
+A press that has not yet moved past the drag threshold has committed to nothing. Lifting it is a
+tap, moving it starts the tool's gesture, and holding it opens the actions menu.
 
-Pointer tolerances scale with the pointer. A coarse pointer hit-tests within
-24 CSS pixels rather than 9, because a fingertip contact patch measures 9-11mm
-and cannot be placed inside a 9-pixel radius. The full table is in
-`apps/web/src/editor/input-tuning.ts`.
+Pointer tolerances scale with the pointer. A coarse pointer hit-tests within 24 CSS pixels rather
+than 9, because a fingertip contact patch measures 9-11mm and cannot be placed inside a 9-pixel
+radius. The full table is in `apps/web/src/editor/input-tuning.ts`.
 
 ## Modifier channels
 
-A press can be qualified by four modal channels. They are named for what they
-qualify rather than for the key that sets them, because a keyboard is only one
-of two ways to set them.
+A press can be qualified by four modal channels. They are named for what they qualify rather than
+for the key that sets them, because a keyboard is only one of two ways to set them.
 
 | Channel     | Key            | Qualifies                                                       |
 | ----------- | -------------- | --------------------------------------------------------------- |
@@ -105,18 +101,17 @@ of two ways to set them.
 | `pan`       | `Space`        | Camera pan. Touch uses two fingers instead                      |
 | `actions`   | Right button   | The action anchor and its menu. Touch uses a long press instead |
 
-A held key and a Select variant (below) produce the same input, so the resolved
-operation, badge, and cursor are identical either way.
+A held key and a Select variant (below) produce the same input, so the resolved operation, badge,
+and cursor are identical either way.
 
-`constrain` is the only channel that may change during a gesture, and it alters
-only geometry, never the operation.
+`constrain` is the only channel that may change during a gesture, and it alters only geometry, never
+the operation.
 
 ## Select variants
 
-Erasing and splitting are things the Select tool does, so they are variants of
-it: chosen from its chevron in the dock, shown on its button, and exclusive of
-each other. This is how both operations are reached without a keyboard, since
-`Alt` and `Ctrl` cannot be held on a touchscreen.
+Erasing and splitting are things the Select tool does, so they are variants of it: chosen from its
+chevron in the dock, shown on its button, and exclusive of each other. This is how both operations
+are reached without a keyboard, since `Alt` and `Ctrl` cannot be held on a touchscreen.
 
 | Variant  | Sets        | A press then                                              |
 | -------- | ----------- | --------------------------------------------------------- |
@@ -124,8 +119,8 @@ each other. This is how both operations are reached without a keyboard, since
 | `erase`  | `alternate` | Removes the point, station, or facility pressed           |
 | `split`  | `secondary` | Splits a corridor at an interior point, extends at an end |
 
-A held `Alt` or `Ctrl` reaches the same operation without changing the variant,
-so a mouse is unaffected.
+A held `Alt` or `Ctrl` reaches the same operation without changing the variant, so a mouse is
+unaffected.
 
-`Shift` has no variant. It constrains a drag already under way rather than
-deciding what a press does, and a finger can draw the angle directly.
+`Shift` has no variant. It constrains a drag already under way rather than deciding what a press
+does, and a finger can draw the angle directly.

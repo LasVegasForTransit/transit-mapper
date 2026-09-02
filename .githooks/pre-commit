@@ -1,50 +1,5 @@
 #!/usr/bin/env sh
-# Layer 1 of four. Auto-fixes the staged files and blocks on nothing a
-# machine can repair.
-#
-# The speed target is under two seconds, and it is a correctness
-# requirement rather than a nicety: a hook that is slow or that scolds gets
-# bypassed with --no-verify, and a bypassed hook enforces nothing at all.
-# CI is the guarantee. This exists so CI is rarely the thing that tells you.
-set -e
-cd "$(git rev-parse --show-toplevel)"
-
-STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
-[ -z "$STAGED" ] && exit 0
-
-# Formats everything Prettier understands, rewriting in place and re-staging.
-#
-# ESLint deliberately does not run here. Every package lints from its own
-# directory and reads its own eslint-suppressions.json from there, and
-# lint-staged runs from the repository root — so an ESLint pass at this layer
-# sees none of the ledgers and reports 1,351 frozen findings as fresh
-# failures. A hook that blocks a commit over debt somebody else recorded is
-# the fastest way to teach people --no-verify. Layers 2 and 3 run the real
-# lint, from the right directories.
-if ! pnpm --silent exec lint-staged; then
-  printf '\n  Commit blocked: lint-staged could not fix everything.\n'
-  printf '    fix:  pnpm check --fix\n\n' >&2
-  exit 1
-fi
-
-# Filename checks read Git's index, so unstaged work cannot hide a bad name and
-# unrelated working-tree files cannot block the commit.
-if ! pnpm --silent check:filenames --staged; then
-  printf '\n  Commit blocked: a source or test filename is out of contract.\n'
-  printf '    fix:  pnpm check:filenames\n\n' >&2
-  exit 1
-fi
-
-# Secret scanning, net 1 of 3. Nets 2 and 3 are CI and GitHub push
-# protection, because this one is bypassable by design.
-if command -v gitleaks >/dev/null 2>&1; then
-  if ! gitleaks git --staged --redact --no-banner 2>/dev/null; then
-    printf '\n  Commit blocked: a secret was detected in the staged changes.\n'
-    printf '  Remove it, then rotate it — assume anything written down is burned.\n'
-    printf '    see:  docs/development/reference/secrets.md\n\n' >&2
-    exit 1
-  fi
-else
-  printf '  note: gitleaks not installed, skipping the local secret scan.\n' >&2
-  printf '        CI still scans. Install it with: brew install gitleaks\n' >&2
-fi
+# The shared hook lives in @lvbt/cli; repository-specific steps go below it.
+set -eu
+ROOT=$(git rev-parse --show-toplevel)
+sh "$ROOT/node_modules/@lvbt/cli/hooks/pre-commit.sh" "$@"

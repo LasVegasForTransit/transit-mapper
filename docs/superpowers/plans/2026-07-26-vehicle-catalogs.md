@@ -1,16 +1,32 @@
 # Vehicle Catalogs Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
+> (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let a person define custom vehicle kinds (label, real size, passenger capacity, top speed) inside their transit system, assign one to a service, and see both its Infrastructure-view footprint and its simulated speed change accordingly — while every service that never touches this feature keeps behaving exactly as it does today.
+**Goal:** Let a person define custom vehicle kinds (label, real size, passenger capacity, top speed)
+inside their transit system, assign one to a service, and see both its Infrastructure-view footprint
+and its simulated speed change accordingly — while every service that never touches this feature
+keeps behaving exactly as it does today.
 
-**Architecture:** `VehicleKind` becomes a new top-level array on `TransitSystem` (system-scoped data, like stations/ways/services), with `Service.vehicleKindId?` pointing at one. A single resolver function in `sim/vehicles.ts` (`effectiveVehicleKind`) looks up a service's assigned kind — falling back to the existing per-mode default (from the previous spec's `vehicleFootprint`) and the existing global default speed when unset or when the assigned kind no longer exists — and both the Infrastructure-view polygon renderer and the timetable/speed math read from it instead of their old hardcoded sources. A `ServiceInspector` dropdown assigns a kind; a new `VehicleKindsDialog` (same live-commit pattern as the existing `ScheduleDialog`) manages the system's list.
+**Architecture:** `VehicleKind` becomes a new top-level array on `TransitSystem` (system-scoped
+data, like stations/ways/services), with `Service.vehicleKindId?` pointing at one. A single resolver
+function in `sim/vehicles.ts` (`effectiveVehicleKind`) looks up a service's assigned kind — falling
+back to the existing per-mode default (from the previous spec's `vehicleFootprint`) and the existing
+global default speed when unset or when the assigned kind no longer exists — and both the
+Infrastructure-view polygon renderer and the timetable/speed math read from it instead of their old
+hardcoded sources. A `ServiceInspector` dropdown assigns a kind; a new `VehicleKindsDialog` (same
+live-commit pattern as the existing `ScheduleDialog`) manages the system's list.
 
-**Tech Stack:** TypeScript, React, Zustand, MapLibre GL, the `check()`-based verification harness (`apps/web/scripts/verify.ts`).
+**Tech Stack:** TypeScript, React, Zustand, MapLibre GL, the `check()`-based verification harness
+(`apps/web/scripts/verify.ts`).
 
-**Spec:** [docs/superpowers/specs/2026-07-26-vehicle-catalogs-design.md](../specs/2026-07-26-vehicle-catalogs-design.md)
+**Spec:**
+[docs/superpowers/specs/2026-07-26-vehicle-catalogs-design.md](../specs/2026-07-26-vehicle-catalogs-design.md)
 
-**Depends on:** [Vehicles in Infrastructure view](2026-07-26-vehicles-in-infrastructure-view.md) — must be implemented first; this plan reuses its `vehicleFootprint` fallback table and its Infrastructure-view rendering path.
+**Depends on:** [Vehicles in Infrastructure view](2026-07-26-vehicles-in-infrastructure-view.md) —
+must be implemented first; this plan reuses its `vehicleFootprint` fallback table and its
+Infrastructure-view rendering path.
 
 ---
 
@@ -56,7 +72,8 @@ export interface VehicleKind {
 
 - [x] **Step 2: Export it from the `system.ts` barrel**
 
-In `packages/core/src/model/system.ts`, add a line to the existing `export * from "./system/..."` list:
+In `packages/core/src/model/system.ts`, add a line to the existing `export * from "./system/..."`
+list:
 
 ```ts
 export * from './system/vehicleKind';
@@ -70,7 +87,8 @@ In `packages/core/src/model/system/document.ts`, add the import and field:
 import type { VehicleKind } from './vehicleKind';
 ```
 
-(add alongside the existing type imports), and in the `TransitSystem` interface, add after `namedWays`:
+(add alongside the existing type imports), and in the `TransitSystem` interface, add after
+`namedWays`:
 
 ```ts
   /** Named identities across ways ("Decatur Avenue"). See NamedWay. */
@@ -102,8 +120,9 @@ In `packages/core/src/model/system/service.ts`, add to the `Service` interface a
 
 - [x] **Step 5: Typecheck**
 
-Run: `npx tsc -b --noEmit`
-Expected: errors in `serialize.ts` (missing `vehicleKinds` in the object literals it builds, `version: 9` mismatch) — that's expected; Task 2 fixes them. Confirm the errors are ONLY in `serialize.ts` and nowhere else.
+Run: `npx tsc -b --noEmit` Expected: errors in `serialize.ts` (missing `vehicleKinds` in the object
+literals it builds, `version: 9` mismatch) — that's expected; Task 2 fixes them. Confirm the errors
+are ONLY in `serialize.ts` and nowhere else.
 
 - [x] **Step 6: Stage**
 
@@ -120,11 +139,14 @@ git add packages/core/src/model/system/vehicleKind.ts packages/core/src/model/sy
 - Modify: `packages/core/src/model/serialize.ts`
 - Modify: `apps/web/scripts/verify.ts`
 
-Every system shape (v1 legacy, v2 legacy, v3+) already funnels through one `finish()` function before returning — there is no separate per-version migration branch to add; a new field just needs parsing and a default there.
+Every system shape (v1 legacy, v2 legacy, v3+) already funnels through one `finish()` function
+before returning — there is no separate per-version migration branch to add; a new field just needs
+parsing and a default there.
 
 - [x] **Step 1: Add a `parseVehicleKinds` helper**
 
-In `packages/core/src/model/serialize.ts`, add near the other `parse*` helpers (e.g. near `parseNamedWays`):
+In `packages/core/src/model/serialize.ts`, add near the other `parse*` helpers (e.g. near
+`parseNamedWays`):
 
 ```ts
 function parseVehicleKinds(raw: unknown): VehicleKind[] {
@@ -149,11 +171,13 @@ function parseVehicleKinds(raw: unknown): VehicleKind[] {
 }
 ```
 
-Add `VehicleKind` to the existing `import type { ... } from "./system";` block at the top of the file.
+Add `VehicleKind` to the existing `import type { ... } from "./system";` block at the top of the
+file.
 
 - [x] **Step 2: Wire it into `finish()`**
 
-In `finish()`, add `vehicleKinds: parseVehicleKinds(o.vehicleKinds),` to the returned object (next to `approachControls`), and bump the hardcoded `version: 8` there to `version: 9`.
+In `finish()`, add `vehicleKinds: parseVehicleKinds(o.vehicleKinds),` to the returned object (next
+to `approachControls`), and bump the hardcoded `version: 8` there to `version: 9`.
 
 - [x] **Step 3: Add `vehicleKindId` parsing to the v3+ service parser**
 
@@ -165,16 +189,18 @@ In `parseV3`'s `services: rawServices.map(...)` block, add to the returned objec
 
 - [x] **Step 4: Update `createEmptySystem`**
 
-In `createEmptySystem`, bump `version: 8` to `version: 9` (update its comment too) and add `vehicleKinds: [],` next to `approachControls: {},`.
+In `createEmptySystem`, bump `version: 8` to `version: 9` (update its comment too) and add
+`vehicleKinds: [],` next to `approachControls: {},`.
 
 - [x] **Step 5: Typecheck**
 
-Run: `npx tsc -b --noEmit`
-Expected: no errors anywhere in the repo.
+Run: `npx tsc -b --noEmit` Expected: no errors anywhere in the repo.
 
 - [x] **Step 6: Add migration + resolution checks**
 
-In `apps/web/scripts/verify.ts`, find the existing checks that exercise `parseSystem` on an old-shaped object (search for `parseSystem(` calls near the migration test section), and add a block near them:
+In `apps/web/scripts/verify.ts`, find the existing checks that exercise `parseSystem` on an
+old-shaped object (search for `parseSystem(` calls near the migration test section), and add a block
+near them:
 
 ```ts
 {
@@ -232,8 +258,7 @@ In `apps/web/scripts/verify.ts`, find the existing checks that exercise `parseSy
 
 - [x] **Step 7: Run verify, confirm pass**
 
-Run: `npx tsx apps/web/scripts/verify.ts`
-Expected: `ALL PASS`.
+Run: `npx tsx apps/web/scripts/verify.ts` Expected: `ALL PASS`.
 
 - [x] **Step 8: Stage**
 
@@ -249,7 +274,9 @@ git add packages/core/src/model/serialize.ts apps/web/scripts/verify.ts
 
 - Modify: `apps/web/src/editor/store.ts`
 
-Mirrors the existing `setServiceSchedule` design exactly (see its own comment in `store.ts`): the dialog owns local add/edit/delete logic and commits the whole array in one shot, rather than the store exposing a setter per field.
+Mirrors the existing `setServiceSchedule` design exactly (see its own comment in `store.ts`): the
+dialog owns local add/edit/delete logic and commits the whole array in one shot, rather than the
+store exposing a setter per field.
 
 - [x] **Step 1: Add the action signatures**
 
@@ -280,12 +307,13 @@ Near `setServiceSchedule`'s implementation, add:
 
 - [x] **Step 3: Typecheck**
 
-Run: `npx tsc -b --noEmit`
-Expected: no errors.
+Run: `npx tsc -b --noEmit` Expected: no errors.
 
 - [x] **Step 4: Add checks**
 
-In `apps/web/scripts/verify.ts`, find the store-action test section (it already creates a store via `createEditorStore()` and calls actions like `store.getState().setServiceMode(...)`), and add nearby:
+In `apps/web/scripts/verify.ts`, find the store-action test section (it already creates a store via
+`createEditorStore()` and calls actions like `store.getState().setServiceMode(...)`), and add
+nearby:
 
 ```ts
 {
@@ -321,8 +349,7 @@ In `apps/web/scripts/verify.ts`, find the store-action test section (it already 
 
 - [x] **Step 5: Run verify, confirm pass**
 
-Run: `npx tsx apps/web/scripts/verify.ts`
-Expected: `ALL PASS`.
+Run: `npx tsx apps/web/scripts/verify.ts` Expected: `ALL PASS`.
 
 - [x] **Step 6: Stage**
 
@@ -339,7 +366,10 @@ git add apps/web/src/editor/store.ts apps/web/scripts/verify.ts
 - Modify: `apps/web/src/sim/vehicles.ts`
 - Modify: `apps/web/scripts/verify.ts`
 
-This is where an assigned (or unassigned) vehicle kind actually changes rendering and timing. `buildTimetable`/`metersAtElapsed` gain a `speedMps` parameter with a default equal to today's constant, so the two existing verify.ts checks that call them with no speed argument keep passing unchanged.
+This is where an assigned (or unassigned) vehicle kind actually changes rendering and timing.
+`buildTimetable`/`metersAtElapsed` gain a `speedMps` parameter with a default equal to today's
+constant, so the two existing verify.ts checks that call them with no speed argument keep passing
+unchanged.
 
 - [x] **Step 1: Add `effectiveVehicleKind`**
 
@@ -499,7 +529,8 @@ function resolveInfraPatternGeometry(
 
 - [x] **Step 4: Use `effectiveVehicleKind` in the tick loop**
 
-In `attachVehicleAnimation`'s tick function, replace the per-pattern geometry resolution and the infra feature's dimensions:
+In `attachVehicleAnimation`'s tick function, replace the per-pattern geometry resolution and the
+infra feature's dimensions:
 
 ```ts
       for (const service of system.services) {
@@ -514,7 +545,8 @@ In `attachVehicleAnimation`'s tick function, replace the per-pattern geometry re
           if (!geometry) continue;
 ```
 
-And further down, where the infra polygon is built, drop the now-redundant `vehicleFootprint` call in favor of the already-resolved `widthM`/`lengthM`:
+And further down, where the infra polygon is built, drop the now-redundant `vehicleFootprint` call
+in favor of the already-resolved `widthM`/`lengthM`:
 
 ```ts
             } else {
@@ -528,16 +560,17 @@ And further down, where the infra polygon is built, drop the now-redundant `vehi
             }
 ```
 
-`vehicleFootprint` is still imported and used — now only inside `effectiveVehicleKind`, not directly in the tick loop; leave the import as-is.
+`vehicleFootprint` is still imported and used — now only inside `effectiveVehicleKind`, not directly
+in the tick loop; leave the import as-is.
 
 - [x] **Step 5: Typecheck**
 
-Run: `npx tsc -b --noEmit`
-Expected: no errors.
+Run: `npx tsc -b --noEmit` Expected: no errors.
 
 - [x] **Step 6: Add checks**
 
-In `apps/web/scripts/verify.ts`, add `effectiveVehicleKind` to the existing `../src/sim/vehicles` import, then add a block near the `buildTimetable`/`metersAtElapsed` checks:
+In `apps/web/scripts/verify.ts`, add `effectiveVehicleKind` to the existing `../src/sim/vehicles`
+import, then add a block near the `buildTimetable`/`metersAtElapsed` checks:
 
 ```ts
 {
@@ -610,8 +643,7 @@ In `apps/web/scripts/verify.ts`, add `effectiveVehicleKind` to the existing `../
 
 - [x] **Step 7: Run verify, confirm pass**
 
-Run: `npx tsx apps/web/scripts/verify.ts`
-Expected: `ALL PASS`.
+Run: `npx tsx apps/web/scripts/verify.ts` Expected: `ALL PASS`.
 
 - [x] **Step 8: Stage**
 
@@ -627,7 +659,8 @@ git add apps/web/src/sim/vehicles.ts apps/web/scripts/verify.ts
 
 - Create: `apps/web/src/ui/VehicleKindsDialog.tsx`
 
-Same live-commit local-state pattern as `apps/web/src/ui/ScheduleDialog.tsx` — no separate Save step, every edit commits immediately via `onSave`.
+Same live-commit local-state pattern as `apps/web/src/ui/ScheduleDialog.tsx` — no separate Save
+step, every edit commits immediately via `onSave`.
 
 - [x] **Step 1: Write the component**
 
@@ -832,8 +865,7 @@ export function VehicleKindsDialog({
 
 - [x] **Step 2: Typecheck**
 
-Run: `npx tsc -b --noEmit`
-Expected: no errors.
+Run: `npx tsc -b --noEmit` Expected: no errors.
 
 - [x] **Step 3: Stage**
 
@@ -875,7 +907,8 @@ const setVehicleKinds = useEditor((s) => s.setVehicleKinds);
 
 - [x] **Step 2: Add the picker to the "line" tab**
 
-In the `tab === "line"` block, after the Mode chip-row's closing `</div>` and before the `ColorField`'s wrapping `<div className="insp-field">`, insert:
+In the `tab === "line"` block, after the Mode chip-row's closing `</div>` and before the
+`ColorField`'s wrapping `<div className="insp-field">`, insert:
 
 ```tsx
           <label className="field-label" htmlFor="vehicle-kind-select">
@@ -927,8 +960,7 @@ Alongside the existing `{scheduleOpen && (...)}` block:
 
 - [x] **Step 4: Typecheck**
 
-Run: `npx tsc -b --noEmit`
-Expected: no errors.
+Run: `npx tsc -b --noEmit` Expected: no errors.
 
 - [x] **Step 5: Stage**
 
@@ -942,26 +974,35 @@ git add apps/web/src/ui/inspector/ServiceInspector.tsx
 
 - [x] **Step 1: Start the dev server, select a bus or rail service**
 
-Open the app, select an existing service (or draw one), open its Inspector. Confirm the new "Vehicle" dropdown shows "Default <Mode>" and a "Manage vehicle kinds…" link.
+Open the app, select an existing service (or draw one), open its Inspector. Confirm the new
+"Vehicle" dropdown shows "Default <Mode>" and a "Manage vehicle kinds…" link.
 
 - [x] **Step 2: Create a custom vehicle kind**
 
-Click "Manage vehicle kinds…", add one (e.g. a bus, 3m wide, 20m long, 90 km/h top speed), close the dialog. Confirm the service's Vehicle dropdown now lists it.
+Click "Manage vehicle kinds…", add one (e.g. a bus, 3m wide, 20m long, 90 km/h top speed), close the
+dialog. Confirm the service's Vehicle dropdown now lists it.
 
 - [x] **Step 3: Assign it and confirm both effects**
 
-Assign the new kind to the service. Switch to Infrastructure view — confirm the rendered vehicle rectangle is now visibly bigger (matches the custom dimensions, not the mode default). Watch it animate — confirm it now moves faster than an unassigned service of the same mode (visually, over a short observation window).
+Assign the new kind to the service. Switch to Infrastructure view — confirm the rendered vehicle
+rectangle is now visibly bigger (matches the custom dimensions, not the mode default). Watch it
+animate — confirm it now moves faster than an unassigned service of the same mode (visually, over a
+short observation window).
 
 - [x] **Step 4: Confirm deletion falls back cleanly**
 
-Reopen "Manage vehicle kinds…", delete the assigned kind, close. Confirm the service's Vehicle dropdown falls back to "Default <Mode>" and the vehicle's rendered size/speed reverts to the mode default — no crash, no stuck stale state.
+Reopen "Manage vehicle kinds…", delete the assigned kind, close. Confirm the service's Vehicle
+dropdown falls back to "Default <Mode>" and the vehicle's rendered size/speed reverts to the mode
+default — no crash, no stuck stale state.
 
 - [x] **Step 5: Confirm an untouched service is unaffected**
 
-Check a different, never-assigned service of the same mode — confirm its size/speed never changed throughout the above steps.
+Check a different, never-assigned service of the same mode — confirm its size/speed never changed
+throughout the above steps.
 
 ---
 
 ## Commits
 
-As with the previous plan, steps say "stage" rather than "commit" — commits happen only with explicit user go-ahead once this plan (and its browser verification) is complete.
+As with the previous plan, steps say "stage" rather than "commit" — commits happen only with
+explicit user go-ahead once this plan (and its browser verification) is complete.

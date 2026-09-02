@@ -1,171 +1,69 @@
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
+  "ui": "tui",
+  "globalEnv": ["CI", "DEV", "PORT"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**", "*.tsbuildinfo"],
       "env": [
         "GITHUB_SHA",
         "TRANSITMAPPER_BUILD_COMMIT",
         "TRANSITMAPPER_BUILD_DIRTY",
         "TRANSITMAPPER_RELEASE_TAG",
         "VITE_PERF_BUILD"
-      ],
-      "outputs": ["dist/**", "*.tsbuildinfo"]
-    },
-    "typecheck": {
-      "dependsOn": ["^typecheck"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/tsconfig/*.json"],
-      "outputs": ["*.tsbuildinfo"]
+      ]
     },
     "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "check-types": {
+      "dependsOn": ["^check-types"],
+      "outputs": ["*.tsbuildinfo"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "validate": {
+      "dependsOn": ["^build"]
+    },
+    "test:e2e": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "outputs": ["playwright-report/**", "test-results/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "preview": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "persistent": true
+    },
+    "//#validate": {
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/eslint.config.ts",
-        "$TURBO_ROOT$/packages/eslint-plugin/src/**"
+        "scripts/**",
+        "turbo/**",
+        "docs/**",
+        "apps/worker/src/migrations/**"
       ],
-      "outputs": []
+      "cache": false,
+      "env": ["MIGRATION_BASE_REF"]
     },
-    "verify": {
-      "dependsOn": ["^typecheck"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/tsconfig/*.json"],
-      "outputs": []
-    },
-    "check:types": {
-      "inputs": ["scripts/check-generated-types.ts", "wrangler.toml", "worker-configuration.d.ts"],
-      "outputs": []
-    },
-    "check:icons": {
+    "@transitmapper/web#validate": {
       "inputs": [
         "scripts/**",
         "src/assets/**",
         "src/map/lucideIconNodes.ts",
         "public/**",
         "$TURBO_ROOT$/packages/core/src/style/lvbtBrand.ts"
-      ],
-      "outputs": []
+      ]
     },
-    "lint:workspace": {
-      "dependsOn": ["lint", "//#lint:root"],
-      "outputs": []
-    },
-    "validate": {
-      "dependsOn": [
-        "lint",
-        "typecheck",
-        "verify",
-        "check:types",
-        "check:icons",
-        "//#format:check",
-        "//#lint:root",
-        "//#typecheck:root",
-        "//#check:filenames",
-        "//#check:contract",
-        "//#check:docs",
-        "//#check:migrations",
-        "//#check:structure",
-        "//#check:breakpoint",
-        "//#check:config",
-        "//#check:debt",
-        "//#check:deadcode",
-        "//#check:duplication",
-        "//#check:boundaries",
-        "//#check:documents",
-        "//#check:reference"
-      ],
-      "outputs": []
-    },
-    "//#format:check": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#lint:root": {
-      "inputs": [
-        "$TURBO_ROOT$/eslint.config.ts",
-        "$TURBO_ROOT$/packages/eslint-plugin/src/**",
-        "$TURBO_ROOT$/scripts/**",
-        "$TURBO_ROOT$/turbo/**"
-      ],
-      "outputs": []
-    },
-    "//#typecheck:root": {
-      "inputs": [
-        "$TURBO_ROOT$/scripts/**",
-        "$TURBO_ROOT$/turbo/**",
-        "$TURBO_ROOT$/eslint.config.ts",
-        "$TURBO_ROOT$/tsconfig.json",
-        "$TURBO_ROOT$/package.json"
-      ],
-      "outputs": []
-    },
-    "//#check:filenames": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#check:contract": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#check:docs": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#check:migrations": {
-      "cache": false,
-      "inputs": [
-        "$TURBO_ROOT$/apps/worker/src/migrations/**",
-        "$TURBO_ROOT$/scripts/check-migrations-append-only.ts"
-      ],
-      "outputs": []
-    },
-    "//#check:structure": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#check:breakpoint": {
-      "inputs": [
-        "scripts/check-breakpoint.ts",
-        "apps/web/src/device/capabilities.ts",
-        "apps/web/src/ui/app.css"
-      ],
-      "outputs": []
-    },
-    "//#check:config": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#check:debt": {
-      "cache": false,
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#check:deadcode": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#check:duplication": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#check:boundaries": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#check:documents": {
-      "inputs": [
-        "$TURBO_ROOT$/*.md",
-        "$TURBO_ROOT$/LICENSE",
-        "$TURBO_ROOT$/docs/**",
-        "$TURBO_ROOT$/scripts/check-document-standards.ts"
-      ],
-      "outputs": []
-    },
-    "//#check:reference": {
-      "inputs": [
-        "$TURBO_ROOT$/prettier.config.mjs",
-        "$TURBO_ROOT$/docs/development/reference/checks.md",
-        "$TURBO_ROOT$/scripts/generate-checks-reference.ts"
-      ],
-      "outputs": []
+    "@transitmapper/worker#validate": {
+      "inputs": ["scripts/check-generated-types.ts", "wrangler.toml", "worker-configuration.d.ts"]
     }
   }
 }

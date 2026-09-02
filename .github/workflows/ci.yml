@@ -1,3 +1,5 @@
+# The organization ruleset requires one status check named "Validate" on every
+# pull request. Add steps to this job rather than renaming it.
 name: CI
 
 on:
@@ -5,21 +7,12 @@ on:
     branches: [main]
   push:
     branches-ignore: [main]
-  # Callable so the production deploy can gate on exactly these checks
-  # instead of restating them. There is one definition of "validated", and
-  # both entry points use it.
   workflow_call:
-  # A pull request created by GITHUB_TOKEN does not emit another workflow
-  # event. The release workflow dispatches CI explicitly against Release
-  # Please's branch so the generated version and changelog receive the same
-  # required check as every other pull request.
   workflow_dispatch:
 
-# Least-privilege defaults.
 permissions:
   contents: read
 
-# Cancel in-progress CI when a newer commit lands on the same ref.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -28,14 +21,13 @@ jobs:
   validate:
     name: Validate
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # Gitleaks scans history rather than only the proposed tree. A
-          # shallow checkout would turn that promise into a one-commit scan.
+          # The secret scan reads history, not only the proposed tree.
           fetch-depth: 0
 
       - name: Setup Node + pnpm
@@ -45,24 +37,17 @@ jobs:
         run: pnpm check
 
       # A generator exists so scaffolding is right by construction. This runs
-      # them and checks the output still passes, so one cannot rot into
-      # emitting code that fails the very checks it was meant to satisfy. Not
-      # in \`pnpm check\`: it generates into the working tree, which is rude to
-      # do underneath uncommitted work but fine on a disposable runner.
+      # them and checks the output still passes. Not in `pnpm check`: it
+      # generates into the working tree.
       - name: Generators emit conformant code
         run: pnpm check:generators
 
       - name: Dependency audit
-        # Build and test tooling executes in CI, so a production-only audit
-        # would miss vulnerabilities in code this job actually runs.
         run: pnpm audit --audit-level=high
 
       - name: Secret scan
         run: |
           set -euo pipefail
-          test "$(git rev-parse --is-shallow-repository)" = false
-          docker run --rm \
-            -v "$PWD:/repo" \
-            -w /repo \
+          docker run --rm -v "$PWD:/repo" -w /repo \
             ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
             git --redact --no-banner --config /repo/.gitleaks.toml

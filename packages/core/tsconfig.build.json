@@ -5,8 +5,15 @@
 // not the file to reach for when tightening what `src` may depend on. Tighten
 // here.
 {
-  "extends": "@transitmapper/tsconfig/base.json",
+  "extends": "@lvbt/typescript-config/base.json",
   "compilerOptions": {
+    // Adoption debt against the organization base: the two flags below are on
+    // in @lvbt/typescript-config and off here until this package's code is
+    // made to pass them (about a thousand findings across the workspace when
+    // the standard arrived). Turn one on, fix what it reports, and delete the
+    // line; never add a new package with them off.
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
     // DOM only for the ambient fetch/crypto/structuredClone typings (part of
     // lib.dom.d.ts) — core has no actual DOM/browser dependency, but these
     // WHATWG globals are what both consumers (browser + Workers runtime)

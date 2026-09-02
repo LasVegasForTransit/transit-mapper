@@ -1,16 +1,35 @@
 # Vehicles in Infrastructure View Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
+> (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Render each service's animated vehicles in Infrastructure view as real, true-to-scale rotated-rectangle polygons riding their actual physical lane — not the raw way centerline, and not a raster icon — while leaving Network view's existing colored-dot rendering untouched.
+**Goal:** Render each service's animated vehicles in Infrastructure view as real, true-to-scale
+rotated-rectangle polygons riding their actual physical lane — not the raw way centerline, and not a
+raster icon — while leaving Network view's existing colored-dot rendering untouched.
 
-**Architecture:** A new `geometry/vehicleLane.ts` module derives, per pattern, which direction it travels each way (nothing tracks this today) and which real lane it rides (mode preference → direction filter → nearest-centerline tie-break), then stitches those lane paths into one polyline the same shape as today's `patternPath`. `sim/vehicles.ts` gains a parallel, lazily-computed geometry cache built from that lane-aware path, and its per-frame tick pushes rotated-rectangle `Polygon` features (real width/length in meters, rotated to bearing) to a new source/layer pair in Infrastructure view, while Network view keeps pushing `Point` features to the existing source exactly as before.
+**Architecture:** A new `geometry/vehicleLane.ts` module derives, per pattern, which direction it
+travels each way (nothing tracks this today) and which real lane it rides (mode preference →
+direction filter → nearest-centerline tie-break), then stitches those lane paths into one polyline
+the same shape as today's `patternPath`. `sim/vehicles.ts` gains a parallel, lazily-computed
+geometry cache built from that lane-aware path, and its per-frame tick pushes rotated-rectangle
+`Polygon` features (real width/length in meters, rotated to bearing) to a new source/layer pair in
+Infrastructure view, while Network view keeps pushing `Point` features to the existing source
+exactly as before.
 
-**Tech Stack:** TypeScript, MapLibre GL, the monorepo's existing `check()`-based verification harness (`apps/web/scripts/verify.ts`, run via `npm run verify` / `tsx apps/web/scripts/verify.ts` — this repo does not use vitest/jest yet).
+**Tech Stack:** TypeScript, MapLibre GL, the monorepo's existing `check()`-based verification
+harness (`apps/web/scripts/verify.ts`, run via `npm run verify` / `tsx apps/web/scripts/verify.ts` —
+this repo does not use vitest/jest yet).
 
-**Spec:** [docs/superpowers/specs/2026-07-26-vehicles-in-infrastructure-view-design.md](../specs/2026-07-26-vehicles-in-infrastructure-view-design.md)
+**Spec:**
+[docs/superpowers/specs/2026-07-26-vehicles-in-infrastructure-view-design.md](../specs/2026-07-26-vehicles-in-infrastructure-view-design.md)
 
-**A note on "TDD" in this codebase:** there is no per-file test runner — every check lives in one compiled TypeScript file (`apps/web/scripts/verify.ts`) that imports the real modules directly. Writing a `check()` call against a function that doesn't exist yet fails the whole file to _compile_, not just that one check — so the practical red/green cycle here is: implement a small, focused function → add `check()` calls exercising it → run the whole harness once → confirm every check (old and new) prints `ok`. Each task below still lands one focused unit at a time.
+**A note on "TDD" in this codebase:** there is no per-file test runner — every check lives in one
+compiled TypeScript file (`apps/web/scripts/verify.ts`) that imports the real modules directly.
+Writing a `check()` call against a function that doesn't exist yet fails the whole file to
+_compile_, not just that one check — so the practical red/green cycle here is: implement a small,
+focused function → add `check()` calls exercising it → run the whole harness once → confirm every
+check (old and new) prints `ok`. Each task below still lands one focused unit at a time.
 
 ---
 
@@ -21,7 +40,10 @@
 - Create: `packages/core/src/geometry/vehicleLane.ts`
 - Modify: `apps/web/scripts/verify.ts` (add imports + checks)
 
-This is the core of the feature. It must live in `geometry/`, not `model/geo/` — `geometry/streets.ts` already imports from `model/`, so a `model/` file importing back from `geometry/` would be circular. `geometry/` already depends on `model/`, so this new file can safely import both.
+This is the core of the feature. It must live in `geometry/`, not `model/geo/` —
+`geometry/streets.ts` already imports from `model/`, so a `model/` file importing back from
+`geometry/` would be circular. `geometry/` already depends on `model/`, so this new file can safely
+import both.
 
 - [x] **Step 1: Write `patternWayTraversals` (direction detection)**
 
@@ -78,7 +100,8 @@ export function patternWayTraversals(ways: Way[], pattern: Pattern): WayTraversa
 
 - [x] **Step 2: Add checks for `patternWayTraversals`**
 
-In `apps/web/scripts/verify.ts`, add to the import from `@transitmapper/core/geometry/vehicleLane` (new import block near the other `@transitmapper/core/geometry/*` import):
+In `apps/web/scripts/verify.ts`, add to the import from `@transitmapper/core/geometry/vehicleLane`
+(new import block near the other `@transitmapper/core/geometry/*` import):
 
 ```ts
 import {
@@ -141,10 +164,12 @@ Add checks (anchor: search for an existing `wayLaneGeometry` check and add this 
 }
 ```
 
-- [x] **Step 3: Run verify, confirm it fails to compile (selectVehicleLane/patternLanePath don't exist yet)**
+- [x] **Step 3: Run verify, confirm it fails to compile (selectVehicleLane/patternLanePath don't
+      exist yet)**
 
-Run: `npx tsx apps/web/scripts/verify.ts`
-Expected: FAIL — TypeScript error, `"selectVehicleLane" is not exported` / `"patternLanePath" is not exported` from `@transitmapper/core/geometry/vehicleLane`.
+Run: `npx tsx apps/web/scripts/verify.ts` Expected: FAIL — TypeScript error,
+`"selectVehicleLane" is not exported` / `"patternLanePath" is not exported` from
+`@transitmapper/core/geometry/vehicleLane`.
 
 - [x] **Step 4: Write `selectVehicleLane` (lane selection heuristic)**
 
@@ -264,8 +289,7 @@ Append to the same check block in `apps/web/scripts/verify.ts` from Step 2:
 
 - [x] **Step 6: Run verify, confirm it still fails (patternLanePath missing)**
 
-Run: `npx tsx apps/web/scripts/verify.ts`
-Expected: FAIL — `"patternLanePath" is not exported`.
+Run: `npx tsx apps/web/scripts/verify.ts` Expected: FAIL — `"patternLanePath" is not exported`.
 
 - [x] **Step 7: Write `patternLanePath`**
 
@@ -344,10 +368,11 @@ Append to the same block:
 
 - [x] **Step 9: Run verify, confirm everything passes**
 
-Run: `npx tsx apps/web/scripts/verify.ts`
-Expected: every check prints `ok`, ends with `ALL PASS`, exit code 0.
+Run: `npx tsx apps/web/scripts/verify.ts` Expected: every check prints `ok`, ends with `ALL PASS`,
+exit code 0.
 
-- [x] **Step 10: Commit (stage only — do not run `git commit`; this plan's commits are batched for explicit approval, see the end of this document)**
+- [x] **Step 10: Commit (stage only — do not run `git commit`; this plan's commits are batched for
+      explicit approval, see the end of this document)**
 
 ```bash
 git add packages/core/src/geometry/vehicleLane.ts apps/web/scripts/verify.ts
@@ -364,7 +389,10 @@ git add packages/core/src/geometry/vehicleLane.ts apps/web/scripts/verify.ts
 
 - [x] **Step 1: Write `bearingAtT`**
 
-`packages/core/src/model/geo/spherical.ts` already has `bearingDegrees(a, b)` (great-circle bearing between two points — the same one the way-drawing bearing readout uses). Reuse it rather than writing a second, flat-approximation bearing formula. In `packages/core/src/model/geo/measurement.ts`, change the top import to add `bearingDegrees`:
+`packages/core/src/model/geo/spherical.ts` already has `bearingDegrees(a, b)` (great-circle bearing
+between two points — the same one the way-drawing bearing readout uses). Reuse it rather than
+writing a second, flat-approximation bearing formula. In
+`packages/core/src/model/geo/measurement.ts`, change the top import to add `bearingDegrees`:
 
 ```ts
 import { bearingDegrees, haversineMeters, toRad } from './spherical';
@@ -398,7 +426,8 @@ export function bearingAtT(path: LngLat[], t: number): number {
 
 - [x] **Step 2: Add checks**
 
-In `apps/web/scripts/verify.ts`, add `bearingAtT` to the existing `@transitmapper/core/model/geo` import list, then add a check near the other `pointAtT`/`nearestOnPath` checks:
+In `apps/web/scripts/verify.ts`, add `bearingAtT` to the existing `@transitmapper/core/model/geo`
+import list, then add a check near the other `pointAtT`/`nearestOnPath` checks:
 
 ```ts
 {
@@ -429,8 +458,7 @@ In `apps/web/scripts/verify.ts`, add `bearingAtT` to the existing `@transitmappe
 
 - [x] **Step 3: Run verify, confirm pass**
 
-Run: `npx tsx apps/web/scripts/verify.ts`
-Expected: `ALL PASS`.
+Run: `npx tsx apps/web/scripts/verify.ts` Expected: `ALL PASS`.
 
 - [x] **Step 4: Stage**
 
@@ -476,7 +504,8 @@ export function rotatedRectPolygon(
 
 - [x] **Step 2: Add checks**
 
-In `apps/web/scripts/verify.ts`, add `rotatedRectPolygon` to the existing `@transitmapper/core/model/geo` import list, then:
+In `apps/web/scripts/verify.ts`, add `rotatedRectPolygon` to the existing
+`@transitmapper/core/model/geo` import list, then:
 
 ```ts
 {
@@ -497,8 +526,7 @@ In `apps/web/scripts/verify.ts`, add `rotatedRectPolygon` to the existing `@tran
 
 - [x] **Step 3: Run verify, confirm pass**
 
-Run: `npx tsx apps/web/scripts/verify.ts`
-Expected: `ALL PASS`.
+Run: `npx tsx apps/web/scripts/verify.ts` Expected: `ALL PASS`.
 
 - [x] **Step 4: Stage**
 
@@ -578,8 +606,7 @@ check(
 
 - [x] **Step 3: Run verify, confirm pass**
 
-Run: `npx tsx apps/web/scripts/verify.ts`
-Expected: `ALL PASS`.
+Run: `npx tsx apps/web/scripts/verify.ts` Expected: `ALL PASS`.
 
 - [x] **Step 4: Stage**
 
@@ -598,7 +625,8 @@ git add packages/core/src/model/catalog.ts apps/web/scripts/verify.ts
 
 - [x] **Step 1: Add the per-mode footprint table and paint constants**
 
-In `packages/core/src/style/catalogStyle.ts`, add after the `MODE_RENDER`/`modeRender` block (after line 124):
+In `packages/core/src/style/catalogStyle.ts`, add after the `MODE_RENDER`/`modeRender` block (after
+line 124):
 
 ```ts
 // ---- Vehicle footprint (Infrastructure view) --------------------------------
@@ -639,7 +667,9 @@ export const VEHICLE_FILL_OPACITY = 0.92;
 
 - [x] **Step 2: Add a check**
 
-In `apps/web/scripts/verify.ts`, add `vehicleFootprint`, `VEHICLE_FOOTPRINT_M` to the `@transitmapper/core/style/catalogStyle` import (or add a new import line if none exists yet — search the file for `catalogStyle` to find the existing import block), then:
+In `apps/web/scripts/verify.ts`, add `vehicleFootprint`, `VEHICLE_FOOTPRINT_M` to the
+`@transitmapper/core/style/catalogStyle` import (or add a new import line if none exists yet —
+search the file for `catalogStyle` to find the existing import block), then:
 
 ```ts
 check(
@@ -654,8 +684,7 @@ check(
 
 - [x] **Step 3: Run verify, confirm pass**
 
-Run: `npx tsx apps/web/scripts/verify.ts`
-Expected: `ALL PASS`.
+Run: `npx tsx apps/web/scripts/verify.ts` Expected: `ALL PASS`.
 
 - [x] **Step 4: Stage**
 
@@ -689,7 +718,11 @@ export const LYR_VEHICLES_INFRA_STROKE = 'tm-vehicles-infra-stroke';
 
 - [x] **Step 2: Add the fill + stroke layer pair**
 
-In `apps/web/src/map/layers/layerSpecs.ts`, add `SRC_VEHICLES_INFRA`, `LYR_VEHICLES_INFRA_FILL`, `LYR_VEHICLES_INFRA_STROKE` to the existing import blocks from `"./constants"` and `"@transitmapper/core/style/catalogStyle"` (add `VEHICLE_FILL_OPACITY`, `VEHICLE_STROKE` to the latter), then insert this pair immediately after the existing `LYR_VEHICLES` entry (so it paints in the same position in the stack, right after the Network-view dot):
+In `apps/web/src/map/layers/layerSpecs.ts`, add `SRC_VEHICLES_INFRA`, `LYR_VEHICLES_INFRA_FILL`,
+`LYR_VEHICLES_INFRA_STROKE` to the existing import blocks from `"./constants"` and
+`"@transitmapper/core/style/catalogStyle"` (add `VEHICLE_FILL_OPACITY`, `VEHICLE_STROKE` to the
+latter), then insert this pair immediately after the existing `LYR_VEHICLES` entry (so it paints in
+the same position in the stack, right after the Network-view dot):
 
 ```ts
   {
@@ -715,8 +748,8 @@ In `apps/web/src/map/layers/layerSpecs.ts`, add `SRC_VEHICLES_INFRA`, `LYR_VEHIC
 
 - [x] **Step 3: Typecheck**
 
-Run: `npx tsc -b --noEmit` (from repo root, or `cd apps/web && npx tsc -b --noEmit` if the root command doesn't cover the app)
-Expected: no errors.
+Run: `npx tsc -b --noEmit` (from repo root, or `cd apps/web && npx tsc -b --noEmit` if the root
+command doesn't cover the app) Expected: no errors.
 
 - [x] **Step 4: Stage**
 
@@ -732,7 +765,11 @@ git add apps/web/src/map/layers/constants.ts apps/web/src/map/layers/layerSpecs.
 
 - Modify: `apps/web/src/sim/vehicles.ts`
 
-This is the task that actually makes vehicles appear in Infrastructure view. `VehicleGate` changes shape: `isVisible` becomes a pure mode-filter check (view-mode gating moves into this file, since the tick loop now needs to know the current view mode to decide which source/shape to render). `resolvePatternGeometry` (Network, unchanged) gets a sibling `resolveInfraPatternGeometry` built from `patternLanePath` instead of `patternPath`.
+This is the task that actually makes vehicles appear in Infrastructure view. `VehicleGate` changes
+shape: `isVisible` becomes a pure mode-filter check (view-mode gating moves into this file, since
+the tick loop now needs to know the current view mode to decide which source/shape to render).
+`resolvePatternGeometry` (Network, unchanged) gets a sibling `resolveInfraPatternGeometry` built
+from `patternLanePath` instead of `patternPath`.
 
 - [x] **Step 1: Update imports and the `VehicleGate` interface**
 
@@ -923,8 +960,10 @@ export function attachVehicleAnimation(
 
 - [x] **Step 4: Typecheck**
 
-Run: `npx tsc -b --noEmit`
-Expected: no errors. (`patternPath` stays imported/used by `resolvePatternGeometry`, unchanged above this diff — if the typechecker reports it unused, that means Step 1's import line accidentally dropped it; re-check the import list includes `patternPath`.)
+Run: `npx tsc -b --noEmit` Expected: no errors. (`patternPath` stays imported/used by
+`resolvePatternGeometry`, unchanged above this diff — if the typechecker reports it unused, that
+means Step 1's import line accidentally dropped it; re-check the import list includes
+`patternPath`.)
 
 - [x] **Step 5: Stage**
 
@@ -942,7 +981,8 @@ git add apps/web/src/sim/vehicles.ts
 
 - [x] **Step 1: Add `SRC_VEHICLES_INFRA` to `ALL_SOURCES`**
 
-Find the `ALL_SOURCES` array (search for `SRC_VEHICLES,` inside it) and add `SRC_VEHICLES_INFRA` right after `SRC_VEHICLES`:
+Find the `ALL_SOURCES` array (search for `SRC_VEHICLES,` inside it) and add `SRC_VEHICLES_INFRA`
+right after `SRC_VEHICLES`:
 
 ```ts
 const ALL_SOURCES = [
@@ -968,7 +1008,8 @@ const ALL_SOURCES = [
 ];
 ```
 
-Add `SRC_VEHICLES_INFRA` to this file's import from `./layers` (find the existing `SRC_VEHICLES,` in that import list and add it alongside).
+Add `SRC_VEHICLES_INFRA` to this file's import from `./layers` (find the existing `SRC_VEHICLES,` in
+that import list and add it alongside).
 
 - [x] **Step 2: Update the `attachVehicleAnimation` call site**
 
@@ -992,8 +1033,7 @@ detachVehicles = attachVehicleAnimation(map, store, {
 
 - [x] **Step 3: Typecheck**
 
-Run: `npx tsc -b --noEmit`
-Expected: no errors.
+Run: `npx tsc -b --noEmit` Expected: no errors.
 
 - [x] **Step 4: Stage**
 
@@ -1005,34 +1045,52 @@ git add apps/web/src/map/MapCanvas.tsx
 
 ### Task 9: Browser verification
 
-Not a code change — confirms the whole chain actually works end to end, per the spec's Testing section.
+Not a code change — confirms the whole chain actually works end to end, per the spec's Testing
+section.
 
-- [x] **Step 1: Start the dev server and open a system with a multi-lane road carrying more than one mode**
+- [x] **Step 1: Start the dev server and open a system with a multi-lane road carrying more than one
+      mode**
 
-Use the project's preview tooling (`.claude/launch.json`, `npm run dev` on :5173) to load the app. Draw or open a system with: a 4+ lane road carrying a bus service, and a rail line (any rail mode) with at least 2 tracks. Give both services a headway so at least one vehicle animates (Service Inspector → Peak headway).
+Use the project's preview tooling (`.claude/launch.json`, `npm run dev` on :5173) to load the app.
+Draw or open a system with: a 4+ lane road carrying a bus service, and a rail line (any rail mode)
+with at least 2 tracks. Give both services a headway so at least one vehicle animates (Service
+Inspector → Peak headway).
 
 - [x] **Step 2: Switch to Infrastructure view and confirm real polygons**
 
-Confirm: each vehicle now renders as a filled, route-colored rectangle (not a dot, not an icon), sized differently between the bus and the rail vehicle (rail longer), sitting inside one of the road's real lanes (not floating across the whole fanned-out group) and rotated to face its direction of travel.
+Confirm: each vehicle now renders as a filled, route-colored rectangle (not a dot, not an icon),
+sized differently between the bus and the rail vehicle (rail longer), sitting inside one of the
+road's real lanes (not floating across the whole fanned-out group) and rotated to face its direction
+of travel.
 
 - [x] **Step 3: Confirm Network view is unchanged**
 
-Switch back to Network view. Confirm vehicles are still the original small colored dots at the way's centerline, exactly as before this plan.
+Switch back to Network view. Confirm vehicles are still the original small colored dots at the way's
+centerline, exactly as before this plan.
 
 - [x] **Step 4: Confirm a curve rotates the vehicle smoothly**
 
-Find or draw a curved way carrying a service; confirm the Infrastructure-view vehicle's rotation visibly follows the curve rather than snapping.
+Find or draw a curved way carrying a service; confirm the Infrastructure-view vehicle's rotation
+visibly follows the curve rather than snapping.
 
 - [x] **Step 5: Confirm a lane-count change at a junction doesn't break the path**
 
-Find or create a junction where a road's lane count changes (e.g. a 4-lane arterial narrowing to a 2-lane local street) with a bus service running through it. Confirm the vehicle continues smoothly through the junction without jumping or disappearing.
+Find or create a junction where a road's lane count changes (e.g. a 4-lane arterial narrowing to a
+2-lane local street) with a bus service running through it. Confirm the vehicle continues smoothly
+through the junction without jumping or disappearing.
 
 - [x] **Step 6: RTC-scale performance check**
 
-If the RTC Southern Nevada GTFS import is available in this environment (see project memory on the GTFS import feature), load it, switch to Infrastructure view, and confirm the tab stays responsive (use the existing `__perf`/`__panBench` dev harness if present) — this feature must not reintroduce a per-frame hot path at real-agency scale.
+If the RTC Southern Nevada GTFS import is available in this environment (see project memory on the
+GTFS import feature), load it, switch to Infrastructure view, and confirm the tab stays responsive
+(use the existing `__perf`/`__panBench` dev harness if present) — this feature must not reintroduce
+a per-frame hot path at real-agency scale.
 
 ---
 
 ## Commits
 
-This plan's steps say "stage" rather than "commit" — per this project's standing policy, commits happen only with explicit user go-ahead, batched rather than one per task. Once all 9 tasks are complete and verified, ask the user for permission to commit the whole plan's changes (or split however they prefer) before running `git commit`.
+This plan's steps say "stage" rather than "commit" — per this project's standing policy, commits
+happen only with explicit user go-ahead, batched rather than one per task. Once all 9 tasks are
+complete and verified, ask the user for permission to commit the whole plan's changes (or split
+however they prefer) before running `git commit`.

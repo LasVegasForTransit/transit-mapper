@@ -67,10 +67,13 @@ const config: KnipConfig = {
     // graph. knip resolves dependencies by import, so a tool invoked by a hook
     // reads as unused.
     'lint-staged',
-    // Declared at the root so every package resolves one version through the
-    // catalog. Nothing at the root imports it, by design.
-    'vitest',
+    // Run by `lvbt preflight` and `lvbt deploy` through `pnpm exec` at the root,
+    // outside the import graph.
+    'wrangler',
   ],
+  // The version catalog is the organization's, shared by every LVBT repository,
+  // so it carries entries this repository does not use by design.
+  exclude: ['catalog'],
 };
 
 export default config;

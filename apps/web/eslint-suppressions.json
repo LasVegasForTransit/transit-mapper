@@ -75,6 +75,9 @@
     }
   },
   "scripts/perf/offline.ts": {
+    "@typescript-eslint/consistent-type-imports": {
+      "count": 2
+    },
     "@typescript-eslint/no-unnecessary-boolean-literal-compare": {
       "count": 2
     },
@@ -953,17 +956,6 @@
       "count": 1
     }
   },
-  "src/ui/useListboxKeyboardNav.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "complexity": {
-      "count": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 1
-    }
-  },
   "tests/editor/actions/pointActions.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 7
@@ -998,6 +990,9 @@
     }
   },
   "tests/map/interactions.test.ts": {
+    "@typescript-eslint/no-meaningless-void-operator": {
+      "count": 2
+    },
     "@typescript-eslint/no-misused-spread": {
       "count": 1
     },
@@ -1092,6 +1087,9 @@
     }
   },
   "tests/sim/vehicles.test.ts": {
+    "@typescript-eslint/consistent-type-imports": {
+      "count": 2
+    },
     "max-lines": {
       "count": 1
     }
@@ -1149,6 +1147,9 @@
     }
   },
   "tests/ui/ExportPreviewMap.test.ts": {
+    "@typescript-eslint/consistent-type-imports": {
+      "count": 2
+    },
     "@typescript-eslint/no-invalid-void-type": {
       "count": 2
     }
@@ -1175,6 +1176,11 @@
       "count": 1
     }
   },
+  "tests/ui/Workbench.test.tsx": {
+    "@typescript-eslint/consistent-type-imports": {
+      "count": 1
+    }
+  },
   "tests/ui/about-dialog.test.tsx": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
@@ -1191,6 +1197,9 @@
     }
   },
   "tests/verify.test.ts": {
+    "@typescript-eslint/no-meaningless-void-operator": {
+      "count": 2
+    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 274
     },

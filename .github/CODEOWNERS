@@ -1,15 +1,3 @@
-# Review routing is separate from project ownership and copyright. Willie is
-# currently the only repository administrator, so routes stay individual
-# until an organization maintainer team can receive them.
-#
-# After `@LasVegasForTransit/maintainers` exists and has repository access,
-# replace every `@williecubed` entry below with that team.
-* @williecubed
-
-# Paths where a mistake is expensive or irreversible. These are called out
-# separately so that when the default owner changes, the deliberate review of
-# migrations, deployment config and CI does not silently move with it.
-/apps/worker/src/migrations/ @williecubed
-/apps/worker/wrangler.toml   @williecubed
-/.github/                    @williecubed
-/.githooks/                  @williecubed
+# Every change is reviewed by the maintainers team. Add narrower entries below
+# for paths that need a specific reviewer, for example database migrations.
+* @LasVegasForTransit/maintainers

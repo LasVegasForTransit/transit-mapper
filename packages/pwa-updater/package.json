@@ -7,16 +7,20 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
-    "lint": "eslint .",
-    "verify": "vitest run"
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "react": "^18.3.1"
   },
   "devDependencies": {
-    "@transitmapper/tsconfig": "workspace:*",
+    "@lvbt/eslint-config": "link:../../../repository-tooling/packages/eslint-config",
+    "@lvbt/typescript-config": "link:../../../repository-tooling/packages/typescript-config",
+    "@lvbt/vitest-config": "link:../../../repository-tooling/packages/vitest-config",
     "@types/react": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
     "vite-plugin-pwa": "catalog:",
     "vitest": "catalog:"
   }

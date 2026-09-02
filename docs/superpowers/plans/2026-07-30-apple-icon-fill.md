@@ -1,10 +1,15 @@
 # Apple Icon Mark Fill Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
+> (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Enlarge the Apple-only Route silhouette so the 180px touch icon has a 16dp left and right inset.
+**Goal:** Enlarge the Apple-only Route silhouette so the 180px touch icon has a 16dp left and right
+inset.
 
-**Architecture:** Keep browser and manifest icon scales unchanged. Give the Apple Icon Composer input layer a dedicated `1.0` scale, verify its rendered alpha bounds as image behavior, then re-export and record the native Liquid Glass result.
+**Architecture:** Keep browser and manifest icon scales unchanged. Give the Apple Icon Composer
+input layer a dedicated `1.0` scale, verify its rendered alpha bounds as image behavior, then
+re-export and record the native Liquid Glass result.
 
 **Tech Stack:** TypeScript ESM, Sharp, Vitest, Apple Icon Composer, pnpm
 
@@ -74,13 +79,13 @@ Run:
 pnpm --filter @transitmapper/web exec vitest run tests/scripts/app-icon.test.ts
 ```
 
-Expected: FAIL because the existing `0.88` browser scale leaves about 25px of
-horizontal inset in the 180px render.
+Expected: FAIL because the existing `0.88` browser scale leaves about 25px of horizontal inset in
+the 180px render.
 
 - [ ] **Step 3: Add the dedicated Apple scale**
 
-In `apps/web/scripts/app-icon.ts`, add the Apple-only constant beside
-`GLYPH_SCALE` and use it only in `appleTouchIconLayerSvg()`:
+In `apps/web/scripts/app-icon.ts`, add the Apple-only constant beside `GLYPH_SCALE` and use it only
+in `appleTouchIconLayerSvg()`:
 
 ```ts
 const APPLE_GLYPH_SCALE = 1;
@@ -126,16 +131,14 @@ pnpm --filter @transitmapper/web generate:icons
 ```
 
 Expected: the command updates
-`apps/web/scripts/transit-mapper.icon/Assets/apple-touch-icon-layer.png`, then
-stops with the expected stale-export message because the native export still
-contains the old silhouette.
+`apps/web/scripts/transit-mapper.icon/Assets/apple-touch-icon-layer.png`, then stops with the
+expected stale-export message because the native export still contains the old silhouette.
 
 - [ ] **Step 2: Export the native source**
 
-Open `apps/web/scripts/transit-mapper.icon` in Apple Icon Composer. Export a
-flattened 1024px PNG over
-`apps/web/scripts/apple-touch-icon-source.png`, preserving the existing Ember
-fill, Combined lighting, neutral shadow, and 0.5 translucency.
+Open `apps/web/scripts/transit-mapper.icon` in Apple Icon Composer. Export a flattened 1024px PNG
+over `apps/web/scripts/apple-touch-icon-source.png`, preserving the existing Ember fill, Combined
+lighting, neutral shadow, and 0.5 translucency.
 
 - [ ] **Step 3: Record provenance and regenerate the public asset**
 
@@ -145,8 +148,8 @@ Run:
 pnpm --filter @transitmapper/web generate:icons -- --record-apple-export
 ```
 
-Expected: the command records the current document, enlarged layer, and
-flattened export, then updates `apps/web/public/apple-touch-icon.png`.
+Expected: the command records the current document, enlarged layer, and flattened export, then
+updates `apps/web/public/apple-touch-icon.png`.
 
 - [ ] **Step 4: Document the platform-specific sizing contract**
 
@@ -154,9 +157,9 @@ Add this paragraph to the Apple Icon Composer section of
 `docs/development/how-to/update-application-icons.md`:
 
 ```md
-The Apple-only Route layer uses a 16dp left and right inset in the 180px touch
-icon. Browser and manifest icons keep their independent regular and maskable
-scales; changing the Apple inset must not resize those assets.
+The Apple-only Route layer uses a 16dp left and right inset in the 180px touch icon. Browser and
+manifest icons keep their independent regular and maskable scales; changing the Apple inset must not
+resize those assets.
 ```
 
 - [ ] **Step 5: Verify generated assets are stable**
@@ -172,9 +175,8 @@ Expected: both commands succeed without changing files.
 
 - [ ] **Step 6: Inspect the generated Apple icon**
 
-Open `apps/web/public/apple-touch-icon.png` and confirm that the Route
-silhouette fills more of the Ember square, retains one continuous Liquid Glass
-surface, and leaves visually balanced side insets.
+Open `apps/web/public/apple-touch-icon.png` and confirm that the Route silhouette fills more of the
+Ember square, retains one continuous Liquid Glass surface, and leaves visually balanced side insets.
 
 - [ ] **Step 7: Commit the native export and documentation**
 
@@ -224,5 +226,5 @@ git diff --stat origin/main...HEAD
 git log --oneline origin/main..HEAD
 ```
 
-Expected: a clean `codex/apple-icon-fill` branch containing the design,
-implementation, generated Apple assets, and documentation commits only.
+Expected: a clean `codex/apple-icon-fill` branch containing the design, implementation, generated
+Apple assets, and documentation commits only.

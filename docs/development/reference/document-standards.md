@@ -1,8 +1,8 @@
 # Document standards
 
-Required documents and their required sections. Applies to every repository
-the organization maintains. `pnpm check` fails when a required document is
-missing or lacks a required top-level section.
+Required documents and their required sections. Applies to every repository the organization
+maintains. `pnpm check` fails when a required document is missing or lacks a required top-level
+section.
 
 ## Rules
 
@@ -11,19 +11,18 @@ missing or lacks a required top-level section.
 A heading is a noun phrase naming its contents. `Runtimes` is a heading;
 `Why core must run in two runtimes` is a sentence.
 
-Nest. A section covering several things gets one `###` per thing, rather
-than paragraphs separated by transitions.
+Nest. A section covering several things gets one `###` per thing, rather than paragraphs separated
+by transitions.
 
-Required sections are `##`. Their order is fixed. A section with nothing to
-record is omitted, not retitled.
+Required sections are `##`. Their order is fixed. A section with nothing to record is omitted, not
+retitled.
 
 ### Prose
 
-Sentences are complete, declarative, and specific. A section does not open
-by restating its heading, and reference documents do not address the reader.
+Sentences are complete, declarative, and specific. A section does not open by restating its heading,
+and reference documents do not address the reader.
 
-Numbers carry units and provenance: `10ms CPU limit per request`, not `a low
-CPU limit`.
+Numbers carry units and provenance: `10ms CPU limit per request`, not `a low CPU limit`.
 
 Write plainly. Say the thing, in the shortest sentence that still says it.
 
@@ -37,19 +36,19 @@ Write plainly. Say the thing, in the shortest sentence that still says it.
 | Plain structure   | `The reason it works is that the core is pure`         | `It works because the core is pure` |
 | No stock metaphor | `the load-bearing detail`, `at its core`               | Name the detail                     |
 
-Vary the construction. A page where every other sentence turns on `rather
-than` or an em-dash reads as filler even when each sentence is true. If a
-phrase appears three times on one page, two of them are habit.
+Vary the construction. A page where every other sentence turns on `rather than` or an em-dash reads
+as filler even when each sentence is true. If a phrase appears three times on one page, two of them
+are habit.
 
-`check:documents` rejects a fixed list of stock phrases. It catches the
-obvious ones only; the rest is on the author and the reviewer.
+`check:documents` rejects a fixed list of stock phrases. It catches the obvious ones only; the rest
+is on the author and the reviewer.
 
 ## Required documents
 
 ### `development/explanation/architecture.md`
 
-[arc42](https://arc42.org/overview), complete. All twelve sections, in
-order, with the official names.
+[arc42](https://arc42.org/overview), complete. All twelve sections, in order, with the official
+names.
 
 #### Sections
 
@@ -68,17 +67,15 @@ order, with the official names.
 | 11. Risks and Technical Debt | Known risks and debt, with current status                                                |
 | 12. Glossary                 | Domain and technical terms used when discussing the system                               |
 
-The heading set is closed. Those twelve are the only `##` headings
-permitted, spelled exactly, in that order. An unrecognised heading fails the
-check.
+The heading set is closed. Those twelve are the only `##` headings permitted, spelled exactly, in
+that order. An unrecognised heading fails the check.
 
-Every section is required. A section with nothing to record is a finding
-about the project rather than licence to drop the heading: an empty Risks
-and Technical Debt means nobody has looked, and an empty Glossary means the
-vocabulary is undocumented.
+Every section is required. A section with nothing to record is a finding about the project rather
+than licence to drop the heading: an empty Risks and Technical Debt means nobody has looked, and an
+empty Glossary means the vocabulary is undocumented.
 
-A word limit of 5,000 catches runaway. The closed heading set, not the
-limit, is what keeps filler out.
+A word limit of 5,000 catches runaway. The closed heading set, not the limit, is what keeps filler
+out.
 
 #### Naming
 
@@ -90,16 +87,15 @@ The document must survive a rename that changes no behaviour.
 | Name sparingly | Top-level source directories, and an entry-point file where the file is the module      |
 | Never name     | Paths inside a package, functions, variables, config keys, versions, exact measurements |
 
-Name things so a reader can find them by symbol search. Do not link to
-source files: links go stale, names do not.
+Name things so a reader can find them by symbol search. Do not link to source files: links go stale,
+names do not.
 
-The test: if a behaviour-preserving rename would falsify a sentence, that
-sentence is at the wrong altitude.
+The test: if a behaviour-preserving rename would falsify a sentence, that sentence is at the wrong
+altitude.
 
 #### Excluded
 
-Content belonging to another document, regardless of which arc42 section it
-might seem to fit:
+Content belonging to another document, regardless of which arc42 section it might seem to fit:
 
 | Excluded                              | Belongs in                              |
 | ------------------------------------- | --------------------------------------- |
@@ -120,15 +116,14 @@ The document is organized by ownership, not by literal directory names.
 | `###`  | A package, application, or repository-support area beneath its group    |
 | `####` | An internal module beneath the package or application that owns it      |
 
-`Workspace` contains dependency direction and the navigation tree. `Packages`
-and `Applications` explain responsibility, dependencies, runtime constraints,
-and ownership boundaries. Source paths appear as short locator notes within
-their owning sections; paths and filenames do not become headings.
+`Workspace` contains dependency direction and the navigation tree. `Packages` and `Applications`
+explain responsibility, dependencies, runtime constraints, and ownership boundaries. Source paths
+appear as short locator notes within their owning sections; paths and filenames do not become
+headings.
 
-Filename-led inventories are excluded. A file is named only when it is an
-entry point, generated artifact, or external contract whose identity matters
-to the explanation. `check:structure` enforces the group hierarchy and
-bidirectional coverage between workspace modules and source directories.
+Filename-led inventories are excluded. A file is named only when it is an entry point, generated
+artifact, or external contract whose identity matters to the explanation. `check:structure` enforces
+the group hierarchy and bidirectional coverage between workspace modules and source directories.
 
 ### `development/explanation/enforcement-model.md`
 

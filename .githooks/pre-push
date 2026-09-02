@@ -1,45 +1,5 @@
-#!/usr/bin/env bash
-# Layer 2 of four. Runs the full bar before anything leaves the laptop.
-#
-# CI is still the authority; this exists so a red CI run is rare rather
-# than routine. Adapted from website/.githooks/pre-push, trimmed to this
-# stack: no Astro, no LFS, no allowed-scopes file.
-set -e
-cd "$(git rev-parse --show-toplevel)"
-
-BOLD='\033[1m'; DIM='\033[2m'; RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; RESET='\033[0m'
-if [ ! -t 1 ]; then BOLD=''; DIM=''; RED=''; GREEN=''; CYAN=''; RESET=''; fi
-
-TOTAL_STEPS=2
-step() { printf "\n${CYAN}${BOLD}[%s/%s]${RESET} %s\n" "$1" "$TOTAL_STEPS" "$2"; }
-fail() { printf "\n  ${RED}${BOLD}Push blocked${RESET} — %s\n" "$1"; }
-cmd()  { printf "    ${BOLD}%s${RESET}\n" "$1"; }
-
-UPSTREAM=$(git rev-parse --abbrev-ref '@{u}' 2>/dev/null || echo "")
-BASE=${UPSTREAM:-main}
-
-if [ "$(git rev-list --count "${BASE}..HEAD" 2>/dev/null || echo 0)" -eq 0 ]; then
-  printf "  ${DIM}Nothing to push${RESET}\n"
-  exit 0
-fi
-
-step 1 "Checking the local environment"
-if ! pnpm --silent check:env; then
-  fail "the installed tree disagrees with the lockfile"
-  echo ""
-  cmd "pnpm install --frozen-lockfile"
-  echo ""
-  exit 1
-fi
-
-step 2 "Running pnpm check"
-if ! pnpm check; then
-  fail "pnpm check failed"
-  echo ""
-  cmd "pnpm check --fix   # repairs everything a machine can"
-  cmd "pnpm check         # then re-run to see what is left"
-  echo ""
-  exit 1
-fi
-
-printf "\n${GREEN}${BOLD}All checks passed${RESET} ${DIM}(%ss)${RESET} — pushing\n\n" "$SECONDS"
+#!/usr/bin/env sh
+# The shared hook lives in @lvbt/cli; repository-specific steps go below it.
+set -eu
+ROOT=$(git rev-parse --show-toplevel)
+sh "$ROOT/node_modules/@lvbt/cli/hooks/pre-push.sh" "$@"

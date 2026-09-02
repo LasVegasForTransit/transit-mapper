@@ -38,14 +38,6 @@
       "count": 1
     }
   },
-  "scripts/check-docs-links.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 1
-    }
-  },
   "scripts/check-document-standards.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
@@ -54,22 +46,8 @@
       "count": 1
     }
   },
-  "scripts/check-workspace-contract.ts": {
-    "complexity": {
-      "count": 3
-    },
-    "max-depth": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 3
-    }
-  },
-  "turbo/generators/config.ts": {
-    "max-lines-per-function": {
+  "scripts/check-migrations-append-only.ts": {
+    "turbo/no-undeclared-env-vars": {
       "count": 1
     }
   }

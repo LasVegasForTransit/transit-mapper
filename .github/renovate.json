@@ -6,12 +6,30 @@
   "labels": ["dependencies"],
   "prHourlyLimit": 4,
   "prConcurrentLimit": 8,
-  "rangeStrategy": "bump",
+  "rangeStrategy": "pin",
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 6am on monday"]
   },
+  "customManagers": [
+    {
+      "description": "The @lvbt/* packages install from git tags of repository-tooling with a path: suffix that the npm manager does not parse, and the Claude Code marketplace pins the same tag. Track both as one dependency on the repository's tags.",
+      "customType": "regex",
+      "managerFilePatterns": ["/(^|/)package\\.json$/", "/(^|/)\\.claude/settings\\.json$/"],
+      "matchStrings": [
+        "github:LasVegasForTransit/repository-tooling#(?<currentValue>v\\d+\\.\\d+\\.\\d+)&path:/packages/[a-z-]+",
+        "\"repo\": \"LasVegasForTransit/repository-tooling\",\\s*\"ref\": \"(?<currentValue>v\\d+\\.\\d+\\.\\d+)\""
+      ],
+      "depNameTemplate": "LasVegasForTransit/repository-tooling",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "semver"
+    }
+  ],
   "packageRules": [
+    {
+      "groupName": "LVBT repository standard",
+      "matchDepNames": ["LasVegasForTransit/repository-tooling"]
+    },
     {
       "groupName": "dev dependencies (non-major)",
       "matchDepTypes": ["devDependencies"],
@@ -21,32 +39,6 @@
       "matchUpdateTypes": ["patch"],
       "automerge": true,
       "automergeType": "branch"
-    },
-    {
-      "groupName": "the lint and format toolchain",
-      "matchPackageNames": [
-        "eslint",
-        "@eslint/**",
-        "@eslint-community/**",
-        "typescript-eslint",
-        "@typescript-eslint/**",
-        "eslint-config-prettier",
-        "eslint-plugin-**",
-        "prettier"
-      ]
-    },
-    {
-      "groupName": "the Cloudflare toolchain",
-      "matchPackageNames": ["wrangler", "@cloudflare/**"]
-    },
-    {
-      "groupName": "Vitest",
-      "matchPackageNames": ["vitest", "@vitest/**"]
-    },
-    {
-      "matchPackageNames": ["typescript"],
-      "enabled": false,
-      "description": "Pinned to 6.x on purpose. typescript-eslint cannot load under TypeScript 7 and there is no released support, so an automated bump here breaks linting entirely. Re-enable when typescript-eslint ships TS 7 support; see Standard technology in the harness spec."
     }
   ]
 }

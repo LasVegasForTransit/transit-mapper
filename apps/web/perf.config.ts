@@ -18,7 +18,9 @@ export const BUNDLE_BUDGETS: BundleBudget[] = [
     entry: 'main',
     // These round delivery guardrails leave space for the simulator to grow
     // while still making a material download increase an explicit decision.
-    maximumGzipBytes: 512_000,
+    // 512 KiB. React 19 (the organization baseline) grew the runtime chunk past
+    // the earlier 500 KB line by under 2 KB.
+    maximumGzipBytes: 524_288,
     maximumBrotliBytes: 450_560,
   },
   {

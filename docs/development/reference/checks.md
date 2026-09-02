@@ -14,7 +14,7 @@ pnpm check --fix  # everything a machine can repair
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `format:check`      | a file is not Prettier-formatted                                                                                              | `pnpm format`                                                                                             |
 | `lint`              | a lint rule is violated, including the repository-specific ones                                                               | `pnpm lint:fix`                                                                                           |
-| `typecheck:root`    | repository tooling — scripts/, turbo/, or eslint.config.ts — does not compile                                                 | `fix the type error; do not add `any``                                                                    |
+| `typecheck:root`    | repository tooling — scripts/, turbo/, or eslint.config.ts — does not compile                                                 | `` fix the type error; do not add `any` ``                                                                |
 | `check:filenames`   | a file under a module src/ or tests/ tree does not follow its filename contract                                               | `rename the file and update its imports`                                                                  |
 | `check:contract`    | a package is missing a required task, pins a version outside the catalog, or keeps test material outside its tests/ directory | `add the script, use the catalog, or move the test under the owning package tests/ tree`                  |
 | `check:docs`        | a relative link or anchor in docs/ does not resolve                                                                           | `correct the link, or write the page it points at`                                                        |
@@ -22,7 +22,7 @@ pnpm check --fix  # everything a machine can repair
 | `check:structure`   | the project map hierarchy is malformed, a source module is missing beneath its owner, or a described path is gone             | `describe the module beneath its package or application, or remove the stale locator`                     |
 | `check:breakpoint`  | the layout breakpoint in the stylesheet and the capability module disagree                                                    | `set --breakpoint-md to one more than COMPACT_LAYOUT_QUERY's max-width`                                   |
 | `check:config`      | a tool is configured under a name other than `<tool>.config.<ext>`                                                            | `rename the file, or record the tool in scripts/check-config.ts`                                          |
-| `check:debt`        | a suppression ledger gained an entry, or a suppressed file was changed without shrinking                                      | `fix the finding rather than recording it, then `eslint --prune-suppressions``                            |
+| `check:debt`        | a suppression ledger gained an entry, or a suppressed file was changed without shrinking                                      | `` fix the finding rather than recording it, then `eslint --prune-suppressions` ``                        |
 | `check:deadcode`    | a file, export, type, or dependency is unreferenced                                                                           | `delete it — or declare the entry point in knip.config.ts if it is reached from outside the import graph` |
 | `check:duplication` | copy-pasted code exceeds the recorded share of the codebase                                                                   | `extract the shared part, or lower nothing — the threshold only goes down`                                |
 | `check:boundaries`  | a module imports across a boundary the project map forbids, or a cycle exists                                                 | `move the shared code into packages/core, or break the cycle`                                             |
@@ -35,8 +35,8 @@ pnpm check --fix  # everything a machine can repair
 
 ## Checks that run elsewhere
 
-Not every guard belongs in `pnpm check`. These run at a layer where they
-make sense — a disposable CI runner, or the moment before a push.
+Not every guard belongs in `pnpm check`. These run at a layer where they make sense — a disposable
+CI runner, or the moment before a push.
 
 | Check                       | Fails when                                                                         | Fix                                                  |
 | --------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -51,9 +51,8 @@ make sense — a disposable CI runner, or the moment before a push.
 ## Adding a check
 
 Add it to `pnpm check` in `package.json`, then to the registry in
-`scripts/generate-checks-reference.ts`, then run `pnpm gen:checks`. The
-staleness check fails until this page matches, so the documentation cannot
-be the step that gets skipped.
+`scripts/generate-checks-reference.ts`, then run `pnpm gen:checks`. The staleness check fails until
+this page matches, so the documentation cannot be the step that gets skipped.
 
-Every check must name the command that fixes it. A failure that leaves
-someone guessing is a defect in the check, not in the person.
+Every check must name the command that fixes it. A failure that leaves someone guessing is a defect
+in the check, not in the person.

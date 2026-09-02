@@ -1,4 +1,6 @@
 import { configDefaults, defineConfig } from 'vitest/config';
+
+import { sharedConfig } from '@lvbt/vitest-config';
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
 import { resolve } from 'node:path';
 
@@ -24,7 +26,7 @@ export default defineConfig({
     }),
   ],
   test: {
-    include: ['tests/**/*.test.{ts,tsx}'],
+    ...sharedConfig.test,
     exclude: [...configDefaults.exclude, 'tests/verify.test.ts', 'tests/support/**'],
   },
 });

@@ -1,44 +1,10 @@
-// Repository tooling: the checks and generators under scripts/, the package
-// scaffolding under turbo/, and eslint.config.ts itself.
-//
-// At the root rather than inside scripts/ because TypeScript's language
-// service resolves a file by walking up to the nearest `tsconfig.json`, and a
-// `.ts` file at the repository root would otherwise reach nothing at all.
-// `eslint.config.ts` and `turbo/generators/config.ts` are both loaded at
-// runtime by tools that transpile without typechecking, so without this they
-// are the two files nothing compiles.
-//
-// No `tsconfig.build.json` beside this one, unlike every package: nothing here
-// ships. These are programs `tsx` runs in place.
-//
-// An independent leaf — no composite, no references. `tsc -b --noEmit` raises
-// TS6310 once a project has outgoing references.
+// Repository tooling: the checks and generators under scripts/ and turbo/.
+// Nothing here ships; these are programs tsx runs in place. `.ts` imports are
+// allowed because eslint-plugin and the generators reach into package source.
 {
+  "extends": "@lvbt/typescript-config/node.json",
   "compilerOptions": {
-    "target": "es2022",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitOverride": true,
-    "noImplicitReturns": true,
-    // `array[i]` and `record[key]` are typed as always present without this,
-    // and a guard around one then reads as dead code to
-    // `no-unnecessary-condition` — which is how check-debt.ts ended up
-    // declaring both levels of its ledger optional by hand to make the rule
-    // agree with reality. The compiler flag and that lint rule only make sense
-    // together.
-    "noUncheckedIndexedAccess": true,
-    "noEmit": true,
-    "types": ["node"],
-    // Not for anything under scripts/. `eslint.config.ts` imports
-    // `@transitmapper/config-eslint` and `@transitmapper/eslint-plugin`, whose
-    // `exports` maps point straight at TypeScript source, and that source
-    // imports its own modules with a `.ts` suffix. Typechecking the config
-    // therefore means typechecking those packages under their own rule. Safe
-    // because nothing here emits.
     "allowImportingTsExtensions": true
   },
-  "include": ["scripts", "turbo", "eslint.config.ts"]
+  "include": ["scripts", "turbo"]
 }

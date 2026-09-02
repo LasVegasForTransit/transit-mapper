@@ -1,12 +1,22 @@
 # Share Expiration Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
+> (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Anonymous shares expire 7 days after creation, enforced both lazily (on read) and by a daily cron sweep, with a schema that anticipates future account-owned shares (`expires_at = NULL` = never expires).
+**Goal:** Anonymous shares expire 7 days after creation, enforced both lazily (on read) and by a
+daily cron sweep, with a schema that anticipates future account-owned shares (`expires_at = NULL` =
+never expires).
 
-**Architecture:** One D1 migration adds a nullable `expires_at` column and clears existing rows. The `POST /api/systems` handler sets `expires_at` on insert. The `GET /api/systems/:id` handler checks `expires_at` and deletes+404s if expired. A new `scheduled()` handler, wired alongside the existing Hono `app` in the Worker's default export, runs a daily `DELETE` for any expired rows a cron sweep would catch that reads never touched.
+**Architecture:** One D1 migration adds a nullable `expires_at` column and clears existing rows. The
+`POST /api/systems` handler sets `expires_at` on insert. The `GET /api/systems/:id` handler checks
+`expires_at` and deletes+404s if expired. A new `scheduled()` handler, wired alongside the existing
+Hono `app` in the Worker's default export, runs a daily `DELETE` for any expired rows a cron sweep
+would catch that reads never touched.
 
-**Tech Stack:** Cloudflare Workers, Hono, D1 (SQLite-compatible), Wrangler Cron Triggers. No test framework currently exists in `apps/worker` — verification is manual via `wrangler dev` + `curl` against a local D1 instance, matching the package's existing lack of automated tests.
+**Tech Stack:** Cloudflare Workers, Hono, D1 (SQLite-compatible), Wrangler Cron Triggers. No test
+framework currently exists in `apps/worker` — verification is manual via `wrangler dev` + `curl`
+against a local D1 instance, matching the package's existing lack of automated tests.
 
 **Reference spec:** `docs/superpowers/specs/2026-07-21-share-expiry-design.md`
 
@@ -33,13 +43,15 @@ ALTER TABLE systems ADD COLUMN expires_at INTEGER;
 
 - [ ] **Step 2: Apply the migration to the local dev D1 database**
 
-Run: `cd apps/worker && npx wrangler d1 migrations apply transitmapper --local`
-Expected: output listing `0002_share_expiry.sql` as applied, no errors.
+Run: `cd apps/worker && npx wrangler d1 migrations apply transitmapper --local` Expected: output
+listing `0002_share_expiry.sql` as applied, no errors.
 
 - [ ] **Step 3: Verify the column exists**
 
-Run: `cd apps/worker && npx wrangler d1 execute transitmapper --local --command "PRAGMA table_info(systems);"`
-Expected: a row for `expires_at` with type `INTEGER`, and the `systems` table has 0 rows (from `SELECT count(*) FROM systems` if you want to double check).
+Run:
+`cd apps/worker && npx wrangler d1 execute transitmapper --local --command "PRAGMA table_info(systems);"`
+Expected: a row for `expires_at` with type `INTEGER`, and the `systems` table has 0 rows (from
+`SELECT count(*) FROM systems` if you want to double check).
 
 - [ ] **Step 4: Commit**
 
@@ -107,7 +119,9 @@ curl -s -X POST http://localhost:8787/api/systems \
   -d '{"system":{"id":"test-1","name":"Test System","stops":[],"ways":[],"lines":[],"createdAt":0,"updatedAt":0}}'
 ```
 
-Expected: a JSON response like `{"id":"<10-char-id>"}` (adjust the request body's `system` shape to whatever `parseSystem` in `packages/core/src/model/serialize.ts` actually requires — check that file if this 400s on shape).
+Expected: a JSON response like `{"id":"<10-char-id>"}` (adjust the request body's `system` shape to
+whatever `parseSystem` in `packages/core/src/model/serialize.ts` actually requires — check that file
+if this 400s on shape).
 
 Then check the row directly:
 
@@ -162,7 +176,8 @@ app.get('/api/systems/:id', async (c) => {
 
 - [ ] **Step 2: Verify manually — non-expired share still works**
 
-With `wrangler dev` still running, re-run the `curl -X POST` from Task 2 Step 2 to get a fresh `id`, then:
+With `wrangler dev` still running, re-run the `curl -X POST` from Task 2 Step 2 to get a fresh `id`,
+then:
 
 ```bash
 curl -s http://localhost:8787/api/systems/<id>
@@ -207,7 +222,8 @@ git commit -m "Delete and 404 expired shares on read"
 
 - [ ] **Step 1: Add the cron trigger to wrangler.toml**
 
-Modify `apps/worker/wrangler.toml`, adding this block (anywhere after the existing `[[d1_databases]]` section is fine):
+Modify `apps/worker/wrangler.toml`, adding this block (anywhere after the existing
+`[[d1_databases]]` section is fine):
 
 ```toml
 [triggers]
@@ -275,10 +291,15 @@ git commit -m "Add daily cron sweep to delete expired shares"
 
 - [ ] **Step 1: Run the worker's typecheck**
 
-Run: `cd apps/worker && pnpm typecheck:run`
-Expected: exits 0, no type errors (in particular, confirm `ScheduledEvent` is recognized — it comes from `@cloudflare/workers-types`, already a devDependency).
+Run: `cd apps/worker && pnpm typecheck:run` Expected: exits 0, no type errors (in particular,
+confirm `ScheduledEvent` is recognized — it comes from `@cloudflare/workers-types`, already a
+devDependency).
 
-If `ScheduledEvent` is not found, check that `apps/worker/tsconfig.json` includes `@cloudflare/workers-types` in its `types` array or that ambient types are picked up the same way the existing `D1Database`/`Fetcher` types in `Env` already are (those work today, so `ScheduledEvent` should resolve the same way — if not, add `"types": ["@cloudflare/workers-types"]` to `apps/worker/tsconfig.json`'s `compilerOptions`).
+If `ScheduledEvent` is not found, check that `apps/worker/tsconfig.json` includes
+`@cloudflare/workers-types` in its `types` array or that ambient types are picked up the same way
+the existing `D1Database`/`Fetcher` types in `Env` already are (those work today, so
+`ScheduledEvent` should resolve the same way — if not, add `"types": ["@cloudflare/workers-types"]`
+to `apps/worker/tsconfig.json`'s `compilerOptions`).
 
 - [ ] **Step 2: Commit (only if tsconfig needed a change)**
 

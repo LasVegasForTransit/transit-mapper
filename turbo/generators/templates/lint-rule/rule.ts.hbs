@@ -22,13 +22,14 @@ export const {{camelCase name}}: Rule.RuleModule = {
     },
   },
 
-  create(context) {
+  create() {
     return {
       // Where a rule is about globals, prefer scope analysis over an
       // Identifier visitor — see core-runtime-purity for why property keys
-      // and shadowed names otherwise each need special-casing.
+      // and shadowed names otherwise each need special-casing. Take
+      // `context` as the parameter once the rule reports something.
       Program() {
-        void context;
+        // TODO: visit the nodes this rule is about.
       },
     };
   },

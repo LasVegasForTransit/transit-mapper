@@ -110,7 +110,7 @@ const REQUIRED_HEADINGS = [
   ['Packages', 'PWA updater', 'Update lifecycle'],
   ['Packages', 'ESLint plugin'],
   ['Packages', 'ESLint plugin', 'Repository rules'],
-  ['Packages', 'TypeScript configuration'],
+  ['Packages', 'Shared configuration'],
   ['Applications'],
   ['Applications', 'Web'],
   ['Applications', 'Web', 'Editing'],

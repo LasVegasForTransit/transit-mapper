@@ -1,13 +1,12 @@
 # Write a test
 
-`pnpm verify` runs everything. There are two suites and they are not
-interchangeable.
+`pnpm test` runs everything. There are two suites and they are not interchangeable.
 
 ## Adding to an existing suite
 
-`apps/web/tests/verify.test.ts` and `apps/worker/tests/verify.test.ts` are
-sequential scripts. One store is built at module scope and mutated in order,
-so each section depends on the state the sections above it left behind.
+`apps/web/tests/verify.test.ts` and `apps/worker/tests/verify.test.ts` are sequential scripts. One
+store is built at module scope and mutated in order, so each section depends on the state the
+sections above it left behind.
 
 Add beside related cases, in the same style:
 
@@ -15,17 +14,16 @@ Add beside related cases, in the same style:
 check('deleting a way removes its service', servicesOnWay(wayId).length === 0);
 ```
 
-The name is the entire failure message, so write it as the rule it enforces
-— not "test delete" but "deleting a way removes its service".
+The name is the entire failure message, so write it as the rule it enforces — not "test delete" but
+"deleting a way removes its service".
 
-**Do not split these files up piecemeal.** The shared sequential state means
-a section moved to another file silently tests something different. Splitting
-them is a rewrite, not a refactor.
+**Do not split these files up piecemeal.** The shared sequential state means a section moved to
+another file silently tests something different. Splitting them is a rewrite, not a refactor.
 
 ## Adding a new test file
 
-Put each new isolated Vitest case in the owning module's `tests/` tree,
-mirroring the production area it covers:
+Put each new isolated Vitest case in the owning module's `tests/` tree, mirroring the production
+area it covers:
 
 ```text
 <module>/
@@ -35,16 +33,14 @@ mirroring the production area it covers:
     map/interactions.test.ts
 ```
 
-Test support belongs in `tests/support/`. Test imports cross explicitly into
-`src/`; do not make production code reach into test support. For example, a
-test in `tests/share/claim.test.ts` imports its subject from
-`../../src/share/claim`.
+Test support belongs in `tests/support/`. Test imports cross explicitly into `src/`; do not make
+production code reach into test support. For example, a test in `tests/share/claim.test.ts` imports
+its subject from `../../src/share/claim`.
 
-Every file under `tests/` uses exactly `<name>.test.ts` or
-`<name>.test.tsx`, including sequential verifiers and support modules.
-End-to-end files under `tests/e2e/` instead use exactly `<name>.spec.ts` or
-`<name>.spec.tsx`. A filename cannot contain another dot, and no other file
-type belongs under `tests/`.
+Every file under `tests/` uses exactly `<name>.test.ts` or `<name>.test.tsx`, including sequential
+verifiers and support modules. End-to-end files under `tests/e2e/` instead use exactly
+`<name>.spec.ts` or `<name>.spec.tsx`. A filename cannot contain another dot, and no other file type
+belongs under `tests/`.
 
 Write the case as ordinary isolated Vitest:
 
@@ -58,33 +54,31 @@ describe('claimOutcome', () => {
 });
 ```
 
-Every Vitest config discovers `tests/**/*.test.{ts,tsx}`. The configs
-explicitly exclude the sequential verifiers and `tests/support/`, which are
-executed directly or imported by tests. Keeping all test material under this
-one boundary makes the runner configuration and the repository check agree
-about what must run. These Vitest globs deliberately exclude end-to-end specs.
+Every Vitest config discovers `tests/**/*.test.{ts,tsx}`. The configs explicitly exclude the
+sequential verifiers and `tests/support/`, which are executed directly or imported by tests. Keeping
+all test material under this one boundary makes the runner configuration and the repository check
+agree about what must run. These Vitest globs deliberately exclude end-to-end specs.
 
 ## Testing the Worker
 
-`apps/worker/tests/shares.test.ts` runs in **real workerd against a real D1**,
-with the production migrations applied — not a mock. That means a test can
-exercise actual SQL, actual bindings, and actual request handling:
+`apps/worker/tests/shares.test.ts` runs in **real workerd against a real D1**, with the production
+migrations applied — not a mock. That means a test can exercise actual SQL, actual bindings, and
+actual request handling:
 
 ```ts
 const response = await worker.fetch(request, env, createExecutionContext());
 expect(response.status).toBe(400);
 ```
 
-This is the suite that matters most. The Worker is the only component that
-reads bytes from strangers.
+This is the suite that matters most. The Worker is the only component that reads bytes from
+strangers.
 
 ## What to test first
 
-Start at the untrusted-input boundary, not the happy path. The cases worth
-the most are the ones asserting that bad input is rejected — a system that
-is not an object, an id containing SQL metacharacters, a body over the size
-cap.
+Start at the untrusted-input boundary, not the happy path. The cases worth the most are the ones
+asserting that bad input is rejected — a system that is not an object, an id containing SQL
+metacharacters, a body over the size cap.
 
-Where a behaviour is deliberate but surprising, pin it with a test and say
-so in a comment. `POST /api/systems` accepting any object-shaped body is
-recorded that way, so that if it ever changes, it changes on purpose.
+Where a behaviour is deliberate but surprising, pin it with a test and say so in a comment.
+`POST /api/systems` accepting any object-shaped body is recorded that way, so that if it ever
+changes, it changes on purpose.

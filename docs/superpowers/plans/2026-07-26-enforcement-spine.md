@@ -1,25 +1,42 @@
 # Enforcement Spine Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
+> (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `pnpm check` the complete, single definition of a valid working tree, enforced locally by git hooks and authoritatively by CI.
+**Goal:** Make `pnpm check` the complete, single definition of a valid working tree, enforced
+locally by git hooks and authoritatively by CI.
 
-**Architecture:** Every check becomes a Turborepo task with declared inputs, composed into one `check` task. Four enforcement layers wrap it: an agent hook that formats on edit, a pre-commit hook that auto-fixes staged files, a pre-push hook that runs everything, and CI that runs everything authoritatively. Hook shell scripts are ported from the sibling `website` repository rather than written fresh.
+**Architecture:** Every check becomes a Turborepo task with declared inputs, composed into one
+`check` task. Four enforcement layers wrap it: an agent hook that formats on edit, a pre-commit hook
+that auto-fixes staged files, a pre-push hook that runs everything, and CI that runs everything
+authoritatively. Hook shell scripts are ported from the sibling `website` repository rather than
+written fresh.
 
-**Tech Stack:** Turborepo 2.10.5, pnpm 11.15.1, TypeScript 7.0.2, Prettier 3, ESLint 9 flat config with typescript-eslint, gitleaks, lint-staged.
+**Tech Stack:** Turborepo 2.10.5, pnpm 11.15.1, TypeScript 7.0.2, Prettier 3, ESLint 9 flat config
+with typescript-eslint, gitleaks, lint-staged.
 
-This is track 1 of `docs/superpowers/specs/2026-07-26-repo-harness-design.md`, plus the three secret-scanning nets that spec's Sequencing section pulls forward into track 1. Track 2 (Vitest) is a separate plan; here `test` wraps the existing `apps/web/scripts/verify.ts` so this track ships on its own.
+This is track 1 of `docs/superpowers/specs/2026-07-26-repo-harness-design.md`, plus the three
+secret-scanning nets that spec's Sequencing section pulls forward into track 1. Track 2 (Vitest) is
+a separate plan; here `test` wraps the existing `apps/web/scripts/verify.ts` so this track ships on
+its own.
 
 ## Global Constraints
 
 - Line width for Markdown prose: 76 characters. Prettier does not reflow prose; wrap by hand.
-- Prettier config is copied verbatim from `website/.prettierrc.json`: `printWidth: 100`, `singleQuote: true`, `trailingComma: "all"`. Do not add the `prettier-plugin-astro` plugin — there is no Astro here.
-- Never add `composite: true` or `references` to any tsconfig. `tsc -b --noEmit` raises TS6310 once a project has outgoing references; this repository already hit it. Every tsconfig stays an independent leaf with its own `noEmit: true`.
-- pnpm build-script approval lives in `pnpm-workspace.yaml` under `allowBuilds`, not in `package.json`. pnpm 11 ignores the old location.
+- Prettier config is copied verbatim from `website/.prettierrc.json`: `printWidth: 100`,
+  `singleQuote: true`, `trailingComma: "all"`. Do not add the `prettier-plugin-astro` plugin — there
+  is no Astro here.
+- Never add `composite: true` or `references` to any tsconfig. `tsc -b --noEmit` raises TS6310 once
+  a project has outgoing references; this repository already hit it. Every tsconfig stays an
+  independent leaf with its own `noEmit: true`.
+- pnpm build-script approval lives in `pnpm-workspace.yaml` under `allowBuilds`, not in
+  `package.json`. pnpm 11 ignores the old location.
 - Turborepo tasks must share the exact name of the package script they wrap.
 - `dev`, `preview`, and `worker:dev` stay off the Turborepo graph.
 - Every failure message ends with the exact command that fixes it.
-- Do not fix any type error by adding `any`, `@ts-ignore`, or `@ts-expect-error`. Widening with an explicit annotation is fine; a cast is not.
+- Do not fix any type error by adding `any`, `@ts-ignore`, or `@ts-expect-error`. Widening with an
+  explicit annotation is fine; a cast is not.
 
 ---
 
@@ -32,7 +49,8 @@ This is track 1 of `docs/superpowers/specs/2026-07-26-repo-harness-design.md`, p
 
 **Interfaces:**
 
-- Produces: root scripts `format` (writes) and `format:check` (verifies); turbo tasks of the same names.
+- Produces: root scripts `format` (writes) and `format:check` (verifies); turbo tasks of the same
+  names.
 
 - [ ] **Step 1: Install Prettier**
 
@@ -76,8 +94,7 @@ In `package.json` `scripts`:
 
 - [ ] **Step 5: Verify it fails before formatting**
 
-Run: `pnpm format:check`
-Expected: FAIL, listing many files. This confirms the check is live.
+Run: `pnpm format:check` Expected: FAIL, listing many files. This confirms the check is live.
 
 - [ ] **Step 6: Format the repository**
 
@@ -85,13 +102,12 @@ Run: `pnpm format`
 
 - [ ] **Step 7: Verify it now passes**
 
-Run: `pnpm format:check`
-Expected: `All matched files use Prettier code style!`
+Run: `pnpm format:check` Expected: `All matched files use Prettier code style!`
 
 - [ ] **Step 8: Confirm nothing broke**
 
-Run: `pnpm typecheck --force && pnpm verify --force`
-Expected: both pass. `--force` matters — a cache replay would not re-check the reformatted files.
+Run: `pnpm typecheck --force && pnpm verify --force` Expected: both pass. `--force` matters — a
+cache replay would not re-check the reformatted files.
 
 - [ ] **Step 9: Commit**
 
@@ -118,9 +134,13 @@ afterwards to confirm a cache replay was not hiding a break."
 
 **Interfaces:**
 
-- Produces: `scripts/doctor.ts` exporting `checkLockfileSync(): Promise<DoctorResult>`; root script `pnpm preflight`.
+- Produces: `scripts/doctor.ts` exporting `checkLockfileSync(): Promise<DoctorResult>`; root script
+  `pnpm preflight`.
 
-**Why this exists:** while writing the spec, `pnpm-lock.yaml` pinned wrangler 4.114.0 while the installed tree was 3.114.17. CI installs with `--frozen-lockfile` and would have used 4.x while a developer used 3.x. Nothing reported it. pnpm has no built-in "is my tree in sync" command, so we record the lockfile hash at install time and compare.
+**Why this exists:** while writing the spec, `pnpm-lock.yaml` pinned wrangler 4.114.0 while the
+installed tree was 3.114.17. CI installs with `--frozen-lockfile` and would have used 4.x while a
+developer used 3.x. Nothing reported it. pnpm has no built-in "is my tree in sync" command, so we
+record the lockfile hash at install time and compare.
 
 - [ ] **Step 1: Write `scripts/doctor.ts`**
 
@@ -227,8 +247,8 @@ await recordLockfileHash();
 
 - [ ] **Step 4: Verify the healthy path**
 
-Run: `pnpm install --frozen-lockfile && pnpm preflight`
-Expected: `doctor: environment is healthy.`, exit 0.
+Run: `pnpm install --frozen-lockfile && pnpm preflight` Expected: `doctor: environment is healthy.`,
+exit 0.
 
 - [ ] **Step 5: Verify the drift path**
 
@@ -242,8 +262,7 @@ Expected: exit 1, with the problem line and `fix:  pnpm install --frozen-lockfil
 
 - [ ] **Step 6: Restore and confirm green**
 
-Run: `pnpm preflight`
-Expected: healthy, exit 0.
+Run: `pnpm preflight` Expected: healthy, exit 0.
 
 - [ ] **Step 7: Commit**
 
@@ -271,7 +290,10 @@ lockfile, so postinstall records the lockfile hash and doctor compares."
 
 - Produces: `pnpm typecheck` covers `apps/web/scripts/` as well as `apps/web/src/`.
 
-**Context:** `apps/web/tsconfig.json` has `"include": ["src"]`, so the 3,202-line test suite has never been typechecked. Under a correct node leaf it surfaces nine real errors. Widening the existing config instead reports 28, but 18 of those are artefacts of `"types": ["vite/client"]` disabling automatic `@types` resolution; the node config must not inherit that narrowing.
+**Context:** `apps/web/tsconfig.json` has `"include": ["src"]`, so the 3,202-line test suite has
+never been typechecked. Under a correct node leaf it surfaces nine real errors. Widening the
+existing config instead reports 28, but 18 of those are artefacts of `"types": ["vite/client"]`
+disabling automatic `@types` resolution; the node config must not inherit that narrowing.
 
 - [ ] **Step 1: Create `apps/web/tsconfig.node.json`**
 
@@ -310,36 +332,32 @@ In `apps/web/package.json`:
 
 - [ ] **Step 3: Run it and capture the full error list**
 
-Run: `pnpm --filter @transitmapper/web typecheck`
-Expected: FAIL with **nine** errors, all in `scripts/verify.ts`.
+Run: `pnpm --filter @transitmapper/web typecheck` Expected: FAIL with **nine** errors, all in
+`scripts/verify.ts`.
 
-Not 28. Widening the _existing_ config's include reports 28, but 18 of
-those are artefacts of `"types": ["vite/client"]` disabling automatic
-`@types` resolution — 2 × TS2307 for a missing `geojson` module, and 16 ×
-TS7006 where callback parameters lose their contextual type as a
-consequence. The node leaf created in Step 1 does not set `types` at all,
-so all 18 never appear. If you see them, Step 1's config is wrong; fix the
-config rather than the code.
+Not 28. Widening the _existing_ config's include reports 28, but 18 of those are artefacts of
+`"types": ["vite/client"]` disabling automatic `@types` resolution — 2 × TS2307 for a missing
+`geojson` module, and 16 × TS7006 where callback parameters lose their contextual type as a
+consequence. The node leaf created in Step 1 does not set `types` at all, so all 18 never appear. If
+you see them, Step 1's config is wrong; fix the config rather than the code.
 
 - [ ] **Step 4: Fix the four duplicate identifiers**
 
-`snap` and `squareFootprint` are each imported twice from
-`@transitmapper/core/model/geo`. Delete the second import block's
-specifiers for both, leaving `bearingDegrees`, `formatBearing`, and
+`snap` and `squareFootprint` are each imported twice from `@transitmapper/core/model/geo`. Delete
+the second import block's specifiers for both, leaving `bearingDegrees`, `formatBearing`, and
 `haversineMeters`.
 
 - [ ] **Step 5: Fix the two unused locals**
 
-`patternPath` is an unused import specifier — delete it. `groupId` binds
-the result of `createGroup(...)`; **keep the call**, which has the side
-effect the case depends on, and drop only the binding.
+`patternPath` is an unused import specifier — delete it. `groupId` binds the result of
+`createGroup(...)`; **keep the call**, which has the side effect the case depends on, and drop only
+the binding.
 
 - [ ] **Step 6: Fix the `TS2345` OSM fixture mismatch**
 
 TypeScript unions the four object literals and gives `tags` a shape like
-`{ highway: string; railway?: undefined }`, which is not assignable to
-`OsmWayElement["tags"]` (`Record<string, string>`). Annotate at the
-declaration, and add the type import:
+`{ highway: string; railway?: undefined }`, which is not assignable to `OsmWayElement["tags"]`
+(`Record<string, string>`). Annotate at the declaration, and add the type import:
 
 ```ts
 import type { OsmWayElement } from '@transitmapper/core/model/import';
@@ -349,16 +367,15 @@ const elements: OsmWayElement[] = [/* ...existing fixture... */];
 
 - [ ] **Step 7: Fix the `TS2531` selection read**
 
-`store.getState().selection?.kind === 'station' && store.getState().selection.id === sid`
-calls `getState()` twice, so narrowing the first tells TypeScript nothing
-about the second. Read it once into a local and narrow that.
+`store.getState().selection?.kind === 'station' && store.getState().selection.id === sid` calls
+`getState()` twice, so narrowing the first tells TypeScript nothing about the second. Read it once
+into a local and narrow that.
 
 - [ ] **Step 8: Fix the `TS2367` brand-token comparison**
 
-`LVBT.light.surfaceContainer !== LVBT.light.surface` compares two `as const`
-literals, which TypeScript can decide statically. Do not delete the check —
-it is what fails if someone edits the two tokens to the same value. Widen
-one side with an annotation, not a cast:
+`LVBT.light.surfaceContainer !== LVBT.light.surface` compares two `as const` literals, which
+TypeScript can decide statically. Do not delete the check — it is what fails if someone edits the
+two tokens to the same value. Widen one side with an annotation, not a cast:
 
 ```ts
 const raisedSurface: string = LVBT.light.surfaceContainer;
@@ -367,13 +384,11 @@ check('the panel and the ground are different tokens', raisedSurface !== LVBT.li
 
 - [ ] **Step 9: Verify zero errors**
 
-Run: `pnpm --filter @transitmapper/web typecheck`
-Expected: PASS, no output.
+Run: `pnpm --filter @transitmapper/web typecheck` Expected: PASS, no output.
 
 - [ ] **Step 10: Confirm the suite still runs**
 
-Run: `pnpm verify --force`
-Expected: `ALL PASS`.
+Run: `pnpm verify --force` Expected: `ALL PASS`.
 
 - [ ] **Step 11: Commit**
 
@@ -421,7 +436,8 @@ pnpm add -Dw eslint@^9 typescript-eslint@^8 eslint-config-prettier@^10
 
 - [ ] **Step 2: Create `eslint.config.js`**
 
-`eslint-config-prettier` goes last so it disables every stylistic rule that would fight Prettier. No repository-specific paths appear here, so track 9 can extract it unchanged.
+`eslint-config-prettier` goes last so it disables every stylistic rule that would fight Prettier. No
+repository-specific paths appear here, so track 9 can extract it unchanged.
 
 ```js
 // @ts-check
@@ -464,8 +480,7 @@ export default tseslint.config(
 
 - [ ] **Step 4: Run it and see what it reports**
 
-Run: `pnpm lint`
-Expected: some findings. Record the count.
+Run: `pnpm lint` Expected: some findings. Record the count.
 
 - [ ] **Step 5: Auto-fix what is fixable**
 
@@ -473,12 +488,13 @@ Run: `pnpm lint:fix && pnpm lint`
 
 - [ ] **Step 6: Fix the remainder by hand**
 
-Do not silence anything with `eslint-disable` unless you write the reason on the same line. If a rule is genuinely wrong for this codebase, turn it off in `eslint.config.js` with a comment saying why.
+Do not silence anything with `eslint-disable` unless you write the reason on the same line. If a
+rule is genuinely wrong for this codebase, turn it off in `eslint.config.js` with a comment saying
+why.
 
 - [ ] **Step 7: Verify clean**
 
-Run: `pnpm lint`
-Expected: exit 0, no output.
+Run: `pnpm lint` Expected: exit 0, no output.
 
 - [ ] **Step 8: Verify nothing broke**
 
@@ -505,8 +521,10 @@ which makes this the org's first and therefore the shared baseline."
 
 **Files:**
 
-- Modify: `turbo.json`, `package.json`, `apps/web/package.json`, `apps/worker/package.json`, `packages/core/package.json`
-- Modify: `README.md`, `AGENTS.md`, `docs/development/how-to/local-development.md`, `.github/workflows/ci.yml`
+- Modify: `turbo.json`, `package.json`, `apps/web/package.json`, `apps/worker/package.json`,
+  `packages/core/package.json`
+- Modify: `README.md`, `AGENTS.md`, `docs/development/how-to/local-development.md`,
+  `.github/workflows/ci.yml`
 
 **Interfaces:**
 
@@ -515,7 +533,8 @@ which makes this the org's first and therefore the shared baseline."
 
 - [ ] **Step 1: Rename the `verify` script to `test`**
 
-In `apps/web/package.json`, rename `"verify": "tsx scripts/verify.ts"` to `"test": "tsx scripts/verify.ts"`. Track 2 replaces the command; the task name is what matters now.
+In `apps/web/package.json`, rename `"verify": "tsx scripts/verify.ts"` to
+`"test": "tsx scripts/verify.ts"`. Track 2 replaces the command; the task name is what matters now.
 
 - [ ] **Step 2: Add a `lint` script to every workspace package**
 
@@ -527,7 +546,8 @@ Each of `apps/web`, `apps/worker`, `packages/core` gets:
 
 - [ ] **Step 3: Rewrite `turbo.json` with declared inputs**
 
-Inputs are what make the cache correct: editing `eslint.config.js` must invalidate `lint` and nothing else.
+Inputs are what make the cache correct: editing `eslint.config.js` must invalidate `lint` and
+nothing else.
 
 ```json
 {
@@ -561,7 +581,8 @@ Inputs are what make the cache correct: editing `eslint.config.js` must invalida
 
 - [ ] **Step 4: Add the root `check` scripts**
 
-`format:check` and `contract` are root-level (they span the repo, not one package), so `check` runs them directly and then fans out through turbo.
+`format:check` and `contract` are root-level (they span the repo, not one package), so `check` runs
+them directly and then fans out through turbo.
 
 ```json
 "check": "pnpm format:check && turbo run check",
@@ -570,8 +591,7 @@ Inputs are what make the cache correct: editing `eslint.config.js` must invalida
 
 - [ ] **Step 5: Run it**
 
-Run: `pnpm check`
-Expected: PASS across all three packages.
+Run: `pnpm check` Expected: PASS across all three packages.
 
 - [ ] **Step 6: Verify the cache is scoped correctly**
 
@@ -582,7 +602,8 @@ touch eslint.config.js
 pnpm check                      # lint re-runs; typecheck and test replay
 ```
 
-Expected: the third run shows `lint` executing and `typecheck`/`test` as cache hits. If typecheck also re-runs, the `inputs` globs are wrong — fix them before moving on.
+Expected: the third run shows `lint` executing and `typecheck`/`test` as cache hits. If typecheck
+also re-runs, the `inputs` globs are wrong — fix them before moving on.
 
 - [ ] **Step 7: Verify a real failure is caught**
 
@@ -596,9 +617,12 @@ Expected: non-zero exit naming the file.
 
 - [ ] **Step 8: Update every reference to `verify`**
 
-Search and replace across `README.md`, `AGENTS.md`, `docs/development/how-to/local-development.md`, and `.github/workflows/ci.yml`. `pnpm typecheck && pnpm verify` becomes `pnpm check` everywhere it appears as the pull-request bar.
+Search and replace across `README.md`, `AGENTS.md`, `docs/development/how-to/local-development.md`,
+and `.github/workflows/ci.yml`. `pnpm typecheck && pnpm verify` becomes `pnpm check` everywhere it
+appears as the pull-request bar.
 
-Run: `grep -rn "pnpm verify\|pnpm run verify" --include='*.md' --include='*.yml' --include='*.json' . | grep -v node_modules`
+Run:
+`grep -rn "pnpm verify\|pnpm run verify" --include='*.md' --include='*.yml' --include='*.json' . | grep -v node_modules`
 Expected: no results.
 
 - [ ] **Step 9: Commit**
@@ -630,10 +654,13 @@ it, and every reference to the old two-command bar is updated."
 
 **Interfaces:**
 
-- Consumes: `turbo query`, which returns `{ data: { packages: { items: [{ name, path }] } } }` and includes the root package as `name: "//"`.
+- Consumes: `turbo query`, which returns `{ data: { packages: { items: [{ name, path }] } } }` and
+  includes the root package as `name: "//"`.
 - Produces: root script `check:contract`.
 
-**Why:** `apps/worker` declares no test script today, so it is skipped without an error and CI stays green. The Worker — the only component touching D1, cookies, and untrusted input — is untested and invisibly so.
+**Why:** `apps/worker` declares no test script today, so it is skipped without an error and CI stays
+green. The Worker — the only component touching D1, cookies, and untrusted input — is untested and
+invisibly so.
 
 - [ ] **Step 1: Write the failing check**
 
@@ -726,12 +753,13 @@ In root `package.json`:
 
 - [ ] **Step 3: Run it and watch it fail**
 
-Run: `pnpm check:contract`
-Expected: FAIL. `@transitmapper/worker` and `@transitmapper/core` have no `test` script; the worker also has no `lint` script until Task 4 Step 2 added it.
+Run: `pnpm check:contract` Expected: FAIL. `@transitmapper/worker` and `@transitmapper/core` have no
+`test` script; the worker also has no `lint` script until Task 4 Step 2 added it.
 
 - [ ] **Step 4: Add the missing scripts**
 
-`apps/worker/package.json` and `packages/core/package.json` each need a `test` script. Neither has tests yet — track 2 adds them. Until then, declare the task honestly rather than falsely:
+`apps/worker/package.json` and `packages/core/package.json` each need a `test` script. Neither has
+tests yet — track 2 adds them. Until then, declare the task honestly rather than falsely:
 
 ```json
 "test": "echo 'no tests yet — see docs/superpowers/plans (track 2)' && exit 0"
@@ -741,8 +769,7 @@ This is deliberately visible in CI output. Track 2 replaces both with `vitest ru
 
 - [ ] **Step 5: Verify it passes**
 
-Run: `pnpm check:contract`
-Expected: `workspace contract: all packages declare every required task.`
+Run: `pnpm check:contract` Expected: `workspace contract: all packages declare every required task.`
 
 - [ ] **Step 6: Verify it catches a regression**
 
@@ -788,7 +815,9 @@ core and worker get placeholder test scripts that say so out loud. Track
 - Consumes: `pnpm check` (Task 5), `pnpm preflight` (Task 2).
 - Produces: hooks installed via `core.hooksPath`.
 
-Port the structure from `website/.githooks/`. Its pre-push has the DX this repository wants: numbered steps, timings, and an explicit `Fix:` block naming the command. Adapt rather than copy line-for-line — this repo has no Astro, no LFS, and no `allowed-scopes.txt`.
+Port the structure from `website/.githooks/`. Its pre-push has the DX this repository wants:
+numbered steps, timings, and an explicit `Fix:` block naming the command. Adapt rather than copy
+line-for-line — this repo has no Astro, no LFS, and no `allowed-scopes.txt`.
 
 - [ ] **Step 1: Install lint-staged**
 
@@ -896,7 +925,8 @@ printf "\n${GREEN}${BOLD}All checks passed${RESET} ${DIM}(%ss)${RESET} -- pushin
 
 - [ ] **Step 5: Write `.githooks/commit-msg`**
 
-`website` validates conventional-commit format against a written standard. Principle 7 says the standard has to exist, so this task writes it.
+`website` validates conventional-commit format against a written standard. Principle 7 says the
+standard has to exist, so this task writes it.
 
 ```sh
 #!/usr/bin/env sh
@@ -928,7 +958,10 @@ fi
 
 - [ ] **Step 6: Write the standard the hook cites**
 
-Create `docs/development/reference/commit-messages.md` documenting: allowed types (`feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `ci`, `chore`), the 72-character subject limit, when a body is required (`feat` and `fix` always), and the 72-column body wrap. Include two real examples taken from this repository's history.
+Create `docs/development/reference/commit-messages.md` documenting: allowed types (`feat`, `fix`,
+`docs`, `style`, `refactor`, `perf`, `test`, `ci`, `chore`), the 72-character subject limit, when a
+body is required (`feat` and `fix` always), and the 72-column body wrap. Include two real examples
+taken from this repository's history.
 
 - [ ] **Step 7: Make the hooks executable and install them**
 
@@ -959,7 +992,8 @@ git commit -m "chore: probe the pre-commit formatter"
 git show --stat HEAD
 ```
 
-Expected: the committed file is Prettier-formatted. Then: `git reset --hard HEAD~1 && rm -f packages/core/src/probe.ts`
+Expected: the committed file is Prettier-formatted. Then:
+`git reset --hard HEAD~1 && rm -f packages/core/src/probe.ts`
 
 - [ ] **Step 10: Commit**
 
@@ -992,9 +1026,13 @@ rather than encoding the rules only in the hook."
 **Interfaces:**
 
 - Consumes: the pre-commit hook from Task 7.
-- Produces: net 2 of 3 (CI). Net 3 (GitHub push protection) is a repository setting, documented here and enabled in track 5.
+- Produces: net 2 of 3 (CI). Net 3 (GitHub push protection) is a repository setting, documented here
+  and enabled in track 5.
 
-**The gap:** `.claude/settings.local.json` is currently ignored only by the maintainer's personal global gitignore, and `.claude/worktrees/` only by `.git/info/exclude`. Neither rule travels with the repository, so a fresh clone has no protection and a new contributor would commit personal agent settings on a first pull request.
+**The gap:** `.claude/settings.local.json` is currently ignored only by the maintainer's personal
+global gitignore, and `.claude/worktrees/` only by `.git/info/exclude`. Neither rule travels with
+the repository, so a fresh clone has no protection and a new contributor would commit personal agent
+settings on a first pull request.
 
 - [ ] **Step 1: Close the gitignore gap**
 
@@ -1035,7 +1073,8 @@ paths = [
 
 - [ ] **Step 4: Add the CI job (net 2)**
 
-In `.github/workflows/ci.yml`, add a step to the `validate` job. Full history is required so the scan covers the whole diff.
+In `.github/workflows/ci.yml`, add a step to the `validate` job. Full history is required so the
+scan covers the whole diff.
 
 ```yaml
 - name: Scan for secrets
@@ -1044,7 +1083,8 @@ In `.github/workflows/ci.yml`, add a step to the `validate` job. Full history is
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-Pin the SHA by resolving the current release tag yourself; do not copy the SHA above without verifying it, since an unverified pinned SHA is worse than a tag.
+Pin the SHA by resolving the current release tag yourself; do not copy the SHA above without
+verifying it, since an unverified pinned SHA is worse than a tag.
 
 - [ ] **Step 5: Verify the scanner catches a planted secret**
 
@@ -1055,11 +1095,14 @@ git add leak-probe.env
 git commit -m "chore: probe the secret scanner"; echo "exit=$?"
 ```
 
-Expected: the commit is blocked by the pre-commit hook. Then: `git restore --staged leak-probe.env && rm -f leak-probe.env /tmp/leak-probe.env`
+Expected: the commit is blocked by the pre-commit hook. Then:
+`git restore --staged leak-probe.env && rm -f leak-probe.env /tmp/leak-probe.env`
 
 - [ ] **Step 6: Document net 3**
 
-GitHub push protection is a repository setting, free on public repositories, and cannot be enabled from the repo tree. Note it in `docs/development/reference/checks.md` as a required setting, and add it to track 5's governance task where the rest of the repository settings are configured.
+GitHub push protection is a repository setting, free on public repositories, and cannot be enabled
+from the repo tree. Note it in `docs/development/reference/checks.md` as a required setting, and add
+it to track 5's governance task where the rest of the repository settings are configured.
 
 - [ ] **Step 7: Commit**
 
@@ -1093,7 +1136,9 @@ personal agent settings would have landed in a pull request."
 - Consumes: `prettier`, `eslint` from Tasks 1 and 4.
 - Produces: committed team-policy agent configuration.
 
-Layer 0 introduces **no new rules**. It only makes an agent hit the bar the repository already enforces, which is what keeps enforcement agent-agnostic: deleting `.claude/` must not change what CI accepts.
+Layer 0 introduces **no new rules**. It only makes an agent hit the bar the repository already
+enforces, which is what keeps enforcement agent-agnostic: deleting `.claude/` must not change what
+CI accepts.
 
 - [ ] **Step 1: Create `.claude/settings.json`**
 
@@ -1126,7 +1171,8 @@ Layer 0 introduces **no new rules**. It only makes an agent hit the bar the repo
 }
 ```
 
-The `|| true` matters: the hook is an accelerator, and an accelerator that fails must never block the agent's work.
+The `|| true` matters: the hook is an accelerator, and an accelerator that fails must never block
+the agent's work.
 
 - [ ] **Step 2: Symlink `CLAUDE.md` to `AGENTS.md`**
 
@@ -1138,7 +1184,9 @@ git check-ignore CLAUDE.md || echo "not ignored, good"
 
 - [ ] **Step 3: Verify the deny rules hold**
 
-In a Claude Code session in this repository, attempt to read `apps/worker/.dev.vars`. Expected: refused by the harness. If `.dev.vars` does not exist locally, create one with a dummy value first, confirm the refusal, then delete it.
+In a Claude Code session in this repository, attempt to read `apps/worker/.dev.vars`. Expected:
+refused by the harness. If `.dev.vars` does not exist locally, create one with a dummy value first,
+confirm the refusal, then delete it.
 
 - [ ] **Step 4: Verify agent-agnosticism**
 
@@ -1148,7 +1196,8 @@ pnpm check; echo "exit=$?"
 mv /tmp/claude-hidden .claude
 ```
 
-Expected: `pnpm check` passes identically. Any correctness rule that disappears was in the wrong layer.
+Expected: `pnpm check` passes identically. Any correctness rule that disappears was in the wrong
+layer.
 
 - [ ] **Step 5: Commit**
 
@@ -1196,7 +1245,9 @@ Keep the existing `Dependency audit` step and the secret scan from Task 8.
 
 - [ ] **Step 2: Add `--affected` support without breaking the first run**
 
-`--affected` compares against `main`, which needs history. Set `fetch-depth: 0` on the checkout step. Do **not** enable `--affected` for the `workflow_call` path used by the production deploy — a deploy must validate everything, not only what changed.
+`--affected` compares against `main`, which needs history. Set `fetch-depth: 0` on the checkout
+step. Do **not** enable `--affected` for the `workflow_call` path used by the production deploy — a
+deploy must validate everything, not only what changed.
 
 ```yaml
 - name: Checkout
@@ -1244,12 +1295,28 @@ everything, not only what changed."
 
 ## Self-Review
 
-**Spec coverage.** Track 1 of the spec lists: one command defining validity (Task 5), four enforcement layers (Tasks 7, 9, 10), the workspace contract check (Task 6), and closing the typecheck blind spot (Task 3). The Sequencing section pulls the three secret nets forward into track 1 (Task 8). `pnpm preflight` is named in the spec's First-class commands table (Task 2). Prettier and ESLint come from the Cross-cutting decisions section (Tasks 1, 4).
+**Spec coverage.** Track 1 of the spec lists: one command defining validity (Task 5), four
+enforcement layers (Tasks 7, 9, 10), the workspace contract check (Task 6), and closing the
+typecheck blind spot (Task 3). The Sequencing section pulls the three secret nets forward into track
+1 (Task 8). `pnpm preflight` is named in the spec's First-class commands table (Task 2). Prettier
+and ESLint come from the Cross-cutting decisions section (Tasks 1, 4).
 
-Deliberately deferred, with the spec section that owns each: custom type-aware lint rules and the `AGENTS.md` rewrite (track 3); `turbo boundaries` wiring (track 3); generators (track 4); rulesets, merge queue, CODEOWNERS, migration automation and `pnpm ship` (track 5); the documentation domain reorganization and the seventeen new pages (track 3); Vitest (track 2).
+Deliberately deferred, with the spec section that owns each: custom type-aware lint rules and the
+`AGENTS.md` rewrite (track 3); `turbo boundaries` wiring (track 3); generators (track 4); rulesets,
+merge queue, CODEOWNERS, migration automation and `pnpm ship` (track 5); the documentation domain
+reorganization and the seventeen new pages (track 3); Vitest (track 2).
 
-**Known gap carried forward:** Task 7's commit-msg hook writes `docs/development/reference/commit-messages.md`, which is the first page in the new domain layout, but the rest of the reorganization happens in track 3. Until then that page is the only occupant of `docs/development/`. This is intentional — the hook must cite a standard that exists.
+**Known gap carried forward:** Task 7's commit-msg hook writes
+`docs/development/reference/commit-messages.md`, which is the first page in the new domain layout,
+but the rest of the reorganization happens in track 3. Until then that page is the only occupant of
+`docs/development/`. This is intentional — the hook must cite a standard that exists.
 
-**Type consistency.** `checkLockfileSync` and `recordLockfileHash` are defined in Task 2 and consumed by Task 7's pre-push. `REQUIRED_TASKS` in Task 6 is `["lint", "typecheck", "test"]`, matching the task names created in Tasks 4 and 5 — `format:check` and `check:contract` are root-level and correctly absent from the per-package list. The `turbo query` response shape in Task 6 was verified against turbo 2.10.5 rather than assumed.
+**Type consistency.** `checkLockfileSync` and `recordLockfileHash` are defined in Task 2 and
+consumed by Task 7's pre-push. `REQUIRED_TASKS` in Task 6 is `["lint", "typecheck", "test"]`,
+matching the task names created in Tasks 4 and 5 — `format:check` and `check:contract` are
+root-level and correctly absent from the per-package list. The `turbo query` response shape in Task
+6 was verified against turbo 2.10.5 rather than assumed.
 
-**Ordering.** Task 6 depends on Task 4 having added `lint` scripts and Task 5 having renamed `verify` to `test`; running it earlier reports failures the plan has not reached yet. Task 10 depends on Task 5. Tasks 1, 2, and 3 are independent and can run in any order.
+**Ordering.** Task 6 depends on Task 4 having added `lint` scripts and Task 5 having renamed
+`verify` to `test`; running it earlier reports failures the plan has not reached yet. Task 10
+depends on Task 5. Tasks 1, 2, and 3 are independent and can run in any order.

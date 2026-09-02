@@ -4,24 +4,24 @@
 
 ## Problem
 
-Two transit lines that run down the same corridor are, in the real world, _sharing
-infrastructure_ — the same track, the same road, often the same lane. TransitMapper doesn't
-model that. Every drawn line mints its own `Way`, and overlapping lines are independent ways
-that happen to sit on top of each other. Two consequences:
+Two transit lines that run down the same corridor are, in the real world, _sharing infrastructure_ —
+the same track, the same road, often the same lane. TransitMapper doesn't model that. Every drawn
+line mints its own `Way`, and overlapping lines are independent ways that happen to sit on top of
+each other. Two consequences:
 
 - **Drawing** two routes along one street produces two stacked lines with no shared identity.
-- **Import** is the pathological case: each GTFS shape becomes its own `Way` with no
-  conflation (`gtfsImport.ts` appends `nodes:[]`, so not even junctions are derived), so a
-  boulevard carrying ten routes imports as ten overlapping ways — the visible "mess."
+- **Import** is the pathological case: each GTFS shape becomes its own `Way` with no conflation
+  (`gtfsImport.ts` appends `nodes:[]`, so not even junctions are derived), so a boulevard carrying
+  ten routes imports as ten overlapping ways — the visible "mess."
 
-Today, overlap is only handled _cosmetically_: services that happen to share the **same way
-object** fan out as parallel offset lines (`BUNDLE_SPACING_PX` in `buildFeatures.ts`). Nothing
-makes two _different_ ways on the same ground share anything.
+Today, overlap is only handled _cosmetically_: services that happen to share the **same way object**
+fan out as parallel offset lines (`BUNDLE_SPACING_PX` in `buildFeatures.ts`). Nothing makes two
+_different_ ways on the same ground share anything.
 
 ## The principle (user's framing)
 
-> If a user draws multiple lines right next to each other or overlapping, it's expected they
-> **share infrastructure** unless explicitly separated.
+> If a user draws multiple lines right next to each other or overlapping, it's expected they **share
+> infrastructure** unless explicitly separated.
 
 This inverts how the tool thinks:
 
@@ -46,22 +46,23 @@ The target representation is largely in place; this feature mostly _wires it tog
 matcher.
 
 - **Lane vocabulary exists.** `LANE_KINDS` already defines `drive`, `bus` (a bus lane —
-  `role: "travel"`, `countsAsCapacity`, `directional`), and `track`, plus a `transitway` road
-  class and `roadTransitway` type. No new lane roles needed.
-- **Lanes are addressable.** `LaneSpec` (`model/system/way.ts`) has a stable `id`, so a service
-  can name the exact lane it rides.
+  `role: "travel"`, `countsAsCapacity`, `directional`), and `track`, plus a `transitway` road class
+  and `roadTransitway` type. No new lane roles needed.
+- **Lanes are addressable.** `LaneSpec` (`model/system/way.ts`) has a stable `id`, so a service can
+  name the exact lane it rides.
 - **Mode↔infrastructure wiring exists.** `Mode.wayTypeIds` (`model/catalog.ts`) already maps
   bus→`road`, subway/commuterRail→`heavyRail`, tram/lightRail→`[lightRail, road]`, etc. This is
-  exactly the filter for "snap to the right kind of shared unit," and `routeBetween(sys, a, b,
-{ allowedTypeIds })` already routes services over existing compatible ways.
+  exactly the filter for "snap to the right kind of shared unit," and
+  `routeBetween(sys, a, b, { allowedTypeIds })` already routes services over existing compatible
+  ways.
 - **Per-lane geometry exists.** `wayLaneGeometry` (`geometry/streets.ts`) already computes each
   lane's centerline; rendering can offset a service onto its _real_ lane instead of a synthetic
   index.
 - **A spatial index exists.** `buildSegmentGrid` (`geo/snapIndex.ts`, cached on `system.ways`
   identity) is the acceleration structure the corridor matcher needs.
 - **Junctions from coincidence exist.** Nodes are derived where control points coincide, and
-  `buildFeatures` already draws junction footprints/trims from them — so "split a corridor where
-  a route joins/leaves" has a home.
+  `buildFeatures` already draws junction footprints/trims from them — so "split a corridor where a
+  route joins/leaves" has a home.
 
 ## Design
 
@@ -81,14 +82,14 @@ export interface Pattern {
 }
 ```
 
-- **Backward compatible:** existing patterns (no `lanes`) resolve to the default, so nothing
-  breaks and imports need no migration.
-- **Default resolver** (pure, core): `defaultLaneFor(way, direction) → LaneSpec.id` — a bus lane
-  if the profile has one, else the rightmost `travel`-role lane in the pattern's direction of
-  travel; for rail, the direction's track. Used both at placement (to seed `lanes`) and at
-  render (to fill gaps).
-- Lane assignment is **domain data** (which lane a service rides), never style — consistent with
-  the separation-of-concerns rule. Lane _colors/widths_ stay in the style layer.
+- **Backward compatible:** existing patterns (no `lanes`) resolve to the default, so nothing breaks
+  and imports need no migration.
+- **Default resolver** (pure, core): `defaultLaneFor(way, direction) → LaneSpec.id` — a bus lane if
+  the profile has one, else the rightmost `travel`-role lane in the pattern's direction of travel;
+  for rail, the direction's track. Used both at placement (to seed `lanes`) and at render (to fill
+  gaps).
+- Lane assignment is **domain data** (which lane a service rides), never style — consistent with the
+  separation-of-concerns rule. Lane _colors/widths_ stay in the style layer.
 
 ### 2. `corridorMatch` — mode-typed snapping (pure, `packages/core`)
 
@@ -103,24 +104,23 @@ matchToCorridor(path: LngLat[], ways: Way[], opts: {
 ```
 
 Direction-aware (parallel vs. anti-parallel), memoized on `(ways-identity, opts)` like the other
-RTC-scale passes. **Draw-time only needs the incremental half:** as the in-progress stroke
-extends, "am I riding a compatible existing way here?" The full segmentation is what import
-conflation (later phase) will reuse.
+RTC-scale passes. **Draw-time only needs the incremental half:** as the in-progress stroke extends,
+"am I riding a compatible existing way here?" The full segmentation is what import conflation (later
+phase) will reuse.
 
 ### 3. Draw-time UX
 
 Pick a mode → draw a **service** (not raw infrastructure):
 
-1. The stroke **snaps to compatible corridors** (rail→tracks, tight; bus→roads, road-width),
-   with live "you're sharing this" feedback — reuse the hover/`feature-state` highlight added in
-   the perf pass.
+1. The stroke **snaps to compatible corridors** (rail→tracks, tight; bus→roads, road-width), with
+   live "you're sharing this" feedback — reuse the hover/`feature-state` highlight added in the perf
+   pass.
 2. On commit, matched stretches make the service **ride the existing ways** (shared); fresh
-   stretches **mint new infrastructure** with a per-mode default cross-section (table below),
-   which later services can in turn share.
+   stretches **mint new infrastructure** with a per-mode default cross-section (table below), which
+   later services can in turn share.
 3. The service gets a **default lane assignment** on each way (`defaultLaneFor`).
 4. **`Alt`-drag = keep separate** — lay parallel new infrastructure instead of sharing (express/
-   local tracks, a busway beside a road). This is the mandatory "explicitly separated" escape
-   hatch.
+   local tracks, a busway beside a road). This is the mandatory "explicitly separated" escape hatch.
 
 This makes route-drafting (already in the store as `startRouteDraft`/`extendRouteDraft`/
 `commitRouteDraft` over `routeBetween`) the _default_ behavior of the draw tool, rather than a
@@ -130,22 +130,21 @@ separate mode.
 
 **Invariant: switching views is lossless.** A line drawn in one view exists identically in the
 other; the views differ only in how much physical detail they _reveal_. Nothing is converted or
-silently mutated by switching. (This already holds — `beginWay` bakes a full `profile`
-immediately; Network just collapses it to one line.)
+silently mutated by switching. (This already holds — `beginWay` bakes a full `profile` immediately;
+Network just collapses it to one line.)
 
 - **Network view:** every way collapses to one schematic service line; grade/footprints/junction
   detail hidden; **only service-carrying infrastructure shown**.
-- **Infrastructure view:** full cross-section revealed — lanes fanned to `wayCapacity`,
-  true-scale metric lanes with surfaces/dividers/arrows at zoom (`wayLaneGeometry`), junction
-  footprints, grade styling; **all** physical infrastructure shown including bare ways. This is
-  the **refinement surface** where the user edits lane count, designates a bus lane, sets grade.
+- **Infrastructure view:** full cross-section revealed — lanes fanned to `wayCapacity`, true-scale
+  metric lanes with surfaces/dividers/arrows at zoom (`wayLaneGeometry`), junction footprints, grade
+  styling; **all** physical infrastructure shown including bare ways. This is the **refinement
+  surface** where the user edits lane count, designates a bus lane, sets grade.
 
 **Draw in Network → switch to Infrastructure** (the concrete answer):
 
-- _Bus line:_ Network shows one colored line; underneath it either joined an existing road or
-  minted a default road, bus assigned to the curb lane. Infrastructure reveals that road at true
-  width with the bus on its lane and junctions where it crosses other roads — where you then
-  refine it.
+- _Bus line:_ Network shows one colored line; underneath it either joined an existing road or minted
+  a default road, bus assigned to the curb lane. Infrastructure reveals that road at true width with
+  the bus on its lane and junctions where it crosses other roads — where you then refine it.
 - _Train line:_ Network shows one colored line; Infrastructure reveals a **track** (a single rail
   line, not a multi-lane road) with the service on it; other services drawn on it share it.
 
@@ -164,11 +163,11 @@ right is a first-class requirement, not a detail.
 
 ### 5. Rendering — offsets become physically honest
 
-Service offsets stop being a cosmetic fan (`i - (n-1)/2`) and become **real lane positions**:
-two bus routes on the curb lane sit on the curb lane; a route on the bus lane sits there; trains
-sit on the track. `wayLaneGeometry` already produces per-lane centerlines — drive the service
-geometry from the pattern's resolved lane instead of a synthetic index. Where multiple services
-share one lane, a small legibility offset within the lane keeps them distinguishable.
+Service offsets stop being a cosmetic fan (`i - (n-1)/2`) and become **real lane positions**: two
+bus routes on the curb lane sit on the curb lane; a route on the bus lane sits there; trains sit on
+the track. `wayLaneGeometry` already produces per-lane centerlines — drive the service geometry from
+the pattern's resolved lane instead of a synthetic index. Where multiple services share one lane, a
+small legibility offset within the lane keeps them distinguishable.
 
 ### Architecture
 
@@ -201,30 +200,30 @@ flowchart TB
 ## Phasing (draw-time first; each phase a valid buildable commit)
 
 - **Phase A — Mode-typed corridor snapping.** Draw a service → snaps to compatible shared ways;
-  fresh ground mints default infra; `Alt` escape hatch; services share ways at the road/track
-  level. Realizes "share by default." (`corridorMatch` incremental half, draw-tool + store
-  changes, per-mode default infra.)
+  fresh ground mints default infra; `Alt` escape hatch; services share ways at the road/track level.
+  Realizes "share by default." (`corridorMatch` incremental half, draw-tool + store changes,
+  per-mode default infra.)
 - **Phase B — Lane model + default assignment.** Seed `Pattern.lanes` via `defaultLaneFor`
   (rightmost-in-direction / bus lane / track); render services on their assigned lane geometry.
 - **Phase C — Lane override UI.** Service inspector picks/overrides the lane per way.
 - **Later (separate) — Import-time conflation.** Reuse `corridorMatch` (full segmentation) to
-  collapse co-aligned GTFS/OSM shapes onto shared ways + junction nodes. Fixes the RTC mess at
-  the source. Highest payoff, highest risk — sequenced after the engine proves out on drawing.
+  collapse co-aligned GTFS/OSM shapes onto shared ways + junction nodes. Fixes the RTC mess at the
+  source. Highest payoff, highest risk — sequenced after the engine proves out on drawing.
 
 ## Risks & mitigations
 
 - **Continuous-snap jitter / snap-vs-not ambiguity.** Mode-scaled tolerance + hysteresis + clear
   "sharing this" visual feedback + the `Alt` escape hatch. Prototype the feel early.
-- **Piecewise join/leave → way splitting at branch nodes.** The node/junction model supports it,
-  but the draw tool must _materialize_ the split (insert a coincident control point → derived
-  node). Reuse the existing coincidence-based node derivation.
+- **Piecewise join/leave → way splitting at branch nodes.** The node/junction model supports it, but
+  the draw tool must _materialize_ the split (insert a coincident control point → derived node).
+  Reuse the existing coincidence-based node derivation.
 - **Lane assignment on messy profiles** (turn pockets, one-way carriageways, lane-count changes).
   `defaultLaneFor` resolves against `role: "travel"` + direction; overrides handle the rest;
   unresolved → nearest travel lane, never a crash.
 - **Lane-count transitions in rendering** (a route moving between ways of different cross-section).
   Offsets are per-way; transitions happen at junction nodes where geometry already breaks.
-- **RTC-scale performance.** `corridorMatch` memoized on ways-identity, same discipline as the
-  perf pass; draw-time only touches the stroke's neighborhood via the grid.
+- **RTC-scale performance.** `corridorMatch` memoized on ways-identity, same discipline as the perf
+  pass; draw-time only touches the stroke's neighborhood via the grid.
 - **Losslessness of view switching.** Guarded by a round-trip test (draw in Network → switch →
   switch back → identical system).
 

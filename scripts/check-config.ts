@@ -67,9 +67,16 @@ interface Exemption {
  * Adding an entry is the deliberate act; the default is TypeScript.
  */
 const NOT_TYPESCRIPT: Exemption[] = [
+  // The organization standard ships eslint.config.js and prettier.config.js in
+  // every package (Turborepo convention), so both are JavaScript here.
+  {
+    tool: 'eslint',
+    ext: 'js',
+    why: 'The organization standard ships eslint.config.js (Turborepo convention).',
+  },
   {
     tool: 'prettier',
-    ext: 'mjs',
+    ext: 'js',
     why: 'Prettier ships zero dependencies and registers no TypeScript loader.',
   },
   {

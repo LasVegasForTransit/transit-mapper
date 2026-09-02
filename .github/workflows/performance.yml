@@ -40,7 +40,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profile: ${{ fromJSON(github.event_name == 'pull_request' && '["desktop"]' || '["desktop","mobile"]') }}
+        profile:
+          ${{ fromJSON(github.event_name == 'pull_request' && '["desktop"]' ||
+          '["desktop","mobile"]') }}
     env:
       XVFB_ARGS: -screen 0 1440x900x24 -nolisten tcp -dpi 96
     steps:
@@ -53,7 +55,7 @@ jobs:
             >> "$GITHUB_ENV"
 
       - name: Checkout candidate
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -71,18 +73,14 @@ jobs:
       - name: Exercise candidate RTC smoke
         if: github.event_name == 'pull_request'
         run: >-
-          xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf --
-          --smoke
-          --profile "${{ matrix.profile }}"
-          --scenario rtc
-          --output "$CURRENT_ARTIFACT"
+          xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf -- --smoke --profile "${{ matrix.profile
+          }}" --scenario rtc --output "$CURRENT_ARTIFACT"
 
       - name: Record complete candidate matrix
         if: github.event_name != 'pull_request'
         run: >-
-          xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf:record --
-          --profile "${{ matrix.profile }}"
-          --output "$CURRENT_ARTIFACT"
+          xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf:record -- --profile "${{ matrix.profile
+          }}" --output "$CURRENT_ARTIFACT"
 
       - name: Upload reports and recorded Chrome traces
         if: always()
@@ -111,7 +109,7 @@ jobs:
             >> "$GITHUB_ENV"
 
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -125,9 +123,7 @@ jobs:
 
       - name: Exercise RTC-scale soak
         run: >-
-          xvfb-run -a --server-args="$XVFB_ARGS"
-          pnpm perf:soak --
-          --output "$SOAK_ARTIFACT"
+          xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf:soak -- --output "$SOAK_ARTIFACT"
           --soak-duration "$SOAK_DURATION_MS"
 
       - name: Upload leak report

@@ -1,19 +1,18 @@
 # Catalogs
 
-Every _kind_ in TransitMapper (way types, service modes, lane kinds,
-facility types, grades, presets) is catalog **data** in
-[`src/model/catalog.ts`](../../../packages/core/src/model/catalog.ts), not a union type baked
-into logic. Records in the data model reference catalog entries by string
-id. Adding a funicular or a queue-jump lane means adding a catalog entry.
+Every _kind_ in TransitMapper (way types, service modes, lane kinds, facility types, grades,
+presets) is catalog **data** in
+[`src/model/catalog.ts`](../../../packages/core/src/model/catalog.ts), not a union type baked into
+logic. Records in the data model reference catalog entries by string id. Adding a funicular or a
+queue-jump lane means adding a catalog entry.
 
 Rendering (colors, dashes, icons) for each catalog entry lives separately in
 `src/style/catalogStyle.ts`; the catalog itself is pure domain data.
 
 ## Way types (`WAY_TYPES`)
 
-The physical carriers. Each declares its family, its capacity unit, its
-facility classes, which lane kinds its cross-section may include, and the
-default profile a new way starts with.
+The physical carriers. Each declares its family, its capacity unit, its facility classes, which lane
+kinds its cross-section may include, and the default profile a new way starts with.
 
 | Id           | Label             | Family   | Capacity unit |
 | ------------ | ----------------- | -------- | ------------- |
@@ -26,50 +25,43 @@ default profile a new way starts with.
 | `aerial`     | Aerial / gondola  | aerial   | cabins/hr     |
 | `water`      | Ferry route       | water    | vessels       |
 
-Heavy rail, light rail, and monorail are separate types (not classes of one
-"rail") because they're physically incompatible track standards. Roads carry
-classes (transitway / arterial / collector / local); bike ways carry
-protection classes; pedestrian ways carry promenade / pathway / stairs.
+Heavy rail, light rail, and monorail are separate types (not classes of one "rail") because they're
+physically incompatible track standards. Roads carry classes (transitway / arterial / collector /
+local); bike ways carry protection classes; pedestrian ways carry promenade / pathway / stairs.
 
-A type may also name a `junctionGroupId`: which other types it may share a
-junction with. Road, bike, and pedestrian share the `street` group, because a
-cyclist really does turn from a path onto the street it meets. Every other
-type omits it and so may only meet its own kind — a road and a heavy-rail
-line crossing is a level crossing, not a junction. This governs which
-junctions are KEPT (on load, and on import); forming one by drawing across
-another way still needs an exact type match.
+A type may also name a `junctionGroupId`: which other types it may share a junction with. Road,
+bike, and pedestrian share the `street` group, because a cyclist really does turn from a path onto
+the street it meets. Every other type omits it and so may only meet its own kind — a road and a
+heavy-rail line crossing is a level crossing, not a junction. This governs which junctions are KEPT
+(on load, and on import); forming one by drawing across another way still needs an exact type match.
 
 ### Way families (`WAY_FAMILIES`)
 
-Families group types for the UI: each family is one drawing tool in the dock
-(`toolLabel`: Road, Track, Path, Aerial, Ferry), and supplies the noun a
-shared identity of that family gets (`identityNoun`: Street, Line, Trail,
-Route).
+Families group types for the UI: each family is one drawing tool in the dock (`toolLabel`: Road,
+Track, Path, Aerial, Ferry), and supplies the noun a shared identity of that family gets
+(`identityNoun`: Street, Line, Trail, Route).
 
 ## Lane kinds (`LANE_KINDS`)
 
-Elements of a cross-section. Each has a `role` (`travel`, `separator`,
-`edge`), a default width and width presets (stored in meters, presented in
-feet), whether it counts toward the way's headline capacity, and whether
-one-way/flip operations steer it (`directional`: drive lanes and tracks
-are; a one-way street's sidewalks stay bidirectional).
+Elements of a cross-section. Each has a `role` (`travel`, `separator`, `edge`), a default width and
+width presets (stored in meters, presented in feet), whether it counts toward the way's headline
+capacity, and whether one-way/flip operations steer it (`directional`: drive lanes and tracks are; a
+one-way street's sidewalks stay bidirectional).
 
-`drive`, `bus`, `turnPocket`, `bike`, `sidewalk`, `parking`, `shoulder`,
-`median`, `track`, `platform`, `channel` (an aerial span or navigable water
-lane).
+`drive`, `bus`, `turnPocket`, `bike`, `sidewalk`, `parking`, `shoulder`, `median`, `track`,
+`platform`, `channel` (an aerial span or navigable water lane).
 
 ## Profile presets (`PROFILE_PRESETS`)
 
-One-click cross-sections offered while drawing or editing. This is the
-turnkey path. Roads: 2-lane local, 3-lane with center turn, 4-lane arterial, 5-lane
-with center turn, divided boulevard, 3-lane one-way, transitway. Rail:
-single / double / quad track. Presets may also set the way's class (the
+One-click cross-sections offered while drawing or editing. This is the turnkey path. Roads: 2-lane
+local, 3-lane with center turn, 4-lane arterial, 5-lane with center turn, divided boulevard, 3-lane
+one-way, transitway. Rail: single / double / quad track. Presets may also set the way's class (the
 boulevard preset makes an arterial).
 
 ## Modes (`MODES`)
 
-Services people ride. Each mode lists the way types it can run over, which
-drives every compatibility check (the mode picker, route drawing, adoption):
+Services people ride. Each mode lists the way types it can run over, which drives every
+compatibility check (the mode picker, route drawing, adoption):
 
 | Id             | Label            | Runs over       |
 | -------------- | ---------------- | --------------- |
@@ -83,34 +75,31 @@ drives every compatibility check (the mode picker, route drawing, adoption):
 | `gondola`      | Gondola / aerial | aerial          |
 | `ferry`        | Ferry            | water           |
 
-Light rail and trams list `road` because they street-run in a road's
-right-of-way (a road's cross-section can include `track` lanes).
+Light rail and trams list `road` because they street-run in a road's right-of-way (a road's
+cross-section can include `track` lanes).
 
-A mode also declares `corridorToleranceM`: how far a drawn line may sit from
-existing infrastructure and still count as running along it. This is a
-physical fact about the mode rather than a UI preference — a train is on the
-track or it is not, so the rail modes use 6 m, while road and water modes take
-the 20 m default that was tuned against real GTFS data. Too tight and drawing
-along a street mints a second street beside it; too loose and a line drawn
-deliberately beside an existing one gets swallowed by it.
+A mode also declares `corridorToleranceM`: how far a drawn line may sit from existing infrastructure
+and still count as running along it. This is a physical fact about the mode rather than a UI
+preference — a train is on the track or it is not, so the rail modes use 6 m, while road and water
+modes take the 20 m default that was tuned against real GTFS data. Too tight and drawing along a
+street mints a second street beside it; too loose and a line drawn deliberately beside an existing
+one gets swallowed by it.
 
 ## Grades (`GRADES`)
 
-`underground`, `atGrade`, `elevated`. Grade decides junction formation:
-same-grade crossings form junctions; different grades pass over each other.
+`underground`, `atGrade`, `elevated`. Grade decides junction formation: same-grade crossings form
+junctions; different grades pass over each other.
 
 ## Facility types (`FACILITY_TYPES`)
 
-Each has a `geometryKind`, either `point` (click to place) or `area` (drawn
-to shape), that decides how the Facility tool works for it:
+Each has a `geometryKind`, either `point` (click to place) or `area` (drawn to shape), that decides
+how the Facility tool works for it:
 
 - Points: `entrance`, `bikeDock`, `elevator`.
 - Areas: `building`, `busBay`, `platform`, `parkingLot`, `depot`.
 
 ## Extending a catalog
 
-Add the entry to the relevant record and order array in
-`src/model/catalog.ts`, add its rendering to `src/style/catalogStyle.ts`,
-and add a check to `apps/web/tests/verify.test.ts`. Nothing else should need to change.
-If adding an entry forces edits elsewhere, that's a bug in the code that
-forced it.
+Add the entry to the relevant record and order array in `src/model/catalog.ts`, add its rendering to
+`src/style/catalogStyle.ts`, and add a check to `apps/web/tests/verify.test.ts`. Nothing else should
+need to change. If adding an entry forces edits elsewhere, that's a bug in the code that forced it.

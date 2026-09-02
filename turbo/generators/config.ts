@@ -65,6 +65,12 @@ function documentPackage(answers: unknown, _config: unknown, plop: PlopTypes.Nod
  * failure message instead.
  */
 export default function generator(plop: PlopTypes.NodePlopAPI): void {
+  addPackageGenerator(plop);
+  addMigrationGenerator(plop);
+  addLintRuleGenerator(plop);
+}
+
+function addPackageGenerator(plop: PlopTypes.NodePlopAPI): void {
   plop.setGenerator('package', {
     description: 'A workspace package that already satisfies the workspace contract',
     prompts: [
@@ -105,6 +111,11 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
       },
       {
         type: 'add',
+        path: 'packages/{{name}}/eslint.config.js',
+        templateFile: 'templates/package/eslint.config.js.hbs',
+      },
+      {
+        type: 'add',
         path: 'packages/{{name}}/src/index.ts',
         templateFile: 'templates/package/index.ts.hbs',
       },
@@ -117,7 +128,9 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
       () => 'Package created. Run `pnpm install` so the workspace link exists, then `pnpm check`.',
     ],
   });
+}
 
+function addMigrationGenerator(plop: PlopTypes.NodePlopAPI): void {
   plop.setGenerator('migration', {
     description: 'The next D1 migration, numbered correctly',
     prompts: [
@@ -139,7 +152,9 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
         'Migration created. It is append-only from now on — check:migrations fails if it is edited later.',
     ],
   });
+}
 
+function addLintRuleGenerator(plop: PlopTypes.NodePlopAPI): void {
   plop.setGenerator('lint-rule', {
     description: 'A repository lint rule, its tests, and its documentation anchor',
     prompts: [
@@ -169,7 +184,7 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
         templateFile: 'templates/lint-rule/rule.test.ts.hbs',
       },
       () =>
-        'Rule created. Register it in packages/eslint-plugin/src/index.ts, scope it in eslint.config.js, and add the matching section to docs/development/explanation/enforcement-model.md — the meta.docs.url anchor points there.',
+        'Rule created. Register it in packages/eslint-plugin/src/index.ts, scope it in the owning package eslint.config.js, and add the matching section to docs/development/explanation/enforcement-model.md — the meta.docs.url anchor points there.',
     ],
   });
 

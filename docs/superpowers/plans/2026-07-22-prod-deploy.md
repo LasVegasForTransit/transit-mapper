@@ -1,16 +1,33 @@
 # Production Cloudflare Deployment Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
+> (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Push to `main` triggers an automatic production deploy of TransitMapper to `map.lasvegasfortransit.org` via Cloudflare Workers; every PR/non-main push runs a typecheck + dependency-audit CI gate first.
+**Goal:** Push to `main` triggers an automatic production deploy of TransitMapper to
+`map.lasvegasfortransit.org` via Cloudflare Workers; every PR/non-main push runs a typecheck +
+dependency-audit CI gate first.
 
-**Architecture:** A shared composite GitHub Action (`setup-node-pnpm`, copied verbatim from `github.com/LasVegansForTransit/website` — the org's other Cloudflare-deployed project, an Astro site on Cloudflare Pages, referred to as "`website`" throughout this plan) installs Node+pnpm. `ci.yml` runs on PRs/non-main pushes and gates on `pnpm typecheck` + `pnpm audit`. `deploy-production.yml` runs on push to `main` and calls the existing root `pnpm run deploy` script (build + `wrangler deploy`) inside a `production`-scoped GitHub Environment holding the Cloudflare credentials. `apps/worker/wrangler.toml` gains a custom-domain route. A handful of steps (API token creation, real D1 database id, DNS/zone attachment) require the user's own Cloudflare account access and are manual, not scripted.
+**Architecture:** A shared composite GitHub Action (`setup-node-pnpm`, copied verbatim from
+`github.com/LasVegansForTransit/website` — the org's other Cloudflare-deployed project, an Astro
+site on Cloudflare Pages, referred to as "`website`" throughout this plan) installs Node+pnpm.
+`ci.yml` runs on PRs/non-main pushes and gates on `pnpm typecheck` + `pnpm audit`.
+`deploy-production.yml` runs on push to `main` and calls the existing root `pnpm run deploy` script
+(build + `wrangler deploy`) inside a `production`-scoped GitHub Environment holding the Cloudflare
+credentials. `apps/worker/wrangler.toml` gains a custom-domain route. A handful of steps (API token
+creation, real D1 database id, DNS/zone attachment) require the user's own Cloudflare account access
+and are manual, not scripted.
 
-**Tech Stack:** GitHub Actions, Cloudflare Workers (`wrangler deploy`), pnpm/Turborepo monorepo already in place.
+**Tech Stack:** GitHub Actions, Cloudflare Workers (`wrangler deploy`), pnpm/Turborepo monorepo
+already in place.
 
 **Reference spec:** `docs/superpowers/specs/2026-07-22-prod-deploy-design.md`
 
-**Note on working directory:** This session's git worktree was removed by an earlier `finishing-a-development-branch` cleanup, so all file operations must target the main checkout at `/Users/williecubed/Projects/LasVegansForTransit/transitmapper` explicitly (not the harness's default cwd, which points at the now-empty removed-worktree path). Every step below uses that absolute path.
+**Note on working directory:** This session's git worktree was removed by an earlier
+`finishing-a-development-branch` cleanup, so all file operations must target the main checkout at
+`/Users/williecubed/Projects/LasVegansForTransit/transitmapper` explicitly (not the harness's
+default cwd, which points at the now-empty removed-worktree path). Every step below uses that
+absolute path.
 
 ---
 
@@ -18,12 +35,16 @@
 
 **Files:**
 
-- Create: `/Users/williecubed/Projects/LasVegansForTransit/transitmapper/.github/actions/setup-node-pnpm/action.yml`
-- Modify: `/Users/williecubed/Projects/LasVegansForTransit/transitmapper/package.json` (add `engines.node`)
+- Create:
+  `/Users/williecubed/Projects/LasVegansForTransit/transitmapper/.github/actions/setup-node-pnpm/action.yml`
+- Modify: `/Users/williecubed/Projects/LasVegansForTransit/transitmapper/package.json` (add
+  `engines.node`)
 
 - [ ] **Step 1: Add `engines.node` to root `package.json`**
 
-The root `package.json` currently has `packageManager: "pnpm@11.10.0"` but no `engines` field. Add one so the Node constraint is explicit (matches `website`'s convention where `engines.node` documents the minimum):
+The root `package.json` currently has `packageManager: "pnpm@11.10.0"` but no `engines` field. Add
+one so the Node constraint is explicit (matches `website`'s convention where `engines.node`
+documents the minimum):
 
 ```json
 {
@@ -57,9 +78,9 @@ The root `package.json` currently has `packageManager: "pnpm@11.10.0"` but no `e
 # .github/actions/setup-node-pnpm/action.yml
 name: Setup Node + pnpm
 description: >
-  Install pnpm (version pinned via the repo's `packageManager` field), set up
-  Node with the pnpm store cache, and install dependencies with a frozen
-  lockfile. Caller must `actions/checkout` first.
+  Install pnpm (version pinned via the repo's `packageManager` field), set up Node with the pnpm
+  store cache, and install dependencies with a frozen lockfile. Caller must `actions/checkout`
+  first.
 
 inputs:
   node-version:
@@ -89,7 +110,8 @@ runs:
 
 - [ ] **Step 3: Verify the JSON/YAML are well-formed**
 
-Run: `cd /Users/williecubed/Projects/LasVegansForTransit/transitmapper && node -e "require('./package.json')" && npx -y js-yaml .github/actions/setup-node-pnpm/action.yml > /dev/null && echo OK`
+Run:
+`cd /Users/williecubed/Projects/LasVegansForTransit/transitmapper && node -e "require('./package.json')" && npx -y js-yaml .github/actions/setup-node-pnpm/action.yml > /dev/null && echo OK`
 Expected: `OK` (fails loudly on invalid JSON/YAML before it ever hits GitHub Actions).
 
 - [ ] **Step 4: Commit**
@@ -152,13 +174,17 @@ jobs:
 
 - [ ] **Step 2: Verify the YAML is well-formed**
 
-Run: `cd /Users/williecubed/Projects/LasVegansForTransit/transitmapper && npx -y js-yaml .github/workflows/ci.yml > /dev/null && echo OK`
+Run:
+`cd /Users/williecubed/Projects/LasVegansForTransit/transitmapper && npx -y js-yaml .github/workflows/ci.yml > /dev/null && echo OK`
 Expected: `OK`
 
 - [ ] **Step 3: Verify the underlying commands succeed locally**
 
-Run: `cd /Users/williecubed/Projects/LasVegansForTransit/transitmapper && pnpm typecheck && pnpm audit --prod --audit-level=high`
-Expected: typecheck passes (all 3 packages), and `pnpm audit --prod --audit-level=high` reports no high/critical vulnerabilities (exits 0). If it fails here, CI will fail identically — fix before committing, don't commit a workflow you know will fail.
+Run:
+`cd /Users/williecubed/Projects/LasVegansForTransit/transitmapper && pnpm typecheck && pnpm audit --prod --audit-level=high`
+Expected: typecheck passes (all 3 packages), and `pnpm audit --prod --audit-level=high` reports no
+high/critical vulnerabilities (exits 0). If it fails here, CI will fail identically — fix before
+committing, don't commit a workflow you know will fail.
 
 - [ ] **Step 4: Commit**
 
@@ -203,7 +229,8 @@ migrations_dir = "src/migrations"
 crons = ["0 0 * * *"]
 ```
 
-Add a `[[routes]]` block (placement doesn't matter to wrangler, put it after `[triggers]` for readability):
+Add a `[[routes]]` block (placement doesn't matter to wrangler, put it after `[triggers]` for
+readability):
 
 ```toml
 name = "transitmapper"
@@ -232,18 +259,17 @@ pattern = "map.lasvegasfortransit.org"
 custom_domain = true
 ```
 
-Leave `database_id` as the placeholder for now — Task 5 (manual, user-run)
-replaces it with the real id. Deploying with the placeholder id will fail;
-that's expected until Task 5 is done.
+Leave `database_id` as the placeholder for now — Task 5 (manual, user-run) replaces it with the real
+id. Deploying with the placeholder id will fail; that's expected until Task 5 is done.
 
 - [ ] **Step 2: Verify the TOML is well-formed**
 
-Run: `cd /Users/williecubed/Projects/LasVegansForTransit/transitmapper/apps/worker && node -e "require('toml').parse(require('fs').readFileSync('wrangler.toml','utf8')); console.log('OK')" 2>&1 || npx -y @iarna/toml -e "require('@iarna/toml').parse(require('fs').readFileSync('wrangler.toml','utf8'))" 2>&1 || cat wrangler.toml`
+Run:
+`cd /Users/williecubed/Projects/LasVegansForTransit/transitmapper/apps/worker && node -e "require('toml').parse(require('fs').readFileSync('wrangler.toml','utf8')); console.log('OK')" 2>&1 || npx -y @iarna/toml -e "require('@iarna/toml').parse(require('fs').readFileSync('wrangler.toml','utf8'))" 2>&1 || cat wrangler.toml`
 
-If neither `toml` nor `@iarna/toml` is available, just visually confirm the
-file's bracket/section structure is intact (`cat wrangler.toml`) — TOML
-syntax errors here are simple enough (a stray bracket, un-quoted string)
-that a careful read catches them.
+If neither `toml` nor `@iarna/toml` is available, just visually confirm the file's bracket/section
+structure is intact (`cat wrangler.toml`) — TOML syntax errors here are simple enough (a stray
+bracket, un-quoted string) that a careful read catches them.
 
 - [ ] **Step 3: Commit**
 
@@ -259,7 +285,8 @@ git commit -m "Add custom domain route for map.lasvegasfortransit.org"
 
 **Files:**
 
-- Create: `/Users/williecubed/Projects/LasVegansForTransit/transitmapper/.github/workflows/deploy-production.yml`
+- Create:
+  `/Users/williecubed/Projects/LasVegansForTransit/transitmapper/.github/workflows/deploy-production.yml`
 
 - [ ] **Step 1: Create the workflow**
 
@@ -307,17 +334,16 @@ jobs:
         run: pnpm run deploy
 ```
 
-Note: unlike `website`'s two-job build-then-deploy split (which hands a
-static `dist/` artifact between jobs via upload/download-artifact),
-`wrangler deploy` here needs the freshly-built `apps/web/dist` directory
-present on the same runner's filesystem right before it deploys — the root
-`pnpm run deploy` script already does `build && deploy` back-to-back, so
-there's no reason to split this into two jobs and re-transfer the build
-output between them.
+Note: unlike `website`'s two-job build-then-deploy split (which hands a static `dist/` artifact
+between jobs via upload/download-artifact), `wrangler deploy` here needs the freshly-built
+`apps/web/dist` directory present on the same runner's filesystem right before it deploys — the root
+`pnpm run deploy` script already does `build && deploy` back-to-back, so there's no reason to split
+this into two jobs and re-transfer the build output between them.
 
 - [ ] **Step 2: Verify the YAML is well-formed**
 
-Run: `cd /Users/williecubed/Projects/LasVegansForTransit/transitmapper && npx -y js-yaml .github/workflows/deploy-production.yml > /dev/null && echo OK`
+Run:
+`cd /Users/williecubed/Projects/LasVegansForTransit/transitmapper && npx -y js-yaml .github/workflows/deploy-production.yml > /dev/null && echo OK`
 Expected: `OK`
 
 - [ ] **Step 3: Commit**
@@ -332,23 +358,21 @@ git commit -m "Add production deploy workflow"
 
 ### Task 5: Manual Cloudflare account setup (user-executed)
 
-**Files:** none — this task is a checklist for the user, not code changes.
-It cannot be executed by the implementing agent because it requires the
-user's own Cloudflare account credentials/access.
+**Files:** none — this task is a checklist for the user, not code changes. It cannot be executed by
+the implementing agent because it requires the user's own Cloudflare account credentials/access.
 
 - [ ] **Step 1: Create the remote D1 database**
 
-The user runs (needs to be logged into their own Cloudflare account via
-`wrangler login` first, or have `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`
-env vars set locally):
+The user runs (needs to be logged into their own Cloudflare account via `wrangler login` first, or
+have `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` env vars set locally):
 
 ```bash
 cd /Users/williecubed/Projects/LasVegansForTransit/transitmapper/apps/worker
 npx wrangler d1 create transitmapper
 ```
 
-This prints a `database_id`. The user (or the implementing agent, once the
-user has pasted the id back) edits `apps/worker/wrangler.toml`, replacing:
+This prints a `database_id`. The user (or the implementing agent, once the user has pasted the id
+back) edits `apps/worker/wrangler.toml`, replacing:
 
 ```toml
 database_id = "00000000-0000-0000-0000-000000000000"
@@ -369,35 +393,31 @@ cd /Users/williecubed/Projects/LasVegansForTransit/transitmapper/apps/worker
 npx wrangler d1 migrations apply transitmapper --remote
 ```
 
-Expected: both `0001_init.sql` and `0002_share_expiry.sql` show `✅`, same
-shape as the local `--local` runs already done in this repo's history.
+Expected: both `0001_init.sql` and `0002_share_expiry.sql` show `✅`, same shape as the local
+`--local` runs already done in this repo's history.
 
 - [ ] **Step 3: Create a Cloudflare API token**
 
-Cloudflare dashboard → account-scoped API Tokens page → Create Token →
-start from the "Edit Cloudflare Workers" template (this already includes
-the correct `Account · Workers Scripts · Edit` and `Zone · Workers Routes ·
-Edit` permissions — Workers Routes is a zone-level permission, not an
+Cloudflare dashboard → account-scoped API Tokens page → Create Token → start from the "Edit
+Cloudflare Workers" template (this already includes the correct `Account · Workers Scripts · Edit`
+and `Zone · Workers Routes · Edit` permissions — Workers Routes is a zone-level permission, not an
 account-level one), then add one more row: `Account · D1 · Edit`.
 
 - [ ] **Step 4: Add GitHub Environment secrets**
 
-Repo → Settings → Environments → New environment, name it `production`.
-Inside that environment:
+Repo → Settings → Environments → New environment, name it `production`. Inside that environment:
 
 - Add secret `CLOUDFLARE_API_TOKEN` = the token from Step 3.
-- Add variable (not secret) `CLOUDFLARE_ACCOUNT_ID` = the account id (found
-  on the Cloudflare dashboard's right sidebar on any account page).
+- Add variable (not secret) `CLOUDFLARE_ACCOUNT_ID` = the account id (found on the Cloudflare
+  dashboard's right sidebar on any account page).
 
 - [ ] **Step 5: Attach the custom domain**
 
-If `lasvegasfortransit.org` is already a zone on this Cloudflare account,
-the `[[routes]]` block from Task 3 auto-provisions the DNS record on the
-next successful deploy — no separate action needed. If the zone is not yet
-on this account, add it first: Cloudflare dashboard → Add a site →
-`lasvegasfortransit.org`, follow the nameserver-change instructions, wait
-for the zone to go active, then re-run the deploy workflow
-(`workflow_dispatch` or push to `main`).
+If `lasvegasfortransit.org` is already a zone on this Cloudflare account, the `[[routes]]` block
+from Task 3 auto-provisions the DNS record on the next successful deploy — no separate action
+needed. If the zone is not yet on this account, add it first: Cloudflare dashboard → Add a site →
+`lasvegasfortransit.org`, follow the nameserver-change instructions, wait for the zone to go active,
+then re-run the deploy workflow (`workflow_dispatch` or push to `main`).
 
 - [ ] **Step 6: Trigger and verify the first production deploy**
 
@@ -413,9 +433,8 @@ Then confirm:
 curl -s -o /dev/null -w "%{http_code}\n" https://map.lasvegasfortransit.org/api/systems/nonexistent-id
 ```
 
-Expected: `404` (the worker is live and D1-backed; a nonexistent share id
-correctly 404s, same "it's alive" signal used when testing this feature
-locally against `wrangler dev`).
+Expected: `404` (the worker is live and D1-backed; a nonexistent share id correctly 404s, same "it's
+alive" signal used when testing this feature locally against `wrangler dev`).
 
 ---
 
@@ -425,8 +444,7 @@ locally against `wrangler dev`).
 
 - [ ] **Step 1: Require the CI check before merge**
 
-Repo → Settings → Branches → Add branch protection rule for `main` →
-require status check `Validate` (the `ci.yml` job name) to pass before
-merging. Not automatable from this plan (GitHub API/`gh` can set this, but
-it changes merge policy account-wide — flagging it as a manual decision for
-the user rather than silently enabling it).
+Repo → Settings → Branches → Add branch protection rule for `main` → require status check `Validate`
+(the `ci.yml` job name) to pass before merging. Not automatable from this plan (GitHub API/`gh` can
+set this, but it changes merge policy account-wide — flagging it as a manual decision for the user
+rather than silently enabling it).

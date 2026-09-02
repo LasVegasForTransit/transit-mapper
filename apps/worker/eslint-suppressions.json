@@ -21,6 +21,15 @@
   "tests/verify.test.ts": {
     "@typescript-eslint/no-misused-spread": {
       "count": 2
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
     }
   }
 }

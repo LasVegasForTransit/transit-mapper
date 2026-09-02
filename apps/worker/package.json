@@ -5,12 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
-    "verify": "tsx tests/verify.test.ts && vitest run",
-    "deploy": "wrangler deploy",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
+    "test": "tsx tests/verify.test.ts && vitest run",
     "types": "wrangler types",
-    "check:types": "tsx scripts/check-generated-types.ts"
+    "check:types": "tsx scripts/check-generated-types.ts",
+    "validate": "pnpm check:types"
   },
   "dependencies": {
     "@transitmapper/core": "workspace:*",
@@ -19,8 +19,12 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
     "@cloudflare/workers-types": "catalog:",
-    "@transitmapper/tsconfig": "workspace:*",
+    "@lvbt/eslint-config": "link:../../../repository-tooling/packages/eslint-config",
+    "@lvbt/typescript-config": "link:../../../repository-tooling/packages/typescript-config",
+    "@lvbt/vitest-config": "link:../../../repository-tooling/packages/vitest-config",
+    "eslint": "catalog:",
     "tsx": "catalog:",
+    "typescript": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"
   }

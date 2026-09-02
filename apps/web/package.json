@@ -6,15 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b tsconfig.build.json && vite build && tsx scripts/perf/report-bundle.ts && tsx scripts/perf/verify-pwa-output.ts",
+    "preview": "vite preview",
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
+    "test": "tsx tests/verify.test.ts && vitest run",
     "generate:icons": "tsx scripts/generate-app-icons.ts",
     "check:icons": "tsx scripts/generate-app-icons.ts --check",
-    "preview": "vite preview",
     "perf": "tsx scripts/perf/run.ts",
     "perf:record": "tsx scripts/perf/run.ts --record",
     "perf:soak": "tsx scripts/perf/run.ts --soak",
-    "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
-    "verify": "tsx tests/verify.test.ts && vitest run",
-    "lint": "eslint ."
+    "validate": "pnpm check:icons"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "catalog:",
@@ -31,16 +32,20 @@
     "zustand": "catalog:"
   },
   "devDependencies": {
-    "@transitmapper/tsconfig": "workspace:*",
+    "@lvbt/eslint-config": "link:../../../repository-tooling/packages/eslint-config",
+    "@lvbt/typescript-config": "link:../../../repository-tooling/packages/typescript-config",
+    "@lvbt/vitest-config": "link:../../../repository-tooling/packages/vitest-config",
     "@types/geojson": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
+    "eslint": "catalog:",
     "jsdom": "catalog:",
     "playwright-core": "catalog:",
     "sharp": "catalog:",
     "terser": "catalog:",
     "tsx": "catalog:",
+    "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-pwa": "catalog:",
     "vitest": "catalog:",
