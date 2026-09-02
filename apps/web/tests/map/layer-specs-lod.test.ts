@@ -56,36 +56,36 @@ function layout(id: string, property: string): unknown {
   return Object.entries(properties ?? {}).find(([name]) => name === property)?.[1];
 }
 
+/** Unwraps any `let` bindings wrapping the zoom curve.
+ *
+ * MapLibre accepts `zoom` only as a top-level curve input, but permits that
+ * curve to sit inside `let`. The tier expressions bind their feature-dependent
+ * values there, so the curve is not the outermost node. */
+function zoomCurveOf(expression: readonly unknown[]): readonly unknown[] {
+  let node: readonly unknown[] = expression;
+  while (node[0] === 'let') {
+    const body = node[node.length - 1];
+    if (!Array.isArray(body)) break;
+    node = body;
+  }
+  return node;
+}
+
 function expectCameraTierOpacity(id: string, property: string, baseOpacity: unknown): void {
   const expression = paint(id, property);
   expect(Array.isArray(expression)).toBe(true);
   if (!Array.isArray(expression)) return;
-  const expressionValues: unknown[] = expression;
 
-  expect(expressionValues.slice(0, 3)).toEqual(['interpolate', ['exponential', 2], ['zoom']]);
-  const stops = expressionValues.filter((_, index) => index >= 3 && index % 2 === 1);
+  const curve = zoomCurveOf(expression);
+  expect(curve.slice(0, 3)).toEqual(['interpolate', ['exponential', 2], ['zoom']]);
+  const stops = curve.filter((_, index) => index >= 3 && index % 2 === 1);
   expect(stops).toEqual(expect.arrayContaining([13.75, 14, 14.25]));
 
-  const z14Index = expressionValues.findIndex((value, index) => index >= 3 && value === 14);
-  const z14Output = expressionValues[z14Index + 1];
-  expect(Array.isArray(z14Output) && z14Output[0]).toBe('case');
-
-  const serialized = JSON.stringify(z14Output);
-  const projectedWidth = [
-    '*',
-    ['coalesce', ['get', 'corridorDisplayW14'], ['get', 'corridorW14']],
-    1,
-  ];
-  expect(serialized).toContain(JSON.stringify(baseOpacity));
-  expect(serialized).toContain(JSON.stringify(['get', 'renderTier']));
-  expect(serialized).toContain(
-    JSON.stringify(['interpolate', ['linear'], projectedWidth, 2, 0, 4, 1]),
-  );
-  expect(serialized).toContain(
-    JSON.stringify(['interpolate', ['linear'], projectedWidth, 9, 0, 12, 1]),
-  );
-  expect(serialized).toContain('"/"');
-  expect(serialized).toContain(JSON.stringify(['coalesce', ['get', 'tierOpacity'], 1]));
+  // The layer carries the same expression the tier builder produces, and what
+  // that expression computes is asserted in tier-opacity-camera-gap.test.ts by
+  // evaluating it. Comparing the value here keeps this file about which layer
+  // gets which opacity, without restating the expression's internal shape.
+  expect(expression).toEqual(tierOpacityExpr(baseOpacity));
 }
 
 describe('screen-space LOD layer specifications', () => {
