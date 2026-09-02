@@ -43,6 +43,12 @@ const CHECKS: Check[] = [
     fix: 'fix the type error; do not add `any`',
   },
   {
+    command: 'verify:root',
+    fails:
+      'a guard over repository configuration — the Turbo task graph, package boundaries, the commit hook — is violated',
+    fix: 'restore the configuration the guard names; its failure message says what was dropped',
+  },
+  {
     command: 'check:filenames',
     fails: 'a file under a module src/ or tests/ tree does not follow its filename contract',
     fix: 'rename the file and update its imports',
