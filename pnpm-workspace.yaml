@@ -78,19 +78,12 @@ catalog:
   zustand: 5.0.14
 
 overrides:
-  brace-expansion@<1.1.17: ^1.1.17
-  brace-expansion@>=2.0.0 <2.1.3: ^2.1.3
-  brace-expansion@>=4.0.0 <5.0.9: ^5.0.9
-  fast-uri@<3.1.5: ^3.1.5
-  undici@>=7.0.0 <7.29.0: ^7.29.0
-  # GHSA-5p4m-2wfm-xmqj: quadratic CPU consumption parsing !!omap. Reached only
-  # through eslint's config loader, so nothing here ever feeds it untrusted
-  # YAML — but the audit gate is a floor, not a judgement call, and 4.x is not
-  # getting the fix backported below 4.3.1.
-  js-yaml@>=4.0.0 <4.3.1: ^4.3.1
-  # GHSA-2v37-7h3g-55p8: a zero-size custom generator loops indefinitely.
-  # Reached only through postcss (vite/vitest/@tailwindcss/vite's build-time
-  # use), which never calls nanoid with a caller-controlled size of zero —
-  # but the audit gate doesn't know that, and 3.x isn't getting the fix
-  # backported below 3.3.17.
-  nanoid@<3.3.17: ^3.3.17
+  'brace-expansion@<1.1.17': '^1.1.17'
+  'brace-expansion@>=2.0.0 <2.1.3': '^2.1.3'
+  'brace-expansion@>=4.0.0 <5.0.9': '^5.0.9'
+  'browserslist@<=4.28.6': '>=4.28.7'
+  'fast-uri@<3.1.5': '^3.1.5'
+  'js-yaml@>=4.0.0 <4.3.1': '^4.3.1'
+  'nanoid@<3.3.17': '^3.3.17'
+  'nanoid@<3.3.18': '>=3.3.18'
+  'undici@>=7.0.0 <7.29.0': '^7.29.0'
