@@ -1,10 +1,12 @@
-import { configDefaults, defineConfig } from 'vitest/config';
+import { defineConfig } from 'vitest/config';
+
+import { sharedConfig } from '@lvbt/vitest-config';
 
 export default defineConfig({
+  ...sharedConfig,
   test: {
+    ...sharedConfig.test,
     environment: 'node',
-    include: ['tests/**/*.test.{ts,tsx}'],
-    exclude: [...configDefaults.exclude, 'tests/support/**'],
     // Only this package has a coverage floor. It is where the logic that can be
     // tested without a browser lives; the two applications run their own
     // sequential verifiers through `tsx`, which reports no coverage at all.

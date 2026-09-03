@@ -20,9 +20,9 @@ apps/web ────────┬──> packages/workspace ────> pac
 apps/worker ──────┬──> packages/views ────> packages/core
                   └──> packages/core
 
-all TypeScript packages ──> packages/tsconfig
-repository linting ───────> packages/config-eslint ──> packages/eslint-plugin
-repository contribution tooling ──> pinned LVBT plugin release
+all TypeScript packages ──> @lvbt/typescript-config
+repository linting ───────> @lvbt/eslint-config ──> packages/eslint-plugin
+repository contribution tooling ──> pinned LVBT standard release
 ```
 
 The domain model does not import browser state, React, MapLibre, or Worker
@@ -194,13 +194,14 @@ replacing an editing session without consent.
 ### Contribution tooling
 
 TransitMapper inherits organization issue and pull request templates. The
-pinned contribution plugin supplies agent tooling, and
-`.lvbt/repository-tooling.json` records the verified release.
+`lvbt-contributions` plugin ships inside `@lvbt/cli`, pinned in the catalog
+like any other dependency.
 
 ### ESLint baseline
 
-`packages/config-eslint` exports the type-aware and syntax-only organization
-rule sets consumed by the root lint configuration.
+[`@lvbt/eslint-config`](https://github.com/LasVegasForTransit/repository-tooling/blob/main/docs/reference/packages.md)
+exports the type-aware and syntax-only organization rule sets consumed by the
+root lint configuration.
 
 #### Baseline rules
 
@@ -219,8 +220,11 @@ where each rule applies. See [the enforcement model](../explanation/enforcement-
 
 ### TypeScript configuration
 
-`packages/tsconfig` owns shared compiler policy. Each source package adds its
-runtime libraries and output behavior.
+[`@lvbt/typescript-config`](https://github.com/LasVegasForTransit/repository-tooling/blob/main/docs/reference/packages.md)
+owns shared compiler policy; each source package extends the variant matching
+its runtime and adds its own output behavior. `exactOptionalPropertyTypes`
+and `noUncheckedIndexedAccess` are overridden back off per package as
+recorded adoption debt.
 
 ## Applications
 

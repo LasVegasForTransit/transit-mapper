@@ -1,6 +1,9 @@
-import { configDefaults, defineConfig } from 'vitest/config';
-import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
 import { resolve } from 'node:path';
+
+import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
+import { defineConfig } from 'vitest/config';
+
+import { sharedConfig } from '@lvbt/vitest-config';
 
 // API note for anyone following older documentation: as of
 // @cloudflare/vitest-pool-workers 0.18, there is no `/config` subpath and no
@@ -23,9 +26,10 @@ export default defineConfig({
       },
     }),
   ],
+  ...sharedConfig,
   test: {
-    include: ['tests/**/*.test.{ts,tsx}'],
-    exclude: [...configDefaults.exclude, 'tests/verify.test.ts', 'tests/support/**'],
+    ...sharedConfig.test,
+    exclude: [...sharedConfig.test.exclude, 'tests/verify.test.ts'],
     // Each file starts an isolated workerd runtime. Vitest's per-core default
     // multiplies that cost while Turbo is already scheduling package suites.
     maxWorkers: 2,

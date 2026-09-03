@@ -4,15 +4,16 @@ import type { Map as MLMap } from 'maplibre-gl';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { oneSection, wholeLeg } from '@transitmapper/core/model/geo';
+import type * as CoreGeoModule from '@transitmapper/core/model/geo';
 import type { Stop, TransitSystem, Way } from '@transitmapper/core/model/system';
+import type * as ServiceStatsModule from '@transitmapper/core/sim/serviceStats';
 import { createEditorStore } from '../../src/editor/store';
 import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from '@transitmapper/renderer/layers';
 import { createSimClock } from '../../src/sim/simClock';
-
 const patternStatsProbe = vi.hoisted(() => ({ calls: 0 }));
 const patternDependenciesProbe = vi.hoisted(() => ({ calls: 0 }));
 vi.mock('@transitmapper/core/sim/serviceStats', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@transitmapper/core/sim/serviceStats')>();
+  const actual = await importOriginal<typeof ServiceStatsModule>();
   return {
     ...actual,
     patternStats: (...args: Parameters<typeof actual.patternStats>) => {
@@ -21,9 +22,8 @@ vi.mock('@transitmapper/core/sim/serviceStats', async (importOriginal) => {
     },
   };
 });
-
 vi.mock('@transitmapper/core/model/geo', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@transitmapper/core/model/geo')>();
+  const actual = await importOriginal<typeof CoreGeoModule>();
   return {
     ...actual,
     patternWayIds: (...args: Parameters<typeof actual.patternWayIds>) => {
@@ -32,7 +32,6 @@ vi.mock('@transitmapper/core/model/geo', async (importOriginal) => {
     },
   };
 });
-
 import { attachVehicleAnimation } from '../../src/sim/vehicles';
 
 interface ScheduledWork {

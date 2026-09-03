@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { LngLat } from '@transitmapper/core/model/system';
-import type { Browser } from 'playwright-core';
+import type { Browser, ConsoleMessage, Page, Request } from 'playwright-core';
 import { generatePerfFixture } from '../../src/perf/fixtures';
 import type { PerfProtocol } from '../../src/perf/types';
 import { closeContext, installPerformanceInstrumentation, seedLegacyFixture } from './browser';
@@ -44,7 +44,7 @@ interface OfflineRuntimeReport {
 }
 
 async function waitForOfflineRenderer(
-  page: import('playwright-core').Page,
+  page: Page,
   offlineFailures: readonly string[],
 ): Promise<void> {
   try {
@@ -81,7 +81,7 @@ async function waitForOfflineRenderer(
   }
 }
 
-async function verifyLegacyMigration(page: import('playwright-core').Page, id: string) {
+async function verifyLegacyMigration(page: Page, id: string) {
   return page.evaluate(
     async ({ expectedId, storage }) => {
       const database = await new Promise<IDBDatabase>((resolvePromise, reject) => {
@@ -127,10 +127,7 @@ async function verifyLegacyMigration(page: import('playwright-core').Page, id: s
   );
 }
 
-async function verifyOfflineStopEdit(
-  page: import('playwright-core').Page,
-  stopId: string,
-): Promise<OfflineEditProof> {
+async function verifyOfflineStopEdit(page: Page, stopId: string): Promise<OfflineEditProof> {
   await page.keyboard.press('v');
   const before = await page.evaluate((targetId) => {
     const snapshot = (window as PerfPageWindow).__perfStopSnapshot?.(targetId);
@@ -206,11 +203,11 @@ export async function verifyCacheEvictedOfflineReload(
   const failedOfflineRequests: string[] = [];
   const offlinePageErrors: string[] = [];
   const offlineConsoleErrors: string[] = [];
-  const recordFailedOfflineRequest = (request: import('playwright-core').Request) => {
+  const recordFailedOfflineRequest = (request: Request) => {
     failedOfflineRequests.push(request.url());
   };
   const recordOfflinePageError = (error: Error) => offlinePageErrors.push(error.message);
-  const recordOfflineConsoleError = (message: import('playwright-core').ConsoleMessage) => {
+  const recordOfflineConsoleError = (message: ConsoleMessage) => {
     if (message.type() === 'error') offlineConsoleErrors.push(message.text());
   };
   try {

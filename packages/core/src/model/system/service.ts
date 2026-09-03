@@ -1,5 +1,5 @@
 import type { ScheduleDayScope } from './valueTypes';
-import { removeGroupMembers } from './group';
+import { removeGroupMembers, type Group } from './group';
 
 /** The public identity a transportation agency designates on its map. */
 export interface Line {
@@ -196,7 +196,7 @@ interface LineDocument {
 interface LineServiceDocument extends LineDocument, ServiceDocument {}
 
 interface LineServiceGroupDocument extends LineServiceDocument {
-  groups: import('./group').Group[];
+  groups: Group[];
 }
 
 function replaceService<System extends ServiceDocument>(

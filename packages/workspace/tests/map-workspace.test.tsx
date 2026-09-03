@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { act } from 'react';
+import type * as ReactModule from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -8,7 +9,7 @@ import * as workspace from '../src/index';
 import { matchMediaFor } from './support/media-environment.test';
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react');
+  const actual = await vi.importActual<typeof ReactModule>('react');
   return { ...actual, useLayoutEffect: actual.useEffect };
 });
 

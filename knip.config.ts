@@ -61,6 +61,10 @@ const config: KnipConfig = {
     // graph. knip resolves dependencies by import, so a tool invoked by a hook
     // reads as unused.
     'lint-staged',
+    // Its `lvbt` binary and the lvbt-contributions plugin it ships are run by
+    // path from .githooks/*, .codex/hooks.json, and AGENTS.md's contribution
+    // helper — never imported, so knip cannot see the usage.
+    '@lvbt/cli',
   ],
 };
 

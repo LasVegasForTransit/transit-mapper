@@ -14,7 +14,7 @@ case "$SUBJECT" in
 esac
 
 ROOT=$(git rev-parse --show-toplevel)
-if ! node "$ROOT/plugins/lvbt-contributions/scripts/validate-commit-subject.mjs" "$SUBJECT"; then
+if ! node "$ROOT/node_modules/@lvbt/cli/plugins/lvbt-contributions/scripts/validate-commit-subject.mjs" "$SUBJECT"; then
   printf '\n    see:  docs/development/reference/commit-messages.md\n\n' >&2
   exit 1
 fi

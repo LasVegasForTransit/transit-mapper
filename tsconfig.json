@@ -33,12 +33,11 @@
     "noEmit": true,
     "types": ["node"],
     // Not for anything under scripts/. `eslint.config.ts` imports
-    // `@transitmapper/config-eslint` and `@transitmapper/eslint-plugin`, whose
-    // `exports` maps point straight at TypeScript source, and that source
-    // imports its own modules with a `.ts` suffix. Typechecking the config
-    // therefore means typechecking those packages under their own rule. Safe
-    // because nothing here emits.
+    // `@transitmapper/eslint-plugin`, whose `exports` map points straight at
+    // TypeScript source, and that source imports its own modules with a
+    // `.ts` suffix. Typechecking the config therefore means typechecking that
+    // package under its own rule. Safe because nothing here emits.
     "allowImportingTsExtensions": true
   },
-  "include": ["scripts", "turbo", "eslint.config.ts"]
+  "include": ["scripts", "turbo", "eslint.config.ts", "lvbt-eslint-config.d.ts"]
 }

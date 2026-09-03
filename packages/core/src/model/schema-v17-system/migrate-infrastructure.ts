@@ -1,5 +1,5 @@
 import type { TransitSystem as SchemaV16TransitSystem } from '../system';
-import type { Alignment, Stop, Way } from '../../transit/authored-system';
+import type { Alignment, Stop, TransitSystem, Way } from '../../transit/authored-system';
 
 export function migrateAlignment(way: SchemaV16TransitSystem['ways'][number]): Alignment {
   return {
@@ -51,7 +51,7 @@ export function migrateStop(stop: SchemaV16TransitSystem['stops'][number]): Stop
 export function migratedSystemBase(
   system: SchemaV16TransitSystem,
 ): Omit<
-  import('../../transit/authored-system').TransitSystem,
+  TransitSystem,
   | 'version'
   | 'lines'
   | 'servicePlans'

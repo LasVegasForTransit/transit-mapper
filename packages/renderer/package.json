@@ -79,12 +79,13 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.build.json --noEmit && tsc -p tsconfig.json --noEmit",
+    "check-types": "tsc -p tsconfig.build.json --noEmit && tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
-    "verify": "vitest run"
+    "test": "vitest run"
   },
   "devDependencies": {
-    "@transitmapper/tsconfig": "workspace:*",
+    "@lvbt/typescript-config": "catalog:",
+    "@lvbt/vitest-config": "catalog:",
     "@types/geojson": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"

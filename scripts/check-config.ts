@@ -111,10 +111,6 @@ const OWNED_PATHS = new Set([
   // release-please reads both by these exact names, passed nowhere.
   'release-please-config.json',
   '.release-please-manifest.json',
-  // A shared tsconfig fragment other packages reach by
-  // `@transitmapper/tsconfig/base.json`. Renaming it means editing every
-  // `extends` in the workspace for no gain.
-  'packages/tsconfig/base.json',
 ]);
 
 interface Offence {

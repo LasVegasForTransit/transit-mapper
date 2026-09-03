@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type * as ReactModule from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Workbench, type WorkbenchDetent } from '../src/index';
 import { matchMediaFor, type MediaEnvironment } from './support/media-environment.test';
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react');
+  const actual = await vi.importActual<typeof ReactModule>('react');
   return { ...actual, useLayoutEffect: actual.useEffect };
 });
 

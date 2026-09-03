@@ -331,13 +331,12 @@ function createMap(initialFeatures: MapGeoJSONFeature | MapGeoJSONFeature[] | nu
     panBy(...args: unknown[]) {
       panCalls.push(args);
     },
-    on(type: string, first: unknown, second?: unknown) {
+    on(type: string, first: unknown, _second?: unknown) {
       if (typeof first !== 'function') return;
       const listener = first as (event: unknown) => void;
       const current = handlers.get(type) ?? new Set();
       current.add(listener);
       handlers.set(type, current);
-      void second;
     },
     once(type: string, listener: (event: unknown) => void) {
       const wrapped = (event: unknown) => {
@@ -346,10 +345,9 @@ function createMap(initialFeatures: MapGeoJSONFeature | MapGeoJSONFeature[] | nu
       };
       map.on(type, wrapped);
     },
-    off(type: string, first: unknown, second?: unknown) {
+    off(type: string, first: unknown, _second?: unknown) {
       if (typeof first === 'function')
         handlers.get(type)?.delete(first as (event: unknown) => void);
-      void second;
     },
     fire(type: string, event: unknown) {
       for (const listener of [...(handlers.get(type) ?? [])]) listener(event);

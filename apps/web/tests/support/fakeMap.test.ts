@@ -78,10 +78,9 @@ export function createFakeMap() {
       };
       map.on(type, wrapped);
     },
-    off(type: string, a: unknown, b?: unknown) {
+    off(type: string, a: unknown, _b?: unknown) {
       if (typeof a !== 'function') return;
       handlers.get(key(type))?.delete(a as (e: unknown) => void);
-      void b;
     },
     fire(type: string, e: unknown) {
       for (const fn of [...(handlers.get(key(type)) ?? [])]) fn(e);

@@ -27,11 +27,10 @@ const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', '.turbo', '.wrangle
 /**
  * Whether a package ships code at all.
  *
- * A package of pure configuration — `packages/tsconfig` holds only JSON — has
- * nothing to lint, typecheck, or run. Demanding the three scripts anyway gets
- * answered with three scripts that do nothing, and the reasoning that keeps
- * `build` off the required list applies unchanged: a task written to satisfy
- * a check is a lie, and the next reader cannot tell it from a real one.
+ * A package of pure configuration has nothing to lint, check-types, or run,
+ * and the reasoning that keeps `build` off the required list applies
+ * unchanged: a task written to satisfy a check is a lie, and the next
+ * reader cannot tell it from a real one.
  *
  * Detected rather than declared. A field in package.json saying "the contract
  * does not apply to me" would be reached for by any package that found the
@@ -182,12 +181,12 @@ function shellTokens(command: string): ShellToken[] | undefined {
   return tokens;
 }
 
-interface DirectVerifyDiscovery {
+interface DirectTestDiscovery {
   entries: string[];
   unverifiable: string[];
 }
 
-function directVerifyEntries(command: string): DirectVerifyDiscovery {
+function directTestEntries(command: string): DirectTestDiscovery {
   const tokens = shellTokens(command);
   if (!tokens) {
     return {
@@ -246,7 +245,7 @@ function directVerifyEntries(command: string): DirectVerifyDiscovery {
  * package that ships raw TypeScript source has nothing to build, and
  * requiring an empty build script would teach people to write lies.
  */
-const REQUIRED_TASKS = ['lint', 'typecheck', 'verify'] as const;
+const REQUIRED_TASKS = ['lint', 'check-types', 'test'] as const;
 
 interface TurboPackage {
   name: string;
@@ -329,7 +328,7 @@ async function main(): Promise<void> {
       }
 
       const misplacedTests = new Set(await misplacedTestMaterial(path));
-      const directVerifiers = directVerifyEntries(scripts.verify ?? '');
+      const directVerifiers = directTestEntries(scripts.test ?? '');
 
       for (const entry of directVerifiers.entries) {
         const canonical = canonicalPackagePath(path, entry);
@@ -347,7 +346,7 @@ async function main(): Promise<void> {
       for (const command of [...new Set(directVerifiers.unverifiable)].sort()) {
         failures.push({
           kind: 'test-layout',
-          message: `${name} has an unverifiable direct tsx command in ${path}/package.json verify: ${command}`,
+          message: `${name} has an unverifiable direct tsx command in ${path}/package.json test: ${command}`,
         });
       }
     }
