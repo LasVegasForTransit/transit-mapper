@@ -12,7 +12,7 @@ interface DocumentMapStyleRecoveryRenderer {
 
 export interface DocumentMapStyleRecoveryOptions {
   readonly renderer: DocumentMapStyleRecoveryRenderer;
-  readonly scheduler: Pick<DocumentMapScheduler, 'scheduleFrame' | 'cancelFrame'>;
+  readonly scheduler: Pick<DocumentMapScheduler, 'scheduleFrame' | 'cancelFrame' | 'now'>;
   acceptsWork(): boolean;
   ensureOverlay(): boolean;
   hasQueuedProjection(): boolean;
@@ -20,7 +20,17 @@ export interface DocumentMapStyleRecoveryOptions {
   scheduleProjection(): void;
   restoreAfterStyle(): void;
   reportError(error: unknown): void;
+  /** MapLibre can take several seconds, not one frame, to accept a source
+   * mutation on a heavily loaded main thread (a large document under CPU
+   * throttling delays the style's own internal load, not just source
+   * indexing). Defaults to `DEFAULT_STYLE_RETRY_BUDGET_MS`. */
+  readonly retryBudgetMs?: number;
 }
+
+// Matches the order of magnitude documented in source-bank-settlement.ts for
+// the RTC fixture's source indexing: several seconds, not one animation
+// frame, under CI's CPU throttle.
+const DEFAULT_STYLE_RETRY_BUDGET_MS = 10_000;
 
 export interface DocumentMapStyleRecovery {
   isPending(): boolean;
@@ -34,7 +44,7 @@ class DocumentMapStyleRecoveryController implements DocumentMapStyleRecovery {
   private pending = false;
   private continuation: (() => void) | null = null;
   private retryFrame: number | null = null;
-  private retryUsed = false;
+  private retryDeadline: number | null = null;
 
   constructor(private readonly options: DocumentMapStyleRecoveryOptions) {}
 
@@ -57,7 +67,7 @@ class DocumentMapStyleRecoveryController implements DocumentMapStyleRecovery {
         this.reportSafely(error);
       }
     }
-    this.retryUsed = false;
+    this.retryDeadline = null;
     this.recoverStyle();
   }
 
@@ -125,11 +135,18 @@ class DocumentMapStyleRecoveryController implements DocumentMapStyleRecovery {
   }
 
   private scheduleRetry(): void {
-    if (this.retryUsed) {
+    const now = this.options.scheduler.now();
+    this.retryDeadline ??= now + (this.options.retryBudgetMs ?? DEFAULT_STYLE_RETRY_BUDGET_MS);
+    if (now >= this.retryDeadline) {
       this.pending = false;
+      this.retryDeadline = null;
+      this.reportSafely(
+        new Error(
+          'Style recovery gave up: MapLibre did not accept a source mutation within the retry budget.',
+        ),
+      );
       return;
     }
-    this.retryUsed = true;
     try {
       this.retryFrame = this.options.scheduler.scheduleFrame(() => {
         this.retryFrame = null;
@@ -137,6 +154,7 @@ class DocumentMapStyleRecoveryController implements DocumentMapStyleRecovery {
       });
     } catch (error) {
       this.pending = false;
+      this.retryDeadline = null;
       this.reportSafely(error);
     }
   }
@@ -149,7 +167,7 @@ class DocumentMapStyleRecoveryController implements DocumentMapStyleRecovery {
         this.scheduleRetry();
         return;
       }
-      this.retryUsed = false;
+      this.retryDeadline = null;
       if (this.options.renderer.hasAcceptedScene()) this.recoverAcceptedScene();
       else this.recoverInitialScene();
     } catch (error) {
