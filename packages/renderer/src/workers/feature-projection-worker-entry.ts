@@ -18,6 +18,7 @@ import type {
   FeatureProjectionWorkerRequest,
 } from './feature-projection-worker-protocol';
 import { createRetainedProjectionSystems } from './retained-projection-systems';
+import { createRunningProjections } from './running-projections';
 
 interface FeatureProjectionWorkerScope {
   onmessage: ((event: MessageEvent<FeatureProjectionWorkerRequest>) => void) | null;
@@ -27,6 +28,7 @@ interface FeatureProjectionWorkerScope {
 const workerScope = globalThis as unknown as FeatureProjectionWorkerScope;
 const tierStateResolver = createRenderTierStateResolver();
 const retainedSystems = createRetainedProjectionSystems();
+const runningProjections = createRunningProjections();
 
 // Static callers ask the worker for only ordered visual collections. The
 // temporary source names below never leave this worker: their sole purpose is
@@ -56,19 +58,41 @@ const WORKER_VISUAL_SOURCE_IDS: SystemFeatureSourceMap = {
  * That avoids passing a function across `postMessage` while retaining the
  * same per-document, per-corridor 3/2 and 12/9 behavior. */
 workerScope.onmessage = (event) => {
-  void project(event.data);
+  const request = event.data;
+  // Cancellation is handled on the dispatch turn itself, so a projection
+  // suspended at a checkpoint observes the abort the moment it resumes.
+  if (request.kind === 'cancel') {
+    runningProjections.cancel(request.requestId);
+    return;
+  }
+  void project(request, runningProjections.begin(request.requestId));
 };
 
-async function project(request: FeatureProjectionWorkerRequest): Promise<void> {
+/** The single gate every reply passes through. A cancelled request must never
+ * publish, and the host has stopped waiting for its failure too, so the error
+ * reply is withheld on the same rule rather than a parallel one. */
+function reply(event: FeatureProjectionWorkerEvent): void {
+  if (!runningProjections.finish(event.requestId)) return;
+  workerScope.postMessage(event);
+}
+
+async function project(
+  request: Exclude<FeatureProjectionWorkerRequest, { kind: 'cancel' }>,
+  signal: AbortSignal,
+): Promise<void> {
   try {
     if (request.kind === 'project-pattern-overlay') {
       const { system: carried, ...overlayFacts } = request.input;
+      // No `await` separates this from the message that asked for it, so a
+      // cancel cannot land mid-overlay. `reply` still decides whether to send,
+      // which keeps "a cancelled request never publishes" one rule instead of
+      // a claim about this branch's control flow.
       const overlay = projectPatternOverlay({
         ...overlayFacts,
         system: retainedSystems.resolve(carried, 'system'),
         view: { ...request.input.view, tierStateResolver },
       });
-      workerScope.postMessage({
+      reply({
         kind: 'pattern-overlay-done',
         requestId: request.requestId,
         overlay,
@@ -78,6 +102,11 @@ async function project(request: FeatureProjectionWorkerRequest): Promise<void> {
     // Both slots are read before the first `await` below. Two projections can
     // interleave in one worker, and the later one may retain a newer document
     // while this one is still suspended.
+    //
+    // Cancellation must not skip this either. The slot the request carried is
+    // what the *next* request will name, so a cancelled projection still owes
+    // the realm its retention: bailing out early here would leave the client
+    // naming a System this worker never took.
     const {
       system: carriedSystem,
       diagramSystem: carriedDiagramSystem,
@@ -103,12 +132,20 @@ async function project(request: FeatureProjectionWorkerRequest): Promise<void> {
       counts,
     });
     if (passengerLineScene && request.input.sourceIds.includes(SRC_SERVICES)) {
+      // The only phase of a projection that can be stopped part-way. The
+      // provider yields to the host between chunks and rechecks the signal at
+      // each checkpoint, whereas `buildFeaturesForSources` above runs to
+      // completion in one turn whatever the signal says.
+      const lineSceneStartedAt = performance.now();
       const lineScene = await projectSchemaV16LineScene({
         system: diagramSystem ?? system,
         layout: diagramSystem ? 'diagram' : 'authored',
         view: request.input.view,
         sceneRevision: request.input.sceneRevision ?? `line:${system.id}:${request.requestId}`,
+        signal,
       });
+      counts.passengerLineSceneCount += 1;
+      counts.passengerLineSceneDurationMs += performance.now() - lineSceneStartedAt;
       projected = { ...projected, services: lineSceneFeatures(lineScene) };
     }
     if (passengerLineScene && request.input.sourceIds.includes(SRC_SERVICE_ARROWS)) {
@@ -124,9 +161,9 @@ async function project(request: FeatureProjectionWorkerRequest): Promise<void> {
           sourceIds: WORKER_VISUAL_SOURCE_IDS,
         }).features
       : projected;
-    workerScope.postMessage({ kind: 'done', requestId: request.requestId, features, counts });
+    reply({ kind: 'done', requestId: request.requestId, features, counts });
   } catch (error) {
-    workerScope.postMessage({
+    reply({
       kind: 'error',
       requestId: request.requestId,
       message: error instanceof Error ? error.message : 'Feature projection Worker failed.',

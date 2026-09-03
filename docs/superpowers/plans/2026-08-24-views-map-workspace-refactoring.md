@@ -159,6 +159,14 @@ apps/web/src/views/
 
 `@transitmapper/renderer` will own document projection and rendering. It will depend on `@transitmapper/core`, `@transitmapper/map`, and MapLibre types. It will import no React, editor store, application shell, viewer, or PWA code.
 
+> **Superseded, September 1, 2026:** The `@transitmapper/map` and
+> `@transitmapper/renderer` dependency claims above no longer hold. Map depends
+> on `@transitmapper/core`, `@transitmapper/renderer`, and MapLibre. The
+> renderer depends on `@transitmapper/core` alone, and neither package imports
+> `@transitmapper/views`. The two sentences stay as they were decided on
+> August 24, 2026. The current dependency direction lives in
+> [project structure](../../development/reference/project-structure.md).
+
 `@transitmapper/web` will remain the deployable composition root. It will own route hosts, application chrome content, editor commands, persistence, imports, simulation, PWA behavior, and the HTTP clients. Its main entry will lazy-load `EditorApplication` or `ViewerApplication` after `AppRoot` has rendered the shell. The non-React embed entry will import `views`, `map`, and `renderer` directly. It will not import `workspace` or an application host.
 
 The plan will not create a package for each interface. These four packages correspond to runtime and change boundaries. A View-schema change, MapLibre-runtime change, document-renderer change, and application-host change have different consumers and should invalidate different work.

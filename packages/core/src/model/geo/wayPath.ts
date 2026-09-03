@@ -101,7 +101,11 @@ const wayByIdCache = new WeakMap<Way[], Map<string, Way>>();
 export function wayById(ways: Way[]): Map<string, Way> {
   let index = wayByIdCache.get(ways);
   if (index) return index;
-  index = new Map(ways.map((w) => [w.id, w]));
+  // Avoid intermediate array allocation from ways.map(); build Map directly.
+  index = new Map<string, Way>();
+  for (const w of ways) {
+    index.set(w.id, w);
+  }
   wayByIdCache.set(ways, index);
   return index;
 }

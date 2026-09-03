@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import type { MapViewStore } from '@transitmapper/map';
+import type { MapViewStore } from '@transitmapper/core/presentation/map-presentation-state';
 
 const MapViewStoreContext = createContext<MapViewStore | null>(null);
 

@@ -79,7 +79,14 @@ Use `--skip-build` only when `apps/web/dist` is still the current instrumented
 build from a successful capture or performance run. `--profile desktop|mobile`
 and `--theme light|dark` produce a faster diagnostic subset; they intentionally
 omit the cross-surface, fixture, and filmstrip evidence that belongs to a
-complete phase boundary.
+complete phase boundary. `--fixtures shared-service-trunk,complex-diagram`
+narrows a run to those reference fixtures alone, which is how you get one
+picture of the scene under review without the sixty-odd frames of the complete
+plan. All three land in `diagnostic-` directories and never become a phase.
+
+Every step that waits on the page carries a deadline. A settle that never
+resolves fails with the fixture and camera in its message, because a capture
+that hangs silently is indistinguishable from one that is merely slow.
 
 Capture before renderer behavior changes, after every renderer phase, and
 after a later change to geometry, LOD thresholds, styling, labels, or layer
@@ -356,6 +363,44 @@ generic warning threshold is not the only guard.
 
 Missing Chrome produces an `unavailable` report and a non-zero exit. The
 harness never writes placeholder timings.
+
+## What firstMapCanvasMs actually contains
+
+`firstMapCanvasMs` is not a reading of how fast a document renders. It marks
+`tm:first-system-paint`, which fires only after the whole scene is projected,
+uploaded, indexed, bank-flipped, and painted, and it waits on a MapLibre
+`render` event. Two measurements bound what that number means.
+
+It does not scale with the document. Seeding documents from 25 ways up to the
+3,800-way RTC fixture and reading the startup marks gives first paint at
+8,482-8,525 ms across every size, while `tm:system-committed` and
+`tm:interactive` stay near 1,390 ms. A 152x increase in content moves first
+paint under 7%, so the number is a fixed cost, not a content cost. The editor
+accepts input at about 1.4 s regardless.
+
+About half that fixed cost is the basemap style. Serving a minimal
+background-only style in place of the 25 KB openfreemap style, with everything
+else unchanged, moves first paint from 8,770 ms to 4,461 ms. The cost is not
+parse volume; it is the layer construction, expression compilation, and glyph
+and source setup MapLibre performs for a full style. The editor also withholds
+that request until `contentCommitted`, so it lands on the critical path rather
+than beside it.
+
+Read the gate accordingly. A change to projection or transit content moves
+`projectionDurationMs` and the preparation counters; it barely moves
+`firstMapCanvasMs`. Treat a first-paint regression as evidence about the map
+host and the basemap, and confirm any projection claim against
+`rendererStats`, not against this metric.
+
+Headless frame production is a further floor under every frame-derived
+number. A `requestAnimationFrame` loop injected into the page runs at 1-9 fps
+with single gaps over six seconds, and neither the throttling flags the
+harness already passes, nor `--disable-gpu`, swiftshader,
+`--run-all-compositor-stages-before-draw`, `--disable-frame-rate-limit`, a CDP
+screencast, nor `HeadlessExperimental.beginFrame` changes it. Anything gated
+on a render event inherits that, which is why the renderer capture harness
+times out at a 5.5 s settlement latency here. Capture screenshots and judge
+frame-shaped metrics on a machine with a real compositor.
 
 ## Large-system persistence boundary
 

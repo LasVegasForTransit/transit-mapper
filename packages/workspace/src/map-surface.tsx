@@ -1,11 +1,41 @@
 import { useEffect, useRef } from 'react';
-import type {
-  MapDriver,
-  MapDriverAttachment,
-  MapRuntime,
-  MapViewStore,
-  SelectionController,
-} from '@transitmapper/map';
+import type { MapViewStore } from '@transitmapper/core/presentation/map-presentation-state';
+
+/**
+ * The ports this surface is handed, rather than a map implementation it names.
+ *
+ * The workspace composes a map without depending on one: apps/web injects a
+ * concrete driver and runtime from `@transitmapper/map`, which satisfy these
+ * structurally. Only the members this component actually touches appear here,
+ * so a host is free to supply something else. `Selection` stays a parameter
+ * because the surface forwards it to `attach` without ever reading it.
+ */
+export interface MapSurfaceHostPort {
+  reportError(error: unknown): void;
+}
+
+export interface MapSurfaceAttachmentPort {
+  dispose(): void;
+}
+
+export interface MapSurfaceRuntimePort<ThemeId extends string> {
+  readonly host: MapSurfaceHostPort;
+  readonly milestones: unknown;
+  requestTheme(theme: ThemeId): Promise<void>;
+  dispose(): void;
+}
+
+export interface MapSurfaceAttachOptions<Selection> {
+  host: MapSurfaceHostPort;
+  viewStore: MapViewStore;
+  selection: Selection;
+  milestones: unknown;
+  signal: AbortSignal;
+}
+
+export interface MapSurfaceDriverPort<Selection> {
+  attach(options: MapSurfaceAttachOptions<Selection>): Promise<MapSurfaceAttachmentPort>;
+}
 
 export interface MapSurfaceRuntimeOptions<ThemeId extends string> {
   container: HTMLElement;
@@ -13,9 +43,10 @@ export interface MapSurfaceRuntimeOptions<ThemeId extends string> {
   initialTheme: ThemeId;
 }
 
-export type MapSurfaceRuntimeFactory<ThemeId extends string> = (
-  options: MapSurfaceRuntimeOptions<ThemeId>,
-) => MapRuntime<ThemeId>;
+export type MapSurfaceRuntimeFactory<
+  ThemeId extends string,
+  Runtime extends MapSurfaceRuntimePort<ThemeId>,
+> = (options: MapSurfaceRuntimeOptions<ThemeId>) => Runtime;
 
 export type MapSurfaceAttachmentScheduler = (start: () => void) => () => void;
 
@@ -62,43 +93,55 @@ export function scheduleMapAttachmentAfterFirstPaint(start: () => void): () => v
   };
 }
 
-export interface MapSurfaceProps<ThemeId extends string> {
-  driver: MapDriver;
+export interface MapSurfaceProps<
+  ThemeId extends string,
+  Selection,
+  Runtime extends MapSurfaceRuntimePort<ThemeId> = MapSurfaceRuntimePort<ThemeId>,
+> {
+  driver: MapSurfaceDriverPort<Selection>;
   contentIdentity: string;
   viewStore: MapViewStore;
-  selection: SelectionController;
+  selection: Selection;
   theme: ThemeId;
-  createRuntime: MapSurfaceRuntimeFactory<ThemeId>;
+  createRuntime: MapSurfaceRuntimeFactory<ThemeId, Runtime>;
   scheduleAttachment?: MapSurfaceAttachmentScheduler;
   className?: string;
-  onRuntimeChange?: (runtime: MapRuntime<ThemeId> | null) => void;
+  onRuntimeChange?: (runtime: Runtime | null) => void;
 }
 
-interface MountedRuntime<ThemeId extends string> {
-  runtime: MapRuntime<ThemeId>;
+interface MountedRuntime<ThemeId extends string, Runtime extends MapSurfaceRuntimePort<ThemeId>> {
+  runtime: Runtime;
   theme: ThemeId;
   themeRequestGeneration: number;
 }
 
-interface MapSurfaceMountOptions<ThemeId extends string> {
+interface MapSurfaceMountOptions<
+  ThemeId extends string,
+  Selection,
+  Runtime extends MapSurfaceRuntimePort<ThemeId>,
+> {
   container: HTMLElement;
-  driver: MapDriver;
+  driver: MapSurfaceDriverPort<Selection>;
   viewStore: MapViewStore;
-  selection: SelectionController;
+  selection: Selection;
   initialTheme: ThemeId;
-  createRuntime: MapSurfaceRuntimeFactory<ThemeId>;
+  createRuntime: MapSurfaceRuntimeFactory<ThemeId, Runtime>;
   scheduleAttachment: MapSurfaceAttachmentScheduler;
-  mountedRuntimeRef: { current: MountedRuntime<ThemeId> | null };
-  runtimeChangeRef: { current: MapSurfaceProps<ThemeId>['onRuntimeChange'] };
+  mountedRuntimeRef: { current: MountedRuntime<ThemeId, Runtime> | null };
+  runtimeChangeRef: { current: MapSurfaceProps<ThemeId, Selection, Runtime>['onRuntimeChange'] };
 }
 
 interface AttachmentSlot {
-  current?: MapDriverAttachment;
+  current?: MapSurfaceAttachmentPort;
 }
 
-interface DriverAttachmentOptions<ThemeId extends string> {
-  surface: MapSurfaceMountOptions<ThemeId>;
-  runtime: MapRuntime<ThemeId>;
+interface DriverAttachmentOptions<
+  ThemeId extends string,
+  Selection,
+  Runtime extends MapSurfaceRuntimePort<ThemeId>,
+> {
+  surface: MapSurfaceMountOptions<ThemeId, Selection, Runtime>;
+  runtime: Runtime;
   signal: AbortSignal;
   attachment: AttachmentSlot;
   isDisposed(): boolean;
@@ -110,7 +153,7 @@ const startAttachmentImmediately: MapSurfaceAttachmentScheduler = (start) => {
 };
 
 function reportRuntimeError<ThemeId extends string>(
-  runtime: MapRuntime<ThemeId>,
+  runtime: MapSurfaceRuntimePort<ThemeId>,
   error: unknown,
 ): void {
   try {
@@ -120,10 +163,14 @@ function reportRuntimeError<ThemeId extends string>(
   }
 }
 
-function publishRuntimeChange<ThemeId extends string>(
-  runtime: MapRuntime<ThemeId>,
-  listener: MapSurfaceProps<ThemeId>['onRuntimeChange'],
-  next: MapRuntime<ThemeId> | null,
+function publishRuntimeChange<
+  ThemeId extends string,
+  Selection,
+  Runtime extends MapSurfaceRuntimePort<ThemeId>,
+>(
+  runtime: Runtime,
+  listener: MapSurfaceProps<ThemeId, Selection, Runtime>['onRuntimeChange'],
+  next: Runtime | null,
 ): void {
   try {
     listener?.(next);
@@ -133,8 +180,8 @@ function publishRuntimeChange<ThemeId extends string>(
 }
 
 function disposeAttachment<ThemeId extends string>(
-  runtime: MapRuntime<ThemeId>,
-  attachment: MapDriverAttachment | undefined,
+  runtime: MapSurfaceRuntimePort<ThemeId>,
+  attachment: MapSurfaceAttachmentPort | undefined,
 ): void {
   try {
     attachment?.dispose();
@@ -143,10 +190,12 @@ function disposeAttachment<ThemeId extends string>(
   }
 }
 
-function startDriverAttachment<ThemeId extends string>(
-  options: DriverAttachmentOptions<ThemeId>,
-): void {
-  let attachmentPromise: Promise<MapDriverAttachment> | undefined;
+function startDriverAttachment<
+  ThemeId extends string,
+  Selection,
+  Runtime extends MapSurfaceRuntimePort<ThemeId>,
+>(options: DriverAttachmentOptions<ThemeId, Selection, Runtime>): void {
+  let attachmentPromise: Promise<MapSurfaceAttachmentPort> | undefined;
   try {
     attachmentPromise = options.surface.driver.attach({
       host: options.runtime.host,
@@ -182,9 +231,11 @@ function startDriverAttachment<ThemeId extends string>(
   );
 }
 
-function mountMapSurfaceRuntime<ThemeId extends string>(
-  options: MapSurfaceMountOptions<ThemeId>,
-): () => void {
+function mountMapSurfaceRuntime<
+  ThemeId extends string,
+  Selection,
+  Runtime extends MapSurfaceRuntimePort<ThemeId>,
+>(options: MapSurfaceMountOptions<ThemeId, Selection, Runtime>): () => void {
   const abortController = new AbortController();
   const runtime = options.createRuntime({
     container: options.container,
@@ -243,10 +294,10 @@ function mountMapSurfaceRuntime<ThemeId extends string>(
   };
 }
 
-function requestRuntimeTheme<ThemeId extends string>(
-  mountedRuntimeRef: { current: MountedRuntime<ThemeId> | null },
-  theme: ThemeId,
-): void {
+function requestRuntimeTheme<
+  ThemeId extends string,
+  Runtime extends MapSurfaceRuntimePort<ThemeId>,
+>(mountedRuntimeRef: { current: MountedRuntime<ThemeId, Runtime> | null }, theme: ThemeId): void {
   const mountedRuntime = mountedRuntimeRef.current;
   if (mountedRuntime === null || mountedRuntime.theme === theme) return;
   mountedRuntime.theme = theme;
@@ -279,7 +330,11 @@ function serializedCamera(viewStore: MapViewStore): string {
   return `${center[0]},${center[1]},${zoom}`;
 }
 
-export function MapSurface<ThemeId extends string>({
+export function MapSurface<
+  ThemeId extends string,
+  Selection,
+  Runtime extends MapSurfaceRuntimePort<ThemeId>,
+>({
   driver,
   contentIdentity,
   viewStore,
@@ -289,9 +344,9 @@ export function MapSurface<ThemeId extends string>({
   scheduleAttachment = startAttachmentImmediately,
   className,
   onRuntimeChange,
-}: MapSurfaceProps<ThemeId>) {
+}: MapSurfaceProps<ThemeId, Selection, Runtime>) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mountedRuntimeRef = useRef<MountedRuntime<ThemeId> | null>(null);
+  const mountedRuntimeRef = useRef<MountedRuntime<ThemeId, Runtime> | null>(null);
   const themeRef = useRef(theme);
   const onRuntimeChangeRef = useRef(onRuntimeChange);
   themeRef.current = theme;

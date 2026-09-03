@@ -64,7 +64,9 @@ interface ViewerRuntimePorts {
   readonly reportError: (error: unknown) => void;
 }
 
-function viewerRuntimeFactory(ports: ViewerRuntimePorts): MapSurfaceRuntimeFactory<ColorScheme> {
+function viewerRuntimeFactory(
+  ports: ViewerRuntimePorts,
+): MapSurfaceRuntimeFactory<ColorScheme, MapRuntime<ColorScheme>> {
   return ({ container, viewStore, initialTheme }) => {
     const viewerLayers = (theme: ColorScheme) =>
       viewerLayerSpecsForState(layerSpecsForScheme(theme), viewStore.getSnapshot());
@@ -148,13 +150,14 @@ export function ViewerMapSurface({ system, viewStore, selection, onError }: View
       }),
     [onSessionChange, selection, system, viewStore],
   );
-  const [createRuntime] = useState<MapSurfaceRuntimeFactory<ColorScheme>>(() =>
-    viewerRuntimeFactory({
-      runtime: runtimeRef,
-      session: sessionRef,
-      activeTheme: activeThemeRef,
-      reportError: (error) => onErrorRef.current(error),
-    }),
+  const [createRuntime] = useState<MapSurfaceRuntimeFactory<ColorScheme, MapRuntime<ColorScheme>>>(
+    () =>
+      viewerRuntimeFactory({
+        runtime: runtimeRef,
+        session: sessionRef,
+        activeTheme: activeThemeRef,
+        reportError: (error) => onErrorRef.current(error),
+      }),
   );
   const [scheduleAttachment] = useState<MapSurfaceAttachmentScheduler>(
     () => (start: () => void) => {

@@ -16,6 +16,15 @@ export interface SourceFeatureProjectionCounts
   rendererCandidateFeatureCount: number;
   rendererGeneratedFeatureCount: number;
   rendererGeneratedVertexCount: number;
+  /** Passenger Line scenes resolved, and the wall time they took.
+   *
+   * The Line scene is built inside the worker entry rather than by the
+   * source projector, so none of the counters above see it. On a 3,800-way
+   * network it is the largest single cost of a cold projection, and its
+   * absence from the stats meant a measured projection could get faster
+   * while the thing dominating it stayed dark. */
+  passengerLineSceneCount: number;
+  passengerLineSceneDurationMs: number;
 }
 
 export function createSourceFeatureProjectionCounts(): SourceFeatureProjectionCounts {
@@ -28,6 +37,8 @@ export function createSourceFeatureProjectionCounts(): SourceFeatureProjectionCo
     rendererCandidateFeatureCount: 0,
     rendererGeneratedFeatureCount: 0,
     rendererGeneratedVertexCount: 0,
+    passengerLineSceneCount: 0,
+    passengerLineSceneDurationMs: 0,
   };
 }
 

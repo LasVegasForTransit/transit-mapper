@@ -45,6 +45,35 @@ describe('canonical value encoding', () => {
     const withAccessor = Object.defineProperty({}, 'value', { enumerable: true, get: () => 1 });
     const arrayWithProperty = [1] as number[] & { label?: string };
     arrayWithProperty.label = 'one';
+    // An index key is validated by round-tripping it through Number, so these
+    // are the forms that survive `Number` but are not the key an index writes.
+    const paddedIndexKey = Object.defineProperty([] as unknown[], '01', {
+      value: 1,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+    const spacedIndexKey = Object.defineProperty([] as unknown[], ' 0', {
+      value: 1,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+    const symbolKeyed = [1] as number[];
+    Object.defineProperty(symbolKeyed, Symbol('marker'), { value: 1, enumerable: true });
+    // '-1' survives the Number round trip, so only the range check rejects it.
+    const negativeIndexKey = Object.defineProperty([] as unknown[], '-1', {
+      value: 1,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+    const indexBeyondLength = Object.defineProperty([] as unknown[], '4', {
+      value: 1,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
 
     const invalidValues: readonly (readonly [name: string, value: unknown])[] = [
       ['NaN', Number.NaN],
@@ -67,6 +96,11 @@ describe('canonical value encoding', () => {
       ['an unpaired low surrogate', '\udc00'],
       ['an accessor property', withAccessor],
       ['an array with a named property', arrayWithProperty],
+      ['an array with a zero-padded index key', paddedIndexKey],
+      ['an array with a space-prefixed index key', spacedIndexKey],
+      ['an array with a symbol property', symbolKeyed],
+      ['an array with an index past its length', indexBeyondLength],
+      ['an array with a negative index key', negativeIndexKey],
       ['a cyclic object', cyclic],
     ];
 

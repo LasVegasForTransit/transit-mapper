@@ -143,6 +143,11 @@ export interface LiveMapRendererSnapshot {
 /** One concrete runtime object rather than a collection of public pipeline
  * adapters. Its methods are phrased in scene, layer, and recovery vocabulary
  * because those are the decisions MapCanvas genuinely owns. */
+/** Chosen to stay well inside a frame on the throttled hardware the budgets
+ * are measured on, rather than to be as large as possible: a slice that
+ * overruns a frame trades a faster first paint for a visibly stalled one. */
+const COLD_START_SLICE_BUDGET_MS = 24;
+
 export class LiveMapRenderer {
   private readonly banks: SourceBankController;
   private readonly layers: SourceBankLayerController;
@@ -169,7 +174,14 @@ export class LiveMapRenderer {
         // slice preserves that reserve while allowing a second ready unit in
         // the same frame instead of stretching cold startup across hundreds
         // of virtual-display animation frames.
-        budgetMs: 8,
+        //
+        // A slice still costs a whole frame, so the wall time to a first paint
+        // is the slice count times the frame interval, whatever each slice
+        // spends. Until something is on screen there is no interaction for the
+        // reserve to protect, so cold start takes a larger slice and reaches
+        // the first accepted scene in fewer frames. Every slice after that one
+        // is back to 8 ms.
+        budgetMs: () => (this.hasAcceptedScene() ? 8 : COLD_START_SLICE_BUDGET_MS),
         now: () => options.host.now(),
         scheduleFrame: (callback) => options.host.scheduleFrame(callback),
         cancelFrame: (handle) => options.host.cancelFrame(handle),

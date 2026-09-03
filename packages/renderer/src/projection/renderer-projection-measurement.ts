@@ -32,6 +32,8 @@ interface ProjectionCountBaseline {
   readonly visibleFeatureCount: number;
   readonly generatedVertexCount: number;
   readonly tierTransitionCount: number;
+  readonly passengerLineSceneCount: number;
+  readonly passengerLineSceneDurationMs: number;
 }
 
 function projectionCountBaseline(counts: SourceFeatureProjectionCounts): ProjectionCountBaseline {
@@ -48,6 +50,8 @@ function projectionCountBaseline(counts: SourceFeatureProjectionCounts): Project
     visibleFeatureCount: counts.rendererGeneratedFeatureCount,
     generatedVertexCount: counts.rendererGeneratedVertexCount,
     tierTransitionCount: counts.featureTierTransitionCount,
+    passengerLineSceneCount: counts.passengerLineSceneCount,
+    passengerLineSceneDurationMs: counts.passengerLineSceneDurationMs,
   };
 }
 
@@ -67,6 +71,9 @@ function projectionSample(
     cacheHitCount: current.cacheHitCount - baseline.cacheHitCount,
     cacheMissCount: current.cacheMissCount - baseline.cacheMissCount,
     tierTransitionCount: current.tierTransitionCount - baseline.tierTransitionCount,
+    passengerLineSceneCount: current.passengerLineSceneCount - baseline.passengerLineSceneCount,
+    passengerLineSceneDurationMs:
+      current.passengerLineSceneDurationMs - baseline.passengerLineSceneDurationMs,
   };
 }
 

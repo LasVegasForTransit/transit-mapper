@@ -60,6 +60,13 @@ function emptyStats(): CooperativeRenderJobSchedulerStats {
   };
 }
 
+function requireBudget(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new RangeError('The cooperative render budget must be a finite positive number.');
+  }
+  return value;
+}
+
 export class CooperativeRenderUnitBudgetError extends Error {
   readonly budgetMs: number;
   readonly durationMs: number;
@@ -93,22 +100,29 @@ type MutableSchedulerStats = {
 };
 
 class CooperativeRenderJobSchedulerImplementation implements CooperativeRenderJobScheduler {
-  private readonly budgetMs: number;
+  private readonly sliceBudgetMs: () => number;
   /** Half the slice is the largest legal indivisible unit. Once that reserve
    * has been consumed, yielding before another unit guarantees two legal
    * worst-case units cannot turn a 4 ms slice into an 8 ms frame. */
-  private readonly unitBudgetMs: number;
+  private readonly unitBudgetMs: () => number;
   private readonly stats = emptyStats() as MutableSchedulerStats;
   private nextGeneration = 0;
   private active: ScheduledRenderJob | null = null;
   private disposed = false;
 
   constructor(private readonly options: CooperativeRenderJobSchedulerOptions) {
-    this.budgetMs = options.budgetMs ?? 4;
-    if (!Number.isFinite(this.budgetMs) || this.budgetMs <= 0) {
-      throw new RangeError('The cooperative render budget must be a finite positive number.');
-    }
-    this.unitBudgetMs = this.budgetMs / 2;
+    // A slice costs a whole frame whether it spends 1 ms or 20, so wall time
+    // tracks the slice count rather than the budget. A caller that knows
+    // nothing is interactive yet — a cold start with nothing painted — can
+    // raise the budget to reach the first paint in fewer frames.
+    const budget = options.budgetMs ?? 4;
+    const resolve = typeof budget === 'function' ? budget : () => budget;
+    this.sliceBudgetMs = () => requireBudget(resolve());
+    this.unitBudgetMs = () => this.sliceBudgetMs() / 2;
+    // A fixed budget is wrong at construction or never; a resolved one cannot
+    // be read yet, because a caller's budget may depend on state it assigns
+    // after building the scheduler. That one is checked on first use.
+    if (typeof budget === 'number') requireBudget(budget);
   }
 
   submit<Result>(job: CooperativeRenderJob<Result>): CooperativeRenderJobHandle {
@@ -256,7 +270,7 @@ class CooperativeRenderJobSchedulerImplementation implements CooperativeRenderJo
   }
 
   private unitReserveReached(sliceStartedAt: number): boolean {
-    return this.options.now() - sliceStartedAt >= this.unitBudgetMs;
+    return this.options.now() - sliceStartedAt >= this.unitBudgetMs();
   }
 
   private yieldJob(job: ScheduledRenderJob, sliceStartedAt: number): void {
@@ -285,13 +299,13 @@ class CooperativeRenderJobSchedulerImplementation implements CooperativeRenderJo
       return false;
     }
     const unitId = unit?.id ?? `descriptor:${job.nextUnitIndex}:complete`;
-    if (durationMs > this.unitBudgetMs && !this.canYieldOverBudget(job, unitId)) {
+    if (durationMs > this.unitBudgetMs() && !this.canYieldOverBudget(job, unitId)) {
       this.fail(job, this.unitBudgetError(job, unitId, durationMs), sliceStartedAt);
       return false;
     }
     if (unit) job.pendingUnit = unit;
     else job.unitsExhausted = true;
-    if (durationMs > this.unitBudgetMs) {
+    if (durationMs > this.unitBudgetMs()) {
       this.yieldJob(job, sliceStartedAt);
       return false;
     }
@@ -317,7 +331,7 @@ class CooperativeRenderJobSchedulerImplementation implements CooperativeRenderJo
       this.finishSlice(job, sliceStartedAt);
       return false;
     }
-    const unitBudgetMs = unit.sliceExclusive ? this.budgetMs : this.unitBudgetMs;
+    const unitBudgetMs = unit.sliceExclusive ? this.sliceBudgetMs() : this.unitBudgetMs();
     if (unitDurationMs > unitBudgetMs && !this.canYieldOverBudget(job, unit.id)) {
       this.fail(
         job,
@@ -366,7 +380,7 @@ class CooperativeRenderJobSchedulerImplementation implements CooperativeRenderJo
     job: ScheduledRenderJob,
     unitId: string,
     durationMs: number,
-    budgetMs = this.unitBudgetMs,
+    budgetMs = this.unitBudgetMs(),
   ): CooperativeRenderUnitBudgetError {
     return new CooperativeRenderUnitBudgetError({
       budgetMs,

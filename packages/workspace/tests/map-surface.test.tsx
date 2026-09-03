@@ -7,9 +7,9 @@ import {
   createSelectionController,
   type MapDriverAttachOptions,
   type MapDriverAttachment,
-  type MapRuntime,
 } from '@transitmapper/map';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type MapSurfaceRuntimePort } from '../src/map-surface';
 import {
   baseProps,
   createAttachment,
@@ -333,7 +333,7 @@ describe('MapSurface', () => {
       return Promise.resolve(attachment);
     });
     const runtime = createRuntimeHarness(() => events.push('runtime'));
-    const onRuntimeChange = vi.fn((next: MapRuntime<TestTheme> | null) => {
+    const onRuntimeChange = vi.fn((next: MapSurfaceRuntimePort<TestTheme> | null) => {
       if (next === null) events.push('runtime-null');
     });
     const mounted = await mountSurface({
@@ -359,7 +359,7 @@ describe('MapSurface', () => {
       return Promise.resolve(attachment);
     });
     const runtime = createRuntimeHarness(() => events.push('runtime'));
-    const onRuntimeChange = vi.fn((next: MapRuntime<TestTheme> | null) => {
+    const onRuntimeChange = vi.fn((next: MapSurfaceRuntimePort<TestTheme> | null) => {
       if (next !== null) return;
       events.push('runtime-null');
       throw callbackFailure;

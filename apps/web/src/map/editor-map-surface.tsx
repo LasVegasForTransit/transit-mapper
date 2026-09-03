@@ -42,13 +42,17 @@ import type { EditorMapDriverPorts, EditorMapStyleBridge } from './editor-map-po
 import { createEditorMapStartupScheduler } from './editor-map-startup';
 import { initialBaseStyleTiming } from './basemapLoading';
 
+/** The concrete runtime this host builds, named once so the three places that
+ * mention it stay readable. */
+type EditorRuntimeFactory = MapSurfaceRuntimeFactory<ColorScheme, MapRuntime<ColorScheme>>;
+
 export interface EditorMapSurfaceFrameProps {
   readonly driver: MapDriver;
   readonly contentIdentity: string;
   readonly viewStore: MapViewStore;
   readonly selection: SelectionController;
   readonly theme: ColorScheme;
-  readonly createRuntime: MapSurfaceRuntimeFactory<ColorScheme>;
+  readonly createRuntime: EditorRuntimeFactory;
   readonly scheduleAttachment?: MapSurfaceAttachmentScheduler;
   readonly onRuntimeChange?: (runtime: MapRuntime<ColorScheme> | null) => void;
   readonly children?: ReactNode;
@@ -258,8 +262,8 @@ export function EditorMapSurface({
     });
   });
 
-  const [createRuntime] = useState<MapSurfaceRuntimeFactory<ColorScheme>>(() => {
-    const factory: MapSurfaceRuntimeFactory<ColorScheme> = ({
+  const [createRuntime] = useState<EditorRuntimeFactory>(() => {
+    const factory: EditorRuntimeFactory = ({
       container,
       viewStore: runtimeViewStore,
       initialTheme,

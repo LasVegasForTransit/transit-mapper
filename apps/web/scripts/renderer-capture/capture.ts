@@ -9,7 +9,11 @@ import {
   stopPreview,
   type RunningPreview,
 } from '../perf/process';
-import { RENDERER_CAPTURE_ARTIFACT_ROOT, type RendererCaptureCliOptions } from './cli';
+import {
+  RENDERER_CAPTURE_ARTIFACT_ROOT,
+  rendererCaptureIsComplete,
+  type RendererCaptureCliOptions,
+} from './cli';
 import { configureRendererCaptureBaseUrl } from './capture-browser';
 import { captureContextEvidence } from './capture-contexts';
 import { buildRendererContactSheet } from './capture-contact-sheet';
@@ -77,6 +81,11 @@ async function captureEvidence(
   options: RendererCaptureCliOptions,
 ): Promise<RendererCaptureManifestEntry[]> {
   const imageDirectory = resolve(options.outputDirectory, 'images');
+  // A named fixture selection is the fast diagnostic path: one picture of the
+  // scene under review rather than the sixty-odd of the full evidence plan.
+  if (options.fixtures.length > 0) {
+    return captureReferenceFixtures(browser, imageDirectory, options.phase, options.fixtures);
+  }
   const entries = await captureEditorMatrix(browser, options, imageDirectory);
   if (options.profile !== 'all' || options.theme !== 'all') return entries;
   entries.push(
@@ -119,14 +128,15 @@ export async function runRendererCapture(options: RendererCaptureCliOptions): Pr
       options.outputDirectory,
       await captureEvidence(browser, options),
     );
+    const complete = rendererCaptureIsComplete(options);
     const lodAcceptance =
-      options.phase === '01-lod' && options.profile === 'all' && options.theme === 'all'
+      options.phase === '01-lod' && complete
         ? await captureRendererLodAcceptance(browser, options.outputDirectory, source)
         : undefined;
     const manifest: RendererCaptureManifest = {
       schemaVersion: 1,
       phase: options.phase,
-      complete: options.profile === 'all' && options.theme === 'all',
+      complete,
       selection: { profile: options.profile, theme: options.theme },
       generatedAt: new Date().toISOString(),
       source,

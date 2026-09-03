@@ -90,6 +90,20 @@ export type FeatureProjectionWorkerRequest =
       readonly kind: 'project-pattern-overlay';
       readonly requestId: number;
       readonly input: PatternOverlayWorkerInput;
+    }
+  /**
+   * Stop the named request; it names no document because the worker already
+   * holds everything it needs to identify one.
+   *
+   * This exists so that superseding a projection costs nothing but the
+   * projection. Terminating the worker also reclaimed its CPU, but it threw
+   * away the retained Systems and the described-content cache with it, and a
+   * pan supersedes continuously — which is how both caches came to be paid for
+   * and never used.
+   */
+  | {
+      readonly kind: 'cancel';
+      readonly requestId: number;
     };
 
 export type FeatureProjectionWorkerEvent =

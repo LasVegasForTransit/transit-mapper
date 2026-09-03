@@ -92,15 +92,28 @@ interface BundleCandidate {
 
 const textEncoder = new TextEncoder();
 
-function compareText(left: string, right: string): number {
-  const leftBytes = textEncoder.encode(left);
-  const rightBytes = textEncoder.encode(right);
+function compareTextBytes(leftBytes: Uint8Array, rightBytes: Uint8Array): number {
   const length = Math.min(leftBytes.length, rightBytes.length);
   for (let index = 0; index < length; index += 1) {
     const difference = (leftBytes[index] ?? 0) - (rightBytes[index] ?? 0);
     if (difference !== 0) return difference;
   }
   return leftBytes.length - rightBytes.length;
+}
+
+/** A comparator runs O(n log n) times over the same n strings, so encoding
+ * inside it re-encodes each one for every comparison it takes part in. The
+ * cache lives for one sort and is keyed by the exact string, so the ordering
+ * is the one `compareText` would have produced. */
+function textBytesMemo(): (text: string) => Uint8Array {
+  const cache = new Map<string, Uint8Array>();
+  return (text) => {
+    const existing = cache.get(text);
+    if (existing !== undefined) return existing;
+    const encoded = textEncoder.encode(text);
+    cache.set(text, encoded);
+    return encoded;
+  };
 }
 
 function digestCanonicalValue(value: unknown): Promise<string> {
@@ -125,18 +138,23 @@ function membersFor(
     if (lineSpans === undefined) spansByLineId.set(span.lineId, [span]);
     else lineSpans.push(span);
   }
+  const lineIdBytes = textBytesMemo();
   const members = [...spansByLineId]
     .sort(([leftLineId], [rightLineId]) => {
       const rankDifference = (ranks.get(leftLineId) ?? 0) - (ranks.get(rightLineId) ?? 0);
-      return rankDifference === 0 ? compareText(leftLineId, rightLineId) : rankDifference;
+      return rankDifference === 0
+        ? compareTextBytes(lineIdBytes(leftLineId), lineIdBytes(rightLineId))
+        : rankDifference;
     })
-    .map(([lineId, lineSpans]) => ({
-      lineId,
-      spans: [...lineSpans].sort((left, right) => compareText(left.id, right.id)) as [
-        LineSpan,
-        ...LineSpan[],
-      ],
-    }));
+    .map(([lineId, lineSpans]) => {
+      const spanIdBytes = textBytesMemo();
+      return {
+        lineId,
+        spans: [...lineSpans].sort((left, right) =>
+          compareTextBytes(spanIdBytes(left.id), spanIdBytes(right.id)),
+        ) as [LineSpan, ...LineSpan[]],
+      };
+    });
   const [first, ...rest] = members;
   return [first, ...rest];
 }

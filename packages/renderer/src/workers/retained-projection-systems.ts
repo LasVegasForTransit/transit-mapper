@@ -9,6 +9,11 @@
  * Retention is per worker realm, which is what makes it safe: the client owns
  * every worker it creates, and forgets what it believes a worker holds the
  * moment it replaces or disposes one.
+ *
+ * A cancelled projection still owes the realm its retention. The entry resolves
+ * both slots before its first `await`, so a document a request carried is held
+ * before any cancel for that request can be dispatched — and the request that
+ * superseded it is entitled to name that slot.
  */
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { ProjectionSystemCarriage } from './feature-projection-worker-protocol';

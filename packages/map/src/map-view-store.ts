@@ -3,19 +3,11 @@ import {
   type MapCameraStateV1,
   type MapFilterValue,
   type MapPresentationStateV1,
-  type RepresentationId,
+  type MapViewStore,
+  type MapViewStoreListener,
 } from '@transitmapper/core/presentation/map-presentation-state';
 
-export type MapViewStoreListener = (state: MapPresentationStateV1) => void;
-
-export interface MapViewStore {
-  getSnapshot(): MapPresentationStateV1;
-  replace(next: MapPresentationStateV1): void;
-  setCamera(camera: MapCameraStateV1): void;
-  setRepresentationId(representationId: RepresentationId): void;
-  setFilter(id: string, value: MapFilterValue): void;
-  subscribe(listener: MapViewStoreListener): () => void;
-}
+export type { MapViewStore, MapViewStoreListener };
 
 function freezeFilterValue(value: MapFilterValue): MapFilterValue {
   if (typeof value === 'boolean' || typeof value === 'string') return value;

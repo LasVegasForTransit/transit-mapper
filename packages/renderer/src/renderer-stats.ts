@@ -5,6 +5,8 @@ export interface RendererProjectionSample {
   /** User-observed wall time from submission until the accepted live scene. */
   settlementLatencyMs: number;
   candidateFeatureCount: number;
+  passengerLineSceneCount: number;
+  passengerLineSceneDurationMs: number;
   visibleFeatureCount: number;
   generatedVertexCount: number;
   cacheHitCount: number;
@@ -45,6 +47,8 @@ export interface RendererStatsSnapshot {
   maxProjectionDurationMs: number;
   projectionSettlementLatencyMs: number;
   maxProjectionSettlementLatencyMs: number;
+  passengerLineSceneCount: number;
+  passengerLineSceneDurationMs: number;
   candidateFeatureCount: number;
   visibleFeatureCount: number;
   generatedVertexCount: number;
@@ -105,6 +109,8 @@ function emptyRendererStats(): RendererStatsSnapshot {
     projectionSettlementLatencyMs: 0,
     maxProjectionSettlementLatencyMs: 0,
     candidateFeatureCount: 0,
+    passengerLineSceneCount: 0,
+    passengerLineSceneDurationMs: 0,
     visibleFeatureCount: 0,
     generatedVertexCount: 0,
     cacheHitCount: 0,
@@ -155,6 +161,8 @@ function enabledRendererStatsCollector(): RendererStatsCollector {
         sample.settlementLatencyMs,
       );
       stats.candidateFeatureCount += sample.candidateFeatureCount;
+      stats.passengerLineSceneCount += sample.passengerLineSceneCount;
+      stats.passengerLineSceneDurationMs += sample.passengerLineSceneDurationMs;
       stats.visibleFeatureCount += sample.visibleFeatureCount;
       stats.generatedVertexCount += sample.generatedVertexCount;
       stats.cacheHitCount += sample.cacheHitCount;

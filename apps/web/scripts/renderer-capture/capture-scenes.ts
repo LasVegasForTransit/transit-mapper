@@ -14,6 +14,7 @@ import {
   RENDERER_FIXTURE_DESCRIPTORS,
 } from '../../src/perf/renderer-fixtures';
 import { createPerfProtocol } from '../../src/perf/scenarios';
+import type { RendererFixtureId } from '../../src/perf/renderer-fixture-types';
 import type { PerfProfileId } from '../../src/perf/types';
 import type { RendererCaptureCliOptions } from './cli';
 import {
@@ -212,9 +213,14 @@ export async function captureReferenceFixtures(
   browser: Browser,
   imageDirectory: string,
   phase: string,
+  only: readonly RendererFixtureId[] = [],
 ): Promise<RendererCaptureManifestEntry[]> {
+  const wanted = new Set<string>(only);
+  const descriptors = RENDERER_FIXTURE_DESCRIPTORS.filter(
+    (descriptor) => wanted.size === 0 || wanted.has(descriptor.id),
+  );
   const entries: RendererCaptureManifestEntry[] = [];
-  for (const descriptor of RENDERER_FIXTURE_DESCRIPTORS) {
+  for (const descriptor of descriptors) {
     entries.push(await captureReferenceFixture({ browser, imageDirectory, phase, descriptor }));
   }
   return entries;

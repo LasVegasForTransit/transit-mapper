@@ -45,6 +45,7 @@
     "verify": "vitest run"
   },
   "devDependencies": {
+    "@transitmapper/map": "workspace:*",
     "@transitmapper/tsconfig": "workspace:*",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
@@ -54,7 +55,7 @@
     "vitest": "catalog:"
   },
   "dependencies": {
-    "@transitmapper/map": "workspace:*"
+    "@transitmapper/core": "workspace:*"
   },
   "peerDependencies": {
     "react": "catalog:"

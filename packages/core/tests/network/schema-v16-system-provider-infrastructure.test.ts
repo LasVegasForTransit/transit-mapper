@@ -201,6 +201,9 @@ describe('schema-v16 system infrastructure provider', () => {
         approachControls: { 'incoming:end': { control: 'stop' } },
         turnRestrictions: { 'incoming:through-lane': { allowedTargets: [] } },
       }),
+      // Street is the only band that carries carriageway facts, and this case
+      // asserts how they transfer rather than which band asks for them.
+      { ...worldQuery, detailBand: 'street' },
     );
 
     expect(infrastructure.approachControls).toEqual([

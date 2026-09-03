@@ -5,6 +5,13 @@
  * editor generation. A canceled request may finish in the worker, but its
  * detached result can never publish a MapLibre source or replace an accepted
  * scene on the main thread.
+ *
+ * That is what makes supersession correct; a cancel message is what makes it
+ * cheap. Superseding used to terminate the worker, which was the only way to
+ * reclaim the CPU of a projection already running — and it also discarded the
+ * realm's retained Systems and its provider caches. A pan supersedes on every
+ * source mutation, so those caches were rebuilt on every frame. The worker is
+ * now told which request to abandon, and it keeps everything else.
  */
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
@@ -177,13 +184,17 @@ export class FeatureProjectionWorkerClient
 
   private createWorker(): FeatureProjectionWorker {
     // A worker realm starts empty. Forgetting here rather than at each call
-    // site is what stops the abort path from naming a retained System that
-    // the replacement was never sent.
+    // site is what stops a replacement from being named a retained System it
+    // was never sent.
     this.retained.clear();
     const worker = this.workerFactory();
     worker.onmessage = (event) => this.handleMessage(event.data);
+    // Rejecting the pending callers is not enough on its own. Nothing says
+    // what a worker that has raised an error still holds, so leaving it in
+    // place would let the next request name a retained System against a realm
+    // that may no longer have one.
     worker.onerror = (event) =>
-      this.failPending(new Error(event.message || 'Feature Worker failed.'));
+      this.replaceWorker(new Error(event.message || 'Feature Worker failed.'));
     return worker;
   }
 
@@ -203,7 +214,7 @@ export class FeatureProjectionWorkerClient
     if (signal?.aborted) return Promise.reject(projectionAbortedError());
     const requestId = this.nextRequestId++;
     return new Promise<FeatureProjectionResult>((resolve, reject) => {
-      const abort = () => this.replaceWorker(projectionAbortedError());
+      const abort = () => this.cancelRequest(requestId);
       signal?.addEventListener('abort', abort, { once: true });
       this.pending.set(requestId, {
         resolve,
@@ -234,7 +245,7 @@ export class FeatureProjectionWorkerClient
     if (signal?.aborted) return Promise.reject(projectionAbortedError());
     const requestId = this.nextRequestId++;
     return new Promise<PatternOverlayFeatures>((resolve, reject) => {
-      const abort = () => this.replaceWorker(projectionAbortedError());
+      const abort = () => this.cancelRequest(requestId);
       signal?.addEventListener('abort', abort, { once: true });
       this.pendingPatternOverlays.set(requestId, {
         resolve,
@@ -292,8 +303,40 @@ export class FeatureProjectionWorkerClient
     rejectAllPendingWorkerRequests(this.pendingPatternOverlays, error);
   }
 
+  /**
+   * Supersession is a fact about one request, not about the worker's lifetime.
+   *
+   * The caller is rejected here and now, because it must not wait on a realm
+   * that may be mid-chunk. The worker is only asked to stop, and it keeps
+   * everything it holds: the retained Systems and the described-content cache
+   * both survive, which is the entire reason a pan no longer re-sends and
+   * re-describes the document on every frame.
+   */
+  private cancelRequest(requestId: number): void {
+    if (this.disposed) return;
+    if (!this.pending.has(requestId) && !this.pendingPatternOverlays.has(requestId)) return;
+    this.rejectRequest(requestId, projectionAbortedError());
+    try {
+      this.worker.postMessage({ kind: 'cancel', requestId });
+    } catch {
+      // A worker too broken to take a three-field message is one `onerror` is
+      // about to replace anyway, and this caller has already been rejected.
+      // Letting the failure out would throw from inside `AbortController.abort`
+      // at whichever camera or edit handler superseded the projection.
+    }
+  }
+
+  /**
+   * A worker that raised `error` has no usable realm left: its retained
+   * Systems and provider caches are unreachable, and nothing says how far its
+   * running projections got. `createWorker` forgets the retention the dead
+   * realm held, so the replacement is sent every document it needs.
+   *
+   * Supersession does not come here. It cancels by request id and leaves the
+   * realm — and everything it has cached — standing.
+   */
   private replaceWorker(error: Error): void {
-    if (this.disposed || this.pending.size === 0) return;
+    if (this.disposed) return;
     const previous = this.worker;
     previous.onmessage = null;
     previous.onerror = null;

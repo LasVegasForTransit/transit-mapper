@@ -8,6 +8,7 @@ import {
   type MapDriverAttachOptions,
   type MapDriverAttachment,
   type MapRuntime,
+  type SelectionController,
 } from '@transitmapper/map';
 import { vi, type Mock } from 'vitest';
 import { MapSurface, type MapSurfaceProps } from '../../src/map-surface';
@@ -38,7 +39,7 @@ export interface TestAttachment extends MapDriverAttachment {
 export interface MountedSurface {
   root: Root;
   host: HTMLDivElement;
-  render(props: MapSurfaceProps<TestTheme>): Promise<void>;
+  render(props: MapSurfaceProps<TestTheme, SelectionController>): Promise<void>;
   unmount(): Promise<void>;
 }
 
@@ -117,8 +118,8 @@ export function takeNext<Value>(values: Value[]): Value {
 
 export function baseProps(
   driver: MapDriver,
-  createRuntime: MapSurfaceProps<TestTheme>['createRuntime'],
-): MapSurfaceProps<TestTheme> {
+  createRuntime: MapSurfaceProps<TestTheme, SelectionController>['createRuntime'],
+): MapSurfaceProps<TestTheme, SelectionController> {
   return {
     driver,
     contentIdentity: 'document-a',
@@ -129,11 +130,13 @@ export function baseProps(
   };
 }
 
-export async function mountSurface(props: MapSurfaceProps<TestTheme>): Promise<MountedSurface> {
+export async function mountSurface(
+  props: MapSurfaceProps<TestTheme, SelectionController>,
+): Promise<MountedSurface> {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
-  const render = async (nextProps: MapSurfaceProps<TestTheme>) => {
+  const render = async (nextProps: MapSurfaceProps<TestTheme, SelectionController>) => {
     await act(async () => {
       root.render(<MapSurface {...nextProps} />);
       await Promise.resolve();

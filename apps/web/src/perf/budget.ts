@@ -41,6 +41,27 @@ function violatesAbsolute(metric: PerfMetricName, actual: number, limit: number)
   return actual > limit;
 }
 
+/**
+ * What the run actually looked like, beside the one number that failed.
+ *
+ * A startup gate reads `percentile(samples, 95)`, and with five samples that
+ * expression returns the largest of them: `ceil(0.95 * 5) - 1` is index 4 of
+ * 5. So the gate is the worst run, and on a shared CI machine the worst run
+ * moves several seconds between jobs while the median barely moves. Reading
+ * one failure told you nothing about whether a change helped, which is how a
+ * 16.5-second map paint reached main unnoticed and how an improvement to it
+ * was mistaken for noise in the other direction.
+ *
+ * The threshold is untouched. Only the report says more.
+ */
+function sampleShape(report: PerfReport, scenarioId: string, metric: PerfMetricName): string {
+  const summary = report.scenarios.find((scenario) => scenario.scenarioId === scenarioId)?.metrics[
+    metric
+  ];
+  if (!summary || summary.samples === 0) return '';
+  return ` (median ${summary.median}, min ${summary.min}, max ${summary.max}, n=${summary.samples})`;
+}
+
 function absoluteViolations(options: EvaluatePerfBudgetsOptions): PerfBudgetViolation[] {
   const violations: PerfBudgetViolation[] = [];
   for (const scenario of options.scenarios) {
@@ -54,7 +75,9 @@ function absoluteViolations(options: EvaluatePerfBudgetsOptions): PerfBudgetViol
           metric,
           actual,
           limit,
-          message: `${scenario.id} ${metric} is ${actual}; the absolute budget is ${limit}.`,
+          message:
+            `${scenario.id} ${metric} is ${actual}; the absolute budget is ${limit}.` +
+            sampleShape(options.report, scenario.id, metric),
         });
       }
     }
