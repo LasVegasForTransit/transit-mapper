@@ -3,7 +3,10 @@ import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { aRoad, aSystem } from '@transitmapper/core/testing/fixtures';
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { EffectCallback } from 'react';
+import type * as ReactModule from 'react';
 import { emptySystemFeatures } from '@transitmapper/renderer/layers';
+import type * as RendererProjectionModule from '@transitmapper/renderer/projection';
+import type * as MapLayersModule from '../../src/map/layers';
 
 interface FakeSource {
   setData: (data: GeoJSON.FeatureCollection) => void;
@@ -39,7 +42,7 @@ interface ProjectionRequest {
 }
 
 vi.mock('@transitmapper/renderer/projection', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@transitmapper/renderer/projection')>();
+  const actual = await importOriginal<typeof RendererProjectionModule>();
   return {
     ...actual,
     createFeatureProjectionWorker: () => ({
@@ -53,7 +56,7 @@ vi.mock('@transitmapper/renderer/projection', async (importOriginal) => {
 });
 
 vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
+  const actual = await importOriginal<typeof ReactModule>();
   return {
     ...actual,
     useEffect: (effect: EffectCallback) => {
@@ -163,7 +166,7 @@ vi.mock('maplibre-gl', () => {
 });
 
 vi.mock('../../src/map/layers', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/map/layers')>();
+  const actual = await importOriginal<typeof MapLayersModule>();
   return { ...actual, registerMapIcons: vi.fn() };
 });
 

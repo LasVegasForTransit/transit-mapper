@@ -40,13 +40,14 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.build.json --noEmit && tsc -p tsconfig.json --noEmit",
+    "check-types": "tsc -p tsconfig.build.json --noEmit && tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
-    "verify": "vitest run"
+    "test": "vitest run"
   },
   "devDependencies": {
+    "@lvbt/typescript-config": "catalog:",
+    "@lvbt/vitest-config": "catalog:",
     "@transitmapper/map": "workspace:*",
-    "@transitmapper/tsconfig": "workspace:*",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "jsdom": "catalog:",

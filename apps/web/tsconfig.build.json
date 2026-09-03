@@ -6,13 +6,17 @@
 // makes this the file that decides what `src` may reference: a source file
 // that reaches for `process` compiles under the wide config and fails here.
 {
-  "extends": "@transitmapper/tsconfig/base.json",
+  "extends": "@lvbt/typescript-config/browser.json",
   "compilerOptions": {
     "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "allowImportingTsExtensions": true,
-    "jsx": "react-jsx",
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    // Adoption debt, not a deliberate stance: the standard turns both flags
+    // on unconditionally, and this app has never been checked under either.
+    // Pay this down package by package rather than in the same change that
+    // swaps in the shared config.
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false
   },
   "include": ["src"]
 }

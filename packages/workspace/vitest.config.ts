@@ -1,10 +1,12 @@
-import { configDefaults, defineConfig } from 'vitest/config';
+import { defineConfig } from 'vitest/config';
+
+import { sharedConfig } from '@lvbt/vitest-config';
 
 export default defineConfig({
+  ...sharedConfig,
   test: {
+    ...sharedConfig.test,
     environment: 'node',
-    include: ['tests/**/*.test.{ts,tsx}'],
-    exclude: [...configDefaults.exclude, 'tests/support/**'],
     passWithNoTests: true,
   },
 });

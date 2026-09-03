@@ -18,8 +18,8 @@
     "perf:freeze-497a549": "tsx scripts/perf/freeze-497a549-baseline.ts",
     "perf:soak": "tsx scripts/perf/run.ts --soak",
     "renderer:capture": "tsx scripts/renderer-capture/run.ts",
-    "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
-    "verify": "vitest run",
+    "check-types": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
+    "test": "vitest run",
     "lint": "eslint ."
   },
   "dependencies": {
@@ -38,7 +38,8 @@
     "zustand": "catalog:"
   },
   "devDependencies": {
-    "@transitmapper/tsconfig": "workspace:*",
+    "@lvbt/typescript-config": "catalog:",
+    "@lvbt/vitest-config": "catalog:",
     "@types/geojson": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

@@ -12,15 +12,7 @@
  * uncommitted work. CI runs it, where the tree is disposable.
  */
 import { spawnSync } from 'node:child_process';
-import {
-  rmSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmdirSync,
-  writeFileSync,
-} from 'node:fs';
+import { rmSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -155,18 +147,27 @@ function assertTestLayoutGuard(): void {
   }
 }
 
+// A package that ships no code is exempt from the required lint/check-types/
+// test scripts, but not from the test-layout rule — a stray testing/
+// directory has to be rejected whether or not the package that holds it ships
+// code at all. There is no such package left in the workspace to borrow, so
+// this scaffolds a throwaway one rather than reaching for a real package.
 function assertNonCodePackageLayoutGuard(): void {
-  const directory = resolve(ROOT, 'packages/tsconfig/testing');
-  const fixture = resolve(directory, 'gencheck-fixture.json');
-  const directoryExisted = existsSync(directory);
+  const directory = resolve(ROOT, 'packages/gencheck-noncode');
+  const testingDirectory = resolve(directory, 'testing');
+  const fixture = resolve(testingDirectory, 'gencheck-fixture.json');
 
-  mkdirSync(directory, { recursive: true });
+  mkdirSync(testingDirectory, { recursive: true });
+  writeFileSync(
+    resolve(directory, 'package.json'),
+    '{\n  "name": "@transitmapper/gencheck-noncode",\n  "private": true\n}\n',
+    'utf8',
+  );
   writeFileSync(fixture, '{}\n', 'utf8');
   try {
-    assertContractRejects('packages/tsconfig/testing/gencheck-fixture.json');
+    assertContractRejects('packages/gencheck-noncode/testing/gencheck-fixture.json');
   } finally {
-    rmSync(fixture, { force: true });
-    if (!directoryExisted) rmdirSync(directory);
+    rmSync(directory, { recursive: true, force: true });
   }
 }
 

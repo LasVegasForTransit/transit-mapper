@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$(git rev-parse --show-toplevel)/plugins/lvbt-contributions/hooks/codex-pre-tool-use.mjs\"",
+            "command": "node \"$(git rev-parse --show-toplevel)/node_modules/@lvbt/cli/plugins/lvbt-contributions/hooks/codex-pre-tool-use.mjs\"",
             "timeout": 10
           }
         ]

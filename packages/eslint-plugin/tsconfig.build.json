@@ -1,14 +1,18 @@
 // Production sources only. See tsconfig.json beside this one for why the split
 // exists.
 {
-  "extends": "@transitmapper/tsconfig/base.json",
+  "extends": "@lvbt/typescript-config/node.json",
   "compilerOptions": {
-    "lib": ["ES2022"],
-    "types": ["node"],
     // The package's `exports` map points at TypeScript source rather than a
     // build, so its own modules import each other with a `.ts` suffix. Nothing
     // here emits, which is what makes that legal.
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    // Adoption debt, not a deliberate stance: the standard turns both flags
+    // on unconditionally, and this package has never been checked under
+    // either. Pay this down package by package rather than in the same
+    // change that swaps in the shared config.
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false
   },
   "include": ["src"]
 }

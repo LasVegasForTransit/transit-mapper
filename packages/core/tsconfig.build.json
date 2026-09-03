@@ -1,17 +1,24 @@
-// Production sources only, and the authority on what core is allowed to be.
+// Production sources only.
 //
 // `tsconfig.json` beside this one is deliberately wider — it exists so editors
 // and type-aware lint can place every file in the package — which means it is
 // not the file to reach for when tightening what `src` may depend on. Tighten
 // here.
 {
-  "extends": "@transitmapper/tsconfig/base.json",
+  "extends": "@lvbt/typescript-config/base.json",
   "compilerOptions": {
     // DOM only for the ambient fetch/crypto/structuredClone typings (part of
     // lib.dom.d.ts) — core has no actual DOM/browser dependency, but these
     // WHATWG globals are what both consumers (browser + Workers runtime)
     // provide at runtime, and core must type-check standalone for either.
-    "lib": ["ES2022", "DOM"]
+    "lib": ["ES2024", "DOM"],
+    // Adoption debt, not a deliberate stance: the standard turns both flags
+    // on unconditionally, and core has never been checked under either. Pay
+    // this down package by package rather than in the same change that swaps
+    // in the shared config, so a real typecheck regression is never buried
+    // under thousands of unrelated findings.
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false
   },
   "include": ["src"]
 }

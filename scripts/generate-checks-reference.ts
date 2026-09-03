@@ -113,12 +113,6 @@ const CHECKS: Check[] = [
     fix: 'add the section or cut the phrase — see docs/development/reference/document-standards.md',
   },
   {
-    command: 'check:repository-tooling',
-    fails:
-      'the pinned LVBT contribution plugin, agent hooks, or inherited-template policy has drifted',
-    fix: 'restore the files from the pinned repository-tooling release, or upgrade the pin and adapters together',
-  },
-  {
     command: 'check:reference',
     fails: 'this page no longer matches the registry it is generated from',
     fix: 'pnpm gen:checks',

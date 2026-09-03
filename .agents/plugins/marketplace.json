@@ -8,7 +8,7 @@
       "name": "lvbt-contributions",
       "source": {
         "source": "local",
-        "path": "../../plugins/lvbt-contributions"
+        "path": "../../node_modules/@lvbt/cli/plugins/lvbt-contributions"
       },
       "policy": {
         "installation": "AVAILABLE",

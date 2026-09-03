@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
-    "verify": "node --conditions=development --import tsx tests/verify.test.ts && vitest run",
+    "check-types": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
+    "test": "node --conditions=development --import tsx tests/verify.test.ts && vitest run",
     "deploy": "wrangler deploy",
     "lint": "eslint .",
     "types": "wrangler types",
@@ -20,7 +20,8 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
     "@cloudflare/workers-types": "catalog:",
-    "@transitmapper/tsconfig": "workspace:*",
+    "@lvbt/typescript-config": "catalog:",
+    "@lvbt/vitest-config": "catalog:",
     "tsx": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"

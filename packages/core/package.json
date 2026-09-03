@@ -8,15 +8,16 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
+    "check-types": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
     "lint": "eslint .",
-    "verify": "vitest run --coverage"
+    "test": "vitest run --coverage"
   },
   "dependencies": {
     "fflate": "catalog:"
   },
   "devDependencies": {
-    "@transitmapper/tsconfig": "workspace:*",
+    "@lvbt/typescript-config": "catalog:",
+    "@lvbt/vitest-config": "catalog:",
     "@types/geojson": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "vitest": "catalog:"

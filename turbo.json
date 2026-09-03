@@ -1,5 +1,16 @@
 {
   "$schema": "https://turborepo.com/schema.json",
+  "globalEnv": [
+    "CI",
+    "DEV",
+    "PROD",
+    "PORT",
+    "DEBT_BASE_REF",
+    "MIGRATION_BASE_REF",
+    "CLOUDFLARE_ACCOUNT_ID",
+    "CLOUDFLARE_API_TOKEN",
+    "GTFS_FEED_SLUG"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -20,9 +31,9 @@
         "VITE_SITE_URL"
       ]
     },
-    "typecheck": {
-      "dependsOn": ["^typecheck"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/tsconfig/*.json"],
+    "check-types": {
+      "dependsOn": ["^check-types"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/node_modules/@lvbt/typescript-config/*.json"],
       "outputs": ["*.tsbuildinfo"]
     },
     "lint": {
@@ -33,9 +44,9 @@
       ],
       "outputs": []
     },
-    "verify": {
-      "dependsOn": ["^typecheck"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/tsconfig/*.json"],
+    "test": {
+      "dependsOn": ["^check-types"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/node_modules/@lvbt/typescript-config/*.json"],
       "outputs": []
     },
     "check:types": {
@@ -59,8 +70,8 @@
     "validate": {
       "dependsOn": [
         "lint",
-        "typecheck",
-        "verify",
+        "check-types",
+        "test",
         "check:types",
         "check:icons",
         "//#format:check",
@@ -79,7 +90,6 @@
         "//#check:duplication",
         "//#check:boundaries",
         "//#check:documents",
-        "//#check:repository-tooling",
         "//#check:reference"
       ],
       "outputs": []
@@ -167,18 +177,6 @@
         "$TURBO_ROOT$/LICENSE",
         "$TURBO_ROOT$/docs/**",
         "$TURBO_ROOT$/scripts/check-document-standards.ts"
-      ],
-      "outputs": []
-    },
-    "//#check:repository-tooling": {
-      "inputs": [
-        "$TURBO_ROOT$/.agents/plugins/marketplace.json",
-        "$TURBO_ROOT$/.claude/settings.json",
-        "$TURBO_ROOT$/.codex/hooks.json",
-        "$TURBO_ROOT$/.lvbt/repository-tooling.json",
-        "$TURBO_ROOT$/AGENTS.md",
-        "$TURBO_ROOT$/plugins/lvbt-contributions/**",
-        "$TURBO_ROOT$/scripts/check-repository-tooling.ts"
       ],
       "outputs": []
     },

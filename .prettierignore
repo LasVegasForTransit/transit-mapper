@@ -15,9 +15,6 @@ CHANGELOG.md
 # typings. Regenerate it, never hand-edit it.
 apps/worker/worker-configuration.d.ts
 
-# Installed verbatim from the pinned organization release. Local formatting
-# would change the checksum and silently fork the shared agent tooling.
-plugins/lvbt-contributions/
 
 # Generator templates. Prettier infers the `glimmer` parser from .hbs and
 # reformats them as Handlebars markup, which collapses every newline in what

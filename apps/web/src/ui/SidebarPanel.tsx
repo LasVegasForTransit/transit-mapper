@@ -14,11 +14,11 @@ import type { EditorCommands, EditorState, Selection } from '../editor/store';
 import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import { useDocumentView, type RepresentationId } from '../editor/document-view-controls';
 import { Icon } from './Icon';
+import type { servicesForSidebarLine } from './sidebarOutline';
 import {
   infrastructureOutlineProjection,
   limitSidebarItems,
   networkLineRows,
-  servicesForSidebarLine,
   sidebarTabStopKey,
   type SidebarLineRow,
   type SidebarInfrastructureItem,

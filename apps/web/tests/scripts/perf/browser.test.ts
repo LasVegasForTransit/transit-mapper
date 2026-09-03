@@ -1,11 +1,12 @@
 import type { Page } from 'playwright-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as FsPromisesModule from 'node:fs/promises';
 import { PERF_SCENARIOS } from '../../../src/perf/scenarios';
 
 const readFile = vi.hoisted(() => vi.fn(() => Promise.resolve('<html>embed</html>')));
 
 vi.mock('node:fs/promises', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:fs/promises')>()),
+  ...(await importOriginal<typeof FsPromisesModule>()),
   readFile,
 }));
 

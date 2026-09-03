@@ -18,8 +18,7 @@ function restoreDialogMethod(name: 'close' | 'showModal', descriptor?: PropertyD
   Reflect.deleteProperty(HTMLDialogElement.prototype, name);
 }
 
-function finishClosing(dialog: HTMLDialogElement): void {
-  void dialog;
+function finishClosing(_dialog: HTMLDialogElement): void {
   act(() => {
     vi.advanceTimersByTime(200);
   });

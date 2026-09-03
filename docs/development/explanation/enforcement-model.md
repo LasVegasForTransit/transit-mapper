@@ -119,13 +119,15 @@ can ever see it, and it is a denied read in `.claude/settings.json`.
 Creating a GitHub item is another action with no repository artifact. The
 pinned LVBT plugin therefore blocks direct creation in Codex and Claude and
 routes agents through the same readable structure humans receive from
-GitHub. `check:repository-tooling` verifies the pinned files and wiring, but
-GitHub does not police issue or pull request prose after creation.
+GitHub, but GitHub does not police issue or pull request prose after
+creation.
 
 The durable rules remain testable without an agent process. CI does not run
-either harness, but `check:repository-tooling` verifies that their generated
-adapters still point at the same pinned plugin release and that the portable
-rule remains declared in `AGENTS.md`.
+either harness, but the plugin ships inside `@lvbt/cli`, pinned in
+`pnpm-workspace.yaml`'s catalog like any other dependency — so drift in which
+release a checkout runs shows up as an ordinary `check:contract` failure
+("pins X to Y instead of catalog:") rather than needing a check of its own,
+and the portable rule remains declared in `AGENTS.md`.
 
 ## Rules
 

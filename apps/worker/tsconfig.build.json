@@ -7,10 +7,14 @@
 // reaching for something only Node provides compiles under the wide config and
 // fails here.
 {
-  "extends": "@transitmapper/tsconfig/base.json",
+  "extends": "@lvbt/typescript-config/worker.json",
   "compilerOptions": {
-    "lib": ["ES2022"],
-    "types": ["@cloudflare/workers-types"]
+    // Adoption debt, not a deliberate stance: the standard turns both flags
+    // on unconditionally, and this app has never been checked under either.
+    // Pay this down package by package rather than in the same change that
+    // swaps in the shared config.
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false
   },
   "include": ["src", "worker-configuration.d.ts"]
 }

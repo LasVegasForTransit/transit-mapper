@@ -36,7 +36,7 @@ says **nothing**, the rule holds only because you follow it.
 | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
 | `packages/core` uses no browser-only globals                                    | core is typechecked against the browser _and_ workerd; a browser global compiles and then throws in production           | `lint`                          |
 | A migration that exists is never edited, renamed, or deleted                    | Wrangler records applied migrations by name and never re-runs one it has seen, so an edit silently diverges environments | `check:migrations`              |
-| Every package declares `lint`, `typecheck`, `verify`                            | a package missing one is skipped by Turborepo without an error, and CI stays green while it goes unchecked               | `check:contract`                |
+| Every package declares `lint`, `check-types`, `test`                            | a package missing one is skipped by Turborepo without an error, and CI stays green while it goes unchecked               | `check:contract`                |
 | Every dependency version comes from the catalog                                 | two packages on different versions of one library is invisible until it breaks                                           | `check:contract`                |
 | Recognizable test material lives under the owning module's root `tests/` tree   | Production trees stay navigable, and runner globs cannot silently omit a colocated test                                  | `check:contract`                |
 | Test-only support lives under the owning module's root `tests/support/` tree    | A generic `support/` directory has no test-specific signal, so this semantic boundary depends on contributors            | **nothing**                     |
@@ -86,7 +86,7 @@ Then, in the same change:
 ## Add a test
 
 Tests run on Vitest and on a `check()`-based suite that predates it.
-`pnpm verify` runs both.
+`pnpm test` runs both.
 
 - `apps/worker/tests/verify.test.ts` is a sequential script: one store is
   built at module scope and mutated in order, so each section depends on
@@ -148,9 +148,9 @@ pull request. It carries the organization checklist, readable templates, and
 the only approved creation helper:
 
 ```bash
-node plugins/lvbt-contributions/scripts/github-create.mjs issue \
+node node_modules/@lvbt/cli/plugins/lvbt-contributions/scripts/github-create.mjs issue \
   --type bug|feature --title <title> --body-file <file>
-node plugins/lvbt-contributions/scripts/github-create.mjs pr \
+node node_modules/@lvbt/cli/plugins/lvbt-contributions/scripts/github-create.mjs pr \
   --title <title> --body-file <file> --base main
 ```
 
@@ -162,6 +162,7 @@ re-fetches what GitHub stored, and returns the verified URL.
 
 Humans use the native organization issue forms and pull request template.
 Agents use the same visible structure; there are no hidden markers or
-GitHub-side prose checks. `pnpm check:repository-tooling` verifies that this
-repository still consumes the pinned organization release without shadowing
-its inherited templates.
+GitHub-side prose checks. The plugin ships inside `@lvbt/cli`, pinned in
+`pnpm-workspace.yaml`'s catalog like any other dependency, so `check:contract`
+— which already rejects a dependency pinned outside the catalog — is what
+keeps this repository from silently drifting onto a shadowed or stale copy.

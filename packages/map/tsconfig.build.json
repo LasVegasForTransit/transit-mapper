@@ -1,9 +1,8 @@
 // Production sources only. See tsconfig.json beside this one for why the split
 // exists.
 {
-  "extends": "@transitmapper/tsconfig/base.json",
+  "extends": "@lvbt/typescript-config/browser.json",
   "compilerOptions": {
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     // `@transitmapper/renderer` sources resolve through the `development`
     // condition, and two of them read `import.meta.env`.
     "types": ["vite/client"],
@@ -12,7 +11,13 @@
     "outDir": "dist",
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    // Adoption debt, not a deliberate stance: the standard turns both flags
+    // on unconditionally, and this package has never been checked under
+    // either. Pay this down package by package rather than in the same
+    // change that swaps in the shared config.
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false
   },
   "include": ["src"]
 }
