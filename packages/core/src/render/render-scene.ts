@@ -105,13 +105,25 @@ function renderTierOrder(feature: RenderFeature): number {
   return 0;
 }
 
+function semanticPaintOrder(feature: RenderFeature): number {
+  const order: unknown = feature.properties?.renderOrder;
+  return typeof order === 'number' && Number.isFinite(order) ? order : 0;
+}
+
 /** Canonical order is also paint order. Stable-ID sorting alone can place a
  * Street feature below its District predecessor, reversing source-over LOD
  * composition even though both scenes contain the same data. Tier order is
  * therefore semantic; IDs remain the deterministic tie-break within a tier. */
 export function compareRenderPaintOrder(left: RenderFeature, right: RenderFeature): number {
   const tierDifference = renderTierOrder(left) - renderTierOrder(right);
-  return tierDifference || left.id.localeCompare(right.id);
+  // Some scene producers know a semantic order that cannot enter feature IDs.
+  // Line order is one example: changing it changes paint order, but changing a
+  // stable feature ID would make the differential publisher discard identity.
+  return (
+    tierDifference ||
+    semanticPaintOrder(left) - semanticPaintOrder(right) ||
+    left.id.localeCompare(right.id)
+  );
 }
 
 /** Validates and canonicalizes a resolved scene before any renderer consumes it.

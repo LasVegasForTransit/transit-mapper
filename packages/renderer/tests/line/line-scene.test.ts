@@ -87,7 +87,8 @@ describe('Line scene', () => {
 
     expect(casings).toHaveLength(1);
     expect(stripes).toHaveLength(1);
-    expect(stringProperty(stripes[0]!, 'lineId')).toBe('shared-line');
+    const [stripe] = stripes;
+    expect(stringProperty(stripe, 'lineId')).toBe('shared-line');
   });
 
   it('keeps a singleton Line as one casing and one stripe', async () => {
