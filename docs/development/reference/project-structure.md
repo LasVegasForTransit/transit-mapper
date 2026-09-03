@@ -81,16 +81,17 @@ The package depends on map, treats React as a peer, and imports no editor state.
 
 ### Renderer
 
-`packages/renderer` owns document projection, source banks, recovery, workers,
-and two `MapDriver` implementations. `DocumentMapDriver` publishes changing
-editor documents through `LiveMapRenderer`. `SnapshotMapDriver` projects one
-fixed system for readers through an injected feature-projection Worker. Hosts
-construct the Worker client and can attach neutral session extensions to either
-driver. The package depends on core, map, views, and MapLibre. Its bounded
-entries include `driver`, `snapshot`, `layers`, `projection`,
-`projection-worker`, `runtime`, and `stats`.
+`packages/renderer` owns projection, source banks, recovery, workers, and both
+`MapDriver` implementations. `DocumentMapDriver` publishes editor documents.
+`SnapshotMapDriver` projects one reader system through a host-supplied Worker.
+Hosts may attach session extensions. Its bounded entries are `driver`,
+`snapshot`, `layers`, `projection`, `projection-worker`, `runtime`, and `stats`.
 
-`packages/renderer/src/layers` owns stable source and layer identities.
+`packages/renderer/src/layers` owns source and layer identities.
+`packages/renderer/src/network` rejects conflicting duplicates before indexing
+facts. `packages/renderer/src/line` binds Pattern legs to one Line, filters
+carrier partitions by visible seeds, and splits spans before clipping.
+`packages/renderer/src/line` validates result-bound topology windows.
 `packages/renderer/src/projection` owns feature building, preparation,
 cooperative scheduling, resumable work, and projection measurements behind the
 bounded `projection` entry.
@@ -110,9 +111,10 @@ reporting. `MapSurface` owns the stable MapLibre runtime. An injected
 
 ### Core
 
-`packages/core` owns deterministic logic shared by the editor and Worker. It
-is consumed directly from TypeScript source and must run without browser-only
-globals in both the browser and workerd.
+`packages/core` contains browser-and-workerd logic. `packages/core/src/encoding`,
+`packages/core/src/geography`, `packages/core/src/presentation`,
+`packages/core/src/source`, and `packages/core/src/transit` own provider-neutral
+transfer values.
 
 #### Domain model
 
@@ -128,6 +130,13 @@ metadata, and stop reanchoring each have one owner. Lines are public identities
 over technical Services. Stops are anchored boarding points; Stations are
 optional physical places containing Stops. Diagram layout is a pure facade
 returning one `DiagramLayoutResult`, with no MapLibre or editor dependency.
+
+#### Transit content resolution
+
+`packages/core/src/network` owns provider-neutral queries, bounded results,
+carrier-to-Alignment mapping, and same-Line closure for visible
+`(Line, carrier)` pairs. Its schema-v16 adapter has no renderer or storage
+dependency.
 
 #### Geometry
 

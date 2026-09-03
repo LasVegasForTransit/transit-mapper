@@ -28,6 +28,22 @@
       "types": "./dist/layers.d.ts",
       "import": "./dist/layers.js"
     },
+    "./line": {
+      "development": {
+        "types": "./src/line.ts",
+        "import": "./src/line.ts"
+      },
+      "types": "./dist/line.d.ts",
+      "import": "./dist/line.js"
+    },
+    "./network": {
+      "development": {
+        "types": "./src/network.ts",
+        "import": "./src/network.ts"
+      },
+      "types": "./dist/network.d.ts",
+      "import": "./dist/network.js"
+    },
     "./projection": {
       "development": {
         "types": "./src/projection.ts",

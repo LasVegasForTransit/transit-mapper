@@ -1,5 +1,6 @@
 import type { Feature, LineString, Point } from 'geojson';
 import { describe, expect, it } from 'vitest';
+import type { TransitEntityRef } from '../../src/model/transit-entity-ref';
 import {
   createRenderIdentityIndex,
   renderDomainIdentity,
@@ -8,6 +9,21 @@ import {
 } from '../../src/render/render-identity';
 
 describe('render identity', () => {
+  it('uses one transit entity identity for all of its visual fragments', () => {
+    const sourceId = systemFeatureSourceId('lines');
+    const line = { kind: 'line', id: 'blue:east' } satisfies TransitEntityRef;
+    const lineIdentity = renderDomainIdentity(line);
+    const casing = renderFeatureId(sourceId, 'casing', ['blue:east']);
+    const fill = renderFeatureId(sourceId, 'fill', ['blue:east']);
+
+    const index = createRenderIdentityIndex([
+      { domainIdentity: lineIdentity, renderFeatureIds: [fill, casing, fill] },
+    ]);
+
+    expect(lineIdentity).toBe(renderDomainIdentity('line', 'blue:east'));
+    expect(index.renderFeatureIdsByDomain.get(lineIdentity)).toEqual([casing, fill]);
+  });
+
   it('creates stable role-qualified IDs without delimiter collisions', () => {
     const sourceId = systemFeatureSourceId('services');
 
