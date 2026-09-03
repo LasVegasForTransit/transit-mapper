@@ -8,7 +8,10 @@ import type {
   DocumentMapSession,
   DocumentMapSessionAttachment,
 } from '@transitmapper/renderer/driver';
-import type { FeatureProjectionClient } from '@transitmapper/renderer/projection';
+import type {
+  FeatureProjectionClient,
+  PatternOverlayProjectionClient,
+} from '@transitmapper/renderer/projection';
 import type { AcceptedSceneUpdate } from '@transitmapper/renderer/runtime';
 import type { SceneTargetResolver } from '../map/editor-feature-state';
 import type { ProjectionOperationCounts } from '../map/gestureProjection';
@@ -30,7 +33,7 @@ interface EditorMapLayerOptions {
 }
 
 interface EditorMapProjectionOptions {
-  createWorker(): FeatureProjectionClient;
+  createWorker(): FeatureProjectionClient & PatternOverlayProjectionClient;
   readonly gestureCounts: ProjectionOperationCounts;
   overlayNeedsHealing(): boolean;
   beginAccounting(): EditorProjectionAccounting;

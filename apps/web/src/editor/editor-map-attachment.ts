@@ -220,7 +220,7 @@ function attachEditorStoreSubscription(context: EditorAttachmentContext): void {
             });
       if (
         selectionUpdate.updateEditorSources ||
-        selectionUpdate.updateServiceTermini ||
+        selectionUpdate.updatePatternOverlay ||
         editorSourcesNeedSystemRefresh(changedSources, documentChanged)
       ) {
         projection.schedule();

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
-import { aRoad, aSystem } from '@transitmapper/core/testing/fixtures';
+import { aRoad, aService, aSystem } from '@transitmapper/core/testing/fixtures';
 import type { Selection } from '../../src/editor/store';
+import * as editorOverlays from '../../src/map/editor-overlays';
 import {
   canApplyEditorSourceUpdate,
   editorOverlayWorkerInput,
@@ -38,6 +39,33 @@ function state(
 }
 
 describe('selection render updates', () => {
+  it('maps an explicit Path edit to one semantic Pattern request', () => {
+    const service = aService('blue', []);
+    const system = aSystem({ services: [service] });
+    const candidate = (editorOverlays as Record<string, unknown>).editorPatternOverlayWorkerInput;
+
+    expect(candidate).toBeTypeOf('function');
+    if (typeof candidate !== 'function') return;
+    const input = candidate({
+      system,
+      selection: { kind: 'service', id: service.id },
+      activePatternId: service.path.id,
+      armedTerminus: null,
+      view: editorView,
+    }) as { serviceId: string; patternId: string } | null;
+
+    expect(input).toMatchObject({ serviceId: service.id, patternId: service.path.id });
+    expect(
+      candidate({
+        system,
+        selection: { kind: 'service', id: service.id },
+        activePatternId: null,
+        armedTerminus: null,
+        view: editorView,
+      }),
+    ).toBeNull();
+  });
+
   it('describes editor geometry as an isolated worker request', () => {
     const system = aSystem();
 
@@ -50,7 +78,7 @@ describe('selection render updates', () => {
       }),
     ).toMatchObject({
       system,
-      sourceIds: ['tm-handles', 'tm-service-termini', 'tm-physical-handles'],
+      sourceIds: ['tm-handles', 'tm-physical-handles'],
       selectionOwnedConnectors: false,
     });
   });
@@ -92,12 +120,12 @@ describe('selection render updates', () => {
     ] satisfies Exclude<Selection, null>[]) {
       expect(planSelectionRenderUpdate(state(null), state(selection))).toEqual({
         updateEditorSources: true,
-        updateServiceTermini: false,
+        updatePatternOverlay: false,
       });
     }
   });
 
-  it('refreshes termini only when visible service-owned state changes', () => {
+  it('refreshes an opened Pattern only when visible service-owned state changes', () => {
     const selected = state({ kind: 'service', id: 'service-a' }, { activePatternId: 'pattern-a' });
     const armed = {
       serviceId: 'service-a',
@@ -105,30 +133,30 @@ describe('selection render updates', () => {
       side: 'end' as const,
     };
 
-    expect(planSelectionRenderUpdate(state(null), selected).updateServiceTermini).toBe(true);
-    expect(planSelectionRenderUpdate(selected, state(null)).updateServiceTermini).toBe(true);
+    expect(planSelectionRenderUpdate(state(null), selected).updatePatternOverlay).toBe(true);
+    expect(planSelectionRenderUpdate(selected, state(null)).updatePatternOverlay).toBe(true);
     expect(
       planSelectionRenderUpdate(
         selected,
         state({ kind: 'service', id: 'service-b' }, { activePatternId: 'pattern-a' }),
-      ).updateServiceTermini,
+      ).updatePatternOverlay,
     ).toBe(true);
     expect(
       planSelectionRenderUpdate(selected, { ...selected, activePatternId: 'pattern-b' })
-        .updateServiceTermini,
+        .updatePatternOverlay,
     ).toBe(true);
     expect(
       planSelectionRenderUpdate(selected, { ...selected, armedTerminus: armed })
-        .updateServiceTermini,
+        .updatePatternOverlay,
     ).toBe(true);
   });
 
-  it('does not reproject termini for unrelated clicks or semantically identical state', () => {
+  it('does not reproject an opened Pattern for unrelated clicks or equal state', () => {
     const before = state({ kind: 'station', id: 'station-a' });
     const after = state({ kind: 'facility', id: 'facility-a' });
     expect(planSelectionRenderUpdate(before, after)).toEqual({
       updateEditorSources: true,
-      updateServiceTermini: false,
+      updatePatternOverlay: false,
     });
 
     const sameService = state(
@@ -150,13 +178,13 @@ describe('selection render updates', () => {
         selection: { kind: 'service', id: 'service-a' },
         armedTerminus: { ...armedTerminus },
       }),
-    ).toEqual({ updateEditorSources: false, updateServiceTermini: false });
+    ).toEqual({ updateEditorSources: false, updatePatternOverlay: false });
   });
 
   it('updates editor handles without termini when only the active way changes', () => {
     expect(planSelectionRenderUpdate(state(null), state(null, { activeWayId: 'way-a' }))).toEqual({
       updateEditorSources: true,
-      updateServiceTermini: false,
+      updatePatternOverlay: false,
     });
   });
 

@@ -18,14 +18,17 @@ import { widthPxAtZ14 } from '@transitmapper/core/render/constants';
 import { renderFeatureId, systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
 import type { RenderViewOptions, SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 import type { EditorState, Selection } from '../editor/store';
-import { SRC_CONNECTORS } from '@transitmapper/renderer/layers';
+import { SRC_CONNECTORS, SRC_HANDLES, SRC_PHYSICAL_HANDLES } from '@transitmapper/renderer/layers';
 import {
   buildFeaturesForSources,
   type SourceFeatureProjectionCounts,
 } from '@transitmapper/renderer/projection';
 import type { MapSystemFeatureSourceId } from '@transitmapper/renderer/layers';
 import { EDITOR_SYSTEM_FEATURE_SOURCES } from '@transitmapper/renderer/layers';
-import type { FeatureProjectionClientInput } from '@transitmapper/renderer/projection';
+import type {
+  FeatureProjectionClientInput,
+  PatternOverlayClientInput,
+} from '@transitmapper/renderer/projection';
 
 const CONNECTOR_SOURCE_ID = systemFeatureSourceId(SRC_CONNECTORS);
 
@@ -43,7 +46,7 @@ export interface SelectionRenderState {
 
 export interface SelectionRenderUpdatePlan {
   updateEditorSources: boolean;
-  updateServiceTermini: boolean;
+  updatePatternOverlay: boolean;
 }
 
 /** Everything needed to derive the editor's small, selection-owned sources.
@@ -62,6 +65,16 @@ export interface EditorOverlayProjection {
   readonly activePatternId?: string | null;
   readonly armedTerminus?: RenderedArmedTerminus | null;
   readonly counts?: SourceFeatureProjectionCounts;
+}
+
+/** The editor maps its transient selection to semantic overlay input here.
+ * The renderer never receives a Zustand selection or a raw MapLibre object. */
+export interface EditorPatternOverlayProjection {
+  readonly system: TransitSystem;
+  readonly selection: Selection;
+  readonly activePatternId: string | null;
+  readonly armedTerminus: RenderedArmedTerminus | null;
+  readonly view: RenderViewOptions;
 }
 
 const EDITOR_SOURCE_SET = new Set<MapSystemFeatureSourceId>(EDITOR_SYSTEM_FEATURE_SOURCES);
@@ -87,12 +100,45 @@ export function editorOverlayWorkerInput({
     selection,
     handleWayIds: [...handleWayIds],
     view,
-    sourceIds: EDITOR_SYSTEM_FEATURE_SOURCES,
+    // Pattern termini now belong to the dedicated overlay source. Keeping
+    // them out of this generic request prevents duplicate markers when a
+    // person opens a path.
+    sourceIds: [SRC_HANDLES, SRC_PHYSICAL_HANDLES],
     physicalHandleStationId,
     physicalHandleGroupId,
     activePatternId,
     armedTerminus,
     selectionOwnedConnectors: false,
+  };
+}
+
+/** An ordinary Service selection remains an inspection state. Only an explicit
+ * Path action supplies an active Pattern ID and therefore requests its exact
+ * operational geometry from the worker. */
+export function editorPatternOverlayWorkerInput({
+  system,
+  selection,
+  activePatternId,
+  armedTerminus,
+  view,
+}: EditorPatternOverlayProjection): PatternOverlayClientInput | null {
+  if (selection?.kind !== 'service' || !activePatternId) return null;
+  const service = system.services.find((candidate) => candidate.id === selection.id);
+  if (!service || service.path.id !== activePatternId) return null;
+  const armed =
+    armedTerminus?.serviceId === service.id && armedTerminus.patternId === activePatternId
+      ? {
+          serviceId: armedTerminus.serviceId,
+          patternId: armedTerminus.patternId,
+          side: armedTerminus.side,
+        }
+      : null;
+  return {
+    system,
+    serviceId: service.id,
+    patternId: activePatternId,
+    view,
+    armedTerminus: armed,
   };
 }
 
@@ -158,8 +204,8 @@ function armedTerminusKey(terminus: RenderedArmedTerminus | null): string | null
 }
 
 /** Classify ephemeral editor changes without involving settled scene
- * projection. Handles, junction guides, and feature state are lightweight;
- * service termini alone still need their small derived source refreshed. */
+ * projection. Handles, junction guides, and an explicitly opened Pattern are
+ * lightweight editor state rather than a committed scene mutation. */
 export function planSelectionRenderUpdate(
   before: SelectionRenderState,
   after: SelectionRenderState,
@@ -167,7 +213,7 @@ export function planSelectionRenderUpdate(
   const beforeServiceId = selectedServiceId(before.selection);
   const afterServiceId = selectedServiceId(after.selection);
   const selectedServiceChanged = beforeServiceId !== afterServiceId;
-  const visibleServiceStateChanged =
+  const patternOverlayChanged =
     afterServiceId !== null &&
     (before.activePatternId !== after.activePatternId ||
       armedTerminusKey(before.armedTerminus) !== armedTerminusKey(after.armedTerminus));
@@ -176,7 +222,7 @@ export function planSelectionRenderUpdate(
     updateEditorSources:
       selectionKey(before.selection) !== selectionKey(after.selection) ||
       before.activeWayId !== after.activeWayId,
-    updateServiceTermini: selectedServiceChanged || visibleServiceStateChanged,
+    updatePatternOverlay: selectedServiceChanged || patternOverlayChanged,
   };
 }
 
