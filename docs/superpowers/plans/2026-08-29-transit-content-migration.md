@@ -1,503 +1,498 @@
-# Transit content migration plan
+# Transit content migration implementation plan
 
-For TransitMapper maintainers: use this plan when changing source-backed
-transit data, the map content boundary, saved Views, or the existing editor
-import path. Finish the current phase, its behavior checks, and its visual
-proof before starting another phase.
+For TransitMapper maintainers: use this plan to move the production editor,
+reader, and embed onto the approved content architecture without turning a
+working map into an unavailable one. Finish one checked phase and its stated
+commit boundary before starting the next phase.
 
-> **For agentic workers:** Work one phase at a time. Do not start a package
-> extraction, a data migration, and a renderer change in the same commit.
-> Re-read the three binding documents before changing their boundary.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> `superpowers:subagent-driven-development` or `superpowers:executing-plans`
+> to implement this plan task by task. Steps use checkbox (`- [ ]`) syntax for
+> tracking.
 
-**Goal:** Move TransitMapper from a schema-v16 editor document with direct
-GTFS imports to the approved content model without breaking editing, sharing,
-embedding, or map responsiveness.
+**Goal:** Give every host one responsive, Line-first map surface over either
+an editable TransitSystem or an immutable TransitDataset. Add portable Views
+and reproducible revisions without making geography, MapLibre, or provider
+syntax part of the content model.
 
-**Architecture:** TransitSystem remains the mutable authored document. Source
-and TransitDataset own immutable external evidence and normalized content.
-View stores only a content reference, query, and presentation. Both authored
-and source-backed content resolve to the same bounded network transfer before
-the renderer creates a Line-first RenderScene.
+**Architecture:** Four roots own different lifecycles: TransitSystem is
+authored and mutable, Source records immutable external evidence,
+TransitDataset records immutable normalized content, and View records a
+portable content reference, query, and presentation. A host resolves content
+into a bounded semantic network. The renderer projects that network into a
+Line-first scene. The map adapter alone publishes the scene to MapLibre.
 
 **Tech stack:** TypeScript, pnpm workspaces, Turborepo, Vitest, React,
 MapLibre, Cloudflare Worker, D1, and R2.
 
-**Binding documents:**
+The binding contracts are
+[transit content architecture](../specs/2026-08-28-transit-content-architecture.md),
+[transit data types](../specs/2026-08-28-transit-data-types.md), and
+[map data and rendering boundaries](../specs/2026-08-28-map-data-rendering-boundaries-design.md).
+Those contracts win when this plan and current code disagree.
 
-- docs/superpowers/specs/2026-08-28-transit-content-architecture.md
-- docs/superpowers/specs/2026-08-28-transit-data-types.md
-- docs/superpowers/specs/2026-08-28-map-data-rendering-boundaries-design.md
+## Decision and baseline
 
-## Current state and decision
+On August 30, 2026, the current branch contains a partial schema-v17
+compatibility projection and an incomplete Line scene bridge. Neither reaches
+production storage or all map hosts. The bridge only changes Network paint in
+the editor. Diagram, viewer, embed, SVG, PNG, and static previews still use
+per-Service geometry. The renderer package also imports MapLibre, map, and
+Views packages. That leaves rendering, map publication, and host state coupled
+in one package.
 
-The August 29, 2026 baseline is commit d5aff139. The current application
-stores schema-v16 TransitSystem documents. Managed GTFS import creates a Way
-for every shape and commits each batch into that document before the
-reconciliation Worker merges compatible corridors.
+The previous work order was wrong. It put the visible Line-first recovery
+behind Sources and Datasets. It also allowed pinned Views before immutable
+authored revisions and operational snapshots existed. This plan fixes the map
+first through the schema-v16 compatibility path. It then builds the immutable
+content boundaries that Views require.
 
-The Network renderer already takes a Line-first route. It replaces the legacy
-per-Service source with projectLineScene, and it emits one stripe per Line on
-a shared carrier. Infrastructure and explicit Pattern editing still use
-per-Service geometry by design.
-
-The old execution plan remains a record of the earlier workspace refactor. It
-is not the implementation plan for this architecture. In particular, do not
-create a custom TypeScript build helper. Turbo owns package build ordering and
-caching through normal workspace dependencies and its existing ^build edge.
-
-The existing packages have useful names and remain in place. Create
-@transitmapper/sources only when provider adapters move out of core. Do not
-create packages to mirror every box in the architecture diagram.
-
-## Non-negotiable rules
-
-1. The only product-level storage roots are TransitSystem, Source,
-   TransitDataset, and View.
-2. Geographic scope is content and query data. No type, route host, renderer,
-   or map driver receives a geographic-scope mode.
-3. A temporary service is an ordinary ServicePlan, Pattern, Schedule, and
-   OperationalChange under a Line. It is not a fifth storage root.
-4. A Line owns the passenger identity. A ServicePlan owns operations. A
-   Pattern owns directional travel and stop calls. A Schedule owns time.
-5. Raw provider values stop at source adapters. Database rows, View wire
-   values, editor commands, and MapLibre objects do not enter the renderer.
-6. A View references content. It never embeds transit records, permissions,
-   selection, focus, MapLibre identifiers, or application chrome.
-7. The map keeps its last accepted scene interactive while a new query,
-   filter, import, or renderer generation is pending.
-8. Only visible Line spans and physical carriers control permanent map feature
-   count. Trips, schedules, and Pattern variants cannot multiply permanent
-   paint or hit features.
-
-The following component diagram is a component diagram. It shows module
-responsibilities, not a required package split.
+The following component diagram shows the target dependency flow. It shows
+module responsibilities. It does not require a package for every box.
 
 ```mermaid
 flowchart LR
-Adapter[Source adapter]
-Sources[Source repository]
-Builder[Dataset builder]
-Dataset[Dataset repository]
-System[System repository]
-View[View resolver]
-Content[Content provider]
-Resolve[Network resolver]
-Render[Renderer]
-Map[Map surface]
-Host[Editor, reader, or embed host]
+  Author[Editor commands]
+  System[TransitSystem repository]
+  Adapter[Source adapter]
+  Source[Source repository]
+  Builder[Dataset builder]
+  Dataset[Dataset repository]
+  Content[Content provider]
+  Resolver[Network resolver]
+  Renderer[Pure renderer]
+  Map[MapLibre adapter]
+  Host[Editor, reader, or embed host]
 
-Adapter --> Sources
-Sources --> Builder
-Builder --> Dataset
-System --> Content
-Dataset --> Content
-View --> Content
-Host --> Content
-Content --> Resolve
-Resolve --> Render
-Render --> Map
+  Author --> System
+  Adapter --> Source
+  Source --> Builder
+  Builder --> Dataset
+  System --> Content
+  Dataset --> Content
+  Host --> Content
+  Content --> Resolver
+  Resolver --> Renderer
+  Renderer --> Map
 ```
 
-## Work order
+The migration has four non-negotiable boundaries.
 
-The phases below are ordered by user harm and dependency. A phase may not
-start because an adjacent phase looks easy. Each phase has one mergeable
-outcome and one rollback boundary.
+1. No storage root, host route, renderer mode, or map driver represents a
+   geographic product concept. A nationwide map is a View over a Dataset. A
+   local map uses the same types.
+2. Passenger Network and Diagram views render Lines. ServicePlans, Patterns,
+   trips, schedules, and short turns cannot multiply permanent route paint.
+   A Pattern appears separately only in an explicit editor overlay.
+3. A failed, loading, superseded, or cancelled request keeps the last accepted
+   scene interactive. The shell and controls render before document, map style,
+   source, or content loading completes.
+4. Provider rows, database rows, React state, MapLibre values, and renderer
+   drafts stay private to their adapters. A public boundary carries only
+   validated domain, transfer, API, or render contracts.
 
-### Phase 1: Publish GTFS imports only after the candidate network is coherent
+## Phase 1: Recover one Line-first scene across every map host
 
-This phase fixes the visible import failure first. It does not introduce
-Sources or a new persistence schema.
+This phase fixes the visible harm before it changes storage. It uses the
+existing schema-v16 system provider as a compatibility source of resolved
+network facts. It does not introduce a Dataset or change a stored document.
 
-**Files and ownership:**
+The Network and Diagram views must show a normal transit map. One Line has one
+passenger stripe on a shared span even when several ServicePlans or Patterns
+occupy it. Different Lines remain distinguishable ordered stripes in one
+casing. Infrastructure shows physical carriers. Editing a Pattern shows only
+the selected Pattern as a transient overlay. The ordinary click target is a
+Line, not a Service or Pattern.
 
-- Modify apps/web/src/import/run-gtfs-import.ts to accumulate parsed batches
-  outside the live editor document.
-- Modify apps/web/src/editor/store/contracts/import-routing-commands.ts and
-  apps/web/src/editor/store/commands/import-commands.ts to accept one
-  reconciled candidate snapshot atomically.
-- Create packages/core/src/model/gtfs-import-staging.ts for pure batch
-  accumulation and final candidate assembly. It must not import React,
-  Workers, MapLibre, or editor state.
-- Modify apps/web/src/import/reconcile-gtfs.ts only if the final candidate
-  needs a transfer-safe Worker input.
-- Extend apps/web/tests/import/run-gtfs-import.test.ts and add
-  packages/core/tests/model/gtfs-import-staging.test.ts.
-- Extend packages/renderer/tests/line/line-scene.test.ts with the
-  same-Line, same-carrier assertion.
+### 1A: Make the Line scene a pure renderer entry
 
-**Interfaces:**
+- [ ] Add a renderer entry that accepts `NetworkQueryResult` and a core
+      `RenderPresentation`, then returns a `RenderScene`, Line hit bindings,
+      and contributor metadata. It must import only `@transitmapper/core`.
+- [ ] Move the shared RenderScene, patch, feature ID, and identity types into
+      the dependency-leaf core render contract. Persisted v16 and v17 records
+      must not import that contract.
+- [ ] Keep exact carrier correspondence and topology overlap under
+      `packages/renderer/src/line/`. Preserve the approved `line-overlap-v1`
+      rules: a same-Line collapse needs membership plus exact carrier or proven
+      topology correspondence. Coordinate proximity alone never creates a
+      passenger identity.
+- [ ] Add behavior tests under `packages/renderer/tests/line/` for one Line
+      with many ServicePlans, two Lines on one carrier, a short turn, a
+      temporary replacement ServicePlan under an existing Line, and a missing
+      topology proof. The tests inspect scene identities and stripe counts, not
+      generated filenames or feature ordering unrelated to the rule.
+- [ ] Commit only the pure scene contract and its renderer tests.
 
-- GtfsImportDraft contains the import target system ID, the base document
-  identity, accumulated GTFS pieces, and the imported Service IDs.
-- appendGtfsImportBatch(draft, pieces) returns a new draft without changing a
-  TransitSystem.
-- finalizeGtfsImport(baseSystem, draft) returns one candidate TransitSystem
-  that reconciliation can process.
-- applyCompletedGtfsImport accepts the base system identity and the
-  reconciled candidate. It commits only when the base identity still matches.
+**Exit:** The new entry has no MapLibre, React, map, Views, browser, editor, or
+storage dependency. A same-Line scene has one logical Line span per proven
+span.
 
-**Steps:**
+### 1B: Use live query and filter values for Network and Diagram
 
-- [ ] Add a failing test that receives several GTFS batches and proves the
-      live editor document identity does not change before final acceptance.
-- [ ] Add a failing test that cancellation leaves the document unchanged and
-      discards the candidate.
-- [ ] Add a failing test that an edit during import rejects the stale
-      candidate, retains the edit, and retries finalization against the current
-      document rather than publishing partial geometry.
-- [ ] Add a renderer behavior test with two Services under one Line on one
-      carrier. The Network scene must contain one casing and one Line stripe. It
-      must not inspect generated file names or hash values.
-- [ ] Implement the pure draft accumulator and replace per-batch
-      applyGtfsImportBatch calls with final candidate acceptance.
-- [ ] Keep the existing progress control and cancellation action. Progress
-      must update within 250 ms of parse start, but it must never replace the
-      map with un-reconciled route geometry.
-- [ ] Capture one desktop import screenshot while a candidate is assembling
-      and one after acceptance. The first shows the prior map and progress. The
-      second shows the completed Line-first network.
-- [ ] Commit this phase alone.
+- [ ] Make the web host provide current bounds, detail band, selected modes,
+      and presentation to the compatibility provider. Remove the whole-world
+      and persisted-viewport shortcuts from the Line-scene path.
+- [ ] Requery and repack when mode filters change. A hidden mode removes its
+      Line geometry rather than merely hiding an unrelated layer.
+- [ ] Route both Network and Diagram through the pure Line scene. Diagram may
+      use its layout geometry, but it keeps the same Line identity, hit target,
+      filter behavior, and scene replacement rules.
+- [ ] Add web and renderer tests that prove a mode toggle removes the correct
+      Lines, a camera query does not expand to the whole system, and a Diagram
+      scene does not fall back to per-Service occurrences.
+- [ ] Capture desktop Network and Diagram screenshots with a dense shared
+      corridor. They must show compact Lines, not parallel copies of one line.
+- [ ] Commit the host integration separately from the pure scene entry.
 
-**Exit gate:** Import never exposes raw per-shape geometry to Network view.
-The user can pan, select, and use controls while it runs. Cancellation and a
-concurrent edit preserve the last accepted document.
+**Exit:** Network and Diagram use the same Line-first visual language at every
+zoom band. Overview hides individual stop labels and Street reveals them only
+when they remain readable. A mode change never leaves stale route paint.
 
-**Rollback:** Revert the atomic publication commit. No stored document format
-or public API changes in this phase.
+### 1C: Give viewer, embed, export, and previews the same scene
 
-### Phase 2: Establish the schema-v17 authored compatibility boundary
+- [ ] Replace the legacy feature builders in viewer, embed, SVG, PNG, and
+      static preview paths with the pure scene entry. Keep each host's chrome
+      and capability set separate from scene construction.
+- [ ] Resolve a route click to a `Line` in the viewer. Keep ServicePlan and
+      Pattern details behind a concise labeled control in the Line inspector.
+- [ ] Preserve one shared semantic focus protocol. A copyable link may focus a
+      Line, Pattern, Stop, Station, or other transit entity. A named View does
+      not store focus or selection.
+- [ ] Add parity tests for one system rendered by editor, viewer, embed, SVG,
+      and PNG. Assert equivalent Line IDs and geometry counts rather than SVG
+      byte snapshots or MapLibre source IDs.
+- [ ] Capture one reader and one embed screenshot. Neither may carry editor
+      controls or a full-screen loading mask.
+- [ ] Commit each host conversion as its own change.
 
-This phase introduces the target authored vocabulary without pretending that a
-schema migration acquired a Source. It keeps schema-v16 reads and current
-shares working through one explicit compatibility adapter.
+**Exit:** A shared route looks the same to an editor, a reader, and an embed.
+The embed is read-only because the host withholds mutation capabilities, not
+because the map uses a different data model.
 
-**Files and ownership:**
+### 1D: Move map publication out of the renderer
 
-- Add schema-v17 authored records under packages/core/src/transit/ and
-  packages/core/src/model/schema-v17-system/.
-- Keep scalar and shared structural types in
-  packages/core/src/transit/value-types.ts.
-- Add the v16-to-v17 compatibility adapter beside
-  packages/core/src/network/schema-v16-system-provider.ts.
-- Add parsers, canonical serialization, and migration tests under
-  packages/core/tests/transit/ and packages/core/tests/model/.
-- Update docs/development/reference/project-structure.md when the new
-  directory becomes real.
+- [ ] Move MapLibre drivers, source banks, layers, style recovery, and source
+      settlement from `packages/renderer/` to `packages/map/`. The map adapter
+      accepts core `RenderScene` values and never imports renderer internals.
+- [ ] Move map presentation boundary types out of `@transitmapper/views` so
+      `@transitmapper/map` depends only on core. Make `@transitmapper/views`
+      depend on core and remain portable.
+- [ ] Remove `@transitmapper/map`, `@transitmapper/views`, and `maplibre-gl`
+      from `@transitmapper/renderer`. Keep `packages/workspace` independent of
+      `packages/map`; web composes workspace and map.
+- [ ] Test that a rejected or cancelled scene leaves the previous MapLibre
+      source bank and hit index active. Test style recovery by replaying the
+      last accepted scene without reprojecting user content.
+- [ ] Commit the package move only after imports and Turbo graph edges prove
+      the target dependency direction.
 
-**Steps:**
+**Exit:** Renderer depends only on core. Map owns MapLibre. Views own no map
+library state. A map style failure cannot erase the visible network.
 
-- [ ] Define Alignment, Way, Line, ServicePlan, Pattern, Schedule, Calendar,
-      Trip, FrequencyRule, Stop, Station, SourceCitation, SourceBinding,
-      ImportHistoryEntry, LegacyServiceAlias, and LegacySourceReference exactly
-      in the target family.
-- [ ] Keep Line.servicePlanIds authoritative. Do not add
-      ServicePlan.lineId.
-- [ ] Convert each schema-v16 Service to one compatibility ServicePlan and
-      preserve every legacy Service ID through LegacyServiceAlias.
-- [ ] Add behavior tests for a Line with a temporary rail and bus
-      ServicePlan, for an unknown Pattern path, and for a v16 share whose Service
-      focus resolves to a Line after content resolution.
-- [ ] Add canonical schema-v17 parsing and immutable SystemRevision digest
-      tests. Reject provider rows, database records, renderer values, and
-      MapLibre values at this boundary.
-- [ ] Write a one-way schema-v16-to-v17 migration. Do not edit a published
-      migration or overwrite an existing document on load.
-- [ ] Commit the compatibility boundary before moving source adapters.
+## Phase 2: Complete the schema-v17 authored document boundary
 
-**Exit gate:** The editor can read a migrated document, a renderer can receive
-resolved v17 facts, and old documents, undo records, and share links remain
-readable through compatibility records.
+This phase makes v17 an accepted authored value instead of an in-memory
+projection. It does not replace schema-v16 loading until every v17 parser and
+compatibility case passes.
 
-**Rollback:** Continue serving schema-v16 documents through the existing
-provider. Schema-v17 records remain additive until a later cutover.
+### 2A: Repair the compatibility projection before extending it
 
-### Phase 3: Move provider parsing into Sources and persist immutable evidence
+- [ ] Restore verbatim migration of schema-v16 `groups` and other retained
+      infrastructure records. The rendering contract requires their values and
+      order to survive unchanged. Typed `NormalizedGroup.members` belongs to
+      Dataset normalization, not to the v16 authored migration.
+- [ ] Remove the unsupported `vehicle-kind` branch from `TransitEntityRef` and
+      remove the migration inference that introduced it. A vehicle kind is a
+      value record, not a portable transit entity reference.
+- [ ] Keep the one Way-to-one Alignment compatibility mapping, same IDs,
+      Stop-anchor conversion, Line-owned ServicePlan membership, Pattern
+      derivation, schedule conversion, legacy aliases, and opaque source
+      markers already required by the contract.
+- [ ] Add tests that a Group value retains its old member IDs and order, an
+      incompatible migration leaves the v16 document readable, and the
+      migration never invents a SourceBinding from a legacy source marker.
+- [ ] Commit this corrective compatibility change before parser work.
 
-This phase separates provider authority from authored editing. It creates the
-only new package in this plan because GTFS, GTFS Realtime, OSM, archive
-decoding, and provider-specific types now have a distinct stable boundary.
+### 2B: Parse and validate v17 before any digest or storage write
 
-**Files and ownership:**
+- [ ] Add strict schema-v17 parsers in
+      `packages/core/src/model/schema-v17-system/`. The parser validates root
+      arrays, IDs, text, references, timestamps, geometry, cross sections,
+      bounds, URL and digest values, and every ownership relationship.
+- [ ] Reject dangling or duplicate Line-to-ServicePlan,
+      ServicePlan-to-Pattern, ServicePlan-to-Schedule, Schedule-to-time-rule,
+      Pattern-to-stop, Stop-to-Alignment, and source-binding relationships.
+      Enforce zero or one Way owner for every Alignment. Reject a bare
+      Alignment Pattern leg if a Way owns that Alignment.
+- [ ] Keep unknown geometry explicit. An empty known Pattern path is invalid.
+      The parser must not guess a lane, direction, grade, stop location,
+      calendar, source citation, or external identity.
+- [ ] Validate source bindings and import history: active bindings are unique
+      by external identity and authored target; a bound Source has a citation;
+      one-time uploads never create a binding; baseline hashes use the stated
+      canonical inputs.
+- [ ] Add focused parser tests under
+      `packages/core/tests/model/schema-v17-system/`. Each test names a
+      business rule and passes a semantic object, not a serialized fixture file.
+- [ ] Commit parsing and validation separately from revision identity.
 
-- Create packages/sources with normal package scripts: lint, typecheck,
-  verify, and build when it emits dist.
-- Move GTFS and OSM provider parsing from packages/core/src/model into
-  packages/sources/src/adapters/.
-- Keep provider-neutral Source, SourceRevision, SourceFactArtifact,
-  OperationalFactArtifact, ExternalRef, and SourceCitation contracts in
-  packages/core/src/source/.
-- Add Worker repositories and append-only migrations in apps/worker for Source
-  metadata and bounded revision metadata. Put retained artifacts in R2.
-- Add focused adapter and repository tests under their owning tests trees.
+**Exit:** A v17 document either passes every structural and relationship rule
+or produces a deterministic validation result. No storage adapter, renderer,
+or host can bypass that boundary.
 
-**Steps:**
+## Phase 3: Store immutable authored revisions and expose a v17 content path
 
-- [ ] Define Source and SourceRevision with attribution, capabilities,
-      relationship, digest, validation, completeness, and adapter version.
-- [ ] Make each accepted adapter result produce one nonempty
-      provider-neutral fact batch. Make a rejected result produce no batch.
-- [ ] Store raw artifact descriptors and recoverable fact artifacts by digest.
-      Keep endpoints, credentials, refresh schedules, and retry policy outside
-      portable Source values.
-- [ ] Require stable ExternalRef identity before a managed import can create
-      a SourceBinding. A revision-local ID remains provenance only.
-- [ ] Add tests that a historical Dataset build decodes retained facts without
-      rerunning an adapter, and that an advisory cannot manufacture a path or
+This phase gives published and pinned system content a durable identity. It
+comes before Views because a pinned system reference without a SystemRevision
+is a lie.
+
+- [ ] Add `SystemRevision` creation after strict parsing. Hash canonical
+      `{ encodingVersion: 'transit-system-json-v1', schemaVersion: 17,
+    system }` bytes for `contentDigest`. Create `id` from framed
+      `system-revision-v1`, system ID, algorithm, and digest value. Do not put
+      `createdAt` in either digest.
+- [ ] Add a system revision repository and additive Worker migration. Publishing
+      the same parsed semantic document twice returns the existing immutable
+      revision and its original creation time.
+- [ ] Add a v17 system content provider that resolves working and published
+      system references into the common `ResolvedContentRef` and bounded
+      network transfer. Keep the v16 provider as the fallback for an
+      incompatible legacy document.
+- [ ] Add tests for canonical deduplication, differing semantic content,
+      immutable published reads, failed legacy migration fallback, and a pinned
+      system reference that resolves through the v17 provider.
+- [ ] Commit core revision identity, Worker storage, and provider wiring as
+      separate changes.
+
+**Exit:** The editor still edits only a mutable TransitSystem. Publishing
+creates an immutable snapshot. A reader or later View can pin that snapshot
+without loading a live working copy.
+
+## Phase 4: Separate Sources from provider adapters and retain evidence
+
+This phase creates `@transitmapper/sources` only after provider parsing moves
+there. It does not invent a new package for storage or UI code.
+
+- [ ] Define provider-neutral Source, SourceRevision, SourceFactArtifact,
+      OperationalFactArtifact, ExternalRef, citation, validation,
+      completeness, and artifact descriptor contracts under core source and
+      transit modules. Connector URLs, credentials, refresh cadence, and retry
+      settings stay in deployment configuration.
+- [ ] Move GTFS, GTFS Realtime, OSM, archive decoding, and provider row types
+      into `packages/sources/src/adapters/`. Adapters return either one
+      validated provider-neutral batch or rejected validation with no batch.
+      Raw GTFS and OpenStreetMap values never leave an adapter.
+- [ ] Persist accepted and rejected SourceRevision metadata. Accepted planned
+      revisions retain an exact canonical fact artifact. Rejected revisions
+      retain final validation evidence but cannot build a Dataset.
+- [ ] Validate complete and incremental fact chains, canonical sort order,
+      byte digest, semantic digest, source relationship rules, and exact
+      retained artifact identity. A historical build reads retained facts and
+      never reruns an adapter.
+- [ ] Add repository tests for accepted/rejected evidence, reproducible
+      retained facts, and an advisory that cannot manufacture geometry or a
       timetable.
-- [ ] Add dependency checks that sources imports core only and never imports
-      renderer, map, React, workspace, or web.
-- [ ] Use normal Turbo package dependencies and ^build. Do not add a package
-      build runner, hash comparison build, or source-copy wrapper.
-- [ ] Commit the package and immutable source boundary separately from Dataset
-      normalization.
+- [ ] Commit the pure adapter package, the immutable source repository, and
+      the Worker persistence layer separately.
 
-**Exit gate:** A managed source revision is reproducible from retained
-artifacts. Provider syntax cannot leak into the editor, renderer, View, or
-database-facing API.
+**Exit:** Source data has clear authority and immutable evidence. A rejected
+feed is auditable but cannot leak partial facts into a map.
 
-**Rollback:** Keep the direct schema-v16 import path available until the
-Dataset-backed import cutover in Phase 6.
+## Phase 5: Build immutable Datasets and bounded content delivery
 
-### Phase 4: Build immutable Datasets and a bounded content provider
+This phase turns exact accepted source revisions into a normalized Dataset
+without changing how the renderer asks for data.
 
-This phase creates the source-backed read path. It does not give the renderer
-storage or acquisition responsibilities.
+- [ ] Implement the fixed builder policies: `normalize-v1`, `dataset-v1`,
+      `external-identity-v1`, `reject-conflicts-v1`, and `pattern-match-v1`.
+      The manifest records every exact input revision and policy version.
+- [ ] Normalize source identity, deduplicate only canonically equal evidence
+      under one identity, retain full provenance, and reject conflicts. Do not
+      conflate two sources by names, codes, coordinates, paths, or stops.
+- [ ] Enforce that GTFS shape evidence creates an Alignment only. A Dataset
+      creates a Way only when a source proves complete physical infrastructure.
+      Unknown geometry stays unknown instead of becoming a fake road or lane.
+- [ ] Enforce Pattern membership through exact Line-to-ServicePlan and
+      ServicePlan-to-Pattern links. Zero or several Line owners reject the
+      build. Record Line order in the Dataset manifest rather than deriving it
+      from cache chunks or provider arrival.
+- [ ] Persist one canonical `DatasetNetworkArtifact` with complete provenance.
+      Treat `DatasetCacheManifest` and chunks as rebuildable caches. A cache
+      rebuild decodes the Dataset artifact and runs neither adapters nor the
+      normalizer.
+- [ ] Implement the common `ContentProvider` transfer: resolved content,
+      coverage, stable Line order, chunks, same-Line semantic closure, and an
+      opaque cursor bound to the concrete content and canonical query.
+- [ ] Add worker resource routes for content descriptions, network pages,
+      search pages, and entity detail pages. Wire contracts use
+      `transit-network-v1`; they do not reuse D1 rows.
+- [ ] Add tests for source conflict rejection, Alignment-only GTFS data,
+      no cross-source conflation, artifact-only cache rebuild, query pagination
+      order, cursor misuse, and unknown coverage.
+- [ ] Commit normalization, repository/artifact storage, and bounded delivery
+      as separate phases.
 
-**Files and ownership:**
+**Exit:** An authored system and a Dataset return the same semantic network
+transfer shape. The renderer cannot discover which root supplied it.
 
-- Add ContentRef, ResolvedContentRef, DatasetRevision,
-  DatasetNetworkArtifact, DatasetCacheManifest, OperationalSnapshot,
-  normalized transit facts, and provenance under packages/core/src/transit/
-  and packages/core/src/network/.
-- Add Dataset builder policy under packages/core/src/source/ or a focused
-  core normalization module. It must remain provider-neutral.
-- Add source, dataset, and content repositories in apps/worker.
-- Add the four versioned resource routes in apps/worker.
-- Add a dataset content-provider client in apps/web that implements the
-  core ContentProvider port.
-- Add Worker, core, and web behavior tests under their current tests trees.
+## Phase 6: Build reproducible operational snapshots before Views
 
-**Steps:**
+This phase models real temporary operations without treating service alerts or
+vehicle positions as invented network truth.
 
-- [ ] Normalize exact accepted SourceRevision IDs with the fixed Version 1
-      policies: normalize-v1, dataset-v1, external-identity-v1,
-      reject-conflicts-v1, and pattern-match-v1.
-- [ ] Reject conflicting normalized facts. Collapse canonically equal facts
-      while retaining all provenance. Never infer equivalence across Sources from
-      names, codes, coordinates, paths, or stop sequences.
-- [ ] Store one immutable canonical DatasetNetworkArtifact and complete
-      provenance graph per DatasetRevision. Store only bounded metadata in D1.
-- [ ] Define ContentRef and ResolvedContentRef before the provider. Create
-      dataset-chunk-json-v1 behind ContentProvider. The provider accepts bounds,
-      service time, modes, filters, detail, and cursor. It returns coverage, line
-      order, chunks, and an opaque next cursor.
-- [ ] Resolve latest content references to concrete revisions before building
-      cache keys. Reject a cursor reused with another reference or query.
-- [ ] Return same-Line semantic carrier closure for selected visible carriers.
-      Do not return unrelated carriers or Lines merely because they are nearby.
-- [ ] Add tests for pagination-order independence, cache rebuild without
-      adapters, explicit unknown coverage, and an aborted query that cannot
-      publish a partial accepted scene.
-- [ ] Commit Dataset storage and content-provider delivery separately.
+- [ ] Normalize planned and realtime evidence separately. A realtime Source
+      must name exactly one planned Source through `updates`. It cannot target
+      a different planned source or create a physical Way.
+- [ ] Persist `OperationalFactArtifact` chains. Full revisions may clear prior
+      claims, unknown revisions never infer omitted claims, and deltas name one
+      exact base revision. Reject missing bases, cycles, cross-source deletes,
+      and noncanonical mutation order.
+- [ ] Materialize immutable OperationalSnapshots against one exact
+      DatasetRevision. Record `operational-normalize-v1`,
+      `operational-precedence-v1`, `operational-latest-v1`, exact source
+      revisions, and deterministic source priority. Arrival order must never
+      decide a conflict.
+- [ ] Apply the selected snapshot in the network resolver before it produces a
+      RenderScene input. A stale or unavailable snapshot falls back to planned
+      Dataset service. It never erases the planned network.
+- [ ] Model a Red Line closure in three evidence grades: a known temporary
+      bus ServicePlan under Red Line; a distinct Line if the publisher gives a
+      distinct passenger identity; or an Advisory alone when no path is known.
+      Vehicle positions and predictions remain outside this phase.
+- [ ] Add tests for full, unknown, and delta materialization; precedence;
+      pinned snapshot replay; known shuttle geometry; and advisory-only
+      disruption with no claimed route.
+- [ ] Commit operational artifact handling, snapshot materialization, and
+      effective-network resolution separately.
 
-**Exit gate:** A bounded query of a Dataset and a query of an authored System
-return the same resolved network transfer shape. The renderer cannot tell
-which storage root supplied it.
+**Exit:** Temporary service changes the effective map only where the source
+proves it. A pinned Dataset plus snapshot and fixed time reproduces one
+effective-service state.
 
-**Rollback:** Dataset routes and repositories are additive. Existing authored
-systems and share routes remain unchanged.
+## Phase 7: Move Views and host chrome onto portable content references
 
-### Phase 5: Complete the shared Line-first rendering contract
+This phase creates the product feature that enables a national, regional,
+local, or international map without embedding any of those concepts in code.
 
-This phase moves every passenger-facing surface onto the same resolved
-Line-first scene. It does not change the editor's explicit Pattern tools.
+- [ ] Add strict `ContentRef`, `ResolvedContentRef`, `ViewQuery`,
+      `MapPresentation`, `NamedViewV2`, and `ViewLinkStateV2` parsers to core
+      and `packages/views`. A named View has content, query, and presentation.
+      A copied link may add semantic focus.
+- [ ] Resolve every `latest` reference before cache lookup. A pinned System
+      names `SystemRevision`. A pinned Dataset names `DatasetRevision`,
+      `OperationalSnapshot`, and a fixed service instant. Reject a snapshot
+      from another Dataset revision.
+- [ ] Convert legacy Service focus only after content resolution using
+      `LegacyServiceAlias`. Persist neither legacy focus nor selection in a
+      migrated View record.
+- [ ] Let the host choose capabilities. The editor exposes mutation. The
+      reader exposes browse, filters, details, and sharing. The embed exposes
+      an allowed reduced set. All hosts mount the same map surface and content
+      contract.
+- [ ] Keep interface copy terse. Labels state the available action. Complex
+      behavior gets an expanded MD3-style help surface or tooltip. Remove
+      permanent prose that explains controls already visible on screen.
+- [ ] Add parser, route, and browser tests for hosted System and Dataset Views,
+      pinned replay, legacy links, editor/read-only isolation, and an embed
+      with no authoring controls.
+- [ ] Capture editor, reader, and embed screenshots from the same saved View.
+- [ ] Commit the core/View migration, Worker route migration, and host chrome
+      changes separately.
 
-**Files and ownership:**
+**Exit:** The app has one map product surface. Saved views decide content and
+presentation. Hosts decide which actions people may take.
 
-- Keep Line span, bundle, scene, diff, and identity work in packages/renderer.
-- Keep shared RenderScene, patch, feature ID, and identity protocols in a
-  dependency-leaf core contract module.
-- Keep MapLibre source banks, layers, camera, and hit testing in packages/map.
-- Keep Pattern overlays and editing gestures in apps/web/src/editor/.
-- Add renderer and map behavior tests under their owning tests trees.
+## Phase 8: Replace direct managed imports with reviewed content imports
 
-**Steps:**
+This phase changes managed update authority only after the source and Dataset
+paths exist.
 
-- [ ] Remove renderer dependencies on map and views. Renderer receives only
-      core resolved-network and presentation contracts, then exposes a pure
-      RenderScene and identity index to its host.
-- [ ] Make Network projection collapse sibling Patterns from one Line on each
-      shared Alignment or resolved Way lane. Keep separate Lines as separate
-      ordered stripes inside one casing.
-- [ ] Keep Infrastructure projection distinct by physical carrier. A bare
-      Alignment or unresolved lane defers Infrastructure detail instead of
-      guessing a lane.
-- [ ] Make ordinary map hits resolve to a Line. When wide stripes overlap,
-      choose the nearest stripe or open a labeled Line chooser. Do not descend to
-      Service from ordinary selection.
-- [ ] Keep ServicePlan and Pattern geometry transient and editor-only. It
-      appears only after the user explicitly enters the relevant editing task.
-- [ ] Keep the last accepted RenderScene and source-bank state during
-      resolution, projection, style recovery, or cancellation. Publish one
-      complete replacement bundle atomically.
-- [ ] Add tests for mode filtering, temporary bus replacement under a rail
-      Line, non-overlapping service branches, query clipping, and no permanent
-      route multiplication from Trips, Schedules, or Pattern variants.
-- [ ] Capture desktop and mobile Network, Infrastructure, explicit Pattern
-      editing, and temporary-service screenshots. Remove explanatory empty-state
-      copy where the controls already state the task.
-- [ ] Commit each renderer/map boundary separately.
+- [ ] Keep one-time file uploads as authored imports with a content digest and
+      supplied citation. They never create a SourceBinding or automatic update
+      path.
+- [ ] Build a reviewable import plan from one concrete DatasetRevision. Copy
+      approved facts into TransitSystem, record citation, import history, and
+      stable external bindings, then retain a baseline for future comparison.
+- [ ] Present a source update as a review. It may propose changes but cannot
+      overwrite a local authored edit. A user accepts or rejects each planned
+      change through ordinary editor commands.
+- [ ] Keep import work cancellable and cooperative. Show progress within
+      250 ms. Commit a completed candidate only if its base document identity
+      still matches. An import never replaces the map with partial or raw
+      provider geometry.
+- [ ] Add tests for one-time upload authority, managed binding uniqueness,
+      concurrent local edits, cancellation, no partial publication, and a
+      reviewed temporary-service import.
+- [ ] Capture an import-progress screenshot that shows the prior accepted map
+      still usable.
+- [ ] Commit import planning, editor presentation, and source update review
+      separately.
 
-**Exit gate:** The normal map looks like a transit map. Passenger Lines are
-readable, shared corridors are compact, and operational variants do not turn
-into stacks of identical routes.
+**Exit:** The source update workflow has provenance and explicit user control.
+An import cannot freeze the browser or silently rewrite authored work.
 
-**Rollback:** Retain the last accepted scene protocol. Revert a projection
-slice without changing content storage.
+## Phase 9: Enforce responsiveness, cache, retention, and release gates
 
-### Phase 6: Move Views and hosts onto ContentRef
-
-This phase makes a saved View portable across authored and source-backed
-content. The editor, full reader, and embed remain different hosts over one
-map surface and one content contract.
-
-**Files and ownership:**
-
-- Update packages/views contracts, parser, URL state, and tests.
-- Update apps/worker View resources and migration only when the V2 record is
-  ready to persist.
-- Update apps/web viewer, embed, share, and editor host adapters.
-- Update apps/web tests for reader, embed, routes, and host capability
-  boundaries.
-
-**Steps:**
-
-- [ ] Adopt the core ContentRef union for TransitSystem and TransitDataset.
-      Keep revision and operational selection explicit in every View parser and
-      API resource.
-- [ ] Define ViewQuery with live-or-instant service time, all-or-only modes,
-      and filters. An empty only-mode list means no modes. Let the map host combine
-      this portable query with visible bounds and derived detail as NetworkQuery.
-- [ ] Define NamedViewV2 and ViewLinkStateV2. Persist presentation and query.
-      Keep focus only in copied link state.
-- [ ] Convert a legacy Service focus after content resolution through
-      LegacyServiceAlias. Do not persist a legacy focus in a migrated View row.
-- [ ] Make the host choose capabilities. The editor exposes mutation, the
-      reader exposes browse and share, and the embed exposes the permitted
-      reduced controls. None gets a geography-specific branch.
-- [ ] Add behavior tests for pinned Dataset and OperationalSnapshot replay,
-      local and public Views, old share routes, embed isolation, and hostile
-      View input.
-- [ ] Commit View contract migration separately from route cleanup.
-
-**Exit gate:** A View can open either content root, reproduce a pinned state,
-and use the same map surface without importing editor state or MapLibre state.
-
-**Rollback:** Continue decoding current View records and current share routes
-until one stable release proves the V2 reader and embed.
-
-### Phase 7: Replace direct managed imports and add operational content
-
-This phase makes a reviewed Dataset import the only managed update path. It
-also adds scheduled and structured temporary-service evidence without
-inventing unproved routes.
-
-**Files and ownership:**
-
-- Update the web import host and inspector surfaces.
-- Add source-backed import planning and provenance handling in core and
-  Worker repositories.
-- Add operational normalizer and resolver work in core and Worker
-  repositories.
-- Add reader and inspector tests for Line, ServicePlan, Pattern, Advisory,
-  and OperationalChange details.
-
-**Steps:**
-
-- [ ] Replace direct managed GTFS document mutation with a reviewed import
-      plan from a concrete DatasetRevision. One-time file uploads remain authored
-      imports with a digest and citation, not active Source bindings.
-- [ ] Copy accepted facts into TransitSystem and record SourceBinding,
-      SourceCitation, and ImportHistoryEntry. A later source update may offer a
-      review. It cannot overwrite a local edit.
-- [ ] Resolve Calendars, Schedules, and OperationalChanges before rendering.
-      Keep GTFS Realtime, advisory, and planned source authority separate.
-- [ ] Model a Red Line closure with either known temporary bus ServicePlans
-      under Red Line, a replacement Line when the publisher gives it a new
-      identity, or an Advisory alone when no route evidence exists.
-- [ ] Show Line details first. Place ServicePlan, Pattern, schedule, and
-      temporary-operation details behind concise labeled controls or an expanded
-      helper. Do not use self-referential instructional paragraphs.
-- [ ] Add behavior and visual tests for each evidence level. Verify that
-      unknown geometry never paints as a claimed route.
-- [ ] Commit content migration and operational UI separately.
-
-**Exit gate:** A managed source refresh has clear authority, provenance, and
-review behavior. A temporary shuttle changes ordinary operations without
-creating an architectural exception.
-
-**Rollback:** Preserve the source-backed Dataset revision and authored
-document separately. Reverting an import presentation change cannot destroy
-either.
-
-### Phase 8: Enforce performance, cache, and release gates
-
-This phase proves user-facing responsiveness. It does not substitute bundle
-size for interaction measurements.
-
-**Files and ownership:**
-
-- Update existing performance scenarios and launch-gate tests under
-  apps/web/src/perf and apps/web/tests/perf.
-- Update dependency and Turbo task-graph checks only where a real package
-  boundary was introduced.
-- Update docs/development/how-to/measure-performance.md and project structure
-  documentation with implemented, not proposed, ownership.
-
-**Steps:**
+This phase adds gates only after the behavior exists. It measures user
+interactivity rather than celebrating bundle size.
 
 - [ ] Measure five desktop runs on Fast 4G with four-times CPU throttling.
       Record shell paint, first accepted input, first meaningful geometry,
-      input-to-next-paint p95, and unexpected long-task time.
-- [ ] Enforce these maximums: editor shell 500 ms, editor first input
-      1,000 ms, viewer shell 400 ms, viewer first input 750 ms, embed shell
-      250 ms, embed first input 750 ms, editor geometry 2,000 ms, viewer
-      geometry 1,500 ms, embed geometry 1,250 ms, input-to-next-paint p95
-      50 ms, and no unexpected main-thread task over 50 ms.
-- [ ] Enforce import progress or first batch within 250 ms and cancellation
-      stopping new commits within 100 ms.
-- [ ] Prove an unchanged Turbo build restores every declared package task
-      from cache. Prove an editor-only change does not rebuild core, views,
-      renderer, or map.
-- [ ] Use normal package build tasks and Turbo dependencies. Do not add a
-      custom build orchestrator, synthetic hash comparison build, or literal
-      output-filename test.
-- [ ] Run production route and offline-startup smoke checks after each public
-      route cutover. Treat a browser failure as release-blocking evidence.
-- [ ] Commit only the gate changes that measure a completed behavior.
+      input-to-next-paint p95, unexpected main-thread work, and import
+      progress/cancellation timing.
+- [ ] Enforce these maximums: editor shell 500 ms and first input 1,000 ms;
+      reader shell 400 ms and first input 750 ms; embed shell 250 ms and first
+      input 750 ms; editor geometry 2,000 ms; reader geometry 1,500 ms; embed
+      geometry 1,250 ms; input-to-next-paint p95 50 ms; unexpected tasks 50
+      ms; cumulative startup long tasks 300 ms for editor and 200 ms for
+      reader/embed. Import progress appears within 250 ms and cancellation
+      stops new commits within 100 ms.
+- [ ] Split projection, cache decode, and large import preparation into
+      cancelable worker or frame-bounded work. Preserve pan, click, selection,
+      and cancellation between slices. A browser unresponsive dialog is a
+      release-blocking failure.
+- [ ] Assert no full-screen blocking loader during document loading, map style
+      recovery, source resolution, import, or scene replacement. The shell
+      stays actionable and the last accepted scene remains visible.
+- [ ] Enforce Turbo package boundaries through normal workspace dependencies
+      and declared `build` tasks. An unchanged build restores cache entries. An
+      editor-only change must not rebuild stable core, renderer, map, or Views
+      packages. Do not add a custom TypeScript build runner or literal output
+      filename test.
+- [ ] Implement retention and recovery: retain latest roots, every dependency
+      of retained or recoverable pinned Views, accepted Source revisions for
+      30 days, previous two Dataset revisions for at least 30 days, rejected
+      Source revisions and unreferenced operational snapshots for 7 days, and
+      expiring View dependencies through expiry plus 7 days. Run recovery
+      against a staged cleanup before deleting any retained artifact.
+- [ ] Run browser smoke evidence for editor, reader, embed, public sharing,
+      offline startup, style recovery, and large import before a public route
+      cutover. Treat one failed interaction or blank map as a release blocker.
+- [ ] Commit performance gates, retention, and release checks only after their
+      measured behavior is real.
 
-**Exit gate:** The application remains responsive during startup, import,
-filtering, selection, editing, and scene replacement. Stable packages cache
-independently without hiding a broken dependency edge.
+**Exit:** Every host stays usable while it loads, filters, pans, imports,
+publishes, or recovers. Independent modules cache through Turbo without hiding
+an invalid dependency edge.
 
 ## Completion audit
 
-The migration is complete only after a maintainer can prove every row below
-from current code and runtime evidence.
+The migration is complete only when all of these statements have current code
+and browser evidence:
 
-| Requirement                                     | Evidence                                                                                                         |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Four storage roots only                         | Core parser and repository tests reject an extra root or provider state in TransitSystem                         |
-| Authored and Dataset content share one transfer | Content-provider contract tests run against both roots                                                           |
-| No geographic product mode                      | Dependency and route-host tests cover broad and bounded View content through the same ContentRef union           |
-| Line-first passenger map                        | Renderer and browser screenshots show one stripe per Line on each shared carrier                                 |
-| Explicit operational detail                     | Inspector tests show ordinary selection stays at Line and Pattern tools require an explicit task                 |
-| Source reproducibility                          | A Dataset rebuild reads retained source facts without an adapter run                                             |
-| Portable Views                                  | V2 parser, migration, reader, and embed tests restore only reference, query, presentation, and copied-link focus |
-| Interactive replacement                         | Browser performance audit records accepted input and retained last scene during import and query changes         |
-| Efficient builds                                | Turbo graph and cache evidence proves the declared package boundaries without a custom build runner              |
+| Requirement                | Proof                                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Four storage roots only    | Core and repository tests reject product roots beyond TransitSystem, Source, TransitDataset, and View.     |
+| One passenger map          | Editor, reader, embed, SVG, PNG, and previews project the same Line-first scene from equivalent content.   |
+| No geographic product mode | A wide-area View and a local View use the same ContentRef, query, renderer, and host code paths.           |
+| Reproducible content       | A pinned SystemRevision or DatasetRevision plus snapshot and instant resolves without a live source fetch. |
+| Clear source authority     | Retained immutable artifacts reproduce a Dataset; rejected evidence cannot create one.                     |
+| Honest temporary service   | A source may add a proven replacement service, a new Line, or an Advisory. It cannot invent a path.        |
+| Portable Views             | Saved View records contain only content, query, and presentation. Hosts own chrome and permissions.        |
+| Responsive interaction     | The stated latency gates pass while a user pans, selects, filters, imports, and recovers a map style.      |
+| Efficient builds           | Turbo cache and dependency evidence show the package graph without a custom build script.                  |
 
-Do not mark the migration complete from passing typechecks, a clean build, or
-one screenshot. The evidence must cover the stated behavior at the boundary
-where it can fail.
+Do not call this complete because typechecking, a clean build, or one screenshot
+passes. The release evidence must show each behavior at the boundary where it
+can fail.

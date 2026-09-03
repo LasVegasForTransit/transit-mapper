@@ -87,6 +87,26 @@ describe('render scene', () => {
     ]);
   });
 
+  it('keeps declared semantic paint order before stable feature ID order', () => {
+    const services = systemFeatureSourceId('services');
+    const first = pointFeature(renderFeatureId(services, 'line', ['z-first']), 1);
+    const second = pointFeature(renderFeatureId(services, 'line', ['a-second']), 2);
+    first.properties = { renderTier: 'overview', renderOrder: 0 };
+    second.properties = { renderTier: 'overview', renderOrder: 1 };
+
+    const scene = createRenderScene({
+      revision: renderSceneRevision('semantic-order'),
+      featuresBySource: new Map([[services, collection([second, first])]]),
+      hitFeatures: collection([]),
+      stats: emptyRenderSceneStats(),
+    });
+
+    expect(scene.featuresBySource.get(services)?.features.map((feature) => feature.id)).toEqual([
+      first.id,
+      second.id,
+    ]);
+  });
+
   it('rejects missing top-level string feature IDs', () => {
     const ways = systemFeatureSourceId('ways');
     const missingId: Feature<Point> = {
