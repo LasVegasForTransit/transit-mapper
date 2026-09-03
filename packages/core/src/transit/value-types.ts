@@ -1,5 +1,21 @@
 export type KnownOrUnknown<Value> = { kind: 'known'; value: Value } | { kind: 'unknown' };
 
+/** A geographic coordinate in longitude, latitude order. */
+export type LngLat = [longitude: number, latitude: number];
+
+/** The persisted camera state for an authored transit system. */
+export interface Viewport {
+  center: LngLat;
+  zoom: number;
+}
+
+/** The side of the carriageway that forward traffic keeps to. */
+export type DrivingSide = 'left' | 'right';
+
+/** The week convention used by recurring service calendars. */
+export type Weekday =
+  'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
 export type Applicability<Value> =
   { kind: 'all' } | { kind: 'only'; values: readonly [Value, ...Value[]] } | { kind: 'unknown' };
 

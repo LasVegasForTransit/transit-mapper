@@ -114,7 +114,10 @@ reporting. `MapSurface` owns the stable MapLibre runtime. An injected
 `packages/core` contains browser-and-workerd logic. `packages/core/src/encoding`,
 `packages/core/src/geography`, `packages/core/src/presentation`,
 `packages/core/src/source`, and `packages/core/src/transit` own provider-neutral
-transfer values.
+transfer values. `transit/authored-system.ts` owns the schema-v17 authored
+document contract. `model/schema-v17-system` owns pure compatibility transforms
+from legacy documents and must not import renderer, browser, storage, or host
+state.
 
 #### Domain model
 
