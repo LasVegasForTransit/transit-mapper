@@ -57,26 +57,22 @@ interface DescribedContent {
   readonly content: ResolvedContentRef;
 }
 
-/** Describing a System deep-clones it, validates it, and digests it, and none
- * of that depends on the camera. Rebuilding a provider per projection made
- * panning pay it again on every frame: on a 3,800-way network it measured
- * 993 ms of a 1,437 ms projection.
+/** Describing a System deep-clones, validates, and digests it, and none of
+ * that depends on the camera. Rebuilding a provider per projection made
+ * panning pay it every frame: 993 ms of a 1,437 ms projection on a
+ * 3,800-way network.
  *
- * The key is the TransitSystem object itself. No value key can be sound here:
- * `updatedAt` is stamped `Date.now()` when the editor store finalizes an edit,
- * so two edits landing in the same millisecond share one key while carrying
- * different content, and the second projection paints the first one's
- * geometry. The store rebuilds the object on every mutation, so reference
- * equality separates them by construction and costs no content digest.
+ * The key is the TransitSystem object itself. No value key is sound here:
+ * `updatedAt` is stamped `Date.now()` when the store finalizes an edit, so
+ * two edits in one millisecond share a key while carrying different content.
+ * The store rebuilds the object on every mutation, so reference equality
+ * separates them for free. Nothing evicts because the object graph already
+ * bounds this: an entry dies with the document it describes.
  *
- * Nothing evicts, because the object graph bounds this already: the worker
- * retains one authored System and one schematic snapshot across camera moves,
- * and an entry dies with the document it describes.
- *
- * Layout remains a second axis. A Diagram System is spread from its authored
- * original (`{ ...system, ways, nodes, stops, stations }`), and a Diagram
- * request that arrives before its layout falls back to the authored System, so
- * the two must not share an entry even when one object serves both. */
+ * Layout is a second axis. A Diagram System is spread from its authored
+ * original, and a Diagram request arriving before its layout falls back to
+ * the authored System, so the two must not share an entry.
+ */
 const describedContent = new WeakMap<TransitSystem, Map<SystemLayout, Promise<DescribedContent>>>();
 
 function describeSystem(system: TransitSystem, layout: SystemLayout): Promise<DescribedContent> {
