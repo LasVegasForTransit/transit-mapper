@@ -11,7 +11,7 @@ import {
   type MapRuntime,
 } from '@transitmapper/map';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
+import { createDocumentPresentationState } from '@transitmapper/map/presentation';
 import { EditorMapSurfaceFrame } from '../../src/map/editor-map-surface';
 
 interface Deferred<T> {

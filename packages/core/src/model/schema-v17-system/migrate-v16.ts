@@ -1,6 +1,8 @@
 import type { TransitSystem as SchemaV16TransitSystem } from '../system';
 import { migrateCompatibleSystem } from './migrate-document';
 import { type SchemaV16MigrationIssue, type SchemaV16MigrationResult } from './migration-types';
+import { validateAuthoredInfrastructureRelationships } from './validate-infrastructure-relationships';
+import { validateAuthoredPassengerRelationships } from './validate-passenger-relationships';
 import { schemaV16MigrationIssues } from './validate-v16';
 
 export type { SchemaV16MigrationIssue, SchemaV16MigrationResult } from './migration-types';
@@ -15,5 +17,8 @@ export type { SchemaV16MigrationIssue, SchemaV16MigrationResult } from './migrat
 export function migrateSchemaV16System(system: SchemaV16TransitSystem): SchemaV16MigrationResult {
   const issues: SchemaV16MigrationIssue[] = schemaV16MigrationIssues(system);
   if (issues.length > 0) return { kind: 'incompatible', system, issues };
-  return { kind: 'migrated', system: migrateCompatibleSystem(system) };
+  const migrated = migrateCompatibleSystem(system);
+  validateAuthoredInfrastructureRelationships(migrated);
+  validateAuthoredPassengerRelationships(migrated);
+  return { kind: 'migrated', system: migrated };
 }

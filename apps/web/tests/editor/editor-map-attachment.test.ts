@@ -8,6 +8,7 @@ import {
   SRC_PATTERN_OVERLAY_ARROWS,
   SRC_PATTERN_OVERLAY_TERMINI,
 } from '@transitmapper/renderer/layers';
+import type { PatternOverlayFeatures } from '@transitmapper/renderer/projection';
 import { aService, aSystem } from '@transitmapper/core/testing/fixtures';
 import {
   attachEditorMap,
@@ -85,7 +86,7 @@ describe('the editor map attachment', () => {
     harness.options.document.store.commands.document.setSystem(system);
     harness.options.document.store.commands.selection.select({ kind: 'service', id: service.id });
     harness.options.document.store.commands.selection.setActivePattern(service.path.id);
-    const overlay = {
+    const overlay: PatternOverlayFeatures = {
       path: {
         type: 'FeatureCollection' as const,
         features: [

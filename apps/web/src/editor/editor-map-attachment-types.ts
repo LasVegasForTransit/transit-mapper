@@ -4,15 +4,12 @@ import type {
   CorridorActionHit,
   ServiceActionHit,
 } from '@transitmapper/core/model/selectionActions';
-import type {
-  DocumentMapSession,
-  DocumentMapSessionAttachment,
-} from '@transitmapper/renderer/driver';
+import type { DocumentMapSession, DocumentMapSessionAttachment } from '@transitmapper/map/driver';
 import type {
   FeatureProjectionClient,
   PatternOverlayProjectionClient,
 } from '@transitmapper/renderer/projection';
-import type { AcceptedSceneUpdate } from '@transitmapper/renderer/runtime';
+import type { AcceptedSceneUpdate } from '@transitmapper/map/runtime';
 import type { SceneTargetResolver } from '../map/editor-feature-state';
 import type { ProjectionOperationCounts } from '../map/gestureProjection';
 import type { EditorKeyboardContext, TerminusConnectionChoice } from '../map/interactions';

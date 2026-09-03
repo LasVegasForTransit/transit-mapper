@@ -71,7 +71,7 @@ export function bearingAtT(path: LngLat[], t: number, totalMeters?: number): num
  *  pointAtDistance. Used by the vehicle sim, which resolves a position for
  *  every vehicle every tick and must not re-walk a dense (hundreds of points)
  *  path each time. */
-export function cumulativeLengths(path: LngLat[]): Float64Array {
+export function cumulativeLengths(path: readonly LngLat[]): Float64Array {
   const cum = new Float64Array(path.length);
   for (let i = 1; i < path.length; i++) cum[i] = cum[i - 1] + haversineMeters(path[i - 1], path[i]);
   return cum;

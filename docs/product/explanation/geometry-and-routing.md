@@ -38,15 +38,29 @@ rule to fill one closed carriageway footprint. That is deliberately separate
 from both the Overview centerline and Street's individual lane surfaces: each
 view reveals the amount of physical structure it can actually support.
 
-## Network service bundles
+## Corridor bundles
 
-The Network view groups Services that share a corridor. The ordering policy
-does not draw geometry. It receives each corridor's Service ids and the
-document's Service order, then returns a centered slot for each local member.
-`buildFeatures.ts`, prepared live snapshots, and static rendering use that
-same result. A Service can therefore move from a two-line trunk at `-2.5px`
-or `+2.5px` to the `0px` center of its own branch without letting the two
-colours trade places on the shared corridor.
+Two routes down the same street have to sit beside each other rather than on
+top of each other, and neither may swap sides when the street branches. Two
+modules solve that for two different drawings.
+
+`service-bundle-ordering.ts` groups Services that share a corridor. The
+ordering policy does not draw geometry. It receives each corridor's Service
+ids and the document's Service order, then returns a centered slot for each
+local member. `buildFeatures.ts` uses that result, which since Network and
+Diagram stopped taking their service geometry from it means the Infrastructure
+view: its lane-resolved runs and the centered fallback below lane detail. A
+Service can therefore move from a two-line trunk at `-2.5px` or `+2.5px` to
+the `0px` center of its own branch without letting the two colours trade
+places on the shared corridor.
+
+Network and Diagram no longer draw Services at all. They draw Lines, and the
+Line scene in `packages/renderer/src/line` does its own bundling: one casing
+as wide as the whole corridor, then the member Lines centered across it in a
+stable order. It is a separate implementation because it bundles a different
+thing — a Line is one public identity that several ServicePlans may operate,
+so the members it has to keep apart are not the members the Service ordering
+sees.
 
 The boundary matters because service ordering is cartography, while line
 offsetting is a rendering detail. `service-bundle-ordering.ts` owns the first

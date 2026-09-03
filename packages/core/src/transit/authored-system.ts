@@ -181,11 +181,12 @@ export interface Facility {
   geometry: LngLat | LngLat[];
 }
 
-/** A named collection whose members retain their entity kind. */
+/** An authored collection preserves legacy member IDs. Dataset normalization
+ * resolves typed membership only when its source evidence establishes it. */
 export interface Group {
   id: string;
   name?: string;
-  members: TransitEntityRef[];
+  memberIds: string[];
   footprint?: LngLat[];
   color?: string;
 }

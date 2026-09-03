@@ -1,5 +1,5 @@
 import { aSystem } from '@transitmapper/core/testing/fixtures';
-import type { DocumentMapSceneAccepted, DocumentMapSession } from '@transitmapper/renderer/driver';
+import type { DocumentMapSceneAccepted, DocumentMapSession } from '@transitmapper/map/driver';
 import { describe, expect, it, vi } from 'vitest';
 import { attachDocumentMapPaintProof } from '../../src/map/document-map-paint-proof';
 

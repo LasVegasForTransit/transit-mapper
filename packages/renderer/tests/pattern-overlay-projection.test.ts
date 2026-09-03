@@ -19,10 +19,16 @@ const view: RenderViewOptions = {
   }),
 };
 
+interface PatternOverlayProperties {
+  readonly serviceId?: string;
+  readonly patternId?: string;
+  readonly hitTarget?: boolean;
+}
+
 interface PatternOverlayResult {
-  path: FeatureCollection<LineString>;
-  arrows: FeatureCollection<LineString>;
-  termini: FeatureCollection<Point>;
+  path: FeatureCollection<LineString, PatternOverlayProperties>;
+  arrows: FeatureCollection<LineString, PatternOverlayProperties>;
+  termini: FeatureCollection<Point, PatternOverlayProperties>;
 }
 
 type ProjectPatternOverlay = (input: {
@@ -77,19 +83,19 @@ describe('Pattern overlay projection', () => {
     });
 
     expect(overlay.path.features).not.toHaveLength(0);
-    expect(new Set(overlay.path.features.map((feature) => feature.properties?.serviceId))).toEqual(
+    expect(new Set(overlay.path.features.map((feature) => feature.properties.serviceId))).toEqual(
       new Set([active.id]),
     );
-    expect(overlay.path.features.some((feature) => feature.properties?.hitTarget === true)).toBe(
+    expect(overlay.path.features.some((feature) => feature.properties.hitTarget === true)).toBe(
       true,
     );
     expect(overlay.arrows.features).not.toHaveLength(0);
-    expect(
-      new Set(overlay.arrows.features.map((feature) => feature.properties?.serviceId)),
-    ).toEqual(new Set([active.id]));
+    expect(new Set(overlay.arrows.features.map((feature) => feature.properties.serviceId))).toEqual(
+      new Set([active.id]),
+    );
     expect(overlay.termini.features).toHaveLength(2);
     expect(
-      new Set(overlay.termini.features.map((feature) => feature.properties?.patternId)),
+      new Set(overlay.termini.features.map((feature) => feature.properties.patternId)),
     ).toEqual(new Set([active.path.id]));
   });
 });

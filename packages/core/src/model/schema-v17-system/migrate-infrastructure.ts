@@ -1,6 +1,5 @@
 import type { TransitSystem as SchemaV16TransitSystem } from '../system';
-import type { Alignment, Group, Stop, Way } from '../../transit/authored-system';
-import { legacyEntityReferences, type LegacyEntityReferenceMap } from './legacy-references';
+import type { Alignment, Stop, Way } from '../../transit/authored-system';
 
 export function migrateAlignment(way: SchemaV16TransitSystem['ways'][number]): Alignment {
   return {
@@ -49,28 +48,6 @@ export function migrateStop(stop: SchemaV16TransitSystem['stops'][number]): Stop
   };
 }
 
-function migrateGroup(
-  group: SchemaV16TransitSystem['groups'][number],
-  references: LegacyEntityReferenceMap,
-): Group {
-  const members = group.memberIds.map((memberId) => {
-    const candidates = references.get(memberId);
-    if (!candidates || candidates.length !== 1) {
-      throw new Error(`Cannot migrate ambiguous schema-v16 Group member: ${memberId}`);
-    }
-    return candidates[0]!;
-  });
-  return {
-    id: group.id,
-    ...(group.name === undefined ? {} : { name: group.name }),
-    members,
-    ...(group.footprint === undefined
-      ? {}
-      : { footprint: group.footprint.map(([longitude, latitude]) => [longitude, latitude]) }),
-    ...(group.color === undefined ? {} : { color: group.color }),
-  };
-}
-
 export function migratedSystemBase(
   system: SchemaV16TransitSystem,
 ): Omit<
@@ -85,7 +62,6 @@ export function migratedSystemBase(
   | 'frequencyRules'
   | 'legacyServiceAliases'
 > {
-  const references = legacyEntityReferences(system);
   return {
     id: system.id,
     name: system.name,
@@ -98,7 +74,7 @@ export function migratedSystemBase(
     stops: system.stops.map(migrateStop),
     stations: system.stations.map((station) => ({ ...station })),
     facilities: system.facilities.map((facility) => ({ ...facility })),
-    groups: system.groups.map((group) => migrateGroup(group, references)),
+    groups: system.groups.map((group) => ({ ...group })),
     nodes: system.nodes.map((node) => ({ ...node })),
     namedWays: system.namedWays.map((namedWay) => ({ ...namedWay })),
     vehicleKinds: system.vehicleKinds.map((vehicleKind) => ({ ...vehicleKind })),

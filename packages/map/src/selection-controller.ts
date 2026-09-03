@@ -1,4 +1,4 @@
-import type { MapFeatureReferenceV1 } from '@transitmapper/views';
+import type { MapFeatureReferenceV1 } from '@transitmapper/core/presentation/map-presentation-state';
 
 export interface SelectionController {
   getSnapshot(): MapFeatureReferenceV1 | undefined;

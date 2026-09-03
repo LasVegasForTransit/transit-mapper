@@ -1,6 +1,6 @@
 import type { GeoJSONSource } from 'maplibre-gl';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import type { DocumentMapSceneAccepted, DocumentMapSession } from '@transitmapper/renderer/driver';
+import type { DocumentMapSceneAccepted, DocumentMapSession } from '@transitmapper/map/driver';
 import { SRC_GESTURE } from '@transitmapper/renderer/layers';
 import {
   createGestureProjectionController,

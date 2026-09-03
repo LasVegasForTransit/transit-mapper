@@ -1,6 +1,7 @@
 # One scope per durable TransitMapper boundary.
 # Omit a scope when a change crosses boundaries.
 core
+map
 renderer
 web
 worker

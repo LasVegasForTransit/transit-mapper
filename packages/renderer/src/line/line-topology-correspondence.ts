@@ -21,7 +21,7 @@ export interface TopologyLineCorrespondence {
   readonly members: readonly [LineSpan, LineSpan, ...LineSpan[]];
 }
 
-export type TopologyLineCorrespondenceRejectionReason =
+type TopologyLineCorrespondenceRejectionReason =
   | TopologyWindowRejectionReason
   | 'topology-line-membership-conflict'
   | 'topology-missing-line-materialization'

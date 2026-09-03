@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { aPattern, aRoad, aService, aSystem } from '@transitmapper/core/testing/fixtures';
+import type { TransitSystem } from '@transitmapper/core/model/system';
+import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import {
-  projectLineScene,
+  lineSceneFeatures,
   projectSchemaV16LineScene,
   usesPassengerLineScene,
 } from '../../src/line/line-scene';
@@ -14,6 +16,32 @@ function stringProperty(
   if (!feature.properties || typeof feature.properties !== 'object') return undefined;
   const value = (feature.properties as Record<string, unknown>)[key];
   return typeof value === 'string' ? value : undefined;
+}
+
+/** Every fixture below sits on one short corridor near downtown Las Vegas.
+ * The scene resolves from the live map query, so a case that does not frame
+ * its own geometry would assert against an empty result. */
+function aCameraOverTheFixtures(): RenderViewOptions {
+  return {
+    viewMode: 'network',
+    visibleModes: new Set(['bus']),
+    visibleWayTypes: new Set(['road']),
+    presentation: renderPresentationForViewport({
+      center: [-115.18, 36.14],
+      zoom: 14,
+      width: 1_280,
+      height: 720,
+    }),
+  };
+}
+
+async function stripedFeatures(system: TransitSystem) {
+  const scene = await projectSchemaV16LineScene({
+    system,
+    view: aCameraOverTheFixtures(),
+    sceneRevision: 'current-map-query',
+  });
+  return lineSceneFeatures(scene).features;
 }
 
 describe('Line scene', () => {
@@ -47,17 +75,7 @@ describe('Line scene', () => {
 
     const projected = await projectSchemaV16LineScene({
       system,
-      view: {
-        viewMode: 'network',
-        visibleModes: new Set(['bus']),
-        visibleWayTypes: new Set(['road']),
-        presentation: renderPresentationForViewport({
-          center: [-115.18, 36.14],
-          zoom: 14,
-          width: 1_280,
-          height: 720,
-        }),
-      },
+      view: aCameraOverTheFixtures(),
       sceneRevision: 'current-map-query',
     });
     const features = [...projected.scene.featuresBySource.values()].flatMap(
@@ -84,13 +102,9 @@ describe('Line scene', () => {
       ],
     });
 
-    const scene = await projectLineScene({ system });
-    const casings = scene.features.features.filter(
-      (feature) => feature.properties?.routeRole === 'casing',
-    );
-    const stripes = scene.features.features.filter(
-      (feature) => feature.properties?.routeRole === 'stripe',
-    );
+    const features = await stripedFeatures(system);
+    const casings = features.filter((feature) => feature.properties?.routeRole === 'casing');
+    const stripes = features.filter((feature) => feature.properties?.routeRole === 'stripe');
 
     expect(casings).toHaveLength(1);
     expect(casings[0]?.properties).not.toHaveProperty('lineId');
@@ -103,10 +117,8 @@ describe('Line scene', () => {
       '#abcdef',
     ]);
     expect(stripes.every((feature) => typeof feature.id === 'string')).toBe(true);
-    expect(scene.features.features.some((feature) => feature.properties?.hitTarget === true)).toBe(
-      false,
-    );
-    for (const feature of scene.features.features) {
+    expect(features.some((feature) => feature.properties?.hitTarget === true)).toBe(false);
+    for (const feature of features) {
       for (const property of ['serviceId', 'patternId', 'wayId', 'modeId', 'typeId']) {
         expect(feature.properties).not.toHaveProperty(property);
       }
@@ -133,13 +145,9 @@ describe('Line scene', () => {
       ],
     });
 
-    const scene = await projectLineScene({ system });
-    const casings = scene.features.features.filter(
-      (feature) => feature.properties?.routeRole === 'casing',
-    );
-    const stripes = scene.features.features.filter(
-      (feature) => feature.properties?.routeRole === 'stripe',
-    );
+    const features = await stripedFeatures(system);
+    const casings = features.filter((feature) => feature.properties?.routeRole === 'casing');
+    const stripes = features.filter((feature) => feature.properties?.routeRole === 'stripe');
 
     expect(casings).toHaveLength(1);
     expect(stripes).toHaveLength(1);
@@ -161,14 +169,12 @@ describe('Line scene', () => {
       ],
     });
 
-    const scene = await projectLineScene({ system });
+    const features = await stripedFeatures(system);
 
-    expect(
-      scene.features.features.filter((feature) => feature.properties?.routeRole === 'casing'),
-    ).toHaveLength(1);
-    const [stripe] = scene.features.features.filter(
-      (feature) => feature.properties?.routeRole === 'stripe',
+    expect(features.filter((feature) => feature.properties?.routeRole === 'casing')).toHaveLength(
+      1,
     );
+    const [stripe] = features.filter((feature) => feature.properties?.routeRole === 'stripe');
     expect(stringProperty(stripe, 'lineId')).toBe('singleton-line');
     expect(stringProperty(stripe, 'color')).toBe('#123456');
   });

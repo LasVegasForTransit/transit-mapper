@@ -3,7 +3,7 @@ import type { LngLat } from '@transitmapper/core/model/system';
 import { routePath } from '@transitmapper/core/model/routeGraph';
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { MapViewStore } from '@transitmapper/map';
-import type { DocumentMapSession } from '@transitmapper/renderer/driver';
+import type { DocumentMapSession } from '@transitmapper/map/driver';
 import { SRC_PREVIEW } from '@transitmapper/renderer/layers';
 import { selectionFocus } from '../map/selectionFocus';
 import type { EditorStore } from './store';

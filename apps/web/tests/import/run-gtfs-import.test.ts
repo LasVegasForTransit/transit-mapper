@@ -65,10 +65,18 @@ function importHarness(): ImportHarness {
   let progress: ImportProgress | null = null;
   let completedImports = 0;
   let interruptNextPublication = false;
-  const listeners = new Set<(state: { system: TransitSystem; documentStatus: 'ready' }) => void>();
+  const listeners = new Set<
+    (
+      state: { system: TransitSystem; documentStatus: 'ready' },
+      previous: { system: TransitSystem; documentStatus: 'ready' },
+    ) => void
+  >();
   const replaceSystem = (next: TransitSystem) => {
+    const previous = system;
     system = next;
-    for (const listener of listeners) listener({ system, documentStatus: 'ready' });
+    for (const listener of listeners) {
+      listener({ system, documentStatus: 'ready' }, { system: previous, documentStatus: 'ready' });
+    }
   };
   const options: StartGtfsImportOptions = {
     feed: FEED,
@@ -133,10 +141,9 @@ describe('managed GTFS import operation', () => {
       await Promise.resolve();
       yield BATCH;
     });
-    harness.reconcile.mockImplementation(async (system: TransitSystem) => ({
-      system,
-      reconciled: 0,
-    }));
+    harness.reconcile.mockImplementation((system: TransitSystem) =>
+      Promise.resolve({ system, reconciled: 0 }),
+    );
     const run = importHarness();
 
     startGtfsImport(run.options);
@@ -180,12 +187,12 @@ describe('managed GTFS import operation', () => {
   it('rebuilds the candidate from the edited document before publishing it', async () => {
     vi.useFakeTimers();
     harness.stream.mockImplementation(async function* () {
+      await Promise.resolve();
       yield BATCH;
     });
-    harness.reconcile.mockImplementation(async (system: TransitSystem) => ({
-      system,
-      reconciled: 0,
-    }));
+    harness.reconcile.mockImplementation((system: TransitSystem) =>
+      Promise.resolve({ system, reconciled: 0 }),
+    );
     const run = importHarness();
     run.interruptNextPublication();
 

@@ -26,5 +26,8 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.{ts,tsx}'],
     exclude: [...configDefaults.exclude, 'tests/verify.test.ts', 'tests/support/**'],
+    // Each file starts an isolated workerd runtime. Vitest's per-core default
+    // multiplies that cost while Turbo is already scheduling package suites.
+    maxWorkers: 2,
   },
 });

@@ -42,8 +42,6 @@ afterEach(() => {
 
 describe('the map package dependency boundary', () => {
   it.each([
-    ['core', '../../core/src/index', 'packages/core/src/index.ts'],
-    ['renderer', '../../renderer/src/index', 'packages/renderer/src/index.ts'],
     ['workspace', '../../workspace/src/index', 'packages/workspace/src/index.ts'],
     [
       'editor',
@@ -77,12 +75,15 @@ describe('the map package dependency boundary', () => {
     expect(result.output).toContain('map-package-dependencies-are-an-allowlist');
   });
 
-  it('permits views, MapLibre, and internal map modules', () => {
+  it('permits views, core, the renderer, MapLibre, and internal map modules', () => {
     const result = runBoundaryFixture({
       'packages/map/src/map-runtime.ts':
-        "import './map-view-store';\nimport '../../views/src/index';\nimport 'maplibre-gl';\n",
+        "import './map-view-store';\nimport '../../views/src/index';\n" +
+        "import '../../core/src/index';\nimport '../../renderer/src/index';\nimport 'maplibre-gl';\n",
       'packages/map/src/map-view-store.ts': 'export {};\n',
       'packages/views/src/index.ts': 'export {};\n',
+      'packages/core/src/index.ts': 'export {};\n',
+      'packages/renderer/src/index.ts': 'export {};\n',
       'node_modules/maplibre-gl/package.json': JSON.stringify({
         name: 'maplibre-gl',
         main: 'index.js',
@@ -92,5 +93,43 @@ describe('the map package dependency boundary', () => {
 
     expect(result.status, result.output).toBe(0);
     expect(result.output).not.toContain('map-package-dependencies-are-an-allowlist');
+  });
+});
+
+describe('the renderer package dependency boundary', () => {
+  it('rejects MapLibre, so the pure projector cannot acquire a map', () => {
+    const result = runBoundaryFixture({
+      'packages/renderer/src/scene-draft.ts': "import 'maplibre-gl';\n",
+      'node_modules/maplibre-gl/package.json': JSON.stringify({
+        name: 'maplibre-gl',
+        main: 'index.js',
+      }),
+      'node_modules/maplibre-gl/index.js': 'export {};\n',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.output).toContain('renderer-package-dependencies-are-an-allowlist');
+  });
+
+  it('rejects the map package, which would invert the map-over-renderer direction', () => {
+    const result = runBoundaryFixture({
+      'packages/renderer/src/scene-draft.ts': "import '../../map/src/index';\n",
+      'packages/map/src/index.ts': 'export {};\n',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.output).toContain('renderer-package-dependencies-are-an-allowlist');
+  });
+
+  it('permits core and internal renderer modules', () => {
+    const result = runBoundaryFixture({
+      'packages/renderer/src/scene-draft.ts':
+        "import './scene-publication';\nimport '../../core/src/index';\n",
+      'packages/renderer/src/scene-publication.ts': 'export {};\n',
+      'packages/core/src/index.ts': 'export {};\n',
+    });
+
+    expect(result.status, result.output).toBe(0);
+    expect(result.output).not.toContain('renderer-package-dependencies-are-an-allowlist');
   });
 });

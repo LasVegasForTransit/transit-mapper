@@ -1,5 +1,5 @@
 import type { Tool } from '../editor/store';
-import type { DocumentRepresentationId } from '@transitmapper/renderer/presentation';
+import type { DocumentRepresentationId } from '@transitmapper/map/presentation';
 
 export interface MapContextMenuLifecycleInput {
   actionCount: number;

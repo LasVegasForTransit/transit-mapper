@@ -9,11 +9,8 @@ import {
   SRC_WAYS,
   isBankedRenderLayer,
   sourceBankLayerSpecs,
-} from '@transitmapper/renderer/layers';
-import {
-  documentLayerSpecsForViewMode,
-  type DocumentMapSession,
-} from '@transitmapper/renderer/driver';
+} from '@transitmapper/map/layers';
+import { documentLayerSpecsForViewMode, type DocumentMapSession } from '@transitmapper/map/driver';
 import type { SourceFeatureProjectionAccounting } from '@transitmapper/renderer/projection';
 import type { RendererStatsCollector } from '@transitmapper/renderer/stats';
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';

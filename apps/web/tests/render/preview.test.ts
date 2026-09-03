@@ -3,8 +3,10 @@ import {
   PREVIEW_FONT_FAMILY,
   PREVIEW_HEIGHT,
   PREVIEW_WIDTH,
+  previewRenderView,
   previewSvg,
 } from '@transitmapper/core/render/preview';
+import { lineSceneFeatures, projectSchemaV16LineScene } from '@transitmapper/renderer/line';
 import { systemSvg } from '@transitmapper/core/render/svg';
 import { fitBounds, projector } from '@transitmapper/core/render/project';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
@@ -278,5 +280,104 @@ describe('render/preview: the card the Worker rasterizes for link unfurls', () =
     it("an empty system's name survives where one is drawn", () => {
       expect(previewSvg(empty, { captionedExternally: false })).toContain('Nothing yet');
     });
+  });
+});
+
+describe('render/preview: the passenger Lines a share card draws', () => {
+  const carrier = aRoad('carrier', [
+    [-115.22, 36.14],
+    [-115.16, 36.14],
+  ] as LngLat[]);
+
+  async function cardFor(system: TransitSystem): Promise<string> {
+    const scene = await projectSchemaV16LineScene({
+      system,
+      view: previewRenderView(system),
+      sceneRevision: `preview:${system.id}`,
+    });
+    return previewSvg(system, { passengerLines: lineSceneFeatures(scene) });
+  }
+
+  /** Distinct route identities, counted by the role each Line feature was
+   *  named with. Every identity paints once per pass, so the raw attribute
+   *  occurrences say nothing about how many stripes the card carries. */
+  function routeRoleCounts(card: string): { casings: number; stripes: number } {
+    const ids = new Set(
+      [...card.matchAll(/data-render-source="services" data-feature-id="([^"]+)"/g)].map(
+        (match) => match[1],
+      ),
+    );
+    return {
+      casings: [...ids].filter((id) => id.includes('line-casing')).length,
+      stripes: [...ids].filter((id) => id.includes('line-stripe')).length,
+    };
+  }
+
+  it('draws one stripe for a Line two ServicePlans serve', async () => {
+    const local = aService('local', [aPattern('local-pattern', [carrier], [carrier.id])]);
+    const express = aService('express', [aPattern('express-pattern', [carrier], [carrier.id])]);
+    const system = aSystem({
+      name: 'Shared carrier',
+      ways: [carrier],
+      services: [local, express],
+      lines: [
+        {
+          id: 'shared-line',
+          name: 'Shared',
+          color: '#123456',
+          serviceIds: [local.id, express.id],
+        },
+      ],
+    });
+
+    const card = await cardFor(system);
+
+    expect(routeRoleCounts(card)).toEqual({ casings: 1, stripes: 1 });
+    expect(card).toContain('stroke="#123456"');
+  });
+
+  it('draws one stripe per Line when two Lines share a carrier', async () => {
+    const first = aService('first', [aPattern('first-pattern', [carrier], [carrier.id])]);
+    const second = aService('second', [aPattern('second-pattern', [carrier], [carrier.id])]);
+    const system = aSystem({
+      name: 'Two lines',
+      ways: [carrier],
+      services: [first, second],
+      lines: [
+        { id: 'first-line', name: 'First', color: '#123456', serviceIds: [first.id] },
+        { id: 'second-line', name: 'Second', color: '#abcdef', serviceIds: [second.id] },
+      ],
+    });
+
+    const card = await cardFor(system);
+
+    expect(routeRoleCounts(card)).toEqual({ casings: 1, stripes: 2 });
+    expect(card).toContain('stroke="#123456"');
+    expect(card).toContain('stroke="#abcdef"');
+  });
+
+  it('drops the per-ServicePlan stripes the document would otherwise draw', async () => {
+    const local = aService('local', [aPattern('local-pattern', [carrier], [carrier.id])]);
+    const express = aService('express', [aPattern('express-pattern', [carrier], [carrier.id])]);
+    const system = aSystem({
+      name: 'Shared carrier',
+      ways: [carrier],
+      services: [local, express],
+      lines: [
+        {
+          id: 'shared-line',
+          name: 'Shared',
+          color: '#123456',
+          serviceIds: [local.id, express.id],
+        },
+      ],
+    });
+
+    const withoutLines = previewSvg(system);
+    const withLines = await cardFor(system);
+
+    expect(routeRoleCounts(withoutLines)).toEqual({ casings: 0, stripes: 0 });
+    expect(withoutLines).toContain('data-feature-id="render:services:paint-fragment');
+    expect(withLines).not.toContain('data-feature-id="render:services:paint-fragment');
   });
 });

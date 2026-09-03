@@ -2,7 +2,7 @@ import type {
   DocumentMapSnapshot,
   DocumentMapSnapshotListener,
   DocumentMapSnapshotSource,
-} from '@transitmapper/renderer/driver';
+} from '@transitmapper/map/driver';
 import type { EditorState, EditorStore } from './store';
 
 export interface EditorDocumentMapHold {

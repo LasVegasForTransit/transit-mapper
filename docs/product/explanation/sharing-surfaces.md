@@ -21,7 +21,9 @@ could only ever serve one static image for every system.
   result will be seen. Live maps read it from their final camera; pure previews
   derive it from the viewport they fit.
 - `buildFeatures.ts` turns a system and that presentation into styled GeoJSON.
-  The editor map, embed, image exports, and share card all call it.
+  Every surface reaches it, though Network and Diagram take their passenger
+  geometry from the renderer's Line scene instead of the per-ServicePlan runs
+  this module derives.
 - `system-render-scene.ts` validates stable feature IDs, separates invisible
   hit targets from paint geometry, and gives every consumer the same
   deterministic source and tier order.
@@ -41,10 +43,37 @@ could only ever serve one static image for every system.
   itself.
 
 The web app's export modules are now thin adapters that supply what only a
-live map knows — viewport size, projection, bearing, and ground resolution.
-SVG does not recreate a visual approximation from MapLibre paint expressions;
-MapLibre and SVG start from the normalized scene, and SVG consumes already
-resolved line and polygon paint.
+live map knows — viewport size, projection, bearing, ground resolution, and
+the passenger Lines resolved for that camera. SVG does not recreate a visual
+approximation from MapLibre paint expressions; MapLibre and SVG start from the
+normalized scene, and SVG consumes already resolved line and polygon paint.
+
+## One stripe per Line
+
+A rider-facing drawing shows Lines, not the operations beneath them. The
+editor, reader, embed, PNG, SVG, and share card all paint one stripe per Line
+over a shared casing, so a Line served by two ServicePlans comes out once
+rather than as two parallel stripes. Clicking one in the reader selects that
+Line; its ServicePlans and Patterns are inspector actions reached from there.
+
+Only `@transitmapper/renderer` resolves that geometry, and it depends on core,
+so `systemSvg` and `previewSvg` cannot call it without inverting the
+dependency. Each Worker entry under `apps/web/src/share` resolves the scene
+itself and passes the finished collection in, and core substitutes it for the
+per-plan service geometry `buildFeatures` derives. The per-plan travel arrows
+leave with that geometry, because an arrow annotates one plan's one-way
+stretch while a stripe is the whole corridor.
+
+Resolve the scene against the camera the drawing uses and no other. A Line
+scene is clipped and tiered for the bounds it was resolved for, so a second
+view derived beside the first hands the drawing a network framed for a camera
+it never had. `previewRenderView` exists so a card and its Lines cannot drift
+apart that way.
+
+Infrastructure keeps `buildFeatures`, since physical per-Service geometry is
+what that view is for. Service termini and junction connectors stay on
+`buildFeatures` everywhere: they are route-owned point markers, not corridor
+stripes.
 
 ## Theme boundary
 
@@ -217,9 +246,14 @@ View metadata. It does not rasterize one card per View.
 
 `/e/:id` and `/embed/:id` use a separate Vite entry, not the editor with its
 chrome hidden. An embed competes with the host page's load budget, so it pulls
-in MapLibre and the feature builder and nothing else. It imports no React,
-editor store, or toolbars. Both embed routes use the renderer's document map
-definition and the same hostile-input View parser as the full reader.
+in MapLibre and the shared projection Worker and nothing else. It imports no
+React, editor store, or toolbars. Both embed routes use the renderer's document
+map definition and the same hostile-input View parser as the full reader.
+
+That Worker outlives the first paint. A Line scene covers only the camera it
+was resolved for, and a reader can pan an embed straight off it, so the embed
+projects again on `moveend` and `resize` and keeps whichever scene was
+requested last rather than whichever returns last.
 
 It is the only path on the origin any site may frame; everything else is
 served with `frame-ancestors 'none'`. The embed exposes nothing a share link

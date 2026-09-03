@@ -4,21 +4,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./driver": {
+    "./camera": {
       "development": {
-        "types": "./src/driver.ts",
-        "import": "./src/driver.ts"
+        "types": "./src/camera-render-preload.ts",
+        "import": "./src/camera-render-preload.ts"
       },
-      "types": "./dist/driver.d.ts",
-      "import": "./dist/driver.js"
-    },
-    "./feature-details": {
-      "development": {
-        "types": "./src/document-map-feature-details.ts",
-        "import": "./src/document-map-feature-details.ts"
-      },
-      "types": "./dist/document-map-feature-details.d.ts",
-      "import": "./dist/document-map-feature-details.js"
+      "types": "./dist/camera-render-preload.d.ts",
+      "import": "./dist/camera-render-preload.js"
     },
     "./layers": {
       "development": {
@@ -44,6 +36,14 @@
       "types": "./dist/network.d.ts",
       "import": "./dist/network.js"
     },
+    "./presentation": {
+      "development": {
+        "types": "./src/render-presentation.ts",
+        "import": "./src/render-presentation.ts"
+      },
+      "types": "./dist/render-presentation.d.ts",
+      "import": "./dist/render-presentation.js"
+    },
     "./projection": {
       "development": {
         "types": "./src/projection.ts",
@@ -60,14 +60,6 @@
       "types": "./dist/workers/feature-projection-worker.d.ts",
       "import": "./dist/workers/feature-projection-worker.js"
     },
-    "./presentation": {
-      "development": {
-        "types": "./src/presentation.ts",
-        "import": "./src/presentation.ts"
-      },
-      "types": "./dist/presentation.d.ts",
-      "import": "./dist/presentation.js"
-    },
     "./runtime": {
       "development": {
         "types": "./src/runtime.ts",
@@ -75,14 +67,6 @@
       },
       "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js"
-    },
-    "./snapshot": {
-      "development": {
-        "types": "./src/snapshot.ts",
-        "import": "./src/snapshot.ts"
-      },
-      "types": "./dist/snapshot.d.ts",
-      "import": "./dist/snapshot.js"
     },
     "./stats": {
       "development": {
@@ -106,9 +90,6 @@
     "vitest": "catalog:"
   },
   "dependencies": {
-    "@transitmapper/core": "workspace:*",
-    "@transitmapper/map": "workspace:*",
-    "@transitmapper/views": "workspace:*",
-    "maplibre-gl": "catalog:"
+    "@transitmapper/core": "workspace:*"
   }
 }

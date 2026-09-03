@@ -1,6 +1,5 @@
 import type { Feature, FeatureCollection, LineString } from 'geojson';
 import type { NetworkQueryResult } from '@transitmapper/core/network/result';
-import type { MapPresentation } from '@transitmapper/core/presentation/map-presentation';
 import {
   createRenderIdentityIndex,
   renderDomainIdentity,
@@ -15,6 +14,7 @@ import {
   type RenderScene,
   type RenderSceneStats,
 } from '@transitmapper/core/render/render-scene';
+import type { RenderPresentation } from '@transitmapper/core/render/render-presentation';
 import { featureCollectionStats } from '@transitmapper/core/render/feature-stats';
 import { modeRender } from '@transitmapper/core/style/catalogStyle';
 import {
@@ -33,7 +33,7 @@ type ReadyLineBundles = Extract<MaterializeLineBundlesResult, { readonly kind: '
 
 export interface ProjectResolvedLineSceneOptions {
   readonly result: NetworkQueryResult;
-  readonly presentation: MapPresentation;
+  readonly presentation: RenderPresentation;
   readonly sceneRevision: string;
   readonly sourceId: SystemFeatureSourceId;
 }

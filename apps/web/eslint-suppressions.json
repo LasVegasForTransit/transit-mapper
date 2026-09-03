@@ -137,12 +137,6 @@
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 7
     },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
-    },
     "@typescript-eslint/prefer-nullish-coalescing": {
       "count": 2
     },

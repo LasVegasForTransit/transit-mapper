@@ -155,9 +155,10 @@ export default {
       comment:
         'Portable View data cannot depend on map lifecycle, React composition, transit ' +
         'documents, or rendering. Every other map package may consume this contract, but the ' +
-        'contract cannot reach back into them.',
+        'contract cannot reach back into them. The presentation state it records lives in core ' +
+        'so the map and renderer packages can read it without depending on Views.',
       from: { path: '^packages/views/src/' },
-      to: { pathNot: '^packages/views/' },
+      to: { pathNot: '^(packages/views/|packages/core/src/presentation/)' },
     },
     {
       name: 'core-does-not-import-the-map-stack',
@@ -182,22 +183,28 @@ export default {
       name: 'map-package-dependencies-are-an-allowlist',
       severity: 'error',
       comment:
-        'The map package owns browser-only MapLibre lifecycle and portable View state. React, ' +
-        'transit documents, renderers, editor hosts, and application policy stay outside it.',
+        'The map package owns everything that touches a MapLibre map: lifecycle, source banks, ' +
+        'layer publication, and the drivers that replay an accepted scene. It reads transit ' +
+        'documents from core and consumes the renderer as a pure projector. React, editor hosts, ' +
+        'and application policy stay outside it.',
       from: { path: '^packages/map/src/' },
       to: {
-        pathNot: '^(packages/map/|packages/views/|node_modules/maplibre-gl/)',
+        pathNot:
+          '^(packages/(map|views|core|renderer)/|node_modules/maplibre-gl/|node_modules/@types/geojson/|geojson$)',
       },
     },
     {
       name: 'renderer-package-dependencies-are-an-allowlist',
       severity: 'error',
       comment:
-        'The renderer projects immutable transit documents into MapLibre. Editor, React, ' +
-        'application, simulation, persistence, and UI policy stay in application hosts.',
+        'The renderer is a pure projector: it turns immutable transit documents into scene data ' +
+        'and never names a map. MapLibre and the map package are both denied here, because a ' +
+        'single edge back to either would put browser-only lifecycle behind an import that the ' +
+        'export renderer and the projection worker also pull in. Editor, React, application, ' +
+        'simulation, persistence, and UI policy stay in application hosts.',
       from: { path: '^packages/renderer/src/' },
       to: {
-        pathNot: '^(packages/(renderer|core|map|views)/|node_modules/maplibre-gl/|geojson$)',
+        pathNot: '^(packages/(renderer|core)/|node_modules/@types/geojson/|geojson$)',
       },
     },
     {

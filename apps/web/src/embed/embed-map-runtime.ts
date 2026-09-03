@@ -1,8 +1,12 @@
-import maplibregl, { type Map as MLMap } from 'maplibre-gl';
+import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { INITIAL_STYLE_FALLBACK_TIMEOUT_MS } from '@transitmapper/map';
-import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
-import { resolveDocumentMapPresentation } from '@transitmapper/renderer/presentation';
+import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
+import type { TransitSystem } from '@transitmapper/core/model/system';
+import { resolveDocumentMapPresentation } from '@transitmapper/map/presentation';
+import { createFeatureProjectionWorker } from '@transitmapper/renderer/projection-worker';
+import type { FeatureProjectionClient } from '@transitmapper/renderer/projection-worker';
+import type { SnapshotMapPresentation } from '@transitmapper/map/snapshot';
 import {
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
@@ -12,7 +16,7 @@ import {
   SRC_WAYS,
 } from '@transitmapper/renderer/layers';
 import { registerMapIcons } from '../map/layers';
-import { EMBED_SOURCE_IDS, embedLayerSpecsForScheme } from './config';
+import { EMBED_FEATURE_SOURCES, EMBED_SOURCE_IDS, embedLayerSpecsForScheme } from './config';
 import { markFirstSystemMapPaint } from '../perf/mapPaintMark';
 import {
   getSystemColorScheme,
@@ -20,7 +24,7 @@ import {
   type ColorScheme,
 } from '../theme/color-scheme';
 import { basemapStyleForScheme, localBlankStyleForScheme } from '../map/mapTheme';
-import { renderPresentationForFittedMap } from '../map/static-render-features';
+import { renderPresentationForFittedMap, type FittedMapLike } from '../map/static-render-features';
 import { carryDocumentStyle } from '../map/document-style-carry';
 import type { EmbedContent, EmbedMapRuntimeOptions } from './embed-bootstrap';
 import { createEmbedStyleController, embedOverlayIsRetained } from './embed-style-controller';
@@ -135,29 +139,64 @@ function waitForSystemPaint(map: MLMap): Promise<void> {
   });
 }
 
-function restoreEmbedOverlay(
-  map: MLMap,
-  features: ReturnType<typeof buildFeatures>,
-  scheme: ColorScheme,
-): void {
-  registerMapIcons(map, scheme);
+export interface EmbedSceneRequest {
+  readonly projection: FeatureProjectionClient;
+  readonly system: TransitSystem;
+  readonly presentation: SnapshotMapPresentation;
+  readonly map: FittedMapLike;
+}
+
+/**
+ * Resolves the one committed scene every passenger surface shares.
+ *
+ * The embed must not build its own features. Only the projection worker swaps
+ * the Line scene in for per-Service geometry, so a builder called here would
+ * paint one stripe per ServicePlan while the reader painted one per Line.
+ */
+export async function projectEmbedScene(request: EmbedSceneRequest): Promise<SystemFeatures> {
+  const system =
+    request.presentation.viewMode === 'diagram'
+      ? (await import('@transitmapper/core/model/diagramLayout')).computeDiagramSystem(
+          request.system,
+        )
+      : request.system;
+  const projected = await request.projection.project({
+    system,
+    selection: null,
+    handleWayIds: [],
+    view: { ...request.presentation, presentation: renderPresentationForFittedMap(request.map) },
+    sourceIds: EMBED_FEATURE_SOURCES,
+    sceneRevision: `embed:${system.id}`,
+  });
+  return projected.features;
+}
+
+/** Publishes an accepted scene without touching icons or layers, so a replay
+ * after a style swap cannot depend on a projection that has not returned. */
+export function installEmbedSceneSources(map: MLMap, scene: SystemFeatures): void {
   const dataBySource: Record<string, GeoJSON.FeatureCollection> = {
-    [SRC_WAYS]: features.ways,
-    [SRC_SERVICES]: features.services,
-    [SRC_STATIONS]: features.stops,
-    [SRC_FOOTPRINTS]: features.footprints,
-    [SRC_PLATFORMS]: features.platforms,
-    [SRC_FACILITIES]: features.facilities,
+    [SRC_WAYS]: scene.ways,
+    [SRC_SERVICES]: scene.services,
+    [SRC_STATIONS]: scene.stops,
+    [SRC_FOOTPRINTS]: scene.footprints,
+    [SRC_PLATFORMS]: scene.platforms,
+    [SRC_FACILITIES]: scene.facilities,
   };
-  for (const sourceId of EMBED_SOURCE_IDS) {
-    if (map.getSource(sourceId)) continue;
+  for (const sourceId of EMBED_FEATURE_SOURCES) {
+    const data = dataBySource[sourceId];
+    const source: GeoJSONSource | undefined = map.getSource(sourceId);
+    if (source) {
+      source.setData(data);
+      continue;
+    }
     const heavy = sourceId === SRC_WAYS || sourceId === SRC_SERVICES;
-    map.addSource(sourceId, {
-      type: 'geojson',
-      data: dataBySource[sourceId],
-      ...(heavy ? { tolerance: 1 } : {}),
-    });
+    map.addSource(sourceId, { type: 'geojson', data, ...(heavy ? { tolerance: 1 } : {}) });
   }
+}
+
+function restoreEmbedOverlay(map: MLMap, scene: SystemFeatures, scheme: ColorScheme): void {
+  registerMapIcons(map, scheme);
+  installEmbedSceneSources(map, scene);
   for (const spec of embedLayerSpecsForScheme(scheme)) {
     if (!map.getLayer(spec.id)) map.addLayer(spec);
   }
@@ -165,13 +204,13 @@ function restoreEmbedOverlay(
 
 interface DrawSystemOptions {
   map: MLMap;
-  features: ReturnType<typeof buildFeatures>;
+  scene: SystemFeatures;
   scheme: ColorScheme;
   runtime: EmbedMapRuntimeOptions;
 }
 
-async function drawSystem({ map, features, scheme, runtime }: DrawSystemOptions): Promise<void> {
-  restoreEmbedOverlay(map, features, scheme);
+async function drawSystem({ map, scene, scheme, runtime }: DrawSystemOptions): Promise<void> {
+  restoreEmbedOverlay(map, scene, scheme);
   runtime.milestones.systemCommitted();
   await waitForSystemPaint(map);
   markFirstSystemMapPaint();
@@ -204,18 +243,35 @@ function updateEmbedLabels(content: EmbedContent): void {
 export async function startEmbedMap(options: EmbedMapRuntimeOptions): Promise<void> {
   const initialScheme = getSystemColorScheme();
   const map = createMap(options.container, initialScheme, options);
+  const projection = createFeatureProjectionWorker();
+  // The Line scene is clipped to the camera it was resolved for, and a reader
+  // can pan an embed straight off that clip. The worker therefore outlives the
+  // first paint instead of being disposed once the system commits.
+  map.on('remove', () => projection.dispose());
   let detachScheme = () => {};
   try {
     const [content] = await Promise.all([options.content, waitForMapLoad(map)]);
     restoreCamera(map, content);
     const presentation = resolveDocumentMapPresentation(content.state);
-    const features = buildFeatures(content.system, null, [], {
-      ...presentation,
-      presentation: renderPresentationForFittedMap(map),
-    });
-    updateEmbedLabels(content);
-    await drawSystem({ map, features, scheme: initialScheme, runtime: options });
+    let scene = await projectEmbedScene({ projection, system: content.system, presentation, map });
     let activeScheme = initialScheme;
+    updateEmbedLabels(content);
+    await drawSystem({ map, scene, scheme: initialScheme, runtime: options });
+    let sceneGeneration = 0;
+    const reprojectScene = () => {
+      const generation = ++sceneGeneration;
+      void projectEmbedScene({ projection, system: content.system, presentation, map })
+        .then((next) => {
+          // A superseded projection may still finish. Request order, not
+          // arrival order, decides which scene the embed keeps.
+          if (generation !== sceneGeneration) return;
+          scene = next;
+          installEmbedSceneSources(map, scene);
+        })
+        .catch((error: unknown) => console.error('[transitmapper embed] scene', error));
+    };
+    map.on('moveend', reprojectScene);
+    map.on('resize', reprojectScene);
     const styleSwitcher = createEmbedStyleController({
       map,
       initialTheme: initialScheme,
@@ -235,12 +291,12 @@ export async function startEmbedMap(options: EmbedMapRuntimeOptions): Promise<vo
             if (map.getLayer(layer.id)) map.removeLayer(layer.id);
           }
         }
-        restoreEmbedOverlay(map, features, scheme);
+        restoreEmbedOverlay(map, scene, scheme);
       },
       reportError: (error) => console.error('[transitmapper embed] map runtime', error),
       onUnavailable: (error) => console.error('[transitmapper embed] background map', error),
     });
-    const onStyleLoad = () => restoreEmbedOverlay(map, features, activeScheme);
+    const onStyleLoad = () => restoreEmbedOverlay(map, scene, activeScheme);
     map.on('style.load', onStyleLoad);
     detachScheme = subscribeSystemColorScheme(
       () => void styleSwitcher.request(getSystemColorScheme()),
@@ -249,6 +305,8 @@ export async function startEmbedMap(options: EmbedMapRuntimeOptions): Promise<vo
       detachScheme();
       styleSwitcher.dispose();
       map.off('style.load', onStyleLoad);
+      map.off('moveend', reprojectScene);
+      map.off('resize', reprojectScene);
     });
     const status = document.getElementById('embed-status');
     if (status) status.hidden = true;

@@ -8,7 +8,7 @@ import {
   SRC_STATIONS,
   bankedLayerId,
   bankedSourceId,
-} from '@transitmapper/renderer/layers';
+} from '@transitmapper/map/layers';
 import { editorMapOverlaySnapshot } from '../../src/map/editor-map-instrumentation';
 
 const CATALOG: readonly LayerSpecification[] = [

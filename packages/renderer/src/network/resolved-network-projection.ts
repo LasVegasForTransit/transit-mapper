@@ -21,7 +21,7 @@ import type {
   ResolvedWay,
   ServicePlanPatternLink,
 } from '@transitmapper/core/network/resolved-network-chunk';
-import type { MapPresentation } from '@transitmapper/core/presentation/map-presentation';
+import type { RenderPresentation } from '@transitmapper/core/render/render-presentation';
 
 export interface ResolvedLinePatternMembership {
   readonly lineId: string;
@@ -55,7 +55,7 @@ export interface ResolvedNetworkProjectionIndex {
 
 export interface ResolvedNetworkProjection {
   readonly result: NetworkQueryResult;
-  readonly presentation: MapPresentation;
+  readonly presentation: RenderPresentation;
   readonly index: ResolvedNetworkProjectionIndex;
 }
 
@@ -326,7 +326,7 @@ function projectionIndex(chunks: readonly ResolvedNetworkChunk[]): ResolvedNetwo
 
 export function projectResolvedNetwork(
   result: NetworkQueryResult,
-  presentation: MapPresentation,
+  presentation: RenderPresentation,
 ): ResolvedNetworkProjection {
   return {
     result,

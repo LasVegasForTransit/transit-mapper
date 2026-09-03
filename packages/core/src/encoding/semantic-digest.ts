@@ -37,7 +37,7 @@ function semanticJsonArray(value: unknown[], path: string): JsonSemanticValue[] 
   });
 }
 
-async function sha256(bytes: Uint8Array): Promise<ContentDigest> {
+export async function sha256Digest(bytes: Uint8Array): Promise<ContentDigest> {
   const buffer = await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes).buffer);
   const value = Array.from(new Uint8Array(buffer), (byte) =>
     byte.toString(16).padStart(2, '0'),
@@ -47,5 +47,5 @@ async function sha256(bytes: Uint8Array): Promise<ContentDigest> {
 
 /** Returns the SHA-256 identity of canonical JSON-like content. */
 export async function semanticDigest(value: unknown): Promise<ContentDigest> {
-  return sha256(canonicalValueBytes(semanticJsonValue(value)));
+  return sha256Digest(canonicalValueBytes(semanticJsonValue(value)));
 }

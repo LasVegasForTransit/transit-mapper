@@ -1,5 +1,5 @@
 import type { WorkbenchDetent } from '@transitmapper/workspace';
-import type { DocumentRepresentationId } from '@transitmapper/renderer/presentation';
+import type { DocumentRepresentationId } from '@transitmapper/map/presentation';
 import type { SupplementalContent } from './Inspector';
 
 const REPRESENTATION_LABEL: Record<DocumentRepresentationId, string> = {

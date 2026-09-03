@@ -5,7 +5,7 @@ import { useMapViewStore } from '@transitmapper/workspace';
 import {
   DOCUMENT_VIEW_FILTER_IDS,
   type DocumentRepresentationId,
-} from '@transitmapper/renderer/presentation';
+} from '@transitmapper/map/presentation';
 
 export type RepresentationId = DocumentRepresentationId;
 

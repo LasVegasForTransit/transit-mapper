@@ -4,7 +4,7 @@ import {
   type MapFilterValue,
   type MapPresentationStateV1,
   type RepresentationId,
-} from '@transitmapper/views';
+} from '@transitmapper/core/presentation/map-presentation-state';
 
 export type MapViewStoreListener = (state: MapPresentationStateV1) => void;
 

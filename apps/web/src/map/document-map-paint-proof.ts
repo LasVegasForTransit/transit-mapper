@@ -1,4 +1,4 @@
-import type { DocumentMapSceneAccepted, DocumentMapSession } from '@transitmapper/renderer/driver';
+import type { DocumentMapSceneAccepted, DocumentMapSession } from '@transitmapper/map/driver';
 import { SRC_STATIONS } from '@transitmapper/renderer/layers';
 import { markFirstSystemMapPaint } from '../perf/mapPaintMark';
 

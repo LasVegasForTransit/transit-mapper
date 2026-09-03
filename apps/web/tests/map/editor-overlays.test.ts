@@ -3,10 +3,10 @@ import { renderPresentationForViewport } from '@transitmapper/core/render/render
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import { aRoad, aService, aSystem } from '@transitmapper/core/testing/fixtures';
 import type { Selection } from '../../src/editor/store';
-import * as editorOverlays from '../../src/map/editor-overlays';
 import {
   canApplyEditorSourceUpdate,
   editorOverlayWorkerInput,
+  editorPatternOverlayWorkerInput,
   editorSourcesNeedSystemRefresh,
   planSelectionRenderUpdate,
   projectEditorOverlays,
@@ -42,21 +42,17 @@ describe('selection render updates', () => {
   it('maps an explicit Path edit to one semantic Pattern request', () => {
     const service = aService('blue', []);
     const system = aSystem({ services: [service] });
-    const candidate = (editorOverlays as Record<string, unknown>).editorPatternOverlayWorkerInput;
-
-    expect(candidate).toBeTypeOf('function');
-    if (typeof candidate !== 'function') return;
-    const input = candidate({
+    const input = editorPatternOverlayWorkerInput({
       system,
       selection: { kind: 'service', id: service.id },
       activePatternId: service.path.id,
       armedTerminus: null,
       view: editorView,
-    }) as { serviceId: string; patternId: string } | null;
+    });
 
     expect(input).toMatchObject({ serviceId: service.id, patternId: service.path.id });
     expect(
-      candidate({
+      editorPatternOverlayWorkerInput({
         system,
         selection: { kind: 'service', id: service.id },
         activePatternId: null,

@@ -7,7 +7,7 @@ import {
   documentLayerSpecsForViewMode,
   type SnapshotMapPresentation,
   type SnapshotMapSession,
-} from '@transitmapper/renderer/snapshot';
+} from '@transitmapper/map/snapshot';
 import { createFeatureProjectionWorker } from '@transitmapper/renderer/projection-worker';
 import {
   COMMITTED_SYSTEM_FEATURE_SOURCES,
@@ -16,13 +16,13 @@ import {
   SRC_LANDMARKS,
   SRC_STATIONS,
   logicalRenderLayerId,
-} from '@transitmapper/renderer/layers';
+} from '@transitmapper/map/layers';
 import type { ColorScheme } from '../theme/color-scheme';
 import {
   DOCUMENT_VIEW_FILTER_IDS,
   DOCUMENT_MAP_DEFINITION,
   resolveDocumentMapPresentation,
-} from '@transitmapper/renderer/presentation';
+} from '@transitmapper/map/presentation';
 import { landmarksFeatureCollection } from '../map/landmarks';
 import { registerMapIcons } from '../map/layers';
 import { layerSpecsForScheme } from '../map/mapTheme';

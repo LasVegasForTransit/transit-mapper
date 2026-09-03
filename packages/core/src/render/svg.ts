@@ -1,5 +1,6 @@
+import type { FeatureCollection, LineString } from 'geojson';
 import type { LngLat, TransitSystem } from '../model/system';
-import { buildFeatures, type RenderViewOptions } from './buildFeatures';
+import { buildFeatures, type RenderViewOptions, type SystemFeatures } from './buildFeatures';
 import type { LegendEntry } from './legend';
 import type { ScaleBarSpec } from './scaleBar';
 import type { ScreenPoint } from './project';
@@ -116,6 +117,33 @@ export interface SvgRenderOptions {
    * keeps carrying its own title.
    */
   captionedExternally?: boolean;
+  /**
+   * The passenger Lines already resolved for this camera: one shared casing
+   * and one stripe per Line. Supplying it replaces the per-ServicePlan stripes
+   * `buildFeatures` derives from the document, so a Line served by two plans
+   * paints once here exactly as it does on the live map.
+   *
+   * The caller resolves it rather than this module, because the Line projector
+   * lives in `@transitmapper/renderer`, which depends on core — core importing
+   * it back would invert that. Everything else in the drawing stays on
+   * `buildFeatures`, which is the same split the live projection Worker makes.
+   */
+  passengerLines?: FeatureCollection<LineString>;
+}
+
+const NO_SERVICE_ARROWS: FeatureCollection<LineString> = {
+  type: 'FeatureCollection',
+  features: [],
+};
+
+/** A travel arrow annotates one ServicePlan's one-way stretch, and a Line
+ *  stripe is the whole corridor rather than any one plan's run of it, so the
+ *  arrows go out with the geometry they belonged to. */
+function withPassengerLines(
+  features: SystemFeatures,
+  passengerLines: FeatureCollection<LineString>,
+): SystemFeatures {
+  return { ...features, services: passengerLines, serviceArrows: NO_SERVICE_ARROWS };
 }
 
 // The org's brand face (see style/lvbtBrand.ts). Server-side rendering
@@ -239,13 +267,15 @@ function titleMarkup(title: string, width: number, fontFamily: string, size: num
   );
 }
 
-function legendMarkup(
-  legend: LegendEntry[],
-  width: number,
-  height: number,
-  fontFamily: string,
-  size: number,
-): string {
+interface LegendMarkupOptions {
+  readonly legend: LegendEntry[];
+  readonly width: number;
+  readonly height: number;
+  readonly fontFamily: string;
+  readonly size: number;
+}
+
+function legendMarkup({ legend, width, height, fontFamily, size }: LegendMarkupOptions): string {
   if (legend.length === 0) return '';
   const rowH = Math.max(ROW_H, size * 1.7);
 
@@ -323,9 +353,12 @@ export function systemSvg(
 ): string {
   const { width, height } = opts;
   const fontFamily = opts.fontFamily ?? DEFAULT_FONT_FAMILY;
+  const documentFeatures = buildFeatures(system, null, [], view);
   const resolved = resolveStaticVisualScene({
     revision: `svg:${system.id}`,
-    features: buildFeatures(system, null, [], view),
+    features: opts.passengerLines
+      ? withPassengerLines(documentFeatures, opts.passengerLines)
+      : documentFeatures,
     presentation: view.presentation,
     ...(opts.cartographyCasingColor ? { routeCasingColor: opts.cartographyCasingColor } : {}),
   });
@@ -430,7 +463,15 @@ export function systemSvg(
   if (!opts.captionedExternally) {
     if (legible(TITLE_SIZE)) parts.push(titleMarkup(opts.title, width, fontFamily, TITLE_SIZE));
     if (legible(LEGEND_TEXT_SIZE))
-      parts.push(legendMarkup(opts.legend, width, height, fontFamily, LEGEND_TEXT_SIZE));
+      parts.push(
+        legendMarkup({
+          legend: opts.legend,
+          width,
+          height,
+          fontFamily,
+          size: LEGEND_TEXT_SIZE,
+        }),
+      );
   }
   // A north arrow and a scale bar are instruments — unreadable, they're just
   // marks. Both hang on the same legibility test as the text that labels them.

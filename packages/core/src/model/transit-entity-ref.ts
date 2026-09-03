@@ -1,6 +1,7 @@
 import type { TransitEntityRef } from '../transit/entity-ref';
 
 export type { TransitEntityRef } from '../transit/entity-ref';
+export { parseTransitEntityRef, TRANSIT_ENTITY_KINDS } from '../transit/entity-ref';
 
 declare const transitEntityKeyBrand: unique symbol;
 

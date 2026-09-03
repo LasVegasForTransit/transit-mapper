@@ -9,9 +9,9 @@ import {
   SRC_STATIONS,
   bankedLayerId,
   bankedSourceId,
-} from '@transitmapper/renderer/layers';
-import * as rendererLayers from '@transitmapper/renderer/layers';
-import { documentLayerSpecsForViewMode } from '@transitmapper/renderer/driver';
+} from '@transitmapper/map/layers';
+import * as rendererLayers from '@transitmapper/map/layers';
+import { documentLayerSpecsForViewMode } from '@transitmapper/map/driver';
 import { LAYER_SPECS } from '../../src/map/layers';
 import {
   editorMapSurfaceLayerSpecs,
@@ -35,9 +35,7 @@ describe('editor map layers', () => {
       (key) => (rendererLayers as Record<string, unknown>)[key],
     );
 
-    expect(overlaySources).toSatisfy((sources) =>
-      sources.every((source) => typeof source === 'string'),
-    );
+    expect(overlaySources.every((source) => typeof source === 'string')).toBe(true);
     const sources = new Set(
       overlaySources.filter((source): source is string => typeof source === 'string'),
     );
