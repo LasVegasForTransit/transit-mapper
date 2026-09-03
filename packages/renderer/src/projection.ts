@@ -27,3 +27,9 @@ export {
   type SourceUploadTransition,
   type SystemFeatureSourceId,
 } from './sources/source-upload-plan';
+export {
+  projectResolvedNetwork,
+  type ResolvedLinePatternMembership,
+  type ResolvedNetworkProjection,
+  type ResolvedNetworkProjectionIndex,
+} from './network/resolved-network-projection';

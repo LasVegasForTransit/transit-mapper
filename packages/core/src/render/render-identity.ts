@@ -1,3 +1,5 @@
+import { transitEntityKey, type TransitEntityRef } from '../model/transit-entity-ref';
+
 declare const systemFeatureSourceIdBrand: unique symbol;
 declare const renderFeatureIdBrand: unique symbol;
 declare const renderDomainIdentityBrand: unique symbol;
@@ -64,10 +66,20 @@ export function renderFeatureId(
   return `render:${encoded(sourceId)}:${encoded(role)}:${identity.map(encoded).join(':')}` as RenderFeatureId;
 }
 
-export function renderDomainIdentity(kind: string, id: string): RenderDomainIdentity {
-  requireText(kind, 'Render domain kind');
-  requireText(id, 'Render domain ID');
-  return `domain:${encoded(kind)}:${encoded(id)}` as RenderDomainIdentity;
+export function renderDomainIdentity(reference: TransitEntityRef): RenderDomainIdentity;
+export function renderDomainIdentity(kind: string, id: string): RenderDomainIdentity;
+export function renderDomainIdentity(
+  referenceOrKind: TransitEntityRef | string,
+  id?: string,
+): RenderDomainIdentity {
+  if (typeof referenceOrKind !== 'string') {
+    // Both brands use the legacy domain bytes, but neither layer owns the other's type.
+    return transitEntityKey(referenceOrKind) as unknown as RenderDomainIdentity;
+  }
+
+  requireText(referenceOrKind, 'Render domain kind');
+  requireText(id ?? '', 'Render domain ID');
+  return `domain:${encoded(referenceOrKind)}:${encoded(id ?? '')}` as RenderDomainIdentity;
 }
 
 /** Builds deterministic many-to-many domain grouping for batched visual features.
