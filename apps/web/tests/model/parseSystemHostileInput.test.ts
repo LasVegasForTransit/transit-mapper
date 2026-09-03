@@ -239,43 +239,55 @@ describe('parseSystem survives values a person never types by hand', () => {
   // multiply out to exactly the blowup the cap was added to stop. Measured
   // without the aggregate bound: 0.10 MB of such segments took 4.5 seconds
   // and 690 MB. This is the check that distinguishes the two bounds.
-  describe('many individually-legal wide segments are still bounded in aggregate', () => {
-    const manyWays = () => {
-      const pts: [number, number][] = [];
-      for (let i = 0; i < 10_001; i++) pts.push(i % 2 === 0 ? [0, 0] : [0.189, 0.189]);
-      return parseSystem({
-        ...base,
-        ways: [{ id: 'w', typeId: 'road', points: pts, geometry: 'straight', grade: 'atGrade' }],
-      }).ways;
-    };
+  // Each case here parses a 10,001-point way and queries its segment grid,
+  // which costs ~180ms unloaded against Vitest's 5s default. That is real work
+  // rather than a hang: the 10,000 segments are what push past the aggregate
+  // bound, so the input cannot shrink without the cases ceasing to test it.
+  // Under a machine running several package suites at once the margin is not
+  // enough, and the budget is stated here rather than inherited so a busy
+  // machine cannot fail the build. It sits on the block because all three
+  // cases do the same work — only one of them happened to fail first.
+  describe(
+    'many individually-legal wide segments are still bounded in aggregate',
+    { timeout: 30_000 },
+    () => {
+      const manyWays = () => {
+        const pts: [number, number][] = [];
+        for (let i = 0; i < 10_001; i++) pts.push(i % 2 === 0 ? [0, 0] : [0.189, 0.189]);
+        return parseSystem({
+          ...base,
+          ways: [{ id: 'w', typeId: 'road', points: pts, geometry: 'straight', grade: 'atGrade' }],
+        }).ways;
+      };
 
-    // Each of the 10,000 segments is under MAX_SEGMENT_CELLS on its own, so
-    // the per-segment cap lets every one of them through: this is ~41 million
-    // entries with only that cap in place, and it is the aggregate bound and
-    // nothing else that holds the number below.
-    it('ten thousand individually-legal wide segments stay under the grid bound', () => {
-      const many = manyWays();
-      servedWayIds([0, 0], many, 90);
-      const stats = segmentGridStats(many);
-      expect(stats.entries).toBeLessThanOrEqual(MAX_GRID_CELLS);
-    });
-    // Overflow goes to the held-aside list, which every query scans in full —
-    // so that list needs its own ceiling or the quadratic comes back there.
-    it('the overflow from those segments stays bounded', () => {
-      const many = manyWays();
-      servedWayIds([0, 0], many, 90);
-      const stats = segmentGridStats(many);
-      expect(stats.oversize).toBeLessThanOrEqual(MAX_OVERSIZE_SEGMENTS);
-    });
-    // The bound must not have been reached by silently indexing nothing.
-    it('those segments are still indexed', () => {
-      const many = manyWays();
-      servedWayIds([0, 0], many, 90);
-      const stats = segmentGridStats(many);
-      expect(stats.entries).toBeGreaterThan(0);
-      expect(servedWayIds([0, 0], many, 90)).toContain('w');
-    });
-  });
+      // Each of the 10,000 segments is under MAX_SEGMENT_CELLS on its own, so
+      // the per-segment cap lets every one of them through: this is ~41 million
+      // entries with only that cap in place, and it is the aggregate bound and
+      // nothing else that holds the number below.
+      it('ten thousand individually-legal wide segments stay under the grid bound', () => {
+        const many = manyWays();
+        servedWayIds([0, 0], many, 90);
+        const stats = segmentGridStats(many);
+        expect(stats.entries).toBeLessThanOrEqual(MAX_GRID_CELLS);
+      });
+      // Overflow goes to the held-aside list, which every query scans in full —
+      // so that list needs its own ceiling or the quadratic comes back there.
+      it('the overflow from those segments stays bounded', () => {
+        const many = manyWays();
+        servedWayIds([0, 0], many, 90);
+        const stats = segmentGridStats(many);
+        expect(stats.oversize).toBeLessThanOrEqual(MAX_OVERSIZE_SEGMENTS);
+      });
+      // The bound must not have been reached by silently indexing nothing.
+      it('those segments are still indexed', () => {
+        const many = manyWays();
+        servedWayIds([0, 0], many, 90);
+        const stats = segmentGridStats(many);
+        expect(stats.entries).toBeGreaterThan(0);
+        expect(servedWayIds([0, 0], many, 90)).toContain('w');
+      });
+    },
+  );
 
   // Held-aside segments must still be found, or the bound would be a silent
   // correctness regression rather than a fix.
