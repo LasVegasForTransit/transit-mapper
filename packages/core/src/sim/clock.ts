@@ -14,6 +14,9 @@
 
 import type { Service } from '../model/system/service';
 import type { ScheduleDayScope } from '../model/system/valueTypes';
+import { parseHhMm } from '../transit/service-time';
+
+export { parseHhMm } from '../transit/service-time';
 
 export const MS_PER_MINUTE = 60_000;
 export const MINUTES_PER_DAY = 24 * 60;
@@ -151,18 +154,6 @@ export function dayScopeAt(simMs: number): ScheduleDayScope {
  *  comment above for why this can't be a lookup table. */
 export function formatSimClock(simMs: number, locale?: string): string {
   return `${weekdayLabel(dayOfWeek(simMs), locale)} ${formatTimeOfDay(minutesOfDay(simMs), locale)}`;
-}
-
-/** "HH:MM" → minutes since midnight, or null if it isn't one. Schedule spans
- *  are user-typed strings, so this rejects rather than coerces: a malformed
- *  span should read as "no span set", not as midnight. */
-export function parseHhMm(value: string): number | null {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
-  if (!match) return null;
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  if (hours > 23 || minutes > 59) return null;
-  return hours * 60 + minutes;
 }
 
 /**

@@ -6,25 +6,11 @@ import type { ResolveOptions } from '../content-provider';
 import type { ContentRef } from '../content-reference';
 import type { NetworkQuery, ViewFilterValue } from '../query';
 import type { ResolvedContentDescriptor, ResolvedContentRef } from '../resolved-content-reference';
+import { legacyDerivedId } from '../../model/schema-v16-system/legacy-id';
 
-type LegacyIdPart = string | number;
 const textEncoder = new TextEncoder();
 
-export function legacyDerivedId(kind: string, ...parts: LegacyIdPart[]): string {
-  if (kind.length === 0) throw new Error('Legacy derived ID kind must not be empty.');
-  const framed = parts.map((part) => {
-    const text = typeof part === 'number' ? legacyNumber(part) : part;
-    return `${new TextEncoder().encode(text).byteLength}:${text}`;
-  });
-  return `v16:${kind}${framed.length === 0 ? '' : `:${framed.join(':')}`}`;
-}
-
-function legacyNumber(value: number): string {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error('Legacy derived ID numbers must be nonnegative safe integers.');
-  }
-  return String(value);
-}
+export { legacyDerivedId };
 
 export type SchemaV16SystemProviderErrorCode =
   | 'content-not-found'
