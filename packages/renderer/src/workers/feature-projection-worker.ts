@@ -8,9 +8,14 @@
  */
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type {
+  PatternOverlayFeatures,
+  PatternOverlayProjectionInput,
+} from '../projection/pattern-overlay-projection';
+import type {
   FeatureProjectionWorkerEvent,
   FeatureProjectionWorkerInput,
   FeatureProjectionWorkerRequest,
+  PatternOverlayWorkerInput,
   WorkerRenderView,
 } from './feature-projection-worker-protocol';
 import {
@@ -42,6 +47,10 @@ export type FeatureProjectionClientInput = Omit<FeatureProjectionWorkerInput, 'v
   readonly view: RenderViewOptions;
 };
 
+export type PatternOverlayClientInput = Omit<PatternOverlayProjectionInput, 'view'> & {
+  readonly view: RenderViewOptions;
+};
+
 /** The only capability the live renderer needs from the projection Worker.
  * Keeping this interface separate from the concrete Worker client lets the
  * publication boundary be tested without fabricating Worker internals. */
@@ -53,7 +62,18 @@ export interface FeatureProjectionClient {
   dispose(): void;
 }
 
+/** The editor alone requests exact operational geometry. Keeping this
+ * capability separate preserves the committed-scene client's Line-only
+ * contract for viewers, exports, and renderer tests. */
+export interface PatternOverlayProjectionClient {
+  projectPatternOverlay(
+    input: PatternOverlayClientInput,
+    signal?: AbortSignal,
+  ): Promise<PatternOverlayFeatures>;
+}
+
 type PendingProjection = PendingWorkerRequest<FeatureProjectionResult>;
+type PendingPatternOverlayProjection = PendingWorkerRequest<PatternOverlayFeatures>;
 
 function defaultWorkerFactory(): FeatureProjectionWorker {
   return new Worker(new URL('./feature-projection-worker-entry.js', import.meta.url), {
@@ -79,16 +99,24 @@ function workerInput(input: FeatureProjectionClientInput): FeatureProjectionWork
   return { ...workerSafeInput, view: workerView(view) };
 }
 
+function patternOverlayWorkerInput(input: PatternOverlayClientInput): PatternOverlayWorkerInput {
+  const { view, ...workerSafeInput } = input;
+  return { ...workerSafeInput, view: workerView(view) };
+}
+
 /**
  * The persistent worker owns only projection-local caches and hysteresis.
  * It is intentionally not a general renderer service: source mutation,
  * camera movement, layer visibility, and hit ownership all stay in the live
  * MapLibre renderer where they can be transacted together.
  */
-export class FeatureProjectionWorkerClient implements FeatureProjectionClient {
+export class FeatureProjectionWorkerClient
+  implements FeatureProjectionClient, PatternOverlayProjectionClient
+{
   private readonly workerFactory: () => FeatureProjectionWorker;
   private worker: FeatureProjectionWorker;
   private readonly pending = new Map<number, PendingProjection>();
+  private readonly pendingPatternOverlays = new Map<number, PendingPatternOverlayProjection>();
   private nextRequestId = 1;
   private disposed = false;
 
@@ -133,6 +161,38 @@ export class FeatureProjectionWorkerClient implements FeatureProjectionClient {
     });
   }
 
+  projectPatternOverlay(
+    input: PatternOverlayClientInput,
+    signal?: AbortSignal,
+  ): Promise<PatternOverlayFeatures> {
+    if (this.disposed) return Promise.reject(new Error('Feature projection Worker is disposed.'));
+    if (signal?.aborted) return Promise.reject(projectionAbortedError());
+    const requestId = this.nextRequestId++;
+    return new Promise<PatternOverlayFeatures>((resolve, reject) => {
+      const abort = () => this.replaceWorker(projectionAbortedError());
+      signal?.addEventListener('abort', abort, { once: true });
+      this.pendingPatternOverlays.set(requestId, {
+        resolve,
+        reject,
+        removeAbortListener: () => signal?.removeEventListener('abort', abort),
+      });
+      try {
+        this.worker.postMessage({
+          kind: 'project-pattern-overlay',
+          requestId,
+          input: patternOverlayWorkerInput(input),
+        });
+      } catch (error) {
+        this.rejectRequest(
+          requestId,
+          error instanceof Error
+            ? error
+            : new Error('Could not send Pattern overlay projection to Worker.'),
+        );
+      }
+    });
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -141,18 +201,31 @@ export class FeatureProjectionWorkerClient implements FeatureProjectionClient {
   }
 
   private handleMessage(event: FeatureProjectionWorkerEvent): void {
-    const pending = takePendingWorkerRequest(this.pending, event.requestId);
-    if (!pending) return;
-    if (event.kind === 'done') pending.resolve({ features: event.features, counts: event.counts });
-    else pending.reject(new Error(event.message));
+    if (event.kind === 'done') {
+      takePendingWorkerRequest(this.pending, event.requestId)?.resolve({
+        features: event.features,
+        counts: event.counts,
+      });
+      return;
+    }
+    if (event.kind === 'pattern-overlay-done') {
+      takePendingWorkerRequest(this.pendingPatternOverlays, event.requestId)?.resolve(
+        event.overlay,
+      );
+      return;
+    }
+    const error = new Error(event.message);
+    this.rejectRequest(event.requestId, error);
   }
 
   private rejectRequest(requestId: number, error: Error): void {
     rejectPendingWorkerRequest(this.pending, requestId, error);
+    rejectPendingWorkerRequest(this.pendingPatternOverlays, requestId, error);
   }
 
   private failPending(error: Error): void {
     rejectAllPendingWorkerRequests(this.pending, error);
+    rejectAllPendingWorkerRequests(this.pendingPatternOverlays, error);
   }
 
   private replaceWorker(error: Error): void {

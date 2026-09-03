@@ -6,6 +6,7 @@ import {
 import { systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
 import { SRC_SERVICE_ARROWS, SRC_SERVICES } from '../layers/constants';
 import { projectLineScene, type LineSceneCache } from '../line/line-scene';
+import { projectPatternOverlay } from '../projection/pattern-overlay-projection';
 import { buildFeaturesForSources } from '../projection/source-feature-projection';
 import { createSourceFeatureProjectionCounts } from '../projection/feature-projection-counts';
 import type {
@@ -55,6 +56,18 @@ workerScope.onmessage = (event) => {
 
 async function project(request: FeatureProjectionWorkerRequest): Promise<void> {
   try {
+    if (request.kind === 'project-pattern-overlay') {
+      const overlay = projectPatternOverlay({
+        ...request.input,
+        view: { ...request.input.view, tierStateResolver },
+      });
+      workerScope.postMessage({
+        kind: 'pattern-overlay-done',
+        requestId: request.requestId,
+        overlay,
+      });
+      return;
+    }
     const counts = createSourceFeatureProjectionCounts();
     const networkLineScene = request.input.view.viewMode === 'network';
     const sourceIds = networkLineScene

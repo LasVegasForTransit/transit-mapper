@@ -13,6 +13,7 @@ import type {
 import { emptySystemFeatures } from '../src/system-feature-sources';
 import { SRC_WAYS } from '../src/layers/constants';
 import type { RenderPreparedSnapshot } from '@transitmapper/core/render/render-preparation';
+import type { PatternOverlayFeatures } from '../src/projection/pattern-overlay-projection';
 
 class RecordingFeatureProjectionWorker implements FeatureProjectionWorker {
   onmessage: ((event: MessageEvent<FeatureProjectionWorkerEvent>) => void) | null = null;
@@ -138,5 +139,42 @@ describe('Feature projection worker', () => {
 
     await staleAssertion;
     await expect(current).resolves.toEqual({ features: emptySystemFeatures(), counts: null });
+  });
+
+  it('projects an explicit Pattern overlay through its own semantic request', async () => {
+    const worker = new RecordingFeatureProjectionWorker();
+    const client = createFeatureProjectionWorker({ workerFactory: () => worker });
+    const overlayClient = client as typeof client & {
+      projectPatternOverlay?: (
+        input: Pick<FeatureProjectionClientInput, 'system' | 'view'> & {
+          serviceId: string;
+          patternId: string;
+        },
+      ) => Promise<PatternOverlayFeatures>;
+    };
+
+    expect(overlayClient.projectPatternOverlay).toBeTypeOf('function');
+    if (!overlayClient.projectPatternOverlay) return;
+    const input = { ...requestInput(), serviceId: 'service-a', patternId: 'pattern-a' };
+    const projected = overlayClient.projectPatternOverlay(input);
+
+    expect(worker.requests[0]).toMatchObject({
+      kind: 'project-pattern-overlay',
+      requestId: 1,
+      input: {
+        system: input.system,
+        serviceId: 'service-a',
+        patternId: 'pattern-a',
+      },
+    });
+    expect('tierStateResolver' in (worker.requests[0]?.input.view ?? {})).toBe(false);
+    const overlay: PatternOverlayFeatures = {
+      path: { type: 'FeatureCollection', features: [] },
+      arrows: { type: 'FeatureCollection', features: [] },
+      termini: { type: 'FeatureCollection', features: [] },
+    };
+    worker.respond({ kind: 'pattern-overlay-done', requestId: 1, overlay });
+
+    await expect(projected).resolves.toEqual(overlay);
   });
 });
