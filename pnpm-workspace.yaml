@@ -84,8 +84,15 @@ overrides:
   # but the audit gate doesn't know that, and 3.x isn't getting the fix
   # backported below 3.3.18.
   nanoid@<3.3.18: ^3.3.18
-  # GHSA-jc9c-2v87-9jf6: normalizeStats writes through keys from a
-  # browserslist-stats.json it is handed. Only vite and postcss reach
-  # browserslist here, at build time, and neither passes custom stats — but the
-  # audit gate is a floor, not a judgement call.
+  # GHSA-73wf-gq98-2v4g, GHSA-c83g-rgw3-j3cx, and GHSA-jc9c-2v87-9jf6: a
+  # crash and a prototype write on an untrusted browserslist query, unbounded
+  # cache growth, and normalizeStats writing through keys from a
+  # browserslist-stats.json it is handed. Only babel, vite, and postcss reach
+  # browserslist here, at build time, where the query comes from this
+  # repository and none of them passes custom stats — but the audit gate is a
+  # floor, not a judgement call.
   browserslist@<4.28.7: ^4.28.7
+  # GHSA-fxqj-rqcc-2cmp: the incomplete fix of GHSA-6g55-p6wh-862q, on
+  # attacker-controlled CSS. Reached through the same build-time tooling as
+  # nanoid above, which only ever parses this repository's own stylesheets.
+  postcss@<8.5.23: ^8.5.23

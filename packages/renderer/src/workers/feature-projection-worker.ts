@@ -6,18 +6,22 @@
  * detached result can never publish a MapLibre source or replace an accepted
  * scene on the main thread.
  */
+import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type {
   PatternOverlayFeatures,
   PatternOverlayProjectionInput,
 } from '../projection/pattern-overlay-projection';
 import type {
+  FeatureProjectionRequestFacts,
   FeatureProjectionWorkerEvent,
   FeatureProjectionWorkerInput,
   FeatureProjectionWorkerRequest,
   PatternOverlayWorkerInput,
+  ProjectionSystemCarriage,
   WorkerRenderView,
 } from './feature-projection-worker-protocol';
+import type { RetainedSystemSlot } from './retained-projection-systems';
 import {
   rejectAllPendingWorkerRequests,
   rejectPendingWorkerRequest,
@@ -43,9 +47,14 @@ export interface FeatureProjectionResult {
   readonly counts: CompletedFeatureProjection['counts'];
 }
 
-export type FeatureProjectionClientInput = Omit<FeatureProjectionWorkerInput, 'view'> & {
+/** Callers hand over documents, not carriage. Which of them actually crosses
+ * the boundary is the client's business, because only the client knows what
+ * the live worker already holds. */
+export interface FeatureProjectionClientInput extends FeatureProjectionRequestFacts {
+  readonly system: TransitSystem;
+  readonly diagramSystem?: TransitSystem;
   readonly view: RenderViewOptions;
-};
+}
 
 export type PatternOverlayClientInput = Omit<PatternOverlayProjectionInput, 'view'> & {
   readonly view: RenderViewOptions;
@@ -91,24 +100,64 @@ function workerView(view: RenderViewOptions): WorkerRenderView {
   return serializableView;
 }
 
-function workerInput(input: FeatureProjectionClientInput): FeatureProjectionWorkerInput {
+/** What the client believes the live worker holds, one entry per slot. */
+type RetainedSystems = Map<RetainedSystemSlot, TransitSystem>;
+
+/** Reference equality, never `updatedAt`: the editor store rebuilds the System
+ * object on every mutation, while `updatedAt` is `Date.now()` and two edits in
+ * one millisecond share it. */
+function carriageFor(
+  retained: RetainedSystems,
+  system: TransitSystem,
+  slot: RetainedSystemSlot,
+): ProjectionSystemCarriage {
+  return retained.get(slot) === system ? { kind: 'retained' } : { kind: 'sent', system };
+}
+
+function workerInput(
+  retained: RetainedSystems,
+  input: FeatureProjectionClientInput,
+): FeatureProjectionWorkerInput {
   // Prepared snapshots hold main-thread map adapters. Their `get` methods are
   // not structured-clone data, so the worker must keep its own projection
   // indexes until a serializable prepared-snapshot format exists.
-  const { preparedSnapshot: _preparedSnapshot, view, ...workerSafeInput } = input;
-  return { ...workerSafeInput, view: workerView(view) };
+  const {
+    preparedSnapshot: _preparedSnapshot,
+    system,
+    diagramSystem,
+    view,
+    ...workerSafeInput
+  } = input;
+  return {
+    ...workerSafeInput,
+    system: carriageFor(retained, system, 'system'),
+    diagramSystem: diagramSystem ? carriageFor(retained, diagramSystem, 'diagramSystem') : null,
+    view: workerView(view),
+  };
 }
 
-function patternOverlayWorkerInput(input: PatternOverlayClientInput): PatternOverlayWorkerInput {
-  const { view, ...workerSafeInput } = input;
-  return { ...workerSafeInput, view: workerView(view) };
+function patternOverlayWorkerInput(
+  retained: RetainedSystems,
+  input: PatternOverlayClientInput,
+): PatternOverlayWorkerInput {
+  const { system, view, ...workerSafeInput } = input;
+  return {
+    ...workerSafeInput,
+    system: carriageFor(retained, system, 'system'),
+    view: workerView(view),
+  };
 }
 
 /**
- * The persistent worker owns only projection-local caches and hysteresis.
- * It is intentionally not a general renderer service: source mutation,
- * camera movement, layer visibility, and hit ownership all stay in the live
- * MapLibre renderer where they can be transacted together.
+ * The persistent worker owns only projection-local caches, hysteresis, and
+ * the documents this client has sent it. It is intentionally not a general
+ * renderer service: source mutation, camera movement, layer visibility, and
+ * hit ownership all stay in the live MapLibre renderer where they can be
+ * transacted together.
+ *
+ * This client is the only thing that creates a worker, so it is also the only
+ * thing that can say what one holds. It never asks: `retained` is written when
+ * a message leaves and cleared whenever the worker behind it changes.
  */
 export class FeatureProjectionWorkerClient
   implements FeatureProjectionClient, PatternOverlayProjectionClient
@@ -117,6 +166,7 @@ export class FeatureProjectionWorkerClient
   private worker: FeatureProjectionWorker;
   private readonly pending = new Map<number, PendingProjection>();
   private readonly pendingPatternOverlays = new Map<number, PendingPatternOverlayProjection>();
+  private readonly retained: RetainedSystems = new Map();
   private nextRequestId = 1;
   private disposed = false;
 
@@ -126,11 +176,23 @@ export class FeatureProjectionWorkerClient
   }
 
   private createWorker(): FeatureProjectionWorker {
+    // A worker realm starts empty. Forgetting here rather than at each call
+    // site is what stops the abort path from naming a retained System that
+    // the replacement was never sent.
+    this.retained.clear();
     const worker = this.workerFactory();
     worker.onmessage = (event) => this.handleMessage(event.data);
     worker.onerror = (event) =>
       this.failPending(new Error(event.message || 'Feature Worker failed.'));
     return worker;
+  }
+
+  /** Called only after `postMessage` returns. It throws on a value it cannot
+   * clone, and the worker holds nothing new when it does. A carriage that
+   * names the retained System leaves the slot alone, and so does a request
+   * with no schematic snapshot: the worker keeps the one it already has. */
+  private retainSent(slot: RetainedSystemSlot, carriage: ProjectionSystemCarriage | null): void {
+    if (carriage?.kind === 'sent') this.retained.set(slot, carriage.system);
   }
 
   project(
@@ -148,8 +210,11 @@ export class FeatureProjectionWorkerClient
         reject,
         removeAbortListener: () => signal?.removeEventListener('abort', abort),
       });
+      const sent = workerInput(this.retained, input);
       try {
-        this.worker.postMessage({ kind: 'project', requestId, input: workerInput(input) });
+        this.worker.postMessage({ kind: 'project', requestId, input: sent });
+        this.retainSent('system', sent.system);
+        this.retainSent('diagramSystem', sent.diagramSystem);
       } catch (error) {
         this.rejectRequest(
           requestId,
@@ -176,12 +241,10 @@ export class FeatureProjectionWorkerClient
         reject,
         removeAbortListener: () => signal?.removeEventListener('abort', abort),
       });
+      const sent = patternOverlayWorkerInput(this.retained, input);
       try {
-        this.worker.postMessage({
-          kind: 'project-pattern-overlay',
-          requestId,
-          input: patternOverlayWorkerInput(input),
-        });
+        this.worker.postMessage({ kind: 'project-pattern-overlay', requestId, input: sent });
+        this.retainSent('system', sent.system);
       } catch (error) {
         this.rejectRequest(
           requestId,
@@ -196,6 +259,7 @@ export class FeatureProjectionWorkerClient
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.retained.clear();
     this.failPending(new Error('Feature projection Worker is disposed.'));
     this.worker.terminate();
   }

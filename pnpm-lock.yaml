@@ -151,6 +151,7 @@ overrides:
   js-yaml@>=4.0.0 <4.3.1: ^4.3.1
   nanoid@<3.3.18: ^3.3.18
   browserslist@<4.28.7: ^4.28.7
+  postcss@<8.5.23: ^8.5.23
 
 importers:
 
@@ -469,10 +470,13 @@ importers:
 
   packages/workspace:
     dependencies:
+      '@transitmapper/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
       '@transitmapper/map':
         specifier: workspace:*
         version: link:../map
-    devDependencies:
       '@transitmapper/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -3983,8 +3987,8 @@ packages:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
     engines: {node: '>= 0.4'}
 
-  postcss@8.5.20:
-    resolution: {integrity: sha512-lW616l85ucIQL+FocMmL7pQFPqBmwejrCMg+iPxyImlrANNJG9NHq/RkyCZopDhd8C3LA03PHRJDjkbGu8vvug==}
+  postcss@8.5.26:
+    resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
     engines: {node: ^10 || ^12 || >=14}
 
   potpack@2.1.0:
@@ -8131,7 +8135,7 @@ snapshots:
 
   possible-typed-array-names@1.1.0: {}
 
-  postcss@8.5.20:
+  postcss@8.5.26:
     dependencies:
       nanoid: 3.3.18
       picocolors: 1.1.1
@@ -8746,7 +8750,7 @@ snapshots:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.5)
       picomatch: 4.0.5
-      postcss: 8.5.20
+      postcss: 8.5.26
       rollup: 4.62.2
       tinyglobby: 0.2.17
     optionalDependencies:

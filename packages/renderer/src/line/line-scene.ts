@@ -1,6 +1,8 @@
 import type { FeatureCollection, LineString } from 'geojson';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { NetworkQuery } from '@transitmapper/core/network/query';
+import type { ContentProvider } from '@transitmapper/core/network/content-provider';
+import type { ResolvedContentRef } from '@transitmapper/core/network/resolved-content-reference';
 import { createSchemaV16SystemProvider } from '@transitmapper/core/network/schema-v16-system-provider';
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { RenderPresentation } from '@transitmapper/core/render/render-presentation';
@@ -13,7 +15,14 @@ export interface ProjectSchemaV16LineSceneOptions {
   readonly system: TransitSystem;
   readonly view: RenderViewOptions;
   readonly sceneRevision: string;
+  /** Which geometry `system` carries. A Diagram layout is spread from the
+   * authored System, so it keeps the same id and `updatedAt` and only this
+   * says which of the two arrived. Callers with no layout omit it: their
+   * content is the authored System whatever view mode they are painting. */
+  readonly layout?: SystemLayout;
 }
+
+type SystemLayout = 'authored' | 'diagram';
 
 const SERVICE_SOURCE_ID = systemFeatureSourceId(SRC_SERVICES);
 
@@ -38,19 +47,79 @@ function queryFor(view: RenderViewOptions): NetworkQuery {
   };
 }
 
-async function resolveSchemaV16LineScene(
-  system: TransitSystem,
-  query: NetworkQuery,
-  presentation: RenderPresentation,
-  sceneRevision: string,
-): Promise<ResolvedLineScene> {
+interface DescribedContent {
+  readonly provider: ContentProvider;
+  readonly content: ResolvedContentRef;
+}
+
+/** Describing a System deep-clones it, validates it, and digests it, and none
+ * of that depends on the camera. Rebuilding a provider per projection made
+ * panning pay it again on every frame: on a 3,800-way network it measured
+ * 993 ms of a 1,437 ms projection.
+ *
+ * The key is the TransitSystem object itself. No value key can be sound here:
+ * `updatedAt` is stamped `Date.now()` when the editor store finalizes an edit,
+ * so two edits landing in the same millisecond share one key while carrying
+ * different content, and the second projection paints the first one's
+ * geometry. The store rebuilds the object on every mutation, so reference
+ * equality separates them by construction and costs no content digest.
+ *
+ * Nothing evicts, because the object graph bounds this already: the worker
+ * retains one authored System and one schematic snapshot across camera moves,
+ * and an entry dies with the document it describes.
+ *
+ * Layout remains a second axis. A Diagram System is spread from its authored
+ * original (`{ ...system, ways, nodes, stops, stations }`), and a Diagram
+ * request that arrives before its layout falls back to the authored System, so
+ * the two must not share an entry even when one object serves both. */
+const describedContent = new WeakMap<TransitSystem, Map<SystemLayout, Promise<DescribedContent>>>();
+
+function describeSystem(system: TransitSystem, layout: SystemLayout): Promise<DescribedContent> {
+  let byLayout = describedContent.get(system);
+  if (!byLayout) {
+    byLayout = new Map<SystemLayout, Promise<DescribedContent>>();
+    describedContent.set(system, byLayout);
+  }
+  const cached = byLayout.get(layout);
+  if (cached) return cached;
+  const described = buildDescribedContent(system);
+  // The promise is cached rather than its value because two projections can
+  // interleave in one worker. A rejection must not become the permanent
+  // answer for this document, so it drops out again.
+  byLayout.set(layout, described);
+  void described.catch(() => {
+    if (byLayout.get(layout) === described) byLayout.delete(layout);
+  });
+  return described;
+}
+
+async function buildDescribedContent(system: TransitSystem): Promise<DescribedContent> {
   const provider = createSchemaV16SystemProvider(system);
   const descriptor = await provider.describe({
     kind: 'transit-system',
     id: system.id,
     revision: { kind: 'latest' },
   });
-  const result = await provider.resolve(descriptor.content, query);
+  return { provider, content: descriptor.content };
+}
+
+interface ResolveLineSceneOptions {
+  readonly system: TransitSystem;
+  readonly layout: SystemLayout;
+  readonly query: NetworkQuery;
+  readonly presentation: RenderPresentation;
+  readonly sceneRevision: string;
+}
+
+async function resolveSchemaV16LineScene({
+  system,
+  layout,
+  query,
+  presentation,
+  sceneRevision,
+}: ResolveLineSceneOptions): Promise<ResolvedLineScene> {
+  const { provider, content } = await describeSystem(system, layout);
+  const result = await provider.resolve(content, query);
   return projectResolvedLineScene({
     result,
     presentation,
@@ -71,12 +140,13 @@ export async function projectSchemaV16LineScene(
   options: ProjectSchemaV16LineSceneOptions,
 ): Promise<ResolvedLineScene> {
   const query = queryFor(options.view);
-  return resolveSchemaV16LineScene(
-    options.system,
+  return resolveSchemaV16LineScene({
+    system: options.system,
+    layout: options.layout ?? 'authored',
     query,
-    options.view.presentation,
-    options.sceneRevision,
-  );
+    presentation: options.view.presentation,
+    sceneRevision: options.sceneRevision,
+  });
 }
 
 export function lineSceneFeatures(scene: ResolvedLineScene): FeatureCollection<LineString> {

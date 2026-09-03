@@ -51,6 +51,92 @@ describe('Line scene', () => {
     expect(usesPassengerLineScene('infrastructure')).toBe(false);
   });
 
+  // Describing a System is cached so panning does not re-digest the document.
+  // A Diagram layout is spread from the authored System and keeps its id and
+  // `updatedAt`, and a Diagram request that arrives before its layout falls
+  // back to the authored System — so a cache keyed on identity or on view mode
+  // would serve authored geometry to the laid-out request behind it.
+  it('does not serve authored geometry to a request carrying a Diagram layout', async () => {
+    const way = aRoad('cached-way', [
+      [-115.2, 36.14],
+      [-115.16, 36.14],
+    ]);
+    const service = aService('cached-service', [aPattern('cached-pattern', [way], [way.id])]);
+    const authored = aSystem({
+      ways: [way],
+      services: [service],
+      lines: [{ id: 'cached-line', name: 'Cached', color: '#123456', serviceIds: [service.id] }],
+    });
+    const movedWay = aRoad('cached-way', [
+      [-115.2, 36.141],
+      [-115.16, 36.141],
+    ]);
+    // Same id and updatedAt as the authored System, different geometry: what
+    // `computeDiagramSystem` returns.
+    const laidOut: TransitSystem = { ...authored, ways: [movedWay] };
+
+    const view = aCameraOverTheFixtures();
+    const fallback = await projectSchemaV16LineScene({
+      system: authored,
+      view,
+      sceneRevision: 'diagram-before-layout',
+    });
+    const withLayout = await projectSchemaV16LineScene({
+      system: laidOut,
+      layout: 'diagram',
+      view,
+      sceneRevision: 'diagram-with-layout',
+    });
+
+    const geometry = (scene: Awaited<ReturnType<typeof projectSchemaV16LineScene>>) =>
+      lineSceneFeatures(scene).features.map((feature) => feature.geometry.coordinates);
+    expect(geometry(withLayout)).not.toEqual(geometry(fallback));
+    expect(geometry(withLayout).flat(2)).toContain(36.141);
+  });
+
+  // `finalizedSystem` in the editor store stamps `updatedAt` with `Date.now()`,
+  // so two edits landing in the same millisecond reach the renderer sharing an
+  // id and an `updatedAt` while carrying different geometry. A cache keyed on
+  // those values serves the first edit's Lines to the second.
+  it('projects two Systems that share an id and updatedAt but differ in content differently', async () => {
+    const before = aRoad('same-millisecond-way', [
+      [-115.2, 36.14],
+      [-115.16, 36.14],
+    ]);
+    const service = aService('same-millisecond-service', [
+      aPattern('same-millisecond-pattern', [before], [before.id]),
+    ]);
+    const first = aSystem({
+      id: 'same-millisecond',
+      ways: [before],
+      services: [service],
+      lines: [
+        { id: 'same-millisecond-line', name: 'Edited', color: '#123456', serviceIds: [service.id] },
+      ],
+    });
+    const second: TransitSystem = {
+      ...first,
+      ways: [
+        aRoad('same-millisecond-way', [
+          [-115.2, 36.141],
+          [-115.16, 36.141],
+        ]),
+      ],
+    };
+    expect(second.updatedAt).toBe(first.updatedAt);
+    expect(second.id).toBe(first.id);
+
+    const view = aCameraOverTheFixtures();
+    const projected = async (system: TransitSystem) =>
+      lineSceneFeatures(
+        await projectSchemaV16LineScene({ system, view, sceneRevision: 'same-millisecond' }),
+      ).features.map((feature) => feature.geometry.coordinates);
+
+    const edited = await projected(second);
+    expect(edited).not.toEqual(await projected(first));
+    expect(edited.flat(2)).toContain(36.141);
+  });
+
   it('resolves only the current camera bounds and mode selection', async () => {
     const busWay = aRoad('bus-way', [
       [-115.2, 36.14],

@@ -17,6 +17,7 @@ import type {
   FeatureProjectionWorkerEvent,
   FeatureProjectionWorkerRequest,
 } from './feature-projection-worker-protocol';
+import { createRetainedProjectionSystems } from './retained-projection-systems';
 
 interface FeatureProjectionWorkerScope {
   onmessage: ((event: MessageEvent<FeatureProjectionWorkerRequest>) => void) | null;
@@ -25,6 +26,7 @@ interface FeatureProjectionWorkerScope {
 
 const workerScope = globalThis as unknown as FeatureProjectionWorkerScope;
 const tierStateResolver = createRenderTierStateResolver();
+const retainedSystems = createRetainedProjectionSystems();
 
 // Static callers ask the worker for only ordered visual collections. The
 // temporary source names below never leave this worker: their sole purpose is
@@ -60,8 +62,10 @@ workerScope.onmessage = (event) => {
 async function project(request: FeatureProjectionWorkerRequest): Promise<void> {
   try {
     if (request.kind === 'project-pattern-overlay') {
+      const { system: carried, ...overlayFacts } = request.input;
       const overlay = projectPatternOverlay({
-        ...request.input,
+        ...overlayFacts,
+        system: retainedSystems.resolve(carried, 'system'),
         view: { ...request.input.view, tierStateResolver },
       });
       workerScope.postMessage({
@@ -71,6 +75,18 @@ async function project(request: FeatureProjectionWorkerRequest): Promise<void> {
       });
       return;
     }
+    // Both slots are read before the first `await` below. Two projections can
+    // interleave in one worker, and the later one may retain a newer document
+    // while this one is still suspended.
+    const {
+      system: carriedSystem,
+      diagramSystem: carriedDiagramSystem,
+      ...projectionFacts
+    } = request.input;
+    const system = retainedSystems.resolve(carriedSystem, 'system');
+    const diagramSystem = carriedDiagramSystem
+      ? retainedSystems.resolve(carriedDiagramSystem, 'diagramSystem')
+      : undefined;
     const counts = createSourceFeatureProjectionCounts();
     const passengerLineScene = usesPassengerLineScene(request.input.view.viewMode);
     const sourceIds = passengerLineScene
@@ -79,17 +95,19 @@ async function project(request: FeatureProjectionWorkerRequest): Promise<void> {
         )
       : request.input.sourceIds;
     let projected = buildFeaturesForSources({
-      ...request.input,
+      ...projectionFacts,
+      system,
+      diagramSystem,
       sourceIds,
       view: { ...request.input.view, tierStateResolver },
       counts,
     });
     if (passengerLineScene && request.input.sourceIds.includes(SRC_SERVICES)) {
       const lineScene = await projectSchemaV16LineScene({
-        system: request.input.diagramSystem ?? request.input.system,
+        system: diagramSystem ?? system,
+        layout: diagramSystem ? 'diagram' : 'authored',
         view: request.input.view,
-        sceneRevision:
-          request.input.sceneRevision ?? `line:${request.input.system.id}:${request.requestId}`,
+        sceneRevision: request.input.sceneRevision ?? `line:${system.id}:${request.requestId}`,
       });
       projected = { ...projected, services: lineSceneFeatures(lineScene) };
     }
@@ -101,7 +119,7 @@ async function project(request: FeatureProjectionWorkerRequest): Promise<void> {
     }
     const features = request.input.normalizeVisualScene
       ? createOrderedSystemRenderVisuals({
-          revision: request.input.sceneRevision ?? `static:${request.input.system.id}`,
+          revision: request.input.sceneRevision ?? `static:${system.id}`,
           features: projected,
           sourceIds: WORKER_VISUAL_SOURCE_IDS,
         }).features

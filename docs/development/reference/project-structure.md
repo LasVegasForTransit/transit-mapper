@@ -66,15 +66,12 @@ map and renderer depend on Views for nothing.
 ### Map
 
 `packages/map` owns map state and the browser-only MapLibre lifecycle.
-`MapViewStore` publishes immutable snapshots. `MapRuntime` manages the map,
-controls, resize, camera sync, styles, and disposal. Hosts provide
-interactions, document-layer carry, recovery, and errors.
-
-Both `MapDriver` implementations live here: `DocumentMapDriver` for editor
-documents, `SnapshotMapDriver` for reader systems. `packages/map/src/sources` owns the
-two physical source banks and the controller that flips between them, along
-with layer visibility, style recovery, and the document map definition the
-editor, viewer, and embed share.
+`MapViewStore` publishes immutable snapshots and `MapRuntime` owns the map
+itself. Both `MapDriver` implementations live here: `DocumentMapDriver` for
+editor documents, `SnapshotMapDriver` for reader systems.
+`packages/map/src/sources` owns the two physical source banks and the
+controller that flips between them, along with layer visibility, style
+recovery, and the document map definition every host shares.
 
 ### Workspace
 
@@ -88,20 +85,19 @@ The package depends on map, treats React as a peer, and imports no editor state.
 names MapLibre, so one projection runs in a worker, in a test, and behind a
 map.
 
-`packages/renderer/src/layers` owns source and layer identities.
+`packages/renderer/src/layers` owns source and layer identities, and
 `packages/renderer/src/network` rejects conflicting duplicates before indexing
-facts. `packages/renderer/src/line` binds Pattern legs to Lines, filters carrier
-partitions, splits spans before clipping, and validates topology windows. Its
-one scene entry derives the network query and detail band from the camera being
-drawn, so a Line paints as one stripe over the visible bounds.
+facts. `packages/renderer/src/line` binds Pattern legs to Lines and derives the
+network query and detail band from the camera being drawn, so a Line paints as
+one stripe over the visible bounds.
 `packages/renderer/src/projection` owns feature building, preparation,
 cooperative scheduling, resumable work, and projection measurements behind the
 bounded `projection` entry.
 `packages/renderer/src/sources` owns retained source state, the render-scene
 source contract, and the mutation plans a host applies, behind the bounded
 `runtime` entry.
-`packages/renderer/src/workers` keeps clients beside their protocols, entries,
-request lifecycles, and publication boundaries.
+`packages/renderer/src/workers` keeps each client beside its protocol,
+entry, and request lifecycle.
 
 ### Core
 
@@ -112,15 +108,13 @@ invalid input and import no renderer, storage, or host state.
 
 `packages/core/src/encoding`, `packages/core/src/geography`,
 `packages/core/src/presentation`, `packages/core/src/source`, and
-`packages/core/src/transit` own canonical identity, spatial values, the
-portable map presentation state, source provenance, and schema-v17 transit
-facts.
+`packages/core/src/transit` own canonical identity, spatial values, map
+presentation state, provenance, and schema-v17 facts.
 
 #### Domain model
 
-`packages/core/src/model` defines saved systems, catalogs, service paths,
-validation, serialization, imports, routing, schematic layout, costs, and
-units. Pure transforms reconcile imports and preserve no-op identity; web
+`packages/core/src/model` defines saved systems and the transforms over
+them. Those transforms reconcile imports and preserve no-op identity; web
 commands compose them into undoable edits without importing Zustand.
 `packages/core/src/api` owns `/api/v1`; `model/gtfs-feed.ts` publishes feed
 metadata without upstream URLs.
@@ -141,18 +135,14 @@ carrier identity and geometry; neither imports renderer or storage code.
 
 `packages/core/src/geometry` derives lane centerlines, junction footprints,
 connector curves, and other street geometry from the domain model.
-`metric-plane.ts` and `metric-curves.ts` resolve a curved Way's local-meter
-centerline from optional per-point radius controls; the render presentation
-turns its final CSS-pixel error budget into the tessellation bound. The
-document stores the authored radius, never a sampled mesh. These results are
-memoized but never persisted. See
+The document stores the authored radius, never a sampled mesh, and the
+derived meshes are memoized but never persisted. See
 [Geometry and routing](../../product/explanation/geometry-and-routing.md).
 
 #### Rendering
 
 `packages/core/src/render` projects a system into styled geographic features
-and SVG. It owns displayed-size LOD, dependency and viewport indexes, stable
-identities, scene validation, and diffs. `RenderScene` separates visual and hit
+and SVG, and owns displayed-size LOD. `RenderScene` separates visual and hit
 geometry and fixes paint order; the static resolver emits SVG paint directly.
 
 `SystemFeatures.stops` are boarding markers; physical Stations produce
@@ -337,7 +327,9 @@ flowchart LR
 | `apps/web/src/map/editor-feature-state.ts`, `editor-overlays.ts`           | Own selection paint, hover, route focus, and transient editor geometry. |
 
 The live renderer's worker protocol contains serializable document and
-presentation facts, never MapLibre objects or an editor store. The snapshot
+presentation facts, never MapLibre objects or an editor store. A request names
+the Systems its worker already holds, and only a changed TransitSystem object
+travels: cloning a 3,800-way document per camera move cost 36-60 ms. The snapshot
 driver and embed ask that same Worker for their scene rather than building
 features themselves, and import no accepted-scene publication or source banks.
 A Line scene is clipped to the camera that resolved it, so the embed reprojects

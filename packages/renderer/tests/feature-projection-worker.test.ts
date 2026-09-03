@@ -5,6 +5,7 @@ import { renderPresentationForViewport } from '@transitmapper/core/render/render
 import {
   createFeatureProjectionWorker,
   type FeatureProjectionClientInput,
+  type FeatureProjectionResult,
   type FeatureProjectionWorker,
 } from '../src/workers/feature-projection-worker';
 import type {
@@ -96,8 +97,8 @@ function lineSceneRequest(
     kind: 'project',
     requestId: 1,
     input: {
-      system,
-      diagramSystem,
+      system: { kind: 'sent', system },
+      diagramSystem: diagramSystem ? { kind: 'sent', system: diagramSystem } : null,
       selection: null,
       handleWayIds: [],
       sourceIds: [SRC_SERVICES],
@@ -115,6 +116,100 @@ function lineSceneRequest(
       },
     },
   };
+}
+
+/**
+ * The production client talking to the production entry.
+ *
+ * Retention is a claim two halves make about one worker realm, so neither
+ * half is faked here: the client decides what to put on the wire, and the
+ * entry answers out of what earlier messages left it holding.
+ */
+class EntryBackedProjectionWorker implements FeatureProjectionWorker {
+  onmessage: ((event: MessageEvent<FeatureProjectionWorkerEvent>) => void) | null = null;
+  onerror: ((event: ErrorEvent) => void) | null = null;
+  readonly requests: FeatureProjectionWorkerRequest[] = [];
+  terminated = false;
+
+  postMessage(request: FeatureProjectionWorkerRequest): void {
+    this.requests.push(request);
+    void runWorkerEntry(request).then((event) => {
+      // A terminated realm answers nobody. Its callers were already rejected
+      // when the client replaced it.
+      if (!this.terminated) {
+        this.onmessage?.({ data: event } as MessageEvent<FeatureProjectionWorkerEvent>);
+      }
+    });
+  }
+
+  terminate(): void {
+    this.terminated = true;
+  }
+}
+
+/** Each request as the wire saw it: the document it carried, or the word for
+ * the one it left to the worker. */
+function carriedSystems(worker: EntryBackedProjectionWorker): (TransitSystem | 'retained')[] {
+  return worker.requests.map((request) =>
+    request.input.system.kind === 'sent' ? request.input.system.system : 'retained',
+  );
+}
+
+function aWaySystem(latitude: number): TransitSystem {
+  return aSystem({
+    id: 'retained-system',
+    ways: [
+      aRoad('corridor', [
+        [-115.2, latitude],
+        [-115.16, latitude],
+      ]),
+    ],
+  });
+}
+
+function wayProjectionInput(system: TransitSystem): FeatureProjectionClientInput {
+  return {
+    system,
+    selection: null,
+    handleWayIds: [],
+    sourceIds: [SRC_WAYS],
+    view: {
+      viewMode: 'infrastructure' as const,
+      visibleModes: new Set(['bus']),
+      visibleWayTypes: new Set(['road']),
+      presentation: renderPresentationForViewport({
+        center: [-115.18, 36.14],
+        zoom: 14,
+        width: 1_280,
+        height: 720,
+      }),
+    },
+  };
+}
+
+type NestedCoordinates = number[] | NestedCoordinates[];
+
+function positions(coordinates: NestedCoordinates): number[][] {
+  return typeof coordinates[0] === 'number'
+    ? [coordinates as number[]]
+    : (coordinates as NestedCoordinates[]).flatMap(positions);
+}
+
+/** Which latitude the projected street sits on. A way is projected as a
+ * corridor polygon a few metres wide, so three decimals collapses both of its
+ * edges back onto the centre line the fixture drew. */
+function projectedLatitudes(result: FeatureProjectionResult): number[] {
+  return [
+    ...new Set(
+      result.features.ways.features
+        .flatMap((feature) =>
+          'coordinates' in feature.geometry
+            ? positions(feature.geometry.coordinates as NestedCoordinates)
+            : [],
+        )
+        .map(([, latitude]) => Number(latitude.toFixed(3))),
+    ),
+  ].sort();
 }
 
 function stripesFrom(event: FeatureProjectionWorkerEvent) {
@@ -147,7 +242,8 @@ describe('Feature projection worker', () => {
       kind: 'project',
       requestId: 1,
       input: {
-        system: input.system,
+        system: { kind: 'sent', system: input.system },
+        diagramSystem: null,
         sourceIds: [SRC_WAYS],
       },
     });
@@ -221,6 +317,67 @@ describe('Feature projection worker', () => {
     await expect(current).resolves.toEqual({ features: emptySystemFeatures(), counts: null });
   });
 
+  // A camera move changes no part of the document, and cloning the RTC fixture
+  // across the boundary costs 36-60 ms of main-thread time every time it
+  // happens. These three cases are the whole contract that avoids it.
+  it('names the retained System rather than re-sending an unchanged object', async () => {
+    const worker = new EntryBackedProjectionWorker();
+    const client = createFeatureProjectionWorker({ workerFactory: () => worker });
+    const system = aWaySystem(36.14);
+
+    const first = await client.project(wayProjectionInput(system));
+    const second = await client.project(wayProjectionInput(system));
+
+    expect(carriedSystems(worker)).toEqual([system, 'retained']);
+    expect(projectedLatitudes(second)).toEqual(projectedLatitudes(first));
+    expect(projectedLatitudes(second)).toEqual([36.14]);
+    client.dispose();
+  });
+
+  it('carries the System again once the object changes, and projects the new content', async () => {
+    const worker = new EntryBackedProjectionWorker();
+    const client = createFeatureProjectionWorker({ workerFactory: () => worker });
+    const before = aWaySystem(36.14);
+    // Same id, same `updatedAt`, moved geometry: the editor store rebuilds the
+    // object on every mutation, so only the reference separates these two.
+    const after = aWaySystem(36.15);
+    expect(after.updatedAt).toBe(before.updatedAt);
+
+    await client.project(wayProjectionInput(before));
+    const second = await client.project(wayProjectionInput(after));
+
+    expect(carriedSystems(worker)).toEqual([before, after]);
+    expect(projectedLatitudes(second)).toEqual([36.15]);
+    client.dispose();
+  });
+
+  it('carries the System again after an abort replaces the Worker', async () => {
+    const first = new EntryBackedProjectionWorker();
+    const replacement = new EntryBackedProjectionWorker();
+    const workers = [first, replacement];
+    const client = createFeatureProjectionWorker({
+      workerFactory: () => {
+        const worker = workers.shift();
+        if (!worker) throw new Error('Expected a replacement projection Worker.');
+        return worker;
+      },
+    });
+    const system = aWaySystem(36.14);
+
+    await client.project(wayProjectionInput(system));
+    const abort = new AbortController();
+    const superseded = client.project(wayProjectionInput(system), abort.signal);
+    const supersededAssertion = expect(superseded).rejects.toMatchObject({ name: 'AbortError' });
+    abort.abort();
+    await supersededAssertion;
+    await client.project(wayProjectionInput(system));
+
+    expect(first.terminated).toBe(true);
+    expect(carriedSystems(first)).toEqual([system, 'retained']);
+    expect(carriedSystems(replacement)).toEqual([system]);
+    client.dispose();
+  });
+
   it('projects an explicit Pattern overlay through its own semantic request', async () => {
     const worker = new RecordingFeatureProjectionWorker();
     const client = createFeatureProjectionWorker({ workerFactory: () => worker });
@@ -231,7 +388,7 @@ describe('Feature projection worker', () => {
       kind: 'project-pattern-overlay',
       requestId: 1,
       input: {
-        system: input.system,
+        system: { kind: 'sent', system: input.system },
         serviceId: 'service-a',
         patternId: 'pattern-a',
       },
