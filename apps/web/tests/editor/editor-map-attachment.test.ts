@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from 'vitest';
-import { LYR_GESTURE_POINT, LYR_STATIONS } from '@transitmapper/renderer/layers';
+import {
+  LYR_GESTURE_POINT,
+  LYR_STATIONS,
+  SRC_PATTERN_OVERLAY,
+  SRC_PATTERN_OVERLAY_ARROWS,
+  SRC_PATTERN_OVERLAY_TERMINI,
+} from '@transitmapper/renderer/layers';
+import { aService, aSystem } from '@transitmapper/core/testing/fixtures';
 import {
   attachEditorMap,
   type AttachEditorMapOptions,
@@ -67,6 +74,69 @@ describe('the editor map attachment', () => {
     expect(harness.worker.project).toHaveBeenCalledOnce();
     expect(harness.renderer.updateEditorScene).toHaveBeenCalledOnce();
     expect(harness.scheduleProjection).not.toHaveBeenCalled();
+    attachment.dispose();
+    requestFrame.mockRestore();
+  });
+
+  it('publishes an opened Pattern only to the editor overlay sources', async () => {
+    const harness = createHarness();
+    const service = aService('service-a', []);
+    const system = aSystem({ services: [service] });
+    harness.options.document.store.commands.document.setSystem(system);
+    harness.options.document.store.commands.selection.select({ kind: 'service', id: service.id });
+    harness.options.document.store.commands.selection.setActivePattern(service.path.id);
+    const overlay = {
+      path: {
+        type: 'FeatureCollection' as const,
+        features: [
+          {
+            type: 'Feature' as const,
+            properties: {},
+            geometry: { type: 'LineString' as const, coordinates: [[-115.2, 36.1]] },
+          },
+        ],
+      },
+      arrows: { type: 'FeatureCollection' as const, features: [] },
+      termini: {
+        type: 'FeatureCollection' as const,
+        features: [
+          {
+            type: 'Feature' as const,
+            properties: {},
+            geometry: { type: 'Point' as const, coordinates: [-115.2, 36.1] },
+          },
+        ],
+      },
+    };
+    harness.worker.projectPatternOverlay.mockResolvedValue(overlay);
+    const frames: FrameRequestCallback[] = [];
+    const requestFrame = vi
+      .spyOn(globalThis, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+    const attachment = attachEditorMap(
+      harness.session,
+      harness.options,
+      new AbortController().signal,
+    );
+
+    frames.shift()?.(0);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(harness.worker.projectPatternOverlay).toHaveBeenCalledWith(
+      expect.objectContaining({ serviceId: service.id, patternId: service.path.id }),
+      expect.any(AbortSignal),
+    );
+    expect(harness.map.getSource(SRC_PATTERN_OVERLAY).setData).toHaveBeenCalledWith(overlay.path);
+    expect(harness.map.getSource(SRC_PATTERN_OVERLAY_ARROWS).setData).toHaveBeenCalledWith(
+      overlay.arrows,
+    );
+    expect(harness.map.getSource(SRC_PATTERN_OVERLAY_TERMINI).setData).toHaveBeenCalledWith(
+      overlay.termini,
+    );
     attachment.dispose();
     requestFrame.mockRestore();
   });

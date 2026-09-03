@@ -138,6 +138,13 @@ export function createEditorMapAttachmentHarness() {
   const viewStore = createMapViewStore(createDocumentPresentationState());
   const worker = {
     project: vi.fn(() => Promise.resolve({ features: emptySystemFeatures() })),
+    projectPatternOverlay: vi.fn(() =>
+      Promise.resolve({
+        path: { type: 'FeatureCollection' as const, features: [] },
+        arrows: { type: 'FeatureCollection' as const, features: [] },
+        termini: { type: 'FeatureCollection' as const, features: [] },
+      }),
+    ),
     dispose: vi.fn(),
   };
   const detachSimulation = vi.fn();

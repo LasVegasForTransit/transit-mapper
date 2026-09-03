@@ -14,17 +14,23 @@ import {
   LYR_STATIONS,
   LYR_WAYS_DASHED,
   LYR_WAYS_SOLID,
+  SRC_PATTERN_OVERLAY,
+  SRC_PATTERN_OVERLAY_ARROWS,
+  SRC_PATTERN_OVERLAY_TERMINI,
   SRC_JUNCTION_GUIDES,
   emptySystemFeatures,
 } from '@transitmapper/renderer/layers';
 import {
   mergeSourceFeatureProjectionCounts,
   type FeatureProjectionClient,
+  type PatternOverlayFeatures,
+  type PatternOverlayProjectionClient,
   type SourceFeatureProjectionCounts,
 } from '@transitmapper/renderer/projection';
 import type { AcceptedSceneUpdate } from '@transitmapper/renderer/runtime';
 import {
   canApplyEditorSourceUpdate,
+  editorPatternOverlayWorkerInput,
   editorOverlayWorkerInput,
   selectedJunctionConnectorFeatures,
 } from '../map/editor-overlays';
@@ -52,13 +58,21 @@ export interface EditorProjectionAccounting {
 export interface EditorMapProjectionOptions {
   readonly store: EditorStore;
   readonly viewStore: MapViewStore;
-  createWorker(): FeatureProjectionClient;
+  createWorker(): FeatureProjectionClient & PatternOverlayProjectionClient;
   renderView(): RenderViewOptions;
   overlayNeedsHealing(): boolean;
   beginAccounting(): EditorProjectionAccounting;
   recordUpdate(update: AcceptedSceneUpdate | null): void;
   recordSourceUpload(): void;
   reportError(error: unknown): void;
+}
+
+function emptyPatternOverlay(): PatternOverlayFeatures {
+  return {
+    path: { type: 'FeatureCollection', features: [] },
+    arrows: { type: 'FeatureCollection', features: [] },
+    termini: { type: 'FeatureCollection', features: [] },
+  };
 }
 
 export interface EditorMapProjectionController {
@@ -99,6 +113,7 @@ export function createEditorMapProjection(
     state: ReturnType<EditorStore['getState']>,
     features: ReturnType<typeof emptySystemFeatures>,
     infrastructure: boolean,
+    patternOverlay: PatternOverlayFeatures,
   ) => {
     const update = session.renderer.updateEditorScene({
       revision: `${state.system.id}:editor:${++revision}`,
@@ -108,16 +123,27 @@ export function createEditorMapProjection(
     options.recordUpdate(update);
     featureState.applySelection();
     const guideSource = session.map.getSource<GeoJSONSource>(SRC_JUNCTION_GUIDES);
-    if (!guideSource) return;
-    guideSource.setData(
-      infrastructure
-        ? selectedJunctionConnectorFeatures(
-            state.system,
-            state.selection?.kind === 'node' ? state.selection.id : null,
-          )
-        : { type: 'FeatureCollection', features: [] },
-    );
-    options.recordSourceUpload();
+    if (guideSource) {
+      guideSource.setData(
+        infrastructure
+          ? selectedJunctionConnectorFeatures(
+              state.system,
+              state.selection?.kind === 'node' ? state.selection.id : null,
+            )
+          : { type: 'FeatureCollection', features: [] },
+      );
+      options.recordSourceUpload();
+    }
+    for (const [sourceId, data] of [
+      [SRC_PATTERN_OVERLAY, patternOverlay.path],
+      [SRC_PATTERN_OVERLAY_ARROWS, patternOverlay.arrows],
+      [SRC_PATTERN_OVERLAY_TERMINI, patternOverlay.termini],
+    ] as const) {
+      const source = session.map.getSource<GeoJSONSource>(sourceId);
+      if (!source) continue;
+      source.setData(data);
+      options.recordSourceUpload();
+    }
   };
   const update = () => {
     if (
@@ -134,7 +160,7 @@ export function createEditorMapProjection(
     if (representation === 'diagram') {
       projectionAbort?.abort();
       projectionAbort = null;
-      applyProjected(state, emptySystemFeatures(), false);
+      applyProjected(state, emptySystemFeatures(), false, emptyPatternOverlay());
       return;
     }
     const accounting = options.beginAccounting();
@@ -142,30 +168,41 @@ export function createEditorMapProjection(
     const abort = new AbortController();
     projectionAbort = abort;
     const infrastructure = representation === 'infrastructure';
-    void worker
-      .project(
-        editorOverlayWorkerInput({
-          system: state.system,
-          selection: state.selection,
-          handleWayIds: handles(),
-          view: options.renderView(),
-          physicalHandleStationId:
-            infrastructure && state.selection?.kind === 'station' ? state.selection.id : null,
-          physicalHandleGroupId:
-            infrastructure && state.selection?.kind === 'group' ? state.selection.id : null,
-          activePatternId: state.activePatternId,
-          armedTerminus: state.armedTerminus,
-        }),
-        abort.signal,
-      )
-      .then(({ features, counts }) => {
+    const view = options.renderView();
+    const editorProjection = worker.project(
+      editorOverlayWorkerInput({
+        system: state.system,
+        selection: state.selection,
+        handleWayIds: handles(),
+        view,
+        physicalHandleStationId:
+          infrastructure && state.selection?.kind === 'station' ? state.selection.id : null,
+        physicalHandleGroupId:
+          infrastructure && state.selection?.kind === 'group' ? state.selection.id : null,
+        activePatternId: state.activePatternId,
+        armedTerminus: state.armedTerminus,
+      }),
+      abort.signal,
+    );
+    const patternInput = editorPatternOverlayWorkerInput({
+      system: state.system,
+      selection: state.selection,
+      activePatternId: state.activePatternId,
+      armedTerminus: state.armedTerminus,
+      view,
+    });
+    const patternProjection = patternInput
+      ? worker.projectPatternOverlay(patternInput, abort.signal)
+      : Promise.resolve(emptyPatternOverlay());
+    void Promise.all([editorProjection, patternProjection])
+      .then(([{ features, counts }, patternOverlay]) => {
         if (disposed || abort.signal.aborted || projectionAbort !== abort) {
           accounting.discard();
           return;
         }
         if (counts) mergeSourceFeatureProjectionCounts(accounting.counts, counts);
         try {
-          applyProjected(state, features, infrastructure);
+          applyProjected(state, features, infrastructure, patternOverlay);
           accounting.accept();
         } catch (error) {
           accounting.discard();
