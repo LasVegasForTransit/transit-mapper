@@ -1,14 +1,11 @@
 import type { MapDriver, SelectionController } from '@transitmapper/map';
-import {
-  createDocumentMapDriver,
-  type DocumentMapDriverOptions,
-} from '@transitmapper/renderer/driver';
+import { createDocumentMapDriver, type DocumentMapDriverOptions } from '@transitmapper/map/driver';
 import type { SourceFeatureProjectionAccounting } from '@transitmapper/renderer/projection';
 import type { RendererStatsCollector } from '@transitmapper/renderer/stats';
 import {
   DOCUMENT_MAP_DEFINITION,
   resolveDocumentMapPresentation,
-} from '@transitmapper/renderer/presentation';
+} from '@transitmapper/map/presentation';
 import { createDocumentMapSource, type EditorDocumentMapSource } from './document-map-source';
 import { createEditorSelectionController } from './editor-selection';
 import type { EditorStore } from './store';
@@ -16,7 +13,7 @@ import type { EditorStore } from './store';
 export {
   DOCUMENT_MAP_DEFINITION,
   resolveDocumentMapPresentation,
-} from '@transitmapper/renderer/presentation';
+} from '@transitmapper/map/presentation';
 
 export interface CreateEditorDocumentMapOptions {
   readonly store: EditorStore;

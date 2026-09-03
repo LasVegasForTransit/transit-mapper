@@ -51,7 +51,7 @@ describe('Service path editing', () => {
     if (!pathTab) throw new Error('Expected a Path tab.');
     act(() => pathTab.click());
     const editPath = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-      button.textContent?.includes('Edit path'),
+      button.textContent.includes('Edit path'),
     );
     if (!editPath) throw new Error('Expected an Edit path action.');
     act(() => editPath.click());

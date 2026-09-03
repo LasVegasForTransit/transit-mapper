@@ -3,9 +3,9 @@
 TransitMapper's core idea is that one system needs more than one
 representation. The same document renders three ways:
 
-- **Network** — the schematic. Colored service lines, point stops, one-way
-  chevrons. This is the transit map as riders think of it, and the view
-  where you draw and route _services_.
+- **Network** — the schematic. One colored stripe per Line and point stops.
+  This is the transit map as riders think of it, and the view where you draw
+  and route _services_.
 - **Infrastructure** — the physical world. Roads with lanes, tracks,
   junction footprints, Station boundaries, platforms, buildings. This is where you draw and
   edit _infrastructure_.
@@ -17,8 +17,17 @@ physical infrastructure as a simple network**. In one document a divided
 six-lane boulevard is simultaneously "the red line goes down Decatur" and
 two one-way carriageways with specific lanes, medians, and signalized
 junctions. Neither view is a simplification of the other; they're
-projections of the same data, and details like one-way direction surface
-in both (chevrons in Network, lane arrows in Infrastructure).
+projections of the same data.
+
+## A Line is what Network draws
+
+Network and Diagram paint the public identity, not the operation. A Line
+served by a weekday plan and a weekend one is a single stripe, and clicking it
+selects the Line; its ServicePlans and Patterns are inspector actions reached
+from there. One-way direction is an operational fact about a plan rather than
+a property of the Line, so it shows in Infrastructure as lane arrows and in
+Network only on the transient overlay the editor draws while somebody inspects
+a Pattern.
 
 ## Screen-space detail
 

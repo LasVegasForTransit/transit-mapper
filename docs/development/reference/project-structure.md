@@ -1,8 +1,5 @@
 # Project structure
 
-TransitMapper has four shared map packages, a domain package, a browser
-application, and a Cloudflare Worker.
-
 Use this reference to place code without reversing a package edge or adding
 application policy to a reusable map component.
 
@@ -13,14 +10,14 @@ application policy to a reusable map component.
 Dependencies flow from the applications toward shared packages:
 
 ```text
-apps/web ────────┬──> packages/workspace ────> packages/map ──> packages/views
+apps/web ────────┬──> packages/workspace ────> packages/map ──> packages/renderer ──> packages/core
+                 ├──> packages/map ───────> packages/renderer ──> packages/core
                  ├──> packages/renderer ─────> packages/core
-                 ├──> packages/map ───────> packages/views
-                 ├──> packages/views
+                 ├──> packages/views ─────> packages/core
                  ├──> packages/core
                  └──> packages/pwa-updater
 
-apps/worker ──────┬──> packages/views
+apps/worker ──────┬──> packages/views ────> packages/core
                   └──> packages/core
 
 all TypeScript packages ──> packages/tsconfig
@@ -38,9 +35,9 @@ rules portable across the browser and workerd runtimes.
 ```text
 packages/
   views/          Portable map View values and validation
-  map/            Map runtime and presentation state
+  map/            Map runtime, MapLibre publication, and presentation state
   workspace/      Shared React map and Workbench composition
-  renderer/       Transit document projection and MapLibre publication
+  renderer/       Transit document projection
   core/           Shared domain, geometry, simulation, and contracts
   pwa-updater/    Editor update lifecycle
   config-eslint/  The org's ESLint baseline, as a function
@@ -59,66 +56,65 @@ turbo/            Turborepo generators and templates
 
 ### Views
 
-`packages/views` owns portable, versioned View values and hostile-input
-parsing. It imports no React, MapLibre, DOM, editor, or Worker framework code.
-The package also owns the create, update, and response contracts for published
-Views. The browser and Worker use those contracts without sharing HTTP or
-storage code.
+`packages/views` owns portable, versioned View values, hostile-input parsing,
+and the create, update, and response contracts for published Views. It imports
+no React, MapLibre, DOM, editor, or Worker framework code, so the browser and
+Worker share those contracts without sharing HTTP or storage code. The
+presentation state a map driver reads lives in core; Views re-exports it, so
+map and renderer depend on Views for nothing.
 
 ### Map
 
 `packages/map` owns map state and the browser-only MapLibre lifecycle.
 `MapViewStore` publishes immutable snapshots. `MapRuntime` manages the map,
-controls, resize, camera sync, styles, and disposal. Hosts provide interactions,
-document-layer carry, recovery, and errors. The package depends only on `views`
-and MapLibre.
+controls, resize, camera sync, styles, and disposal. Hosts provide
+interactions, document-layer carry, recovery, and errors.
+
+Both `MapDriver` implementations live here: `DocumentMapDriver` for editor
+documents, `SnapshotMapDriver` for reader systems. `packages/map/src/sources` owns the
+two physical source banks and the controller that flips between them, along
+with layer visibility, style recovery, and the document map definition the
+editor, viewer, and embed share.
 
 ### Workspace
 
-`packages/workspace` owns responsive React composition around one map surface.
-Hosts inject named slots, state, and actions into `MapWorkspace` and Workbench.
+`packages/workspace` owns React composition around one map surface.
+Hosts inject slots, state, and actions into `MapWorkspace` and Workbench.
 The package depends on map, treats React as a peer, and imports no editor state.
 
 ### Renderer
 
-`packages/renderer` owns projection, source banks, recovery, workers, and both
-`MapDriver` implementations. `DocumentMapDriver` publishes editor documents.
-`SnapshotMapDriver` projects one reader system through a host-supplied Worker.
-Hosts may attach session extensions. Its bounded entries are `driver`,
-`snapshot`, `layers`, `projection`, `projection-worker`, `runtime`, and `stats`.
+`packages/renderer` projects a transit system into scene features and never
+names MapLibre, so one projection runs in a worker, in a test, and behind a
+map.
 
 `packages/renderer/src/layers` owns source and layer identities.
 `packages/renderer/src/network` rejects conflicting duplicates before indexing
-facts. `packages/renderer/src/line` binds Pattern legs to one Line, filters
-carrier partitions by visible seeds, and splits spans before clipping.
-`packages/renderer/src/line` validates result-bound topology windows.
+facts. `packages/renderer/src/line` binds Pattern legs to Lines, filters carrier
+partitions, splits spans before clipping, and validates topology windows. Its
+one scene entry derives the network query and detail band from the camera being
+drawn, so a Line paints as one stripe over the visible bounds.
 `packages/renderer/src/projection` owns feature building, preparation,
 cooperative scheduling, resumable work, and projection measurements behind the
 bounded `projection` entry.
-`packages/renderer/src/sources` owns source banks, retained source state,
-mutation plans, settlement, publication, and recovery behind the bounded
-`layers` and `runtime` entries.
-`packages/renderer/src/workers` keeps each worker client beside its protocol,
-entry point, request lifecycle, and publication submission boundary.
-`packages/renderer/src/presentation.ts` owns the document map definition and
-the default document View. It also converts portable View filters to renderer
-presentation values. The editor, viewer, and non-React embed use those same
-defaults and conversions.
-
-The web application supplies editor overlays, theme layers, and performance
-reporting. `MapSurface` owns the stable MapLibre runtime. An injected
-`MapDriver` owns content attachment and feature detail resolution.
+`packages/renderer/src/sources` owns retained source state, the render-scene
+source contract, and the mutation plans a host applies, behind the bounded
+`runtime` entry.
+`packages/renderer/src/workers` keeps clients beside their protocols, entries,
+request lifecycles, and publication boundaries.
 
 ### Core
 
-`packages/core` contains browser-and-workerd logic. `packages/core/src/encoding`,
-`packages/core/src/geography`, `packages/core/src/presentation`,
-`packages/core/src/source`, and `packages/core/src/transit` own provider-neutral
-transfer values. `transit/authored-system.ts` owns the schema-v17 authored
-document contract. `model/schema-v17-system` owns pure compatibility transforms
-from legacy documents and must not import renderer, browser, storage, or host
-state. A compatibility transform reports ambiguous legacy references instead
-of assigning them a new meaning.
+`packages/core` owns domain logic. `transit/authored-system.ts` defines
+v17; `model/schema-v17-system` parses and migrates it.
+`model/system-revision.ts` assigns immutable identity. These modules reject
+invalid input and import no renderer, storage, or host state.
+
+`packages/core/src/encoding`, `packages/core/src/geography`,
+`packages/core/src/presentation`, `packages/core/src/source`, and
+`packages/core/src/transit` own canonical identity, spatial values, the
+portable map presentation state, source provenance, and schema-v17 transit
+facts.
 
 #### Domain model
 
@@ -129,18 +125,17 @@ commands compose them into undoable edits without importing Zustand.
 `packages/core/src/api` owns `/api/v1`; `model/gtfs-feed.ts` publishes feed
 metadata without upstream URLs.
 
-Focused modules name the invariant they maintain: routing edits, endpoint
-metadata, and stop reanchoring each have one owner. Lines are public identities
-over technical Services. Stops are anchored boarding points; Stations are
-optional physical places containing Stops. Diagram layout is a pure facade
-returning one `DiagramLayoutResult`, with no MapLibre or editor dependency.
+Routing edits, endpoint metadata, and stop reanchoring each have one owner.
+Lines are public identities over technical Services. Stops are anchored
+boarding points; Stations are optional physical places containing Stops.
+Diagram layout is a pure facade returning one `DiagramLayoutResult`, with no
+MapLibre or editor dependency.
 
 #### Transit content resolution
 
-`packages/core/src/network` owns provider-neutral queries, bounded results,
-carrier-to-Alignment mapping, and same-Line closure for visible
-`(Line, carrier)` pairs. Its schema-v16 adapter has no renderer or storage
-dependency.
+`packages/core/src/network` owns provider-neutral queries, results, carrier
+clipping, Alignment mapping, and same-Line closure. Schema adapters supply
+carrier identity and geometry; neither imports renderer or storage code.
 
 #### Geometry
 
@@ -262,13 +257,12 @@ flowchart LR
 The editor owns `/`. The viewer owns both shared-system routes at `/s/:id` and
 published View routes at `/v/:id`. A shared-system route synthesizes default
 presentation state. A published View route loads its saved state and then
-loads the referenced shared system. Both routes mount the same viewer
-workspace and snapshot map driver without constructing editor state or the
+loads the referenced shared system. Neither constructs editor state or the
 live document renderer.
 
-The separate embed entry owns `/e/:id` and `/embed/:id`. It imports neither
-React nor editor code. `/e/:id` applies the same synthetic default View as
-`/s/:id`; `/embed/:id` restores the same published state as `/v/:id`.
+The separate embed entry owns `/e/:id` and `/embed/:id`. `/e/:id` applies the
+same synthetic default View as `/s/:id`; `/embed/:id` restores the same
+published state as `/v/:id`.
 
 #### Viewer
 
@@ -336,9 +330,6 @@ flowchart LR
   Viewer --> ViewStore
 ```
 
-The embed uses the same View values and renderer presentation. It owns a
-smaller non-React runtime instead of importing the workspace component tree.
-
 | Modules                                                                    | Responsibility                                                          |
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `packages/renderer/src/render-presentation.ts`, `camera-render-preload.ts` | Describe display scale and reusable camera coverage.                    |
@@ -347,14 +338,15 @@ smaller non-React runtime instead of importing the workspace component tree.
 
 The live renderer's worker protocol contains serializable document and
 presentation facts, never MapLibre objects or an editor store. The snapshot
-driver and embed use the same pure feature projection and presentation values
-without importing accepted-scene publication or source banks.
+driver and embed ask that same Worker for their scene rather than building
+features themselves, and import no accepted-scene publication or source banks.
+A Line scene is clipped to the camera that resolved it, so the embed reprojects
+on move and resize.
 
 Scoped scenes retain a stable source base and small deltas. Static map, embed,
 export, and SVG share scene normalization. Handles, termini, and movement
 guides remain unbanked editor sources; camera changes inside the accepted
-envelope reuse the committed scene. Junction surfaces, traffic controls,
-markings, and lane-continuous services derive from the same resolved geometry.
+envelope reuse the committed scene.
 
 #### UI
 
@@ -413,7 +405,9 @@ calculated by core; it owns neither timetable nor motion policy.
 #### Sharing and embedding
 
 `apps/web/src/share` owns publishing requests, browser-side preview
-rasterization, and downloadable formats. `apps/web/src/embed` owns the
+rasterization, and downloadable formats. Its SVG and preview Workers resolve
+the passenger Lines for the exported camera, and core draws them in place of
+the document's per-plan service geometry. `apps/web/src/embed` owns the
 read-only entry and its host-page contract. The embed resolves either a legacy
 shared-system reference or a published View reference before loading MapLibre.
 It restores the same camera, representation, and filters as the full viewer
@@ -475,12 +469,13 @@ GPC/DNT, validates it, and stores allowlisted columns.
 
 #### Persistence
 
-D1 stores shared systems, named View records, preview metadata, and short-lived
-sampled data. A View stores validated presentation state and a mutable shared
-system ID. It has no foreign key because share expiry and cleanup must remain
-independent. A read deletes a View whose referenced system no longer exists.
-R2 stores one current last-good GTFS archive per configured slug.
-Migrations are append-only and Wrangler applies them in filename order. See
+D1 stores legacy systems, Views, previews, samples, and immutable v17
+revisions. `system-revisions.ts` recomputes identity before insertion,
+preserves the first creation time for duplicates, and rejects conflicting or
+corrupt rows. One mutable head selects the current published revision; another
+table records bounded backfill results. Routes use neither yet. Views omit a
+system foreign key so cleanup remains independent. R2 keeps each last-good GTFS
+archive. Wrangler applies migrations in filename order. See
 [Operations](../../operations/how-to/operations.md).
 
 `performance-samples.ts` owns ingestion; `performance-maintenance.ts` owns

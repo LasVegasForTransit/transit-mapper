@@ -12,7 +12,7 @@ import type { RawGestureMeasurements } from './gestureStats';
 import { attachPaintedFrameCapture } from './paintedFrameCapture';
 import { attachRendererCaptureHarness } from './renderer-capture-harness';
 import type { CooperativeRenderJobSchedulerStats } from '@transitmapper/renderer/projection';
-import type { SourceBankDiagnostics } from '@transitmapper/renderer/runtime';
+import type { SourceBankDiagnostics } from '@transitmapper/map/runtime';
 import type { RendererStatsSnapshot } from '@transitmapper/renderer/stats';
 import { MAP_THEMES } from '../map/mapThemePalette';
 import type { SourceUploadTiming } from './source-uploads';

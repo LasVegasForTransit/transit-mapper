@@ -26,7 +26,7 @@ export interface ExactLineCorrespondence {
   readonly members: readonly [LineSpan, ...LineSpan[]];
 }
 
-export type ExactLineCorrespondenceRejectionReason =
+type ExactLineCorrespondenceRejectionReason =
   | 'invalid-line-order'
   | 'missing-line-order'
   | 'missing-line-materialization'

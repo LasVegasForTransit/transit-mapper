@@ -4,6 +4,9 @@
   "extends": "@transitmapper/tsconfig/base.json",
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // `@transitmapper/renderer` sources resolve through the `development`
+    // condition, and two of them read `import.meta.env`.
+    "types": ["vite/client"],
     "noEmit": false,
     "rootDir": "src",
     "outDir": "dist",

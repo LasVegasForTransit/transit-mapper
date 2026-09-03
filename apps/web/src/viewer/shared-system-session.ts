@@ -4,7 +4,7 @@ import { decodeMapViewState, type MapViewStateV1, ViewParseError } from '@transi
 import {
   createDocumentPresentationState,
   DOCUMENT_MAP_DEFINITION,
-} from '@transitmapper/renderer/presentation';
+} from '@transitmapper/map/presentation';
 import { fetchShare } from '../share/api';
 
 export interface SharedSystemSessionSources {

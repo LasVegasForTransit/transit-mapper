@@ -8,7 +8,7 @@ import type {
 } from '@transitmapper/map/state';
 import type { MapFeatureReferenceV1 } from '@transitmapper/views';
 import { MapWorkspace } from '@transitmapper/workspace';
-import { DOCUMENT_MAP_DEFINITION } from '@transitmapper/renderer/presentation';
+import { DOCUMENT_MAP_DEFINITION } from '@transitmapper/map/presentation';
 import { Icon } from '../ui/Icon';
 import { IconButton } from '../ui/IconButton';
 import { Popover } from '../ui/Popover';

@@ -5,19 +5,16 @@ import type { ContentRef } from '@transitmapper/core/network/content-reference';
 import type { NetworkQuery } from '@transitmapper/core/network/query';
 import type { NetworkQueryResult } from '@transitmapper/core/network/result';
 import { createSchemaV16SystemProvider } from '@transitmapper/core/network/schema-v16-system-provider';
-import type { MapPresentation } from '@transitmapper/core/presentation/map-presentation';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import { aRoad, aService, aSystem } from '@transitmapper/core/testing/fixtures';
 import { projectResolvedNetwork } from '../../src/projection';
 
-const presentation: MapPresentation = {
-  camera: {
-    center: [-115.17, 36.12],
-    zoom: 12,
-    bearing: 0,
-    pitch: 0,
-  },
-  representationId: 'network',
-};
+const presentation = renderPresentationForViewport({
+  center: [-115.17, 36.12],
+  zoom: 12,
+  width: 1_280,
+  height: 720,
+});
 
 const query: NetworkQuery = {
   serviceTime: { kind: 'live' },

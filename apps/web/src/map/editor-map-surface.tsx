@@ -23,7 +23,7 @@ import { useDocumentView } from '../editor/document-view-controls';
 import {
   DOCUMENT_MAP_DEFINITION,
   type DocumentRepresentationId,
-} from '@transitmapper/renderer/presentation';
+} from '@transitmapper/map/presentation';
 import { initializeDocumentCamera } from '../editor/document-view-adapter';
 import { inputTuningFor } from '../editor/input-tuning';
 import type { PointerIntent } from '../editor/pointerIntent';

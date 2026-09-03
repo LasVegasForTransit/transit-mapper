@@ -2,7 +2,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
+import { createDocumentPresentationState } from '@transitmapper/map/presentation';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
 import { generatePerfFixture } from '../../src/perf/fixtures';
 import { PERF_SCENARIOS } from '../../src/perf/scenarios';

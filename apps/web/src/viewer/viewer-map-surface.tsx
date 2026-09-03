@@ -10,7 +10,7 @@ import {
   type MapViewStore,
   type SelectionController,
 } from '@transitmapper/map';
-import type { SnapshotMapSession } from '@transitmapper/renderer/snapshot';
+import type { SnapshotMapSession } from '@transitmapper/map/snapshot';
 import {
   MapSurface,
   type MapSurfaceAttachmentScheduler,

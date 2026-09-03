@@ -2,19 +2,19 @@ import type { LayerSpecification, Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it, vi } from 'vitest';
 import { MODE_ORDER, MODES, WAY_TYPE_ORDER, WAY_TYPES } from '@transitmapper/core/model/catalog';
 import { createMapViewStore } from '@transitmapper/map';
-import type { DocumentMapSession } from '@transitmapper/renderer/driver';
+import type { DocumentMapSession } from '@transitmapper/map/driver';
 import {
   createAttachOptions,
   createProjectionWorker,
   DocumentDriverClock,
   TestDocumentMap,
-} from '../../../../packages/renderer/tests/support/document-map-driver.test';
+} from '../../../../packages/map/tests/support/document-map-driver.test';
 import {
   createEditorDocumentMap,
   DOCUMENT_MAP_DEFINITION,
   resolveDocumentMapPresentation,
 } from '../../src/editor/document-map';
-import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
+import { createDocumentPresentationState } from '@transitmapper/map/presentation';
 import { createEditorStore } from '../../src/editor/store';
 
 describe('the editor document map composition', () => {

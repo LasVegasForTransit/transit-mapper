@@ -2,7 +2,7 @@ import type { GeoJSONSource, MapMouseEvent } from 'maplibre-gl';
 import { serviceWayIds } from '@transitmapper/core/model/geo';
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { MapViewStore } from '@transitmapper/map';
-import type { DocumentMapSession } from '@transitmapper/renderer/driver';
+import type { DocumentMapSession } from '@transitmapper/map/driver';
 import {
   EDITOR_SYSTEM_FEATURE_SOURCES,
   LYR_FACILITIES,
@@ -27,7 +27,7 @@ import {
   type PatternOverlayProjectionClient,
   type SourceFeatureProjectionCounts,
 } from '@transitmapper/renderer/projection';
-import type { AcceptedSceneUpdate } from '@transitmapper/renderer/runtime';
+import type { AcceptedSceneUpdate } from '@transitmapper/map/runtime';
 import {
   canApplyEditorSourceUpdate,
   editorPatternOverlayWorkerInput,

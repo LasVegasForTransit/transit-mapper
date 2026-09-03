@@ -24,18 +24,18 @@ import {
   physicalRenderSourceIds,
   renderOverlayNeedsHealing,
   sourceBankLayerSpecs,
-} from '@transitmapper/renderer/layers';
+} from '@transitmapper/map/layers';
 import {
   createDiagramLayoutWorker,
   createFeatureProjectionWorker,
   createSourceFeatureProjectionAccounting,
 } from '@transitmapper/renderer/projection';
-import type { DocumentMapSession } from '@transitmapper/renderer/driver';
+import type { DocumentMapSession } from '@transitmapper/map/driver';
 import { createRendererStatsCollector } from '@transitmapper/renderer/stats';
-import { DOCUMENT_VIEW_FILTER_IDS } from '@transitmapper/renderer/presentation';
+import { DOCUMENT_VIEW_FILTER_IDS } from '@transitmapper/map/presentation';
 import { createRenderTierStateResolver } from '@transitmapper/core/render/render-presentation';
-import { renderPresentationFromMap } from '@transitmapper/renderer/driver';
-import { documentLayerSpecsForViewMode } from '@transitmapper/renderer/driver';
+import { renderPresentationFromMap } from '@transitmapper/map/driver';
+import { documentLayerSpecsForViewMode } from '@transitmapper/map/driver';
 import { createEditorDocumentMap } from '../editor/document-map';
 import { attachEditorMap, type EditorMapAttachment } from '../editor/editor-map-attachment';
 import { editorMapSurfaceLayerSpecs } from '../editor/editor-map-layers';

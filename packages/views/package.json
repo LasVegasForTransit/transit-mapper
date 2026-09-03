@@ -22,5 +22,8 @@
   "devDependencies": {
     "@transitmapper/tsconfig": "workspace:*",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@transitmapper/core": "workspace:*"
   }
 }

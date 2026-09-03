@@ -247,11 +247,11 @@ This phase gives published and pinned system content a durable identity. It
 comes before Views because a pinned system reference without a SystemRevision
 is a lie.
 
-- [ ] Add `SystemRevision` creation after strict parsing. Hash canonical
-      `{ encodingVersion: 'transit-system-json-v1', schemaVersion: 17,
-    system }` bytes for `contentDigest`. Create `id` from framed
-      `system-revision-v1`, system ID, algorithm, and digest value. Do not put
-      `createdAt` in either digest.
+- [ ] Add `SystemRevision` creation after strict parsing. Hash a canonical
+      value containing `encodingVersion: 'transit-system-json-v1'`,
+      `schemaVersion: 17`, and `system` for `contentDigest`. Create `id` from
+      framed `system-revision-v1`, system ID, algorithm, and digest value. Do
+      not put `createdAt` in either digest.
 - [ ] Add a system revision repository and additive Worker migration. Publishing
       the same parsed semantic document twice returns the existing immutable
       revision and its original creation time.

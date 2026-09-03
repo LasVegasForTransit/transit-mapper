@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
+import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
+import { aPattern, aRoad, aService, aSystem } from '@transitmapper/core/testing/fixtures';
+import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
 import { svgViewForViewport } from '../../src/share/svg-render-view';
 import type { SvgWorkerEvent, SvgWorkerRequest } from '../../src/share/svgWorkerProtocol';
+import { installSvgRenderWorker, type SvgRenderWorkerScope } from '../../src/share/svgWorkerEntry';
 import { renderSvgInWorker, type SvgRenderWorker } from '../../src/share/svgWorker';
 
 class FakeWorker implements SvgRenderWorker {
@@ -90,5 +94,85 @@ describe('SVG render Worker', () => {
 
     await rejection;
     expect(worker.terminated).toBe(true);
+  });
+});
+
+class FakeSvgWorkerScope implements SvgRenderWorkerScope {
+  onmessage: ((event: MessageEvent<SvgWorkerRequest>) => void) | null = null;
+  readonly events: SvgWorkerEvent[] = [];
+
+  postMessage(event: SvgWorkerEvent): void {
+    this.events.push(event);
+  }
+
+  dispatch(request: SvgWorkerRequest): void {
+    this.onmessage?.({ data: request } as MessageEvent<SvgWorkerRequest>);
+  }
+}
+
+const carrier = aRoad('carrier', [
+  [-115.22, 36.14],
+  [-115.16, 36.14],
+] as LngLat[]);
+
+function sharedCarrierSystem(): TransitSystem {
+  const local = aService('local', [aPattern('local-pattern', [carrier], [carrier.id])]);
+  const express = aService('express', [aPattern('express-pattern', [carrier], [carrier.id])]);
+  return aSystem({
+    ways: [carrier],
+    services: [local, express],
+    lines: [
+      { id: 'shared-line', name: 'Shared', color: '#123456', serviceIds: [local.id, express.id] },
+    ],
+  });
+}
+
+/** Distinct route identities, counted by the role each was named with. Every
+ *  identity paints once per pass, so raw occurrences over-count the stripes. */
+function routeRoleCounts(markup: string): { casings: number; stripes: number } {
+  const ids = new Set(
+    [...markup.matchAll(/data-render-source="services" data-feature-id="([^"]+)"/g)].map(
+      (match) => match[1],
+    ),
+  );
+  return {
+    casings: [...ids].filter((id) => id.includes('line-casing')).length,
+    stripes: [...ids].filter((id) => id.includes('line-stripe')).length,
+  };
+}
+
+async function markupFor(viewMode: ViewOptions['viewMode']): Promise<string> {
+  const scope = new FakeSvgWorkerScope();
+  installSvgRenderWorker(scope);
+  const system = sharedCarrierSystem();
+  const wholeSystem: ViewOptions = {
+    viewMode,
+    visibleModes: new Set(MODE_ORDER),
+    visibleWayTypes: new Set(WAY_TYPE_ORDER),
+  };
+  scope.dispatch({
+    system,
+    view: svgViewForViewport(wholeSystem, viewport),
+    viewport,
+    options: { title: '', legend: [], width: 800, height: 500, captionedExternally: true },
+  });
+  await vi.waitFor(() => expect(scope.events).toHaveLength(1));
+  const [event] = scope.events;
+  if (event.kind !== 'done') throw new Error(`SVG Worker failed: ${JSON.stringify(event)}`);
+  return event.markup;
+}
+
+describe('SVG render Worker runtime', () => {
+  it('draws one casing and one stripe for a Line two ServicePlans serve', async () => {
+    const markup = await markupFor('network');
+
+    expect(routeRoleCounts(markup)).toEqual({ casings: 1, stripes: 1 });
+    expect(markup).toContain('stroke="#123456"');
+  });
+
+  it('leaves Infrastructure on the per-Service document geometry', async () => {
+    const markup = await markupFor('infrastructure');
+
+    expect(routeRoleCounts(markup)).toEqual({ casings: 0, stripes: 0 });
   });
 });

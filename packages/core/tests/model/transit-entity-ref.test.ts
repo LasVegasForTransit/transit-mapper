@@ -1,41 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { transitEntityKey, type TransitEntityRef } from '../../src/model/transit-entity-ref';
-
-const entityKindSet = {
-  publisher: true,
-  agency: true,
-  operator: true,
-  alignment: true,
-  way: true,
-  line: true,
-  'service-plan': true,
-  pattern: true,
-  schedule: true,
-  calendar: true,
-  trip: true,
-  'frequency-rule': true,
-  'operational-change': true,
-  advisory: true,
-  stop: true,
-  station: true,
-  facility: true,
-  group: true,
-  node: true,
-  'named-way': true,
-  median: true,
-  'lane-connector': true,
-  'turn-restriction': true,
-  'approach-control': true,
-} satisfies Record<TransitEntityRef['kind'], true>;
-
-const entityKinds = Object.keys(entityKindSet) as TransitEntityRef['kind'][];
+import {
+  parseTransitEntityRef,
+  TRANSIT_ENTITY_KINDS,
+  transitEntityKey,
+} from '../../src/model/transit-entity-ref';
 
 describe('transit entity references', () => {
   it('gives every entity kind a stable distinct key', () => {
-    const keys = entityKinds.map((kind) => transitEntityKey({ kind, id: 'shared-id' }));
+    const keys = TRANSIT_ENTITY_KINDS.map((kind) => transitEntityKey({ kind, id: 'shared-id' }));
 
-    expect(new Set(keys).size).toBe(entityKinds.length);
+    expect(new Set(keys).size).toBe(TRANSIT_ENTITY_KINDS.length);
     expect(transitEntityKey({ kind: 'line', id: 'blue:east' })).toBe('domain:line:blue%3Aeast');
+  });
+
+  it('parses only portable entity kinds and preserves their opaque IDs', () => {
+    expect(parseTransitEntityRef({ kind: 'line', id: 'blue:east', layerId: 'ignored' })).toEqual({
+      kind: 'line',
+      id: 'blue:east',
+    });
+    expect(() => parseTransitEntityRef({ kind: 'vehicle-kind', id: 'bus' })).toThrow();
+    expect(() => parseTransitEntityRef({ kind: 'line', id: ' ' })).toThrow();
+    expect(() => parseTransitEntityRef(null)).toThrow();
   });
 
   it('keeps delimiter text distinct from its encoded spelling', () => {

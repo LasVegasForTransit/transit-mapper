@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { createMapViewStore, createSelectionController } from '@transitmapper/map/state';
-import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
+import { createDocumentPresentationState } from '@transitmapper/map/presentation';
 import type { RouteHostProps } from '../app/route-host';
 import { SHELL_MOUNTED_MARK, markOnce } from '../perf/startup-marks';
 import { attachViewLink, copyViewLink } from '../views/view-link';

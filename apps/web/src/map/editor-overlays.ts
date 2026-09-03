@@ -124,7 +124,7 @@ export function editorPatternOverlayWorkerInput({
 }: EditorPatternOverlayProjection): PatternOverlayClientInput | null {
   if (selection?.kind !== 'service' || !activePatternId) return null;
   const service = system.services.find((candidate) => candidate.id === selection.id);
-  if (!service || service.path.id !== activePatternId) return null;
+  if (service?.path.id !== activePatternId) return null;
   const armed =
     armedTerminus?.serviceId === service.id && armedTerminus.patternId === activePatternId
       ? {

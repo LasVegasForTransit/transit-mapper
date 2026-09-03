@@ -14,7 +14,7 @@ import {
   SRC_VEHICLES,
   SRC_VEHICLES_INFRA,
   sourceBankLayerSpecs,
-} from '@transitmapper/renderer/layers';
+} from '@transitmapper/map/layers';
 
 const EDITOR_MAP_LAYER_SOURCES: ReadonlySet<string> = new Set([
   ...EDITOR_SYSTEM_FEATURE_SOURCES,

@@ -1,5 +1,5 @@
 import type { LayerSpecification, StyleSpecification } from 'maplibre-gl';
-import { sourceBankLayerSpecs } from '@transitmapper/renderer/layers';
+import { sourceBankLayerSpecs } from '@transitmapper/map/layers';
 import { layerSpecsForScheme } from './mapTheme';
 import type { ColorScheme } from '../theme/color-scheme';
 

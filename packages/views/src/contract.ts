@@ -1,30 +1,13 @@
-export const MAP_VIEW_SCHEMA_VERSION = 1 as const;
+import type {
+  MAP_VIEW_SCHEMA_VERSION,
+  MapViewStateV1,
+} from '@transitmapper/core/presentation/map-presentation-state';
 
-export type RepresentationId = string;
-
-export type MapFilterValue = boolean | string | readonly string[];
-
-export interface MapCameraStateV1 {
-  center: [number, number];
-  zoom: number;
-}
-
-export interface MapFeatureReferenceV1 {
-  source: string;
-  kind: string;
-  id: string;
-}
-
-export interface MapPresentationStateV1 {
-  schemaVersion: typeof MAP_VIEW_SCHEMA_VERSION;
-  camera: MapCameraStateV1;
-  representationId: RepresentationId;
-  filters: Record<string, MapFilterValue>;
-}
-
-export interface MapViewStateV1 extends MapPresentationStateV1 {
-  selection?: MapFeatureReferenceV1;
-}
+// The presentation contracts moved to core so that `@transitmapper/map` and
+// `@transitmapper/renderer` can read them without depending on Views. They stay
+// re-exported here because every existing consumer imports them from
+// `@transitmapper/views`.
+export * from '@transitmapper/core/presentation/map-presentation-state';
 
 export interface SharedSystemMapReferenceV1 {
   kind: 'shared-system';

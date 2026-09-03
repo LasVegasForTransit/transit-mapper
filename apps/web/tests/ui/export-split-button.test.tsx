@@ -7,7 +7,7 @@ import { aSystem } from '@transitmapper/core/testing/fixtures';
 import { createMapViewStore } from '@transitmapper/map';
 import { MapViewProvider } from '@transitmapper/workspace';
 import { EditorProvider } from '../../src/editor/EditorProvider';
-import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
+import { createDocumentPresentationState } from '@transitmapper/map/presentation';
 import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { ExportSplitButton } from '../../src/ui/ExportSplitButton';
 

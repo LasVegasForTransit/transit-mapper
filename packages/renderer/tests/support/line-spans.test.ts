@@ -4,14 +4,16 @@ import type {
   ResolvedNetworkChunk,
   ResolvedPatternLegFragment,
 } from '@transitmapper/core/network/resolved-network-chunk';
-import type { MapPresentation } from '@transitmapper/core/presentation/map-presentation';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import type { LineOrderEntry } from '@transitmapper/core/transit/value-types';
 import { projectResolvedNetwork, type ResolvedNetworkProjection } from '../../src/projection';
 
-export const lineSpanPresentation: MapPresentation = {
-  camera: { center: [0, 0], zoom: 12, bearing: 0, pitch: 0 },
-  representationId: 'passenger',
-};
+export const lineSpanPresentation = renderPresentationForViewport({
+  center: [0, 0],
+  zoom: 12,
+  width: 1_280,
+  height: 720,
+});
 
 export function aResolvedCarrier(
   overrides: Partial<ResolvedCarrierFragment> = {},

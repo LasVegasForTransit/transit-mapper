@@ -5,11 +5,11 @@ import {
   isBankedRenderLayer,
   OFFSCREEN_RENDER_TRANSLATE,
   renderLayerTranslateProperties,
-} from '@transitmapper/renderer/layers';
+} from '@transitmapper/map/layers';
 import {
   createSourceBankController,
   createSourceBankLayerController,
-} from '@transitmapper/renderer/runtime';
+} from '@transitmapper/map/runtime';
 
 const layerSpecsModulePath = '../../src/map/layers/layerSpecs.ts';
 const { LAYER_SPECS } = (await import(/* @vite-ignore */ layerSpecsModulePath)) as {

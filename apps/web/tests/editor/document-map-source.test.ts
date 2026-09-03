@@ -4,7 +4,7 @@ import {
   createDocumentMapSource,
   type EditorDocumentMapHold,
 } from '../../src/editor/document-map-source';
-import type { DocumentMapSnapshot } from '@transitmapper/renderer/driver';
+import type { DocumentMapSnapshot } from '@transitmapper/map/driver';
 import { createEditorStore } from '../../src/editor/store';
 
 describe('the editor document map source', () => {

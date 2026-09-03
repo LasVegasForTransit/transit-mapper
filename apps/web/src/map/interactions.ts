@@ -526,12 +526,7 @@ export function attachInteractions(
     featureAt(e, SERVICE_TERMINUS_LAYERS);
 
   const isServiceTerminus = (feature: MapGeoJSONFeature | undefined): boolean =>
-    Boolean(
-      feature &&
-      SERVICE_TERMINUS_LAYERS.includes(
-        featureLayerId(feature) as (typeof SERVICE_TERMINUS_LAYERS)[number],
-      ),
-    );
+    Boolean(feature && SERVICE_TERMINUS_LAYERS.includes(featureLayerId(feature)));
 
   const stopFeatureAt = (e: MapMouseEvent): MapGeoJSONFeature | undefined => {
     // A committed stop remains masked for the few frames in which its
@@ -586,21 +581,32 @@ export function attachInteractions(
     return state.system.ways.filter((way) => allowed.has(way.typeId));
   };
 
-  const networkWayId = (feature: MapGeoJSONFeature | undefined): string | undefined => {
-    if (!feature) return undefined;
-    const wayId = feature.properties.wayId ?? feature.properties.id;
-    return typeof wayId === 'string' ? wayId : undefined;
+  const isFeatureProperties = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null;
+
+  const featureProperty = (feature: MapGeoJSONFeature | undefined, key: string): unknown => {
+    const properties: unknown = feature?.properties;
+    return isFeatureProperties(properties) ? properties[key] : undefined;
   };
 
   const stringFeatureProperty = (
     feature: MapGeoJSONFeature | undefined,
     key: string,
   ): string | undefined => {
-    const properties: unknown = feature?.properties;
-    if (!properties || typeof properties !== 'object') return undefined;
-    const value = (properties as Record<string, unknown>)[key];
+    const value = featureProperty(feature, key);
     return typeof value === 'string' ? value : undefined;
   };
+
+  const numberFeatureProperty = (
+    feature: MapGeoJSONFeature | undefined,
+    key: string,
+  ): number | undefined => {
+    const value = featureProperty(feature, key);
+    return typeof value === 'number' ? value : undefined;
+  };
+
+  const networkWayId = (feature: MapGeoJSONFeature | undefined): string | undefined =>
+    stringFeatureProperty(feature, 'wayId') ?? stringFeatureProperty(feature, 'id');
 
   const isCompatibleNetworkWay = (
     state: Pick<EditorState, 'system' | 'draftModeId'>,
@@ -2788,8 +2794,8 @@ export function attachInteractions(
         } else if (WAY_LAYERS.includes(featureLayerId(hit))) {
           commands.selection.select({ kind: 'way', id: hit.properties.id as string });
         } else if (featureLayerId(hit) === LYR_PATTERN_OVERLAY_HIT) {
-          const serviceId = hit.properties.serviceId;
-          const patternId = hit.properties.patternId;
+          const serviceId = stringFeatureProperty(hit, 'serviceId');
+          const patternId = stringFeatureProperty(hit, 'patternId');
           if (typeof serviceId === 'string' && typeof patternId === 'string') {
             commands.selection.select({ kind: 'service', id: serviceId });
             commands.selection.setActivePattern(patternId);
@@ -2878,7 +2884,10 @@ export function attachInteractions(
     if (featureLayerId(hit) === LYR_FACILITIES)
       return { target: { kind: 'facility', id: hit.properties.id as string }, anchor: lngLatOf(e) };
     if (isServiceTerminus(hit)) {
-      const { serviceId, patternId, side } = hit.properties;
+      const serviceId = stringFeatureProperty(hit, 'serviceId');
+      const patternId = stringFeatureProperty(hit, 'patternId');
+      const side = stringFeatureProperty(hit, 'side');
+      if (serviceId === undefined) return null;
       const anchor =
         hit.geometry.type === 'Point' ? (hit.geometry.coordinates as LngLat) : lngLatOf(e);
       const service = st.system.services.find((candidate) => candidate.id === serviceId);
@@ -2894,7 +2903,7 @@ export function attachInteractions(
           ? patternPositionAt(st.system.ways, pattern, run, legIndex, t)
           : null;
       return {
-        target: { kind: 'service', id: serviceId as string },
+        target: { kind: 'service', id: serviceId },
         anchor,
         ...(typeof serviceId === 'string' &&
         typeof patternId === 'string' &&
@@ -2921,32 +2930,31 @@ export function attachInteractions(
         ...(near ? { corridorHit: { wayId, t: near.t } } : {}),
       };
     }
-    const { serviceId, patternId, run, legIndex } = hit.properties;
+    const serviceId = stringFeatureProperty(hit, 'serviceId');
+    const patternId = stringFeatureProperty(hit, 'patternId');
+    const run = stringFeatureProperty(hit, 'run');
+    const legIndex = numberFeatureProperty(hit, 'legIndex');
+    if (serviceId === undefined) return null;
     const service = st.system.services.find((candidate) => candidate.id === serviceId);
     const pattern = service && service.id === patternId ? servicePattern(service) : undefined;
     const leg =
-      pattern && (run === 'outbound' || run === 'inbound') && typeof legIndex === 'number'
+      pattern && (run === 'outbound' || run === 'inbound') && legIndex !== undefined
         ? patternRunLegs(pattern, run)[legIndex]
         : undefined;
     const way = leg && st.system.ways.find((candidate) => candidate.id === leg.leg.wayId);
     const near = way && nearestOnPath(resolveWayPath(way), lngLatOf(e));
     const position =
-      pattern &&
-      leg &&
-      near &&
-      (run === 'outbound' || run === 'inbound') &&
-      typeof legIndex === 'number'
+      pattern && leg && near && (run === 'outbound' || run === 'inbound') && legIndex !== undefined
         ? patternPositionAt(st.system.ways, pattern, run, legIndex, near.t)
         : null;
-    const serviceHit =
-      typeof serviceId === 'string' &&
+    const serviceHit: ServiceActionHit | undefined =
       typeof patternId === 'string' &&
       (run === 'outbound' || run === 'inbound') &&
-      typeof legIndex === 'number'
+      legIndex !== undefined
         ? { serviceId, patternId, run, legIndex, ...(position ? { position } : {}) }
         : undefined;
     return {
-      target: { kind: 'service', id: serviceId as string },
+      target: { kind: 'service', id: serviceId },
       anchor: position && way ? pointAtT(resolveWayPath(way), position.t) : lngLatOf(e),
       ...(serviceHit ? { serviceHit } : {}),
     };
@@ -2988,8 +2996,9 @@ export function attachInteractions(
     const isSelected = st.selection?.kind === target.kind && st.selection.id === target.id;
     if (!inGroup && !isSelected) commands.selection.select(target);
     if (hit.target.kind === 'service') {
-      const patternId = terminus?.properties.patternId ?? overlay?.properties.patternId;
-      if (typeof patternId === 'string') commands.selection.setActivePattern(patternId);
+      const patternId =
+        stringFeatureProperty(terminus, 'patternId') ?? stringFeatureProperty(overlay, 'patternId');
+      if (patternId !== undefined) commands.selection.setActivePattern(patternId);
     }
     // The map coordinate travels with the screen one: an action that cuts a
     // line where you clicked needs the place, not the pixel.

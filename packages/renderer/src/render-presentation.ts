@@ -1,3 +1,5 @@
+import { defaultProfileFor, profileWidthM } from '@transitmapper/core/model/profile';
+import type { DetailBand } from '@transitmapper/core/network/query';
 import { widthPxAtZ14 } from '@transitmapper/core/render/constants';
 import {
   renderTierBlend,
@@ -82,6 +84,24 @@ export function displayedCorridorWidthPx(
     presentation.displayedHeightPx / presentation.viewportHeightPx,
   );
   return viewportWidthPx * displayScale;
+}
+
+/** The detail a network query asks content for, measured the same way the
+ * renderer measures paint detail: a default road cross-section at the centre
+ * of the visible bounds. Deriving it keeps the resolved content and the
+ * painted tier from disagreeing about what this camera can show.
+ *
+ * No previous tier is passed. Hysteresis would let one camera resolve two
+ * different bands depending on how a person arrived at it, and a query that
+ * depends on render history cannot be cached, replayed, or compared. */
+export function queryDetailBand(presentation: RenderPresentation): DetailBand {
+  const { southwest, northeast } = presentation.bounds;
+  const widthPx = displayedCorridorWidthPx(
+    profileWidthM(defaultProfileFor('road')),
+    (southwest[1] + northeast[1]) / 2,
+    presentation,
+  );
+  return selectRenderTier(widthPx);
 }
 
 /** Live-only hysteresis keyed by stable corridor identity. Static renderers do

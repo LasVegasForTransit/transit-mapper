@@ -12,6 +12,54 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./driver": {
+      "development": {
+        "types": "./src/driver.ts",
+        "import": "./src/driver.ts"
+      },
+      "types": "./dist/driver.d.ts",
+      "import": "./dist/driver.js"
+    },
+    "./feature-details": {
+      "development": {
+        "types": "./src/document-map-feature-details.ts",
+        "import": "./src/document-map-feature-details.ts"
+      },
+      "types": "./dist/document-map-feature-details.d.ts",
+      "import": "./dist/document-map-feature-details.js"
+    },
+    "./layers": {
+      "development": {
+        "types": "./src/layers.ts",
+        "import": "./src/layers.ts"
+      },
+      "types": "./dist/layers.d.ts",
+      "import": "./dist/layers.js"
+    },
+    "./presentation": {
+      "development": {
+        "types": "./src/presentation.ts",
+        "import": "./src/presentation.ts"
+      },
+      "types": "./dist/presentation.d.ts",
+      "import": "./dist/presentation.js"
+    },
+    "./runtime": {
+      "development": {
+        "types": "./src/runtime.ts",
+        "import": "./src/runtime.ts"
+      },
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
+    },
+    "./snapshot": {
+      "development": {
+        "types": "./src/snapshot.ts",
+        "import": "./src/snapshot.ts"
+      },
+      "types": "./dist/snapshot.d.ts",
+      "import": "./dist/snapshot.js"
+    },
     "./state": {
       "development": {
         "types": "./src/state.ts",
@@ -29,10 +77,13 @@
   },
   "devDependencies": {
     "@transitmapper/tsconfig": "workspace:*",
+    "@types/geojson": "catalog:",
+    "vite": "catalog:",
     "vitest": "catalog:"
   },
   "dependencies": {
-    "@transitmapper/views": "workspace:*",
+    "@transitmapper/core": "workspace:*",
+    "@transitmapper/renderer": "workspace:*",
     "maplibre-gl": "catalog:"
   }
 }

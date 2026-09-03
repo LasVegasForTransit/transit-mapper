@@ -1,5 +1,5 @@
 import type { NetworkQueryResult } from '@transitmapper/core/network/result';
-import type { MapPresentation } from '@transitmapper/core/presentation/map-presentation';
+import type { RenderPresentation } from '@transitmapper/core/render/render-presentation';
 import type {
   MaterializeLineBundlesResult,
   materializeLineBundles,
@@ -9,7 +9,7 @@ type LineMaterializationCarrierRule = Parameters<typeof materializeLineBundles>[
 
 export interface LineMaterializationWorkerInput {
   readonly result: NetworkQueryResult;
-  readonly presentation: MapPresentation;
+  readonly presentation: RenderPresentation;
   readonly carrierRule: LineMaterializationCarrierRule;
 }
 

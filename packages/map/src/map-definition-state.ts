@@ -1,4 +1,7 @@
-import type { MapFilterValue, MapPresentationStateV1 } from '@transitmapper/views';
+import type {
+  MapFilterValue,
+  MapPresentationStateV1,
+} from '@transitmapper/core/presentation/map-presentation-state';
 import type { MapDefinition, MapFilterDefinition } from './map-driver';
 
 function resolvedFilterValue(

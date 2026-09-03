@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
+import { defaultProfileFor, profileWidthM } from '@transitmapper/core/model/profile';
 import {
   CorridorTierRegistry,
   displayedCorridorWidthPx,
+  queryDetailBand,
   renderPresentationFromMap,
   type MapRenderPresentationInput,
-} from '@transitmapper/renderer/driver';
+} from '@transitmapper/map/driver';
 
 const MPP_Z14_EQUATOR = 40075016.686 / (512 * 2 ** 14);
+const ROAD_WIDTH_M = profileWidthM(defaultProfileFor('road'));
+/** Midpoint of the fixed `mapInput` bounds, which is the latitude the query
+ * band is derived at. */
+const BOUNDS_CENTRE_LATITUDE = (36.05 + 36.25) / 2;
 
 function widthMetersAtZ14(widthPx: number): number {
   return widthPx * MPP_Z14_EQUATOR;
@@ -26,6 +32,19 @@ function mapInput(overrides: Partial<MapRenderPresentationInput> = {}): MapRende
     pixelRatio: 1,
     ...overrides,
   };
+}
+
+/** Inverts `displayedCorridorWidthPx` for the default road cross-section.
+ * Zoom doubles the displayed width per step, so a camera can be aimed at an
+ * exact tier boundary instead of at a hand-picked zoom that happens to land
+ * near one. */
+function presentationForDisplayedRoadWidthPx(targetPx: number) {
+  const atZ14 = displayedCorridorWidthPx(
+    ROAD_WIDTH_M,
+    BOUNDS_CENTRE_LATITUDE,
+    renderPresentationFromMap(mapInput()),
+  );
+  return renderPresentationFromMap(mapInput({ zoom: 14 + Math.log2(targetPx / atZ14) }));
 }
 
 describe('web render presentation', () => {
@@ -224,5 +243,31 @@ describe('web render presentation', () => {
         presentation,
       }).tier,
     ).toBe('overview');
+  });
+
+  it('asks for the detail band the render tiers name at the same corridor width', () => {
+    const overview = presentationForDisplayedRoadWidthPx(1.9);
+    const district = presentationForDisplayedRoadWidthPx(3);
+    const street = presentationForDisplayedRoadWidthPx(12);
+
+    expect(displayedCorridorWidthPx(ROAD_WIDTH_M, BOUNDS_CENTRE_LATITUDE, overview)).toBeCloseTo(
+      1.9,
+    );
+    expect(displayedCorridorWidthPx(ROAD_WIDTH_M, BOUNDS_CENTRE_LATITUDE, district)).toBeCloseTo(3);
+    expect(displayedCorridorWidthPx(ROAD_WIDTH_M, BOUNDS_CENTRE_LATITUDE, street)).toBeCloseTo(12);
+
+    expect(queryDetailBand(overview)).toBe('overview');
+    expect(queryDetailBand(district)).toBe('district');
+    expect(queryDetailBand(street)).toBe('street');
+  });
+
+  it('resolves the same detail band for one camera whatever camera preceded it', () => {
+    const district = presentationForDisplayedRoadWidthPx(3);
+    const betweenBands = presentationForDisplayedRoadWidthPx(2.5);
+
+    expect(queryDetailBand(district)).toBe('district');
+    expect(queryDetailBand(betweenBands)).toBe('overview');
+    expect(queryDetailBand(betweenBands)).toBe('overview');
+    expect(queryDetailBand(district)).toBe('district');
   });
 });

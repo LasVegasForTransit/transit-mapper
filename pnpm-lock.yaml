@@ -391,9 +391,12 @@ importers:
 
   packages/map:
     dependencies:
-      '@transitmapper/views':
+      '@transitmapper/core':
         specifier: workspace:*
-        version: link:../views
+        version: link:../core
+      '@transitmapper/renderer':
+        specifier: workspace:*
+        version: link:../renderer
       maplibre-gl:
         specifier: 'catalog:'
         version: 4.7.1
@@ -401,6 +404,12 @@ importers:
       '@transitmapper/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      '@types/geojson':
+        specifier: 'catalog:'
+        version: 7946.0.16
+      vite:
+        specifier: 'catalog:'
+        version: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
@@ -429,15 +438,6 @@ importers:
       '@transitmapper/core':
         specifier: workspace:*
         version: link:../core
-      '@transitmapper/map':
-        specifier: workspace:*
-        version: link:../map
-      '@transitmapper/views':
-        specifier: workspace:*
-        version: link:../views
-      maplibre-gl:
-        specifier: 'catalog:'
-        version: 4.7.1
     devDependencies:
       '@transitmapper/tsconfig':
         specifier: workspace:*
@@ -455,6 +455,10 @@ importers:
   packages/tsconfig: {}
 
   packages/views:
+    dependencies:
+      '@transitmapper/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@transitmapper/tsconfig':
         specifier: workspace:*

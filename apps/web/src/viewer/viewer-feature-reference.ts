@@ -16,6 +16,14 @@ export function viewerFeatureReference(
   properties: RenderedProperties,
   logicalLayerId: string,
 ): MapFeatureReferenceV1 | undefined {
+  // A passenger surface paints one stripe per Line, so an ordinary click owes
+  // the reader that Line. ServicePlans and Patterns are inspector actions
+  // reached from it, never the default hit, which is why the Line wins even
+  // when a feature still carries operational identity beside it.
+  const line = reference('line', stringProperty(properties, 'lineId'));
+  if (line) return line;
+  // Infrastructure still paints per-Service geometry, and that geometry has no
+  // Line to resolve to.
   const service = reference('service', stringProperty(properties, 'serviceId'));
   if (service) return service;
   const station = reference('station', stringProperty(properties, 'stationId'));

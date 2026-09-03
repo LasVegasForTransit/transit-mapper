@@ -18,10 +18,10 @@ export default defineConfig({
         // hoped it was, and any regression fails. They are low, and that is the
         // honest starting point: a floor set above the floor fails every branch
         // until somebody deletes it.
-        statements: 84.33,
-        branches: 71.9,
-        functions: 90.02,
-        lines: 88.59,
+        statements: 84.67,
+        branches: 72.06,
+        functions: 90.47,
+        lines: 88.8,
         // Raises a threshold that has been beaten and rewrites this file, so
         // coverage ratchets without anybody choosing a number. Never in CI,
         // where the rewrite would land in a worktree that gets thrown away —

@@ -1,5 +1,5 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import type { MapFeatureReferenceV1 } from '@transitmapper/views';
+import type { MapFeatureReferenceV1 } from '@transitmapper/core/presentation/map-presentation-state';
 import type { MapViewStore } from './map-view-store';
 import type { SelectionController } from './selection-controller';
 import type { MapStartupMilestones } from './startup-milestones';

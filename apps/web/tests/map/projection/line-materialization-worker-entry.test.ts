@@ -1,5 +1,5 @@
 import type { NetworkQueryResult } from '@transitmapper/core/network/result';
-import type { MapPresentation } from '@transitmapper/core/presentation/map-presentation';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import { describe, expect, it } from 'vitest';
 import {
   installLineMaterializationWorker,
@@ -31,10 +31,12 @@ function input() {
       lineOrder: [],
       chunks: [],
     },
-    presentation: {
-      camera: { center: [0, 0], zoom: 12, bearing: 0, pitch: 0 },
-      representationId: 'test',
-    } satisfies MapPresentation,
+    presentation: renderPresentationForViewport({
+      center: [0, 0],
+      zoom: 12,
+      width: 1_280,
+      height: 720,
+    }),
     carrierRule: 'shared-alignment' as const,
   };
 }

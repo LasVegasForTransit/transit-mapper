@@ -1,7 +1,7 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it, vi } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import type { DocumentMapSceneAccepted, DocumentMapSession } from '@transitmapper/renderer/driver';
+import type { DocumentMapSceneAccepted, DocumentMapSession } from '@transitmapper/map/driver';
 import { createDocumentMapSource } from '../../src/editor/document-map-source';
 import { createEditorMapGesture } from '../../src/editor/editor-map-gesture';
 import { createEditorStore } from '../../src/editor/store';

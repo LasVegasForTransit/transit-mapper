@@ -10,7 +10,7 @@ import {
   physicalRenderLayerIds,
   physicalRenderSourceIds,
   sourceBankForPhysicalId,
-} from '@transitmapper/renderer/layers';
+} from '@transitmapper/map/layers';
 
 const layerSpecsModulePath = '../../src/map/layers/layerSpecs.ts';
 const { LAYER_SPECS } = (await import(/* @vite-ignore */ layerSpecsModulePath)) as {

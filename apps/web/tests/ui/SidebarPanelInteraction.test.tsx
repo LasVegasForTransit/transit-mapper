@@ -7,10 +7,10 @@ import { aPattern, aRoad, aService, aStop, aSystem } from '@transitmapper/core/t
 import { createMapViewStore } from '@transitmapper/map';
 import { MapViewProvider } from '@transitmapper/workspace';
 import { EditorProvider } from '../../src/editor/EditorProvider';
-import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
+import { createDocumentPresentationState } from '@transitmapper/map/presentation';
 import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { SidebarPanel } from '../../src/ui/SidebarPanel';
-import type { DocumentRepresentationId } from '@transitmapper/renderer/presentation';
+import type { DocumentRepresentationId } from '@transitmapper/map/presentation';
 
 let container: HTMLDivElement;
 let root: Root;

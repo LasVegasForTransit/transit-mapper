@@ -1,9 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { SRC_HIT_FEATURES } from '@transitmapper/renderer/layers';
+import { SRC_HIT_FEATURES } from '@transitmapper/map/layers';
 import { LIGHT_LAYER_SPECS } from '../../src/map/layers/layerSpecs';
-import { isBankedRenderLayer } from '@transitmapper/renderer/layers';
-import { COMMITTED_SYSTEM_FEATURE_SOURCES } from '@transitmapper/renderer/layers';
+import { isBankedRenderLayer } from '@transitmapper/map/layers';
+import { COMMITTED_SYSTEM_FEATURE_SOURCES } from '@transitmapper/map/layers';
 import {
   RENDERER_LOD_ACCEPTANCE_STATS_ASSERTION_IDS,
   RENDERER_LOD_ACCEPTANCE_VISUAL_CASES,

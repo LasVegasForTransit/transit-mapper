@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   applyRendererVisibilityFilters,
   rendererVisibilityFilter,
-} from '@transitmapper/renderer/driver';
+} from '@transitmapper/map/driver';
 import {
   LYR_JUNCTIONS,
   LYR_LANE_SURFACES,

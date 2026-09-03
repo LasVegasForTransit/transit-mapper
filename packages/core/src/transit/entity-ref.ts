@@ -1,27 +1,49 @@
+export const TRANSIT_ENTITY_KINDS = [
+  'publisher',
+  'agency',
+  'operator',
+  'alignment',
+  'way',
+  'line',
+  'service-plan',
+  'pattern',
+  'schedule',
+  'calendar',
+  'trip',
+  'frequency-rule',
+  'operational-change',
+  'advisory',
+  'stop',
+  'station',
+  'facility',
+  'group',
+  'node',
+  'named-way',
+  'median',
+  'lane-connector',
+  'turn-restriction',
+  'approach-control',
+] as const;
+
+type TransitEntityKind = (typeof TRANSIT_ENTITY_KINDS)[number];
+
 /** A portable core reference to a transit record. Compatibility aliases are not entities. */
-export type TransitEntityRef =
-  | { kind: 'publisher'; id: string }
-  | { kind: 'agency'; id: string }
-  | { kind: 'operator'; id: string }
-  | { kind: 'alignment'; id: string }
-  | { kind: 'way'; id: string }
-  | { kind: 'line'; id: string }
-  | { kind: 'service-plan'; id: string }
-  | { kind: 'pattern'; id: string }
-  | { kind: 'schedule'; id: string }
-  | { kind: 'calendar'; id: string }
-  | { kind: 'trip'; id: string }
-  | { kind: 'frequency-rule'; id: string }
-  | { kind: 'operational-change'; id: string }
-  | { kind: 'advisory'; id: string }
-  | { kind: 'stop'; id: string }
-  | { kind: 'station'; id: string }
-  | { kind: 'facility'; id: string }
-  | { kind: 'group'; id: string }
-  | { kind: 'node'; id: string }
-  | { kind: 'named-way'; id: string }
-  | { kind: 'vehicle-kind'; id: string }
-  | { kind: 'median'; id: string }
-  | { kind: 'lane-connector'; id: string }
-  | { kind: 'turn-restriction'; id: string }
-  | { kind: 'approach-control'; id: string };
+export type TransitEntityRef = {
+  [Kind in TransitEntityKind]: { kind: Kind; id: string };
+}[TransitEntityKind];
+
+const TRANSIT_ENTITY_KIND_SET: ReadonlySet<string> = new Set(TRANSIT_ENTITY_KINDS);
+
+export function parseTransitEntityRef(value: unknown): TransitEntityRef {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('Transit entity reference must be an object.');
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.kind !== 'string' || !TRANSIT_ENTITY_KIND_SET.has(record.kind)) {
+    throw new Error('Transit entity reference kind is invalid.');
+  }
+  if (typeof record.id !== 'string' || record.id.trim().length === 0) {
+    throw new Error('Transit entity ID must not be empty.');
+  }
+  return { kind: record.kind, id: record.id } as TransitEntityRef;
+}

@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
+import { aPattern, aRoad, aService, aSystem } from '@transitmapper/core/testing/fixtures';
+import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
 import { renderPreviewMarkup } from '../../src/share/previewWorker';
+import { installPreviewWorker, type PreviewWorkerScope } from '../../src/share/previewWorkerEntry';
 import type {
   PreviewWorkerEvent,
   PreviewWorkerRequest,
@@ -80,5 +83,94 @@ describe('share preview Worker', () => {
 
     await rejection;
     expect(worker.terminated).toBe(true);
+  });
+});
+
+class FakePreviewWorkerScope implements PreviewWorkerScope {
+  onmessage: ((event: MessageEvent<PreviewWorkerRequest>) => void) | null = null;
+  readonly events: PreviewWorkerEvent[] = [];
+
+  postMessage(event: PreviewWorkerEvent): void {
+    this.events.push(event);
+  }
+
+  dispatch(request: PreviewWorkerRequest): void {
+    this.onmessage?.({ data: request } as MessageEvent<PreviewWorkerRequest>);
+  }
+}
+
+/** Distinct route identities, counted by the role each was named with. Every
+ *  identity paints once per pass, so raw occurrences over-count the stripes. */
+function routeRoleCounts(markup: string): { casings: number; stripes: number } {
+  const ids = new Set(
+    [...markup.matchAll(/data-render-source="services" data-feature-id="([^"]+)"/g)].map(
+      (match) => match[1],
+    ),
+  );
+  return {
+    casings: [...ids].filter((id) => id.includes('line-casing')).length,
+    stripes: [...ids].filter((id) => id.includes('line-stripe')).length,
+  };
+}
+
+async function cardFor(system: TransitSystem): Promise<string> {
+  const scope = new FakePreviewWorkerScope();
+  installPreviewWorker(scope);
+  scope.dispatch({ data: JSON.stringify(system) });
+  await vi.waitFor(() => expect(scope.events).toHaveLength(1));
+  const [event] = scope.events;
+  if (event.kind !== 'done') throw new Error(`Preview Worker failed: ${JSON.stringify(event)}`);
+  return event.markup;
+}
+
+describe('share preview Worker runtime', () => {
+  const carrier = aRoad('carrier', [
+    [-115.22, 36.14],
+    [-115.16, 36.14],
+  ] as LngLat[]);
+
+  it('draws one casing and one stripe for a Line two ServicePlans serve', async () => {
+    const local = aService('local', [aPattern('local-pattern', [carrier], [carrier.id])]);
+    const express = aService('express', [aPattern('express-pattern', [carrier], [carrier.id])]);
+
+    const card = await cardFor(
+      aSystem({
+        name: 'Shared carrier',
+        ways: [carrier],
+        services: [local, express],
+        lines: [
+          {
+            id: 'shared-line',
+            name: 'Shared',
+            color: '#123456',
+            serviceIds: [local.id, express.id],
+          },
+        ],
+      }),
+    );
+
+    expect(routeRoleCounts(card)).toEqual({ casings: 1, stripes: 1 });
+    expect(card).toContain('stroke="#123456"');
+  });
+
+  it('draws one stripe per Line when two Lines share a carrier', async () => {
+    const first = aService('first', [aPattern('first-pattern', [carrier], [carrier.id])]);
+    const second = aService('second', [aPattern('second-pattern', [carrier], [carrier.id])]);
+
+    const card = await cardFor(
+      aSystem({
+        name: 'Two lines',
+        ways: [carrier],
+        services: [first, second],
+        lines: [
+          { id: 'first-line', name: 'First', color: '#123456', serviceIds: [first.id] },
+          { id: 'second-line', name: 'Second', color: '#abcdef', serviceIds: [second.id] },
+        ],
+      }),
+    );
+
+    expect(routeRoleCounts(card)).toEqual({ casings: 1, stripes: 2 });
+    expect(card).toContain('stroke="#123456"');
+    expect(card).toContain('stroke="#abcdef"');
   });
 });

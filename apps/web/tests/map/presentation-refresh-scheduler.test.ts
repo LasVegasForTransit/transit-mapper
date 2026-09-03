@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createPresentationRefreshScheduler } from '@transitmapper/renderer/driver';
+import { createPresentationRefreshScheduler } from '@transitmapper/map/driver';
 
 class SchedulerClock {
   nowMs = 0;

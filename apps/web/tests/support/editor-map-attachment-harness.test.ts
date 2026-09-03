@@ -4,12 +4,15 @@ import type { LayerSpecification, Map as MapLibreMap, StyleSpecification } from 
 import { vi } from 'vitest';
 import { createMapViewStore } from '@transitmapper/map';
 import { emptySystemFeatures } from '@transitmapper/renderer/layers';
-import { createSourceFeatureProjectionAccounting } from '@transitmapper/renderer/projection';
-import type { DocumentMapSceneAccepted, DocumentMapSession } from '@transitmapper/renderer/driver';
+import {
+  createSourceFeatureProjectionAccounting,
+  type PatternOverlayProjectionClient,
+} from '@transitmapper/renderer/projection';
+import type { DocumentMapSceneAccepted, DocumentMapSession } from '@transitmapper/map/driver';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { AttachEditorMapOptions } from '../../src/editor/editor-map-attachment';
 import { createDocumentMapSource } from '../../src/editor/document-map-source';
-import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
+import { createDocumentPresentationState } from '@transitmapper/map/presentation';
 import { createEditorStore } from '../../src/editor/store';
 import { FINE_POINTER_TUNING } from '../../src/editor/input-tuning';
 import { createProjectionOperationCounts } from '../../src/map/gestureProjection';
@@ -138,7 +141,7 @@ export function createEditorMapAttachmentHarness() {
   const viewStore = createMapViewStore(createDocumentPresentationState());
   const worker = {
     project: vi.fn(() => Promise.resolve({ features: emptySystemFeatures() })),
-    projectPatternOverlay: vi.fn(() =>
+    projectPatternOverlay: vi.fn<PatternOverlayProjectionClient['projectPatternOverlay']>(() =>
       Promise.resolve({
         path: { type: 'FeatureCollection' as const, features: [] },
         arrows: { type: 'FeatureCollection' as const, features: [] },

@@ -11,7 +11,7 @@ import {
   LYR_WAY_SELECTED,
   SRC_WAYS,
 } from '@transitmapper/renderer/layers';
-import type { LiveMapRenderer } from '@transitmapper/renderer/runtime';
+import type { LiveMapRenderer } from '@transitmapper/map/runtime';
 
 interface FeatureStateChange {
   readonly target: RenderedFeatureIdentity;

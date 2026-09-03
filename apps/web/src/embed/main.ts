@@ -3,7 +3,7 @@ import { parseSystem } from '@transitmapper/core/model/serialize';
 import type { GetShareResponse } from '@transitmapper/core/share/contract';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { parseMapViewState } from '@transitmapper/views';
-import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
+import { createDocumentPresentationState } from '@transitmapper/map/presentation';
 import { fetchWithTimeout } from '../network/fetchWithTimeout';
 import { createEmbedStartupMilestones } from './startup-milestones';
 import { startFieldSampling } from '../perf/field-sampling';

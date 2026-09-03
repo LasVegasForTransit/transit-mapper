@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
-import type { DocumentRepresentationId } from '@transitmapper/renderer/presentation';
+import type { DocumentRepresentationId } from '@transitmapper/map/presentation';
 import { useEditor } from '../editor/EditorProvider';
 import { useDocumentView } from '../editor/document-view-controls';
 import type { Selection, Tool } from '../editor/store';

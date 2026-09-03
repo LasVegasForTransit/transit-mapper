@@ -1,10 +1,11 @@
+import type { FeatureCollection, LineString } from 'geojson';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '../model/catalog';
 import { systemBounds } from '../model/geo';
 import type { LngLat, TransitSystem } from '../model/system';
 import { LVBT, LVBT_FONT_FAMILY } from '../style/lvbtBrand';
 import type { RenderViewOptions, ViewOptions } from './buildFeatures';
 import { legendEntriesFor } from './legend';
-import { fitBounds, metersPerPixel, projector } from './project';
+import { fitBounds, metersPerPixel, projector, type Viewport } from './project';
 import { renderPresentationForViewport } from './render-presentation';
 import { scaleBarFor } from './scaleBar';
 import { systemSvg } from './svg';
@@ -105,6 +106,54 @@ export interface PreviewSvgOptions {
   borderWidth?: number;
   borderInset?: number;
   insetBackground?: string;
+  /** The passenger Lines resolved for this card's own camera. Resolve them
+   *  against `previewRenderView(system, opts)` and nothing else, or the card
+   *  paints a network that was clipped and tiered for a different framing. */
+  passengerLines?: FeatureCollection<LineString>;
+}
+
+interface PreviewComposition {
+  width: number;
+  height: number;
+  viewport: Viewport;
+  displayWidth: number;
+  view: RenderViewOptions;
+}
+
+function previewComposition(system: TransitSystem, opts: PreviewSvgOptions): PreviewComposition {
+  const width = opts.width ?? CARD_SVG_WIDTH;
+  const height = opts.height ?? CARD_SVG_HEIGHT;
+  const bounds = systemBounds(system);
+  const viewport = bounds
+    ? fitBounds(bounds, { width, height, padding: PREVIEW_PADDING })
+    : { center: EMPTY_SYSTEM_CENTER, zoom: EMPTY_SYSTEM_ZOOM, width, height };
+  const displayWidth = opts.displayWidth ?? TYPICAL_UNFURL_WIDTH;
+  return {
+    width,
+    height,
+    viewport,
+    displayWidth,
+    view: {
+      ...PREVIEW_VIEW,
+      presentation: renderPresentationForViewport(viewport, {
+        displayedWidthPx: displayWidth,
+        displayedHeightPx: height * (displayWidth / width),
+      }),
+    },
+  };
+}
+
+/**
+ * The camera and filters this card will be drawn with. A caller that resolves
+ * passenger Lines needs the same bounds, modes, and detail band the drawing
+ * uses, and re-deriving them beside `previewSvg` is how the card and its Lines
+ * would silently come from two different framings.
+ */
+export function previewRenderView(
+  system: TransitSystem,
+  opts: PreviewSvgOptions = {},
+): RenderViewOptions {
+  return previewComposition(system, opts).view;
 }
 
 /**
@@ -121,20 +170,7 @@ export interface PreviewSvgOptions {
  * image. Nothing here asks for a single element to be removed.
  */
 export function previewSvg(system: TransitSystem, opts: PreviewSvgOptions = {}): string {
-  const width = opts.width ?? CARD_SVG_WIDTH;
-  const height = opts.height ?? CARD_SVG_HEIGHT;
-  const bounds = systemBounds(system);
-  const viewport = bounds
-    ? fitBounds(bounds, { width, height, padding: PREVIEW_PADDING })
-    : { center: EMPTY_SYSTEM_CENTER, zoom: EMPTY_SYSTEM_ZOOM, width, height };
-  const displayWidth = opts.displayWidth ?? TYPICAL_UNFURL_WIDTH;
-  const view: RenderViewOptions = {
-    ...PREVIEW_VIEW,
-    presentation: renderPresentationForViewport(viewport, {
-      displayedWidthPx: displayWidth,
-      displayedHeightPx: height * (displayWidth / width),
-    }),
-  };
+  const { width, height, viewport, displayWidth, view } = previewComposition(system, opts);
 
   return systemSvg(system, view, projector(viewport), {
     title: system.name || 'Transit system',
@@ -151,5 +187,6 @@ export function previewSvg(system: TransitSystem, opts: PreviewSvgOptions = {}):
     insetBackground: opts.insetBackground ?? CARD_INSET_BACKGROUND,
     cartographyCasingColor: LVBT.light.onSurface,
     scaleBar: scaleBarFor(metersPerPixel(viewport), Math.min(140, width * 0.3)),
+    ...(opts.passengerLines ? { passengerLines: opts.passengerLines } : {}),
   });
 }

@@ -1,14 +1,14 @@
 import type { GeoJSONSource } from 'maplibre-gl';
-import type { DocumentMapSession } from '@transitmapper/renderer/driver';
+import type { DocumentMapSession } from '@transitmapper/map/driver';
 import {
   bankedLayerId,
   logicalBankedLayerIds,
   logicalRenderLayerId,
   SOURCE_BANK_IDS,
   SRC_ACTION_ANCHOR,
-} from '@transitmapper/renderer/layers';
+} from '@transitmapper/map/layers';
 import { sourceUploadsForSystemChange } from '@transitmapper/renderer/projection';
-import { DOCUMENT_VIEW_FILTER_IDS } from '@transitmapper/renderer/presentation';
+import { DOCUMENT_VIEW_FILTER_IDS } from '@transitmapper/map/presentation';
 import { attachInteractions } from '../map/interactions';
 import { LAYER_SPECS } from '../map/layers/layerSpecs';
 import { editorSourcesNeedSystemRefresh, planSelectionRenderUpdate } from '../map/editor-overlays';

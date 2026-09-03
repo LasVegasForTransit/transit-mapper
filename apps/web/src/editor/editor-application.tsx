@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createMapViewStore } from '@transitmapper/map';
 import { MapViewProvider } from '@transitmapper/workspace';
-import { createDocumentPresentationState } from '@transitmapper/renderer/presentation';
+import { createDocumentPresentationState } from '@transitmapper/map/presentation';
 import { EditorSession } from '../App';
 import { InstallProvider } from '../pwa/InstallProvider';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
