@@ -9,6 +9,10 @@ import type { BuildFeaturesForSourcesOptions } from '../projection/source-featur
 import type { SourceFeatureProjectionCounts } from '../projection/feature-projection-counts';
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
+import type {
+  PatternOverlayFeatures,
+  PatternOverlayProjectionInput,
+} from '../projection/pattern-overlay-projection';
 
 /** Functions cannot cross a Worker boundary. Live hysteresis is recreated by
  * the worker for its own persistent projection lifetime. */
@@ -25,11 +29,23 @@ export interface FeatureProjectionWorkerInput extends Omit<
   readonly sceneRevision?: string;
 }
 
-export interface FeatureProjectionWorkerRequest {
-  readonly kind: 'project';
-  readonly requestId: number;
-  readonly input: FeatureProjectionWorkerInput;
+/** A transient editor-only result. This has its own request shape so no caller
+ * can accidentally ask the committed Line scene to carry Pattern geometry. */
+export interface PatternOverlayWorkerInput extends Omit<PatternOverlayProjectionInput, 'view'> {
+  readonly view: WorkerRenderView;
 }
+
+export type FeatureProjectionWorkerRequest =
+  | {
+      readonly kind: 'project';
+      readonly requestId: number;
+      readonly input: FeatureProjectionWorkerInput;
+    }
+  | {
+      readonly kind: 'project-pattern-overlay';
+      readonly requestId: number;
+      readonly input: PatternOverlayWorkerInput;
+    };
 
 export type FeatureProjectionWorkerEvent =
   | {
@@ -37,6 +53,11 @@ export type FeatureProjectionWorkerEvent =
       readonly requestId: number;
       readonly features: SystemFeatures;
       readonly counts: SourceFeatureProjectionCounts | null;
+    }
+  | {
+      readonly kind: 'pattern-overlay-done';
+      readonly requestId: number;
+      readonly overlay: PatternOverlayFeatures;
     }
   | {
       readonly kind: 'error';
