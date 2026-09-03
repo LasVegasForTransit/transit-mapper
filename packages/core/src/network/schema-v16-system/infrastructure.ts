@@ -17,7 +17,7 @@ import {
   polygonIntersectsBounds,
   validCoordinate,
 } from './bounds';
-import { detailBandContent, type DetailBandContent } from './detail-band';
+import { detailBandContent, type DetailBandContent } from '../detail-band';
 import { legacyDerivedId } from './identity';
 import { mapInfrastructureControls } from './infrastructure-controls';
 

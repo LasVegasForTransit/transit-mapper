@@ -1,16 +1,13 @@
 import { semanticDigest } from '../../encoding/semantic-digest';
 import { servicesForLine, validateLineServiceMembership } from '../../model/line-service';
 import type { TransitSystem } from '../../model/system';
-import type { ContentDigest } from '../../source/value-types';
-import type { ResolveOptions } from '../content-provider';
 import type { ContentRef } from '../content-reference';
-import type { NetworkQuery, ViewFilterValue } from '../query';
 import type { ResolvedContentDescriptor, ResolvedContentRef } from '../resolved-content-reference';
 import { legacyDerivedId } from '../../model/schema-v16-system/legacy-id';
-
-const textEncoder = new TextEncoder();
+import { abortIfRequested, networkQueryDigest } from '../provider-identity';
 
 export { legacyDerivedId, semanticDigest };
+export { abortIfRequested, networkQueryDigest };
 
 export type SchemaV16SystemProviderErrorCode =
   | 'content-not-found'
@@ -27,53 +24,6 @@ export class SchemaV16SystemProviderError extends Error {
     this.name = 'SchemaV16SystemProviderError';
     this.code = code;
   }
-}
-
-function compareUtf8(left: string, right: string): number {
-  const leftBytes = textEncoder.encode(left);
-  const rightBytes = textEncoder.encode(right);
-  const sharedLength = Math.min(leftBytes.length, rightBytes.length);
-  for (let index = 0; index < sharedLength; index += 1) {
-    const difference = (leftBytes[index] ?? 0) - (rightBytes[index] ?? 0);
-    if (difference !== 0) return difference;
-  }
-  return leftBytes.length - rightBytes.length;
-}
-
-function sortedUtf8(values: readonly string[]): string[] {
-  return [...values].sort(compareUtf8);
-}
-
-function canonicalNetworkQuery(query: NetworkQuery): NetworkQuery {
-  const filters: Record<string, ViewFilterValue> = {};
-  for (const [id, value] of Object.entries(query.filters)) {
-    filters[id] = Array.isArray(value) ? sortedUtf8(value) : value;
-  }
-  const normalized: NetworkQuery = {
-    ...query,
-    modes:
-      query.modes.kind === 'only'
-        ? { kind: 'only', ids: sortedUtf8(query.modes.ids) }
-        : query.modes,
-    filters,
-  };
-  delete normalized.cursor;
-  return normalized;
-}
-
-export function networkQueryDigest(
-  content: ResolvedContentRef,
-  query: NetworkQuery,
-): Promise<ContentDigest> {
-  return semanticDigest({
-    version: 'network-query-v1',
-    content,
-    query: canonicalNetworkQuery(query),
-  });
-}
-
-export function abortIfRequested(options?: ResolveOptions): void {
-  if (options?.signal?.aborted) throw new Error('Provider request aborted.');
 }
 
 function validateUniqueIds(system: TransitSystem): void {

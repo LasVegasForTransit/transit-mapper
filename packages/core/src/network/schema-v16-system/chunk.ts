@@ -9,7 +9,7 @@ import type {
 import { pointInBounds, validCoordinate } from './bounds';
 import { clippedCarrierPieces } from './carrier-geometry';
 import { topologyFragment, type TransferredLegFragment } from './carrier-transfer';
-import { detailBandContent } from './detail-band';
+import { detailBandContent } from '../detail-band';
 import { legacyDerivedId } from './identity';
 import { mapInfrastructure } from './infrastructure';
 import type { DerivedCall } from './patterns';

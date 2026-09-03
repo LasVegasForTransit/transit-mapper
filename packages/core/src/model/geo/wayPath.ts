@@ -1,4 +1,5 @@
 import type { LngLat, Node, Way } from '../system';
+import type { LineGeometry } from '../system';
 import { resolveMetricCenterline, tessellateMetricCenterline } from '../../geometry/metric-curves';
 
 // This is deliberately a model-quality default, not a screen-space policy.
@@ -12,20 +13,34 @@ const DEFAULT_CURVE_SAGITTA_M = 0.25;
 // every way again via servedWayIds) on every rebuild — during a drag that's
 // once per animation frame, and without this cache it was once per raw
 // mousemove event, recomputing curve geometry for the entire system each time.
-const wayPathCache = new WeakMap<Way, Map<number, LngLat[]>>();
+const wayPathCache = new WeakMap<CurvedPathSource, Map<number, LngLat[]>>();
+
+/**
+ * The geometry a physical path is resolved from.
+ *
+ * A v16 Way carries this inline; a v17 Alignment is exactly this and nothing
+ * else. Naming it lets one resolver serve both without either schema's
+ * document type leaking into the other. Callers hold the source identity
+ * stable, because the cache above keys on it.
+ */
+export interface CurvedPathSource {
+  readonly points: LngLat[];
+  readonly geometry: LineGeometry;
+  readonly curveControls?: { readonly pointIndex: number; readonly radiusM: number }[];
+}
 
 /**
  * The stable physical path used by model operations that have no camera.
  * Curved ways use tangent-continuous metric arcs; straight and freeform ways
  * retain their authored control-point references.
  */
-export function resolveWayPath(way: Way): LngLat[] {
+export function resolveWayPath(way: CurvedPathSource): LngLat[] {
   return resolveWayPathAtError(way, DEFAULT_CURVE_SAGITTA_M);
 }
 
 /** Resolves a physical path with no chord deviating more than `maxSagittaM`
  * from a curved way's metric centerline. */
-export function resolveWayPathAtError(way: Way, maxSagittaM: number): LngLat[] {
+export function resolveWayPathAtError(way: CurvedPathSource, maxSagittaM: number): LngLat[] {
   if (way.geometry !== 'curved' || way.points.length < 3) return way.points;
   let pathsByError = wayPathCache.get(way);
   if (!pathsByError) {

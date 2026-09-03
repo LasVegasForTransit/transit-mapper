@@ -159,11 +159,6 @@
       "count": 5
     }
   },
-  "src/map/layers/layerSpecs.ts": {
-    "max-lines": {
-      "count": 1
-    }
-  },
   "src/map/sourceMutationSettlement.ts": {
     "@typescript-eslint/unbound-method": {
       "count": 3
@@ -481,7 +476,7 @@
       "count": 1
     },
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 12
+      "count": 11
     },
     "max-lines": {
       "count": 1

@@ -1,46 +1,15 @@
-/* eslint-disable max-lines -- Six surfaces compared against one another only
-   mean anything in one file; splitting them leaves nothing that compares. */
+/* eslint-disable max-lines -- the surfaces are compared against each other */
 /**
- * One system, one camera, every passenger surface — do they agree?
+ * Every passenger surface resolves one fixture at one camera and must draw the
+ * same Lines over the same stretches. Each surface's own test passes against a
+ * surface that has gone back to one stripe per ServicePlan, as long as it is
+ * self-consistent, so only a comparison catches that drift.
  *
- * Each surface already has its own test, and every one of those tests passes
- * against a surface that has quietly gone back to painting one stripe per
- * ServicePlan, as long as the surface is self-consistent. Nothing compared any
- * surface to any other, so they could drift apart without a failure. This file
- * is that comparison: it resolves the same fixture through each surface's own
- * production entry point and asserts they draw the same Lines over the same
- * stretches, under the same casings.
- *
- * Six surfaces are driven, and these are the entry points they are driven at:
- *
- * - the embed, at `projectEmbedScene`
- * - PNG export, at `projectFeaturesForFittedMap`
- * - the reader, at `createViewerDocumentMap`
- * - the editor, at `createEditorDocumentMap`
- * - SVG export and the share card, at their own Worker entries
- *
- * The first four all ask the one projection Worker for their geometry, and its
- * entry module — the only place any of them swaps the Line scene in for
- * per-ServicePlan geometry — runs here for real, behind the real client. Two
- * of them reach it directly. The reader and the editor reach it through their
- * own drivers, which read a camera off MapLibre, resolve a scene from it, and
- * publish that scene to MapLibre sources; both take the map from their host
- * rather than building one, so a stand-in reporting the shared camera drives
- * them. That makes four pipelines observed here, not six: the embed and PNG
- * share the Worker call, and SVG and the share card share a projector.
- *
- * Two things above these are NOT covered, and they are out of reach for two
- * different reasons. The embed's `startEmbedMap` constructs its own
- * `maplibregl.Map`, so it needs a WebGL canvas and cannot run here at all;
- * `tests/embed/embed-map-reprojection` covers that half instead.
- * `createEditorMapDriver` constructs no map — it takes one from its host, the
- * same way the composition below it does — so WebGL is not what stops it. What
- * stops it is how much of MapLibre a stand-in would have to answer for once it
- * attaches pointer handling, keyboard handling, navigation handlers, and
- * vehicle animation. None of that decides which features arrive, so the scene
- * it publishes is the one `createEditorDocumentMap` resolves above. Nothing
- * here would notice if either of them stopped calling the composition
- * underneath it.
+ * Driven at their production entry points: the embed at `projectEmbedScene`,
+ * PNG at `projectFeaturesForFittedMap`, the reader at `createViewerDocumentMap`,
+ * the editor at `createEditorDocumentMap`, and SVG and the share card at their
+ * Worker entries. The reader and editor take a stand-in map reporting the
+ * shared camera.
  */
 import type { Feature, FeatureCollection } from 'geojson';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -123,17 +92,11 @@ const DOWNTOWN_CORRIDOR: LngLat[] = [
   [-115.22, 36.18],
   [-115.16, 36.18],
 ];
-/**
- * Where the weekend plan stops, as a fraction of the resort corridor.
- *
- * Two plans covering the identical stretch is what this fixture used to say,
- * and it made the drawing surfaces blind: their stripes are collapsed by
- * feature ID, an ID is a content digest, and two per-plan stripes over one
- * stretch are byte-identical. A shorter second run gives the two plans
- * different content, so a per-plan drawing can be counted. Not a half,
- * because equal halves let a surface swap the two stretches and still report
- * the same pair of numbers.
- */
+/** Where the weekend plan stops, as a fraction of the resort corridor.
+ * Stripes collapse by feature ID and an ID is a content digest, so two plans
+ * over the identical stretch are byte-identical and uncountable. A third
+ * rather than a half, because equal halves let a surface swap them
+ * undetected. */
 const WEEKEND_RUN_END_T = 1 / 3;
 
 /**
@@ -154,17 +117,11 @@ const LINE_FIRST_RESULT: LineSurfaceSummary = {
 };
 
 interface LineSurfaceSummary {
-  /**
-   * The stretch every stripe covers, by the Line that drew it, as a fraction
-   * of the longest stripe on the surface and sorted.
-   *
-   * Lengths rather than a count, because a count cannot tell the two worlds
-   * apart. A Line-first resort corridor is two stripes and so is a per-plan
-   * one — the difference is that the Line-first pair tiles the corridor
-   * (0.33 + 0.67) while the per-plan pair repeats a third of it (0.33 and 1).
-   * Normalizing lets one expectation cover both the projected scenes, which
-   * measure in degrees, and the drawings, which measure in page pixels.
-   */
+  /** Stripe stretches by Line, as a sorted fraction of the surface's longest.
+   * Lengths rather than counts: both worlds give the resort corridor two
+   * stripes, but Line-first tiles it (0.33 + 0.67) where per-plan repeats a
+   * third of it (0.33 and 1). Normalizing lets degrees and page pixels share
+   * one expectation. */
   readonly stripeSpansByLineId: Readonly<Record<string, readonly number[]>>;
   readonly casingSpans: readonly number[];
 }
@@ -256,15 +213,10 @@ const workerReplies = new Map<number, (event: FeatureProjectionWorkerEvent) => v
 let workerEntryHandler: ((event: MessageEvent<FeatureProjectionWorkerRequest>) => void) | null =
   null;
 
-/**
- * Hands a request to the real Worker entry.
- *
- * The entry installs itself on the Worker global instead of exporting a
- * handler, so a test drives it the way workerd does. The import is deferred
- * because the SVG and preview entries install themselves on that same global
- * at import time; taking the handler straight after this import is what makes
- * sure it is the projection one.
- */
+/** Hands a request to the real Worker entry, which installs itself on the
+ * Worker global rather than exporting a handler. The import is deferred
+ * because the SVG and preview entries claim that same global at import time,
+ * so the handler is only certainly the projection one right after this. */
 async function deliverToWorkerEntry(request: FeatureProjectionWorkerRequest): Promise<void> {
   const scope = globalThis as unknown as FeatureProjectionWorkerScope;
   if (!workerEntryHandler) {
@@ -549,17 +501,11 @@ async function settleEditorScene(clock: DocumentDriverClock, map: TestDocumentMa
   throw new Error('The editor never settled on a scene.');
 }
 
-/**
- * The editor's own document map, driven to its first accepted scene.
- *
- * `createEditorMapDriver` stays out of reach: it builds a `maplibregl.Map`,
- * attaches pointer and keyboard handling to it, and animates vehicles on it.
- * The composition underneath it does not — `createEditorDocumentMap` takes
- * the projection client as a port and is the piece that asks for a scene and
- * publishes it, which is the only part of the editor this comparison is
- * about. Its layer catalog is stood in for, because a layer decides how a
- * feature is drawn and never which features arrive.
- */
+/** The editor's document map, driven to its first accepted scene.
+ * `createEditorMapDriver` builds a real `maplibregl.Map`, so this uses
+ * `createEditorDocumentMap` underneath it, which takes the projection client
+ * as a port. The layer catalog is stood in for: a layer decides how a feature
+ * is drawn, never which features arrive. */
 async function editorSurface(
   system: TransitSystem,
   camera: RenderViewOptions,

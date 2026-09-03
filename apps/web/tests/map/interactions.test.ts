@@ -1933,7 +1933,8 @@ describe('pointer work coalescing', () => {
         at: opened[0].anchor,
         serviceHit: opened[0].serviceHit,
       })
-      .find((candidate) => candidate.id === 'service.endHere')!;
+      .find((candidate) => candidate.id === 'service.endHere');
+    if (!action) throw new Error('The Service context menu offers no "end here" action.');
     action.run();
     const leg = store.getState().system.services[0].path.sections[0];
     expect(leg.kind === 'shared' && leg.legs[0].extent).toMatchObject({

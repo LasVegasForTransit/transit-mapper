@@ -38,8 +38,12 @@ import { dirname, join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
-/** What the base branch is called. Overridable for a fork or a release line. */
-const BASE = process.env.DEBT_BASE_REF ?? 'main';
+/** What the base branch is called. Overridable for a fork or a release line.
+ * Both spellings are tried, because `actions/checkout` leaves a pull request on
+ * a detached HEAD with no local branch: `main` resolves on a contributor's
+ * machine and only `origin/main` resolves in CI. Trying one spelling meant the
+ * ratchet silently skipped every CI run and caught offences on laptops alone. */
+const BASES = process.env.DEBT_BASE_REF ? [process.env.DEBT_BASE_REF] : ['main', 'origin/main'];
 
 const LEDGER = 'eslint-suppressions.json';
 
@@ -167,14 +171,19 @@ function findUnpaidEdits({
 }
 
 function main(): void {
-  let base: string;
-  try {
-    base = git(['merge-base', BASE, 'HEAD']).trim();
-  } catch {
-    // A shallow clone, a detached build, or a repository with no `main` yet.
-    // Skipping loudly beats failing a build for a reason nobody can act on;
-    // CI checks out full history, which is where this matters.
-    console.log(`debt: no merge base with "${BASE}", skipping the ratchet check.`);
+  let base: string | undefined;
+  for (const candidate of BASES) {
+    try {
+      base = git(['merge-base', candidate, 'HEAD']).trim();
+      break;
+    } catch {
+      continue;
+    }
+  }
+  if (base === undefined) {
+    // A shallow clone or a repository with no base branch yet. Skipping loudly
+    // beats failing a build for a reason nobody can act on.
+    console.log(`debt: no merge base with ${BASES.join(' or ')}, skipping the ratchet check.`);
     return;
   }
 
