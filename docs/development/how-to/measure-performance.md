@@ -378,19 +378,83 @@ It does not scale with the document. Seeding documents from 25 ways up to the
 paint under 7%, so the number is a fixed cost, not a content cost. The editor
 accepts input at about 1.4 s regardless.
 
-About half that fixed cost is the basemap style. Serving a minimal
-background-only style in place of the 25 KB openfreemap style, with everything
-else unchanged, moves first paint from 8,770 ms to 4,461 ms. The cost is not
-parse volume; it is the layer construction, expression compilation, and glyph
-and source setup MapLibre performs for a full style. The editor also withholds
-that request until `contentCommitted`, so it lands on the critical path rather
-than beside it.
+An earlier revision of this page blamed about half that fixed cost on the
+basemap style, from a measurement that moved first paint from 8,770 ms to
+4,461 ms when a minimal style replaced the openfreemap one. That does not hold
+on the RTC fixture: removing the vendor basemap entirely leaves the median at
+19,117 ms against 19,559 ms with it. Whatever that earlier measurement caught,
+it is not what the gate is waiting for.
 
 Read the gate accordingly. A change to projection or transit content moves
 `projectionDurationMs` and the preparation counters; it barely moves
-`firstMapCanvasMs`. Treat a first-paint regression as evidence about the map
-host and the basemap, and confirm any projection claim against
-`rendererStats`, not against this metric.
+`firstMapCanvasMs`. Confirm any projection claim against `rendererStats`
+rather than this metric — but note that `rendererStats` is not a reading of
+the cost either. It reported `projectionDurationMs` of 1,155 ms for a window
+that sampling measured at roughly fifteen seconds.
+
+### Where the time goes, measured
+
+On the RTC fixture the whole deficit sits between two marks. The shell mounts
+at about 1,076 ms and `tm:system-committed` lands at about 1,658 ms; then
+`tm:interactive` does not arrive until roughly 16,400 ms. Everything before a
+committed document is fast, so first paint is neither loading nor parsing.
+
+That window has no hotspot. Sampling it at 10 kHz with symbol names preserved
+puts the largest frame at 1,997 ms of 11,804 ms — about a sixth — and the rest
+spreads across message handling, spatial candidate resolution (`gridFor`,
+`segmentIntersectsBounds`, `indexedCandidates`), geometry maths
+(`haversineMeters`), and MapLibre expression evaluation (`evaluate`,
+`eachChild`, `parse`). Nothing is a targeted fix.
+
+The main thread is not waiting for anything. Across that window it runs
+2,259 tasks totalling 8,857 ms busy against 1,648 ms idle, and that idle is
+1,860 gaps averaging under a millisecond — the largest is 20 ms. Frame
+starvation, a stalled worker, and a blocked style transition are all excluded
+by that alone.
+
+What it spends the time on is promise continuations: `RunMicrotasks` accounts
+for 7,368 ms across 252 checkpoints, averaging 29 ms each, with
+`FireAnimationFrame` at 2,185 ms, `FunctionCall` at 1,028 ms, and about 1.1 s
+of scavenger GC underneath. The projection publishes as hundreds of small
+async steps, and the cost is the aggregate of those steps rather than any one
+of them.
+
+`projectionSettlementLatencyMs` does not span this. It reported 4,312 ms for a
+window of 10,505 ms, so a projection that "settles" has not finished the work
+that gates `tm:interactive`. Do not read that counter as the cost of a cold
+load.
+
+Preserving symbol names is not optional here. Under the shipped terser
+settings the same profile attributes 14,866 ms of 16,627 ms to one frame, and
+that frame is an artifact: terser collapses dozens of inlined callees into a
+single symbol, so a minified profile invents a hotspot that does not exist.
+Four hypotheses were built and discarded on that artifact before anyone
+rebuilt with names.
+
+### Profiling one scenario
+
+The harness cannot do this out of the box, which is why the measurements above
+took several attempts. Three temporary edits are needed, and none may ship:
+
+1. In `apps/web/scripts/perf/browser.ts`, add
+   `'disabled-by-default-v8.cpu_profiler'` to the `startTrace` categories.
+   Without it a trace carries no CPU samples at all.
+2. In `apps/web/scripts/perf/audit-options.ts`, drop `options.record` from the
+   guard that requires the full scenario matrix, so `--record` works with
+   `--scenario`.
+3. For function names, set `keep_fnames` and `mangle.keep_fnames` in the
+   `terserOptions` of `apps/web/vite.config.ts`. This inflates `map-engine`
+   past its chunk budget, so `MAP_ENGINE_MAXIMUM_RAW_BYTES` in
+   `apps/web/src/perf/chunkPolicy.ts` has to rise for the build to complete.
+
+Then `pnpm perf -- --profile desktop --scenario rtc --headless --record
+--output <dir>` writes one trace per measured run. Read `Profile` and
+`ProfileChunk` events, join chunks to their profile by `id` rather than `tid`,
+and window the samples between the `tm:` marks.
+
+Each trace is 45-65 MB and five are written per run. Delete them as soon as
+the analysis is done; filling the disk stops macOS growing swap, which makes
+the resource guard kill the harness, `pnpm check`, and `git push` alike.
 
 Headless frame production is a further floor under every frame-derived
 number. A `requestAnimationFrame` loop injected into the page runs at 1-9 fps
