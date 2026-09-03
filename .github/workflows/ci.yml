@@ -3,6 +3,11 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  # The ruleset requires Validate on the merge group, and a queue entry is
+  # dropped when its required check never reports. Without this trigger no
+  # workflow runs on the merge group ref, so nothing could merge through the
+  # queue at all.
+  merge_group:
   push:
     branches-ignore: [main]
   # Callable so the production deploy can gate on exactly these checks
