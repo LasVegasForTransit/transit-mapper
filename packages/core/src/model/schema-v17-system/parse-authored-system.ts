@@ -40,6 +40,7 @@ import {
 } from './parse-values';
 import { validateAuthoredInfrastructureRelationships } from './validate-infrastructure-relationships';
 import { validateAuthoredPassengerRelationships } from './validate-passenger-relationships';
+import { validateAuthoredProvenanceRelationships } from './validate-provenance-relationships';
 
 const REQUIRED_SYSTEM_FIELDS = [
   'version',
@@ -168,5 +169,6 @@ export function parseAuthoredSystem(value: unknown): TransitSystem {
   validateRemainingCollectionIdentity(system);
   validateAuthoredInfrastructureRelationships(system);
   validateAuthoredPassengerRelationships(system);
+  validateAuthoredProvenanceRelationships(system);
   return system;
 }

@@ -53,6 +53,11 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      # Every package the map is drawn by. The list named only apps/web and
+      # packages/core because the renderer lived inside apps/web when this was
+      # written; extracting it into its own packages silently took the render
+      # pipeline out of the gate's reach, and main drifted to a 16.5 s map
+      # paint behind roughly forty renderer and map commits that never ran it.
       - name: Decide whether this pull request needs the RTC audit
         id: relevance
         env:
@@ -65,6 +70,10 @@ jobs:
           elif git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             apps/web \
             packages/core \
+            packages/renderer \
+            packages/map \
+            packages/views \
+            packages/workspace \
             package.json \
             pnpm-lock.yaml \
             pnpm-workspace.yaml \
@@ -77,7 +86,7 @@ jobs:
 
       - name: Skip the RTC audit for an unrelated pull request
         if: steps.relevance.outputs.run != 'true'
-        run: echo 'No apps/web or packages/core changes require Chrome.'
+        run: echo 'No browser or render-pipeline change requires Chrome.'
 
       - name: Setup candidate Node + pnpm
         if: steps.relevance.outputs.run == 'true'

@@ -44,6 +44,29 @@ describe('renderer preparation mutation journal', () => {
     });
   });
 
+  it('composes a long gesture chain, where every link is held weakly', () => {
+    const way = aRoad('way', [
+      [0, 0],
+      [1, 0],
+    ]);
+    const baseline = aSystem({ ways: [way] });
+    // One System per frame is what a drag actually produces, so the composer
+    // has to walk a chain this shape rather than a single link.
+    const frames = 120;
+    let current = baseline;
+    let latestWay = way;
+    for (let frame = 1; frame <= frames; frame++) {
+      latestWay = { ...way, points: [[0, frame], way.points[1]] as typeof way.points };
+      const next = { ...current, ways: [latestWay] };
+      recordRenderPreparationPatch(current, next, { ways: { upsert: [latestWay] } });
+      current = next;
+    }
+
+    expect(renderPreparationPatchBetween(baseline, current)).toEqual({
+      ways: { upsert: [latestWay] },
+    });
+  });
+
   it('returns null for unjournaled imports, undo, and document replacement', () => {
     const previous = aSystem();
     const next = {

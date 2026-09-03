@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { wholeLeg } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import {
-  createFeatureBuildOperationCounts,
-  type RenderViewOptions,
-} from '@transitmapper/core/render/buildFeatures';
+import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
+import { createSourceFeatureProjectionCounts } from '../src/projection/feature-projection-counts';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import { planRenderProjectionScope } from '@transitmapper/core/render/render-projection-scope';
 import { aPattern, aRoad, aService, aSystem } from '@transitmapper/core/testing/fixtures';
@@ -85,18 +83,8 @@ function fixture(): TransitSystem {
   };
 }
 
-function operationCounts() {
-  return {
-    ...createFeatureBuildOperationCounts(),
-    diagramTopologyBuildCount: 0,
-    diagramTopologyCacheHitCount: 0,
-    diagramStopBuildCount: 0,
-    diagramStopCacheHitCount: 0,
-    rendererCandidateFeatureCount: 0,
-    rendererGeneratedFeatureCount: 0,
-    rendererGeneratedVertexCount: 0,
-  };
-}
+// The production factory, so a new counter does not need adding here twice.
+const operationCounts = createSourceFeatureProjectionCounts;
 
 describe('MapLibre source feature projection', () => {
   it('records source-scoped candidates and output dimensions inside projection', () => {

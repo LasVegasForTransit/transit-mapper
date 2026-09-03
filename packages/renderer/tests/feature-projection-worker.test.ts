@@ -145,13 +145,30 @@ class EntryBackedProjectionWorker implements FeatureProjectionWorker {
   terminate(): void {
     this.terminated = true;
   }
+
+  /** A realm that raised. The client replaces one of these, because nothing
+   * says how far its retained state got. */
+  fail(message: string): void {
+    this.onerror?.({ message } as ErrorEvent);
+  }
+}
+
+/** Requests that carried work. `cancel` names a requestId and nothing else,
+ * so it has no `input` to read. */
+function workRequests(worker: { readonly requests: readonly FeatureProjectionWorkerRequest[] }) {
+  return worker.requests.filter(
+    (request): request is Extract<FeatureProjectionWorkerRequest, { input: unknown }> =>
+      request.kind !== 'cancel',
+  );
 }
 
 /** Each request as the wire saw it: the document it carried, or the word for
  * the one it left to the worker. */
 function carriedSystems(worker: EntryBackedProjectionWorker): (TransitSystem | 'retained')[] {
-  return worker.requests.map((request) =>
-    request.input.system.kind === 'sent' ? request.input.system.system : 'retained',
+  return workRequests(worker).map((request) =>
+    'system' in request.input && request.input.system.kind === 'sent'
+      ? request.input.system.system
+      : 'retained',
   );
 }
 
@@ -247,7 +264,7 @@ describe('Feature projection worker', () => {
         sourceIds: [SRC_WAYS],
       },
     });
-    expect('tierStateResolver' in (worker.requests[0]?.input.view ?? {})).toBe(false);
+    expect('tierStateResolver' in (workRequests(worker)[0]?.input.view ?? {})).toBe(false);
     const features = emptySystemFeatures();
     worker.respond({ kind: 'done', requestId: 1, features, counts: null });
 
@@ -263,7 +280,7 @@ describe('Feature projection worker', () => {
 
     const projected = client.project({ ...requestInput(), preparedSnapshot });
 
-    expect(worker.requests[0]?.input).not.toHaveProperty('preparedSnapshot');
+    expect(workRequests(worker)[0]?.input).not.toHaveProperty('preparedSnapshot');
     client.dispose();
     await expect(projected).rejects.toThrow('Feature projection Worker is disposed.');
   });
@@ -282,14 +299,15 @@ describe('Feature projection worker', () => {
     expect(worker.terminated).toBe(true);
   });
 
-  it('replaces a superseded Worker before a fresh projection can publish', async () => {
-    const staleWorker = new RecordingFeatureProjectionWorker();
-    const currentWorker = new RecordingFeatureProjectionWorker();
-    const workers = [staleWorker, currentWorker];
+  // Supersession used to terminate the Worker, which reclaimed its CPU and
+  // threw away everything it had retained. Request ids are what keep a stale
+  // reply from publishing, so cancelling costs the projection and nothing else.
+  it('keeps the Worker when a projection is superseded, and never publishes the stale one', async () => {
+    const worker = new RecordingFeatureProjectionWorker();
     const client = createFeatureProjectionWorker({
       workerFactory: () => {
-        const worker = workers.shift();
-        if (!worker) throw new Error('Expected a replacement projection Worker.');
+        if (worker.terminated)
+          throw new Error('A superseded projection must not replace the Worker.');
         return worker;
       },
     });
@@ -298,20 +316,13 @@ describe('Feature projection worker', () => {
     const staleAssertion = expect(stale).rejects.toMatchObject({ name: 'AbortError' });
 
     abort.abort();
-    expect(staleWorker.terminated).toBe(true);
+    expect(worker.terminated).toBe(false);
+    expect(worker.requests.at(-1)).toEqual({ kind: 'cancel', requestId: 1 });
+
     const current = client.project(requestInput());
-    staleWorker.respond({
-      kind: 'done',
-      requestId: 1,
-      features: emptySystemFeatures(),
-      counts: null,
-    });
-    currentWorker.respond({
-      kind: 'done',
-      requestId: 2,
-      features: emptySystemFeatures(),
-      counts: null,
-    });
+    // The superseded projection finishing anyway must publish nothing.
+    worker.respond({ kind: 'done', requestId: 1, features: emptySystemFeatures(), counts: null });
+    worker.respond({ kind: 'done', requestId: 2, features: emptySystemFeatures(), counts: null });
 
     await staleAssertion;
     await expect(current).resolves.toEqual({ features: emptySystemFeatures(), counts: null });
@@ -351,7 +362,10 @@ describe('Feature projection worker', () => {
     client.dispose();
   });
 
-  it('carries the System again after an abort replaces the Worker', async () => {
+  // Retention survives supersession now, which is the point: an abort leaves
+  // the realm intact, so the next projection still names what it holds. Only a
+  // Worker that errored loses its realm, and that one must be re-sent.
+  it('keeps the System retained across an abort, and re-sends it after a Worker error', async () => {
     const first = new EntryBackedProjectionWorker();
     const replacement = new EntryBackedProjectionWorker();
     const workers = [first, replacement];
@@ -372,8 +386,14 @@ describe('Feature projection worker', () => {
     await supersededAssertion;
     await client.project(wayProjectionInput(system));
 
+    expect(first.terminated).toBe(false);
+    expect(carriedSystems(first)).toEqual([system, 'retained', 'retained']);
+
+    // An errored Worker's realm is unreachable, so the record of what it held
+    // goes with it.
+    first.fail('Feature Worker failed.');
+    await client.project(wayProjectionInput(system));
     expect(first.terminated).toBe(true);
-    expect(carriedSystems(first)).toEqual([system, 'retained']);
     expect(carriedSystems(replacement)).toEqual([system]);
     client.dispose();
   });
@@ -393,7 +413,7 @@ describe('Feature projection worker', () => {
         patternId: 'pattern-a',
       },
     });
-    expect('tierStateResolver' in (worker.requests[0]?.input.view ?? {})).toBe(false);
+    expect('tierStateResolver' in (workRequests(worker)[0]?.input.view ?? {})).toBe(false);
     const overlay: PatternOverlayFeatures = {
       path: { type: 'FeatureCollection', features: [] },
       arrows: { type: 'FeatureCollection', features: [] },
@@ -402,6 +422,34 @@ describe('Feature projection worker', () => {
     worker.respond({ kind: 'pattern-overlay-done', requestId: 1, overlay });
 
     await expect(projected).resolves.toEqual(overlay);
+  });
+
+  // An overlay used to abort by replacing the Worker, and that path returned
+  // early unless a committed projection was also in flight — so an overlay
+  // cancelled on its own never settled, and the editor awaits both together.
+  it('rejects an aborted Pattern overlay when no projection is in flight', async () => {
+    const worker = new RecordingFeatureProjectionWorker();
+    const client = createFeatureProjectionWorker({
+      workerFactory: () => {
+        if (worker.terminated) throw new Error('A cancelled overlay must not replace the Worker.');
+        return worker;
+      },
+    });
+    const abort = new AbortController();
+    const overlay = client.projectPatternOverlay(
+      { ...requestInput(), serviceId: 'service-a', patternId: 'pattern-a' },
+      abort.signal,
+    );
+    const rejection = expect(overlay).rejects.toMatchObject({ name: 'AbortError' });
+
+    abort.abort();
+
+    await rejection;
+    // The realm a cancelled overlay leaves behind is still usable, so it keeps
+    // both the Worker and the record of what that Worker was sent.
+    expect(worker.terminated).toBe(false);
+    expect(worker.requests.at(-1)).toEqual({ kind: 'cancel', requestId: 1 });
+    client.dispose();
   });
 
   // Every other case here settles a fake Worker's message queue and finishes in

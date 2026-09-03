@@ -261,17 +261,20 @@ export function finalizeViewportSpatialGrid(draft: ViewportSpatialGridDraft): Vi
 }
 
 function segmentIntersectsBounds(a: LngLat, b: LngLat, bounds: NormalizedViewportBounds): boolean {
-  const dx = b[0] - a[0];
-  const dy = b[1] - a[1];
+  const ax = a[0];
+  const ay = a[1];
+  const dx = b[0] - ax;
+  const dy = b[1] - ay;
   let start = 0;
   let end = 1;
-  const edges: readonly [number, number][] = [
-    [-dx, a[0] - bounds.minX],
-    [dx, bounds.maxX - a[0]],
-    [-dy, a[1] - bounds.minY],
-    [dy, bounds.maxY - a[1]],
-  ];
-  for (const [direction, distance] of edges) {
+  // Parallel number arrays rather than an array of pairs: this is the hottest
+  // leaf in candidate selection, and the pair form allocated five objects per
+  // call to compare four edges.
+  const directions = [-dx, dx, -dy, dy];
+  const distances = [ax - bounds.minX, bounds.maxX - ax, ay - bounds.minY, bounds.maxY - ay];
+  for (let edge = 0; edge < 4; edge += 1) {
+    const direction = directions[edge];
+    const distance = distances[edge];
     if (direction === 0) {
       if (distance < 0) return false;
       continue;

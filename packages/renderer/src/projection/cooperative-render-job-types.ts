@@ -89,7 +89,11 @@ export interface CooperativeRenderJobSchedulerStats {
 }
 
 export interface CooperativeRenderJobSchedulerOptions {
-  readonly budgetMs?: number;
+  /** A slice costs a whole frame whether it spends 1 ms or 20, so the wall
+   * time to finish a job is its slice count times the frame interval. Pass a
+   * function to vary the budget — a cold start with nothing painted has no
+   * interaction to protect and can afford larger slices. */
+  readonly budgetMs?: number | (() => number);
   now(): number;
   /** Must defer the callback; requestAnimationFrame is the production adapter. */
   scheduleFrame(callback: () => void): number;

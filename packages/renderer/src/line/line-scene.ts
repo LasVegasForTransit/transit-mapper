@@ -20,6 +20,11 @@ export interface ProjectSchemaV16LineSceneOptions {
    * says which of the two arrived. Callers with no layout omit it: their
    * content is the authored System whatever view mode they are painting. */
   readonly layout?: SystemLayout;
+  /** Stops the resolve part-way. The provider rechecks it at every checkpoint
+   * and yields to the host in between, so a superseded projection gives its
+   * remaining chunks back to the caller instead of running to completion.
+   * Callers with no supersession — exports, previews, tests — omit it. */
+  readonly signal?: AbortSignal;
 }
 
 type SystemLayout = 'authored' | 'diagram';
@@ -109,6 +114,7 @@ interface ResolveLineSceneOptions {
   readonly query: NetworkQuery;
   readonly presentation: RenderPresentation;
   readonly sceneRevision: string;
+  readonly signal?: AbortSignal;
 }
 
 async function resolveSchemaV16LineScene({
@@ -117,9 +123,14 @@ async function resolveSchemaV16LineScene({
   query,
   presentation,
   sceneRevision,
+  signal,
 }: ResolveLineSceneOptions): Promise<ResolvedLineScene> {
+  // `describeSystem` is deliberately not given the signal. Its promise is
+  // shared by every projection of this document, so one caller's supersession
+  // would reject the description that the caller superseding it is about to
+  // wait on. Only the per-request resolve below is cancellable.
   const { provider, content } = await describeSystem(system, layout);
-  const result = await provider.resolve(content, query);
+  const result = await provider.resolve(content, query, { signal });
   return projectResolvedLineScene({
     result,
     presentation,
@@ -146,6 +157,7 @@ export async function projectSchemaV16LineScene(
     query,
     presentation: options.view.presentation,
     sceneRevision: options.sceneRevision,
+    signal: options.signal,
   });
 }
 

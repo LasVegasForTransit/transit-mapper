@@ -56,4 +56,26 @@ describe('renderer capture CLI', () => {
     expect(basename(complete.outputDirectory)).toBe('01-lod');
     expect(basename(subset.outputDirectory)).toBe('diagnostic-01-lod-mobile-dark');
   });
+
+  it('captures only the named reference fixtures, outside the numbered phase', () => {
+    const options = parseRendererCaptureCliOptions([
+      '--phase',
+      '01-lod',
+      '--fixtures',
+      'shared-service-trunk,complex-diagram',
+    ]);
+
+    expect(options.fixtures).toEqual(['shared-service-trunk', 'complex-diagram']);
+    expect(basename(options.outputDirectory)).toBe('diagnostic-01-lod-fixtures');
+  });
+
+  it('rejects a fixture the evidence plan does not define', () => {
+    expect(() =>
+      parseRendererCaptureCliOptions(['--phase', '01-lod', '--fixtures', 'no-such-fixture']),
+    ).toThrow('--fixtures must name known fixtures, not "no-such-fixture".');
+  });
+
+  it('captures the whole evidence plan when no fixture is named', () => {
+    expect(parseRendererCaptureCliOptions(['--phase', '01-lod']).fixtures).toEqual([]);
+  });
 });

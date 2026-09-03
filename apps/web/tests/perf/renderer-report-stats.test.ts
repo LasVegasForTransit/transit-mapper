@@ -7,6 +7,8 @@ import { PERF_PROTOCOL, PERF_SCENARIOS } from '../../src/perf/scenarios';
 import type { PerfSample } from '../../src/perf/types';
 
 const RENDERER_STATS: RendererStatsSnapshot = {
+  passengerLineSceneCount: 0,
+  passengerLineSceneDurationMs: 0,
   projectionCount: 2,
   projectionDurationMs: 4.5,
   maxProjectionDurationMs: 3,

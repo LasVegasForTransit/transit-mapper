@@ -9,6 +9,7 @@ import type {
 import { pointInBounds, validCoordinate } from './bounds';
 import { clippedCarrierPieces } from './carrier-geometry';
 import { topologyFragment, type TransferredLegFragment } from './carrier-transfer';
+import { detailBandContent } from './detail-band';
 import { legacyDerivedId } from './identity';
 import { mapInfrastructure } from './infrastructure';
 import type { DerivedCall } from './patterns';
@@ -115,18 +116,27 @@ function topologyClosure(
   query: NetworkQuery,
   selection: NetworkSelection,
 ): TopologyClosure {
+  // `selection.physicalWayIds` still covers every bounded Way, because the
+  // selection reads it to decide which ServicePlans are candidates. Narrowing
+  // it would make a Line's identity depend on the zoom it was resolved at.
+  // Only the emitted set narrows, and the three closure passes below put back
+  // every Way that carries a fragment, so no emitted carrier or leg is ever
+  // left pointing at an Alignment the chunk dropped.
+  const carriesStreetNetwork = detailBandContent(query.detailBand).streetNetwork;
   const topology: MutableTopologyClosure = {
     calls: new Map(),
     fragments: new Map(),
     windows: [],
     carriers: new Map(),
-    wayIds: new Set(selection.physicalWayIds),
+    wayIds: new Set(carriesStreetNetwork ? selection.physicalWayIds : []),
     visibleFragmentIds: new Set(),
   };
   addVisibleFragments(selection, topology);
   addSemanticCarrierClosure(selection, topology);
   addTopologyWindows(selection, topology);
-  addPhysicalCarriers(system, query, selection.physicalWayIds, topology.carriers);
+  if (carriesStreetNetwork) {
+    addPhysicalCarriers(system, query, selection.physicalWayIds, topology.carriers);
+  }
   return {
     calls: topology.calls,
     fragments: [...topology.fragments.values()],
@@ -300,6 +310,7 @@ async function mapChunkWithCheckpoints(
   const infrastructure = mapInfrastructure({
     system,
     bounds: query.bounds,
+    detailBand: query.detailBand,
     includedWayIds: topology.wayIds,
     includedStopIds: places.stopIds,
     includedStationIds: places.stationIds,

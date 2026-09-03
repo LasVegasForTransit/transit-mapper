@@ -222,12 +222,14 @@ export default {
       name: 'workspace-package-dependencies-are-an-allowlist',
       severity: 'error',
       comment:
-        'Workspace composes React chrome around an injected map surface. It may consume map and ' +
-        'View contracts, but transit documents, renderers, and application policy belong in the ' +
+        'Workspace composes React chrome around an injected map surface. It declares its own ' +
+        'ports and reads the shared view-state contract from core, so it names no map ' +
+        'implementation; transit documents, renderers, and application policy belong in the ' +
         'host that fills its slots.',
       from: { path: '^packages/workspace/src/' },
       to: {
-        pathNot: '^(packages/(workspace|map|views)/|node_modules/(\\.pnpm/)?(react|@types(\\+|/)))',
+        pathNot:
+          '^(packages/(workspace|views)/|packages/core/src/presentation/map-presentation-state\\.ts$|node_modules/(\\.pnpm/)?(react|@types(\\+|/)))',
       },
     },
     {

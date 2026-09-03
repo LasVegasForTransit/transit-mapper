@@ -108,6 +108,16 @@ flowchart LR
   Worker --> Views
 ```
 
+## Screenshot capture is blocked here
+
+Both remaining Phase 1 items are screenshots, and neither can be taken in a
+headless environment. Headless Chrome emits roughly three animation frames a
+second and stalls for over six seconds at a time. The capture harness and the
+`tm:first-system-paint` proof both wait on a MapLibre `render` event, which
+only fires on a frame, so capture ends in a settlement timeout at 5.5 s.
+Disabling background throttling and driving a CDP screencast both leave the
+stall unchanged. Take these on a machine with a real compositor.
+
 ## Task 1: Finish live Line-scene integration
 
 This task completes Phase 1B. It must produce one committed live editor path
@@ -130,7 +140,7 @@ before any read-only host conversion begins.
 - Preserve `RenderScene` as the only accepted-scene value.
 - Do not expose the schema-v16 provider through the pure renderer entry.
 
-- [ ] Trace the production editor request from the current map presentation
+- [x] Trace the production editor request from the current map presentation
       through `feature-projection-worker-entry.ts`. Delete any live fallback
       that uses `WORLD_QUERY` or the persisted document viewport.
 - [x] Build `NetworkQuery.bounds` from the current render bounds. Forward the
@@ -178,13 +188,13 @@ editor.
 - Keep mutation capability in the editor host. Do not encode read-only state
   in renderer data.
 
-- [ ] Replace `@transitmapper/renderer/snapshot` feature construction in the
+- [x] Replace `@transitmapper/renderer/snapshot` feature construction in the
       viewer with the shared Line-scene request and accepted-scene path.
 - [x] Route embed content through the same scene. Keep embed controls and
       capabilities separate from scene construction.
 - [x] Resolve an ordinary route click to a Line. Expose ServicePlans and
       Patterns only through labeled inspector actions.
-- [ ] Keep link focus semantic. Do not persist MapLibre feature, source, or
+- [x] Keep link focus semantic. Do not persist MapLibre feature, source, or
       layer IDs.
 - [x] Add parity tests that render the same System in editor, reader, and embed
       and compare Line identities and visible geometry counts.
@@ -256,20 +266,20 @@ the accepted scene.
 - Renderer imports only `@transitmapper/core` at runtime.
 - Workspace receives an injected map-surface port and does not import map.
 
-- [ ] Move MapLibre source creation, source banks, layers, hit sources, style
+- [x] Move MapLibre source creation, source banks, layers, hit sources, style
       recovery, and accepted-scene replay into `@transitmapper/map`.
 - [x] Move portable presentation contracts to core. Make Views depend on core
       and make map depend on core rather than Views.
-- [ ] Remove `@transitmapper/map`, `@transitmapper/views`, and `maplibre-gl`
+- [x] Remove `@transitmapper/map`, `@transitmapper/views`, and `maplibre-gl`
       from `@transitmapper/renderer`.
-- [ ] Remove `@transitmapper/map` from workspace. Let web compose the
+- [x] Remove `@transitmapper/map` from workspace. Let web compose the
       workspace and injected map surface.
-- [ ] Prove that a rejected scene leaves the old source bank and hit index
+- [x] Prove that a rejected scene leaves the old source bank and hit index
       active. Prove that style recovery replays the accepted scene without
       reprojecting content.
-- [ ] Run package contract checks and inspect the Turbo graph. Do not add a
+- [x] Run package contract checks and inspect the Turbo graph. Do not add a
       custom build script.
-- [ ] Commit with the subject
+- [x] Commit with the subject
       `chore(map): Own map publication and style recovery`.
 
 ## Task 5: Finish schema-v17 provenance validation
@@ -293,18 +303,18 @@ or provider work.
 - Return the same deterministic issue/result contract used by the passenger
   and infrastructure validators.
 
-- [ ] Reject a SourceBinding whose target does not exist in the authored
+- [x] Reject a SourceBinding whose target does not exist in the authored
       System.
-- [ ] Reject duplicate active bindings by external reference and target.
-- [ ] Require a citation for every bound Source.
-- [ ] Reject one-time uploads that claim a managed binding.
-- [ ] Recompute `sourceHash` and `targetHash` from the exact canonical inputs
+- [x] Reject duplicate active bindings by external reference and target.
+- [x] Require a citation for every bound Source.
+- [x] Reject one-time uploads that claim a managed binding.
+- [x] Recompute `sourceHash` and `targetHash` from the exact canonical inputs
       and recorded schema and normalizer versions.
-- [ ] Invoke the validator inside `parseAuthoredSystem` before
+- [x] Invoke the validator inside `parseAuthoredSystem` before
       `SystemRevision` identity or Worker storage can see the value.
-- [ ] Add semantic-object tests for every rule and one valid multi-binding
+- [x] Add semantic-object tests for every rule and one valid multi-binding
       document.
-- [ ] Commit with the subject
+- [x] Commit with the subject
       `chore(core): Validate authored provenance relationships`.
 
 ## Task 6: Add the schema-v17 System content provider

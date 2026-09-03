@@ -217,15 +217,12 @@ layer depends only on the ones above it.
 | Style    | Visual properties of catalog kinds, kept out of the domain data                 |
 | Share    | The wire contract, snapshot ownership, and claim logic                          |
 
-Render produces styled output without a map. That is what lets a published
-preview be drawn where there is no MapLibre and no DOM.
-
 ### Level 2 — `apps/web`
 
 | Block   | Responsibility                                                               |
 | ------- | ---------------------------------------------------------------------------- |
 | Editor  | Reactive data, stable command composition, mutation policy, and undo history |
-| Map     | MapLibre integration, layer emission, and the pointer state machine          |
+| Map     | Editor interaction, overlays, theme layers, and the pointer state machine    |
 | UI      | React components. Subscribe to data, invoke commands, hold no domain logic.  |
 | Share   | Export formats, preview rendering, and the publishing client                 |
 | Storage | The local document library                                                   |
@@ -250,13 +247,10 @@ flowchart LR
   runtime <--> history["Per-store history controller"]
 ```
 
-`apps/web/src/editor/store.ts` is a thin public barrel. The
-`create-editor-store` composition factory creates one vanilla Zustand store
-and constructs the `document`, `history`, `tools`, `selection`, `ways`,
-`network`, `imports`, `routing`, `services`, `stations`, `facilities`, and
-`groups` command objects once. `EditorState` contains reactive data only;
-`EditorStore` exposes read-only observation plus that stable `commands` object,
-not raw `setState`.
+One composition factory builds the store and constructs every command group
+once, so a group's identity never changes under a subscriber. The store
+exposes read-only observation and that stable command object, never raw
+mutation.
 
 Commands decide when an edit happens; pure `TransitSystem` transforms in core
 decide the new domain value. Shared browser workflows live in internal
@@ -314,6 +308,13 @@ feeds continue.
 
 ### Geographic rendering
 
+`packages/renderer` projects a document into scene features and names no map
+library, so one projection serves the live map, an export, and a test.
+`packages/map` alone publishes a scene to MapLibre and owns the map lifecycle.
+The renderer therefore imports `packages/core` and nothing else. Publishing
+from the renderer would have forced every export path to load a map runtime it
+never draws with.
+
 `RenderPresentation` separates saved facts from visible bounds, zoom, the CSS
 projection viewport, final displayed size, and pixel ratio. The two CSS sizes
 let an offscreen export choose detail for its displayed size; pixel ratio
@@ -338,8 +339,7 @@ IDs, canonical paint order, and separate interaction-hit geometry. Live,
 static MapLibre, and SVG output share this normalization.
 
 `MapCanvas` supplies document, camera, and editor events to one
-`LiveMapRenderer`; it does not assemble the pipeline. A maintainer needs five
-concepts:
+`LiveMapRenderer`; it does not assemble the pipeline.
 
 ```mermaid
 flowchart LR
@@ -349,14 +349,6 @@ flowchart LR
   Bank --> Accepted["Accepted pixels and hits"]
   Editor["Editor state"] --> Accepted
 ```
-
-| Concept      | Owning modules                                                 | Rule                                                               |
-| ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Presentation | `render-presentation`, `camera-render-preload`                 | Describe display scale and reusable camera coverage.               |
-| Projection   | `document-projection`, `feature-projection-worker*`            | Send immutable inputs to the CPU worker; return detached features. |
-| Scene        | `scene-draft*`, `accepted-scene-state`, `accepted-scene-store` | Normalize IDs and retain the accepted CPU scene.                   |
-| Bank         | `source-bank*`, `accepted-scene-recovery`                      | Switch complete visual and hit revisions together.                 |
-| Editor state | `editor-feature-state`, `editor-overlays`, `render-visibility` | Keep transient work out of committed projection.                   |
 
 `LiveMapRenderer` owns one `DocumentProjector`, one accepted scene store, and
 the two physical banks. It alone advances the accepted revision. Dependency
@@ -373,6 +365,14 @@ and invalid commits still abort the draft.
 into detached GeoJSON. `MapCanvas` owns camera movement, source banks, feature
 state, and pixel acceptance. Fitted read-only maps use the same client. Workers
 never publish pixels.
+
+A projection Worker keeps the last document it was sent, and a later request
+names that held document rather than carrying it again. A camera move changes
+no part of a system, so re-sending one cost a whole-document clone on the main
+thread every frame. Retention belongs to the Worker realm, and the client
+forgets what a realm holds the moment it replaces one. A request that names a
+document its realm does not hold fails. Projecting the other held document
+would paint a different network convincingly.
 
 The inactive bank is prepared offscreen, loaded, and painted before one switch
 makes its visual and hit layers authoritative; failure keeps the old bank.
@@ -587,17 +587,6 @@ schedule. One Way carries many Services; one Service traverses many Ways.
 Keep them separate and you can widen a street without touching the routes on
 it, or delete a route without deleting the street.
 
-| Type       | Meaning                                    |
-| ---------- | ------------------------------------------ |
-| `System`   | One document: a regional network           |
-| `Way`      | A physical alignment and its cross-section |
-| `Line`     | A public identity grouping Services        |
-| `Service`  | One mode-specific operation over Ways      |
-| `Node`     | A junction where ways meet                 |
-| `Station`  | A boarding place with land and structures  |
-| `Facility` | A structure within a station               |
-| `Group`    | Stations treated as one interchange        |
-
 ### Kinds as data
 
 Modes, way types, lane kinds, and facility classes are catalog records read
@@ -750,6 +739,7 @@ property.
 | Facility      | A structure within a station, such as a platform or a bus bay                                                |
 | Group         | Several stations treated as one interchange                                                                  |
 | Junction      | Derived geometry where ways meet; a `Node` in the model                                                      |
+| Line          | A public identity grouping Services: the name and color on an agency map                                     |
 | Mode          | A means of transport: subway, light rail, bus, tram, ferry, gondola                                          |
 | Service       | A route traversing a sequence of ways                                                                        |
 | Snapshot      | A published copy of a system, stored server-side with an expiry                                              |

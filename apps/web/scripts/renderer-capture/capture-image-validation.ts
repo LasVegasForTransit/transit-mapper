@@ -44,12 +44,15 @@ function dominantBackdrop(data: Buffer): readonly [number, number, number] {
 
 /**
  * A renderer capture is useful only when it contains rendered system pixels.
+ * `subject` names the frame under test, because a blank capture is otherwise
+ * indistinguishable between fixtures.
  * The capture path removes application chrome and its drafting grid first, so
  * the dominant image colour is the deterministic local backdrop. A narrow
  * corridor still occupies far more than the small anti-aliasing allowance.
  */
 export async function assertRendererCaptureHasSceneContent(
   image: Buffer,
+  subject = 'the current capture',
 ): Promise<RendererCaptureImageCoverage> {
   const { data, info } = await sharp(image)
     .ensureAlpha()
@@ -68,8 +71,8 @@ export async function assertRendererCaptureHasSceneContent(
   const minimumContentPixelCount = Math.max(20, Math.ceil((info.width * info.height) / 2_000));
   if (contentPixelCount < minimumContentPixelCount) {
     throw new Error(
-      `Renderer capture has no painted scene content: ${contentPixelCount} pixels, ` +
-        `expected at least ${minimumContentPixelCount}.`,
+      `Renderer capture of ${subject} has no painted scene content: ` +
+        `${contentPixelCount} pixels, expected at least ${minimumContentPixelCount}.`,
     );
   }
   return { contentPixelCount, minimumContentPixelCount, width: info.width, height: info.height };

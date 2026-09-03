@@ -9,7 +9,13 @@ import {
 } from '../../src/perf/renderer-lod-acceptance';
 import { createRendererFixture } from '../../src/perf/renderer-fixtures';
 import { createServedJunctionFixture } from '../../src/perf/renderer-specialized-fixtures';
-import { captureBareRenderer, seedEditor, selectView, setSettledCamera } from './capture-browser';
+import {
+  captureBareRenderer,
+  seedEditor,
+  selectView,
+  setSettledCamera,
+  withCaptureDeadline,
+} from './capture-browser';
 import {
   rendererLodAcceptanceBankIdentity,
   rendererLodAcceptanceStatsSnapshot,
@@ -96,11 +102,14 @@ export async function currentFixture(page: Page): Promise<TransitSystem> {
 }
 
 export async function waitForRendererSettlement(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const settle = (window as AcceptanceWindow).__rendererCaptureWhenSettled;
-    if (!settle) throw new Error('Renderer settle-only capture seam is unavailable.');
-    await settle();
-  });
+  await withCaptureDeadline(
+    'Renderer acceptance settlement',
+    page.evaluate(async () => {
+      const settle = (window as AcceptanceWindow).__rendererCaptureWhenSettled;
+      if (!settle) throw new Error('Renderer settle-only capture seam is unavailable.');
+      await settle();
+    }),
+  );
 }
 
 export async function selectAcceptanceWay(page: Page, wayId: string): Promise<void> {

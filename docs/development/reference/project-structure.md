@@ -129,7 +129,9 @@ MapLibre or editor dependency.
 
 `packages/core/src/network` owns provider-neutral queries, results, carrier
 clipping, Alignment mapping, and same-Line closure. Schema adapters supply
-carrier identity and geometry; neither imports renderer or storage code.
+carrier identity and geometry; neither imports renderer or storage code. A
+query's detail band narrows physical street detail alone, so the Lines,
+Stops, and Stations one bounds resolves are the same at every band.
 
 #### Geometry
 

@@ -275,7 +275,12 @@ describe('schema-v16 system geometry provider', () => {
       ],
     });
     const { provider, descriptor } = await describedProvider(system);
-    const result = await provider.resolve(descriptor.content, worldQuery);
+    // Street is the only band that carries carriageway facts, and this case
+    // asserts the complete transfer rather than what one camera can resolve.
+    const result = await provider.resolve(descriptor.content, {
+      ...worldQuery,
+      detailBand: 'street',
+    });
     const infrastructure = result.chunks[0].infrastructure;
 
     expect(infrastructure.nodes.map(({ id }) => id)).toEqual(['node']);

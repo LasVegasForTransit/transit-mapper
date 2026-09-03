@@ -14,6 +14,8 @@ describe('renderer statistics', () => {
       cacheHitCount: 31,
       cacheMissCount: 4,
       tierTransitionCount: 2,
+      passengerLineSceneCount: 1,
+      passengerLineSceneDurationMs: 40,
     });
     stats.recordEditorProjection({
       cpuDurationMs: 0.75,
@@ -24,6 +26,8 @@ describe('renderer statistics', () => {
       cacheHitCount: 2,
       cacheMissCount: 1,
       tierTransitionCount: 0,
+      passengerLineSceneCount: 0,
+      passengerLineSceneDurationMs: 0,
     });
     stats.recordPatch({ addedFeatureCount: 5, removedFeatureCount: 2, sourceUploadCount: 3 });
     stats.recordFullUpload(12);
@@ -46,6 +50,10 @@ describe('renderer statistics', () => {
 
     expect(stats.snapshot()).toEqual({
       projectionCount: 1,
+      // The Line scene is built in the worker entry, outside the source
+      // projector, so a projection reported every cost except its largest.
+      passengerLineSceneCount: 1,
+      passengerLineSceneDurationMs: 40,
       projectionDurationMs: 3.25,
       maxProjectionDurationMs: 3.25,
       projectionSettlementLatencyMs: 22,

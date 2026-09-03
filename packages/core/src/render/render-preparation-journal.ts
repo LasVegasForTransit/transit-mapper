@@ -2,7 +2,13 @@ import type { TransitSystem } from '../model/system';
 import type { RenderPreparationEntityPatch, RenderPreparationPatch } from './render-preparation';
 
 interface JournalEntry {
-  readonly previous: TransitSystem;
+  /** Weak on purpose. A WeakMap entry lives as long as its key, so a strong
+   * link here would make the live document an ephemeron chain pinning every
+   * version it was ever edited from — back to load, each with the indexes
+   * built against it. A drag mints one System per frame, and the editor's own
+   * history cap does not bound this. Holding the link weakly lets retention
+   * follow what the rest of the app actually still references. */
+  readonly previous: WeakRef<TransitSystem>;
   readonly patch: RenderPreparationPatch;
 }
 
@@ -64,7 +70,8 @@ export function recordRenderPreparationPatch(
   next: TransitSystem,
   patch: RenderPreparationPatch,
 ): TransitSystem {
-  if (previous !== next) journal.set(next, { previous, patch: compactPatch(patch) });
+  if (previous !== next)
+    journal.set(next, { previous: new WeakRef(previous), patch: compactPatch(patch) });
   return next;
 }
 
@@ -80,10 +87,13 @@ export function renderPreparationPatchBetween(
   let composed: RenderPreparationPatch = {};
   for (let depth = 0; depth < MAX_COMPOSED_MUTATIONS; depth++) {
     const entry = journal.get(cursor);
-    if (!entry) return null;
+    // A collected link is indistinguishable from an unjournaled one: both mean
+    // this delta cannot be composed, and cold preparation is the answer.
+    const earlier = entry?.previous.deref();
+    if (!entry || !earlier) return null;
     composed = mergePatches(entry.patch, composed);
-    if (entry.previous === previous) return compactPatch(composed);
-    cursor = entry.previous;
+    if (earlier === previous) return compactPatch(composed);
+    cursor = earlier;
   }
   return null;
 }

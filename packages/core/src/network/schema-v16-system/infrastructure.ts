@@ -2,6 +2,7 @@ import type { GeographicBounds, LngLat } from '../../geography/bounds';
 import { resolveWayPath } from '../../model/geo/wayPath';
 import type { Facility, Group, Node, TransitSystem } from '../../model/system';
 import type { TransitEntityRef } from '../../model/transit-entity-ref';
+import type { DetailBand } from '../query';
 import type {
   ResolvedAreaFragment,
   ResolvedFacility,
@@ -16,12 +17,14 @@ import {
   polygonIntersectsBounds,
   validCoordinate,
 } from './bounds';
+import { detailBandContent, type DetailBandContent } from './detail-band';
 import { legacyDerivedId } from './identity';
 import { mapInfrastructureControls } from './infrastructure-controls';
 
 export interface InfrastructureMappingContext {
   system: TransitSystem;
   bounds: GeographicBounds;
+  detailBand: DetailBand;
   includedWayIds: ReadonlySet<string>;
   includedStopIds: ReadonlySet<string>;
   includedStationIds: ReadonlySet<string>;
@@ -79,7 +82,11 @@ function mapLaneConnectors(
   );
 }
 
-function mapNodeFacts(context: InfrastructureMappingContext, source: readonly Node[]): NodeFacts {
+function mapNodeFacts(
+  context: InfrastructureMappingContext,
+  source: readonly Node[],
+  content: DetailBandContent,
+): NodeFacts {
   const nodes = source.map((node) => ({
     id: node.id,
     location: validCoordinate(node.coord)
@@ -88,10 +95,18 @@ function mapNodeFacts(context: InfrastructureMappingContext, source: readonly No
     wayPoints: node.refs.filter((reference) => context.includedWayIds.has(reference.wayId)),
     ...(node.control === undefined ? {} : { controlId: node.control }),
   }));
-  return { nodes, laneConnectors: mapLaneConnectors(source, context.includedWayIds) };
+  return {
+    nodes,
+    laneConnectors: content.carriagewayDetail
+      ? mapLaneConnectors(source, context.includedWayIds)
+      : [],
+  };
 }
 
-function mapNamedWayFacts(context: InfrastructureMappingContext): NamedWayFacts {
+function mapNamedWayFacts(
+  context: InfrastructureMappingContext,
+  content: DetailBandContent,
+): NamedWayFacts {
   const namedWays: ResolvedNamedWay[] = [];
   for (const namedWay of context.system.namedWays) {
     let wayIds: [string, ...string[]] | undefined;
@@ -104,7 +119,7 @@ function mapNamedWayFacts(context: InfrastructureMappingContext): NamedWayFacts 
   }
   const includedIds = new Set(namedWays.map(({ id }) => id));
   const medians = Object.entries(context.system.medians).flatMap(([namedWayId, median]) =>
-    includedIds.has(namedWayId)
+    content.carriagewayDetail && includedIds.has(namedWayId)
       ? [
           {
             id: legacyDerivedId('median', namedWayId),
@@ -285,10 +300,18 @@ function stationAreas(context: InfrastructureMappingContext): ResolvedAreaFragme
 export function mapInfrastructure(
   context: InfrastructureMappingContext,
 ): ResolvedInfrastructureChunk {
-  const sourceNodes = selectedNodes(context);
-  const nodeFacts = mapNodeFacts(context, sourceNodes);
-  const controls = mapInfrastructureControls(context.system, sourceNodes, context.includedWayIds);
-  const namedWayFacts = mapNamedWayFacts(context);
+  const content = detailBandContent(context.detailBand);
+  // Every Node fact downstream of this — the Nodes themselves, their lane
+  // connectors, and the turn and approach controls the endpoint index reads
+  // off them — is derived from this one list. Emptying it at overview keeps
+  // `includedEntityKeys` from offering a `node:` key too, so a Group cannot
+  // end up listing a member the chunk does not carry.
+  const sourceNodes = content.streetNetwork ? selectedNodes(context) : [];
+  const nodeFacts = mapNodeFacts(context, sourceNodes, content);
+  const controls = content.carriagewayDetail
+    ? mapInfrastructureControls(context.system, sourceNodes, context.includedWayIds)
+    : { turnRestrictions: [], approachControls: [] };
+  const namedWayFacts = mapNamedWayFacts(context, content);
   const facilityFacts = mapFacilityFacts(context);
   const includedIds = includedEntityKeys(context, nodeFacts, namedWayFacts, facilityFacts);
   const groupFacts = mapGroupFacts(context, includedIds);
