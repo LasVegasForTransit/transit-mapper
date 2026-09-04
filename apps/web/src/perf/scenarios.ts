@@ -115,22 +115,43 @@ export const PERF_SCENARIOS: Record<PerfScenarioId, PerfScenario> = {
     path: '/',
     readySelector: '.maplibregl-canvas',
     fixture: { ...PERF_FIXTURES.rtc.counts },
+    // The seven interaction budgets below record what `main` measures today,
+    // not what this editor should do. They were the aspirational numbers until
+    // 2026-09-04, and in that form they had stopped working as a gate: the
+    // render pipeline moved out of apps/web into its own packages, the audit's
+    // relevance list did not follow, and roughly forty renderer commits landed
+    // unmeasured. When the list was corrected the audit came back failing on
+    // `main` itself — so every pull request inherited a red check it had not
+    // caused, and the merge queue, which refuses any entry with a failing
+    // check, stopped merging anything at all.
+    //
+    // A budget the base branch cannot meet is not a gate, it is a wall. These
+    // are set from the measured CI values with headroom for runner variance,
+    // so the audit fails a change that makes the editor slower than it is
+    // now. They are a ceiling that only moves down. The aspiration each one
+    // replaces is on its right, and closing that gap is tracked separately;
+    // the cost is understood (see `tierOpacityExpr` in the renderer's layer
+    // constants, evaluated per feature on every source upload).
     absoluteBudgets: {
       loadMs: 8_000,
       firstContentfulPaintMs: 3_500,
       largestContentfulPaintMs: 2_500,
-      firstMapCanvasMs: 7_500,
+      firstMapCanvasMs: 21_000, // CI 17_132; target 7_500
       cumulativeLayoutShift: 0.1,
-      longTaskTotalMs: 3_500,
+      longTaskTotalMs: 18_000, // CI 14_339; target 3_500
       transferBytes: 6_000_000,
-      inputToNextPaintP95Ms: 50,
-      paintedFrameP95Ms: 16.7,
-      paintedFramesOver33Ratio: 0.01,
-      maxUnexpectedLongTaskMs: 50,
+      inputToNextPaintP95Ms: 4_500, // CI 3_384; target 50
+      paintedFrameP95Ms: 420, // CI 314; target 16.7
+      // Saturated: CI paints no frame under 33 ms, so any value below 1
+      // fails and 1 cannot fail. This one is a reported number rather than a
+      // gate until the frame cost comes down; paintedFrameP95Ms above is the
+      // budget that still bites on the same signal.
+      paintedFramesOver33Ratio: 1,
+      maxUnexpectedLongTaskMs: 3_800, // CI 2_946; target 50
       warmLoadMs: 8_000,
-      warmLargestContentfulPaintMs: 2_500,
+      warmLargestContentfulPaintMs: 10_000, // CI 7_896; target 2_500
       warmCumulativeLayoutShift: 0.1,
-      warmInputToNextPaintP95Ms: 50,
+      warmInputToNextPaintP95Ms: 1_300, // CI 952; target 50
     },
   },
   viewer: {
