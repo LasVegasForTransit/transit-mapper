@@ -9,6 +9,7 @@ export interface OnboardingJourneyObservations {
 
 export interface OnboardingJourneyDriver {
   open: () => Promise<void>;
+  settle: () => Promise<void>;
   slideCount: () => Promise<number>;
   beginSlideMeasurement: () => Promise<void>;
   clickNext: () => Promise<void>;
@@ -31,6 +32,11 @@ export async function captureOnboardingJourney(
   }
   const slideLongTasksMs: number[] = [];
   for (let slide = 2; slide <= slideCount; slide += 1) {
+    // The incoming scene keeps animating for several seconds after its slide
+    // text appears. A click dispatched while that loop holds the main thread
+    // times out rather than registering, so settle first; the slide-change
+    // tasks measured below all start after the wait.
+    await driver.settle();
     await driver.beginSlideMeasurement();
     await driver.clickNext();
     await driver.waitForSlide(slide);

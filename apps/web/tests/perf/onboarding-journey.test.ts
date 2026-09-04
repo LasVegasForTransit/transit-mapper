@@ -15,6 +15,10 @@ describe('the onboarding performance journey', () => {
         calls.push('open');
         return Promise.resolve();
       },
+      settle: () => {
+        calls.push(`settle:${slide}`);
+        return Promise.resolve();
+      },
       slideCount: () => Promise.resolve(5),
       beginSlideMeasurement: () => {
         calls.push(`begin:${slide}`);
@@ -52,6 +56,36 @@ describe('the onboarding performance journey', () => {
       maximumSlideLongTaskMs: 24,
     });
     expect(onboardingJourneyViolations(sample, { enforceNumericBudgets: true })).toEqual([]);
+  });
+
+  it('waits for a quiet main thread before every slide click, not only the first', async () => {
+    const calls: string[] = [];
+    let slide = 1;
+    const record = (name: string) => (): Promise<void> => {
+      calls.push(`${name}:${slide}`);
+      if (name === 'click') slide += 1;
+      return Promise.resolve();
+    };
+    const driver: OnboardingJourneyDriver = {
+      open: () => Promise.resolve(),
+      settle: record('settle'),
+      slideCount: () => Promise.resolve(3),
+      beginSlideMeasurement: record('begin'),
+      clickNext: record('click'),
+      waitForSlide: () => Promise.resolve(),
+      finishSlideMeasurement: () => Promise.resolve([]),
+      observations: () =>
+        Promise.resolve({
+          previewCanvasCount: 1,
+          uniquePreviewCanvasCount: 1,
+          webGlContextCount: 1,
+          remoteStyleRequests: [],
+        }),
+    };
+
+    await captureOnboardingJourney(driver);
+
+    expect(calls).toEqual(['settle:1', 'begin:1', 'click:1', 'settle:2', 'begin:2', 'click:2']);
   });
 
   it('keeps responsiveness thresholds out of a functional smoke', () => {
