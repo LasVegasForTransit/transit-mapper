@@ -79,6 +79,25 @@ function remoteStyleRequest(url: string): boolean {
   return parsed.hostname === 'tiles.openfreemap.org' && parsed.pathname.startsWith('/styles/');
 }
 
+/** Resolves once no long task has run for 500 ms.
+ *
+ * The preview map rewrites SRC_SERVICES on every animation frame while a scene
+ * plays. A trusted click issued into that loop never completes its hit-target
+ * round trip, so a slow frame surfaces as a 30-second click timeout instead of
+ * as the long task it is. The slide-change tasks this journey measures are
+ * recorded after the wait, so the numeric budget still sees them.
+ */
+async function waitForMainThreadQuiet(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const probe = (window as OnboardingProbeWindow).__perfOnboardingProbe;
+      return probe !== undefined && performance.now() - probe.lastLongTaskAt >= 500;
+    },
+    undefined,
+    { timeout: 30_000 },
+  );
+}
+
 async function openOnboarding(
   page: Page,
   previewUrl: string,
@@ -111,14 +130,7 @@ async function openOnboarding(
     undefined,
     { timeout: 30_000 },
   );
-  await page.waitForFunction(
-    () => {
-      const probe = (window as OnboardingProbeWindow).__perfOnboardingProbe;
-      return probe !== undefined && performance.now() - probe.lastLongTaskAt >= 500;
-    },
-    undefined,
-    { timeout: 30_000 },
-  );
+  await waitForMainThreadQuiet(page);
 }
 
 function createOnboardingDriver(
@@ -130,6 +142,7 @@ function createOnboardingDriver(
   let totalSlides = 0;
   return {
     open: () => openOnboarding(page, previewUrl, remoteStyleRequests, startObservingRequests),
+    settle: () => waitForMainThreadQuiet(page),
     slideCount: async () => {
       const label = (await page.locator('.onboarding-step-count').textContent())?.trim() ?? '';
       const match = /^(\d+) of (\d+)$/.exec(label);
