@@ -8,8 +8,13 @@ on:
   # workflow runs on the merge group ref, so nothing could merge through the
   # queue at all.
   merge_group:
+  # Creating a merge group creates its `gh-readonly-queue/...` branch, and a
+  # branch creation is a push. That push run shares the concurrency group below
+  # with the merge_group run and, being a push, cancels it — one second in,
+  # every time. The queue reads the cancelled required check as a failed one and
+  # drops the entry, which is why nothing has ever merged through it.
   push:
-    branches-ignore: [main]
+    branches-ignore: [main, 'gh-readonly-queue/**']
   # Callable so the production deploy can gate on exactly these checks
   # instead of restating them. There is one definition of "validated", and
   # both entry points use it.
