@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "generatedAt": "2026-08-15T21:59:39.695Z",
+  "generatedAt": "2026-09-04T21:00:00.000Z",
   "status": "ok",
   "protocol": {
     "profile": "desktop",
@@ -31,15 +31,15 @@
   "bundles": [
     {
       "entry": "embed",
-      "rawBytes": 1145280,
-      "gzipBytes": 327475,
-      "brotliBytes": 278251
+      "rawBytes": 1047214,
+      "gzipBytes": 301998,
+      "brotliBytes": 256323
     },
     {
       "entry": "main",
-      "rawBytes": 1779812,
-      "gzipBytes": 515671,
-      "brotliBytes": 437234
+      "rawBytes": 2152441,
+      "gzipBytes": 639226,
+      "brotliBytes": 551910
     }
   ],
   "firstSessions": [
