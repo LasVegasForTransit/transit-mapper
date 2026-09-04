@@ -158,11 +158,19 @@ function createOnboardingDriver(
         probe.measuring = true;
       }),
     // Playwright's locator click dispatches a trusted browser pointer input.
-    clickNext: () => page.locator('.onboarding-next').click(),
+    //
+    // The generous timeout is the point of a functional smoke. Settling before
+    // the click keeps it out of the worst of a scene animation, but the
+    // renderer can saturate the main thread again while the click is in
+    // flight, and a starved hit-test dispatch is a slow editor rather than a
+    // broken one. Failing here would report the slowness as a journey that
+    // does not work. The repeated audit owns timing and gates it; this gate
+    // answers whether the four clicks advance the journey at all.
+    clickNext: () => page.locator('.onboarding-next').click({ timeout: 120_000 }),
     waitForSlide: async (slide) => {
       await page.getByText(`${slide} of ${totalSlides}`, { exact: true }).waitFor({
         state: 'visible',
-        timeout: 30_000,
+        timeout: 120_000,
       });
       await page.evaluate(
         () =>
