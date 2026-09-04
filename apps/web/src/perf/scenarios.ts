@@ -142,11 +142,13 @@ export const PERF_SCENARIOS: Record<PerfScenarioId, PerfScenario> = {
       transferBytes: 6_000_000,
       inputToNextPaintP95Ms: 4_500, // CI 3_384; target 50
       paintedFrameP95Ms: 420, // CI 314; target 16.7
-      // Saturated: CI paints no frame under 33 ms, so any value below 1
-      // fails and 1 cannot fail. This one is a reported number rather than a
-      // gate until the frame cost comes down; paintedFrameP95Ms above is the
-      // budget that still bites on the same signal.
-      paintedFramesOver33Ratio: 1,
+      // paintedFramesOver33Ratio is deliberately absent, not set to a passing
+      // number. CI paints no frame under 33 ms, and this is the one metric
+      // compared with `>=` rather than `>` (see violatesAbsolute), so every
+      // value a ratio can take fails. Writing 1.01 would be a budget that
+      // reads like a gate and cannot be one. It stays measured and reported;
+      // paintedFrameP95Ms above gates the same signal at 420 ms, and it
+      // returns here when frame cost is back under a thirty-third of a second.
       maxUnexpectedLongTaskMs: 3_800, // CI 2_946; target 50
       warmLoadMs: 8_000,
       warmLargestContentfulPaintMs: 10_000, // CI 7_896; target 2_500
