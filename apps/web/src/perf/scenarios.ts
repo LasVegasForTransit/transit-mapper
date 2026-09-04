@@ -126,22 +126,32 @@ export const PERF_SCENARIOS: Record<PerfScenarioId, PerfScenario> = {
     // check, stopped merging anything at all.
     //
     // A budget the base branch cannot meet is not a gate, it is a wall. These
-    // are set from the measured CI values with headroom for runner variance,
-    // so the audit fails a change that makes the editor slower than it is
-    // now. They are a ceiling that only moves down. The aspiration each one
-    // replaces is on its right, and closing that gap is tracked separately;
-    // the cost is understood (see `tierOpacityExpr` in the renderer's layer
-    // constants, evaluated per feature on every source upload).
+    // are set from the measured CI values, so the audit fails a change that
+    // makes the editor slower than it is now. They are a ceiling that only
+    // moves down. The aspiration each one replaces is on its right, and
+    // closing that gap is tracked separately; the cost is understood (see
+    // `tierOpacityExpr` in the renderer's layer constants, evaluated per
+    // feature on every source upload).
+    //
+    // The ranges are two consecutive runs of the same commit on the same
+    // runner class, and they are why the numbers sit where they do rather
+    // than snugly above one measurement. firstMapCanvasMs came back 17.1 s
+    // and then 26.6 s; largestContentfulPaintMs had a median under 2.5 s and
+    // then one of 11.1 s. An absolute gate reads the five-run p95, which at
+    // n=5 is the slowest of the five, so it tracks the worst moment of a
+    // shared machine rather than the change under test. Budgets tight enough
+    // to be interesting would fail on noise alone. Reading the median instead
+    // is the fix, and it belongs in its own change with its own test.
     absoluteBudgets: {
       loadMs: 8_000,
       firstContentfulPaintMs: 3_500,
-      largestContentfulPaintMs: 2_500,
-      firstMapCanvasMs: 21_000, // CI 17_132; target 7_500
+      largestContentfulPaintMs: 15_000, // CI 2_728-11_524; target 2_500
+      firstMapCanvasMs: 34_000, // CI 17_132-26_620; target 7_500
       cumulativeLayoutShift: 0.1,
-      longTaskTotalMs: 18_000, // CI 14_339; target 3_500
+      longTaskTotalMs: 32_000, // CI 14_339-24_045; target 3_500
       transferBytes: 6_000_000,
-      inputToNextPaintP95Ms: 4_500, // CI 3_384; target 50
-      paintedFrameP95Ms: 420, // CI 314; target 16.7
+      inputToNextPaintP95Ms: 5_500, // CI 3_384-3_816; target 50
+      paintedFrameP95Ms: 600, // CI 314-412; target 16.7
       // paintedFramesOver33Ratio is deliberately absent, not set to a passing
       // number. CI paints no frame under 33 ms, and this is the one metric
       // compared with `>=` rather than `>` (see violatesAbsolute), so every
@@ -149,11 +159,11 @@ export const PERF_SCENARIOS: Record<PerfScenarioId, PerfScenario> = {
       // reads like a gate and cannot be one. It stays measured and reported;
       // paintedFrameP95Ms above gates the same signal at 420 ms, and it
       // returns here when frame cost is back under a thirty-third of a second.
-      maxUnexpectedLongTaskMs: 3_800, // CI 2_946; target 50
+      maxUnexpectedLongTaskMs: 5_000, // CI 2_946-3_438; target 50
       warmLoadMs: 8_000,
-      warmLargestContentfulPaintMs: 10_000, // CI 7_896; target 2_500
+      warmLargestContentfulPaintMs: 15_000, // CI 7_896-11_064; target 2_500
       warmCumulativeLayoutShift: 0.1,
-      warmInputToNextPaintP95Ms: 1_300, // CI 952; target 50
+      warmInputToNextPaintP95Ms: 1_600, // CI 952-1_056; target 50
     },
   },
   viewer: {
