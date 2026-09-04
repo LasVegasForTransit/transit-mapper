@@ -3,7 +3,7 @@ import {
   FOOTPRINT_FILL_OPACITY,
   PLATFORM_FILL_OPACITY,
 } from '@transitmapper/core/style/catalogStyle';
-import { type MapTheme } from '../mapThemePalette';
+import type { MapTheme } from '../mapThemePalette';
 import {
   LYR_CENTER_LINES,
   LYR_CONNECTORS,

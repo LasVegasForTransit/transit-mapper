@@ -1,6 +1,6 @@
 import type { Map as MLMap } from 'maplibre-gl';
 import { iconName } from '@transitmapper/core/render/iconName';
-import { type IconName } from '../ui/Icon';
+import type { IconName } from '../ui/Icon';
 import { ICON_NODES, type IconNode } from './lucideIconNodes';
 
 // On-map pictograms, rasterized at runtime from the same Lucide icon

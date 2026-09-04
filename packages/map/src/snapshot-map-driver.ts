@@ -5,10 +5,10 @@ import type {
   Map as MapLibreMap,
   MapEventType,
 } from 'maplibre-gl';
-import {
-  type Highlight,
-  type SystemFeatures,
-  type ViewOptions,
+import type {
+  Highlight,
+  SystemFeatures,
+  ViewOptions,
 } from '@transitmapper/core/render/buildFeatures';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type {

@@ -1,8 +1,8 @@
 // What any selection lets you do, whatever it holds.
 
-import {
-  type SelectionAction,
-  type SelectionActionProvider,
+import type {
+  SelectionAction,
+  SelectionActionProvider,
 } from '@transitmapper/core/model/selectionActions';
 import type { SelectionActionStore } from './action-store';
 

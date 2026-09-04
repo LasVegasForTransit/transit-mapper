@@ -9,7 +9,7 @@ import {
   type MapDriverAttachment,
 } from '@transitmapper/map';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type MapSurfaceRuntimePort } from '../src/map-surface';
+import type { MapSurfaceRuntimePort } from '../src/map-surface';
 import {
   baseProps,
   createAttachment,

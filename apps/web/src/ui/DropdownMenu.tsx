@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Icon } from './Icon';
-import { type FloatingAlign } from './floating-position';
+import type { FloatingAlign } from './floating-position';
 import { NativePopover } from './native-popover';
 
 interface DropdownMenuProps {

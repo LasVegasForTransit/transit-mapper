@@ -1,5 +1,5 @@
 import type { LayerSpecification } from 'maplibre-gl';
-import { type MapTheme } from '../mapThemePalette';
+import type { MapTheme } from '../mapThemePalette';
 import {
   CORRIDOR_CASING_WIDTH_EXPR,
   CORRIDOR_SELECT_HALO_WIDTH_EXPR,

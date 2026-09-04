@@ -1,6 +1,6 @@
 import type { TransitSystem as SchemaV16TransitSystem } from '../system';
 import { migrateCompatibleSystem } from './migrate-document';
-import { type SchemaV16MigrationIssue, type SchemaV16MigrationResult } from './migration-types';
+import type { SchemaV16MigrationIssue, SchemaV16MigrationResult } from './migration-types';
 import { validateAuthoredInfrastructureRelationships } from './validate-infrastructure-relationships';
 import { validateAuthoredPassengerRelationships } from './validate-passenger-relationships';
 import { schemaV16MigrationIssues } from './validate-v16';

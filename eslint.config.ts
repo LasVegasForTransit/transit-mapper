@@ -53,6 +53,18 @@ export default [
     // browser-only seams. It is generated code, never application source.
     ignores: ['apps/web/.perf-harness-dist/**'],
   },
+  {
+    // `import { type X } from './m'` erases the specifier but keeps the
+    // statement, so under the shared config's `verbatimModuleSyntax` it emits
+    // `import './m'` — a side-effect import that pulls the whole module into
+    // the bundle. One of these put React into the embed's graph, which the
+    // embed delivery boundary forbids; nothing but a production build could
+    // see it, because the types are correct either way.
+    files: ['**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-import-type-side-effects': 'error',
+    },
+  },
   // The two classic hook rules only, listed explicitly rather than spreading
   // one of eslint-plugin-react-hooks's presets. As of version 7, every preset
   // — `recommended` included — carries the React Compiler rule set (purity,
