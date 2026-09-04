@@ -29,13 +29,13 @@ import {
   type SceneUpdate,
 } from '@transitmapper/renderer/runtime';
 import { SRC_HIT_FEATURES } from '@transitmapper/renderer/layers';
-import {
-  type GeoJsonSourceTarget,
-  type RenderSceneSourceUpdateResult,
+import type {
+  GeoJsonSourceTarget,
+  RenderSceneSourceUpdateResult,
 } from '@transitmapper/renderer/runtime';
-import {
-  type RenderSourceErrorEvent,
-  type RenderSourceErrorRecoveryCoordinator,
+import type {
+  RenderSourceErrorEvent,
+  RenderSourceErrorRecoveryCoordinator,
 } from './sources/render-source-error-recovery';
 import { createAcceptedSceneRecovery } from './accepted-scene-recovery';
 import { RendererSourcePublication } from './sources/renderer-source-publication';

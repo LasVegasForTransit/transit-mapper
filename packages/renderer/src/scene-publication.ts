@@ -6,11 +6,11 @@
  * controller state. Cancellation or failure before that point leaves the
  * previously accepted scene authoritative.
  */
-import {
-  type CooperativeRenderJobHandle,
-  type CooperativeRenderJobScheduler,
-  type CooperativeRenderJobSchedulerStats,
-  type CooperativeRenderJobSettlement,
+import type {
+  CooperativeRenderJobHandle,
+  CooperativeRenderJobScheduler,
+  CooperativeRenderJobSchedulerStats,
+  CooperativeRenderJobSettlement,
 } from './projection/cooperative-render-job-scheduler';
 import type {
   ScenePublicationSubmission,

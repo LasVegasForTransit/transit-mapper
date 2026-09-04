@@ -8,10 +8,10 @@
 import type { Feature } from 'geojson';
 import type { SystemFeatureName, SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 import { renderFeatureDomainIdentities } from '@transitmapper/core/render/system-render-scene';
-import {
-  type RenderDomainIdentity,
-  type RenderFeatureId,
-  type SystemFeatureSourceId,
+import type {
+  RenderDomainIdentity,
+  RenderFeatureId,
+  SystemFeatureSourceId,
 } from '@transitmapper/core/render/render-identity';
 import {
   compareRenderPaintOrder,

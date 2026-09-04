@@ -1,6 +1,6 @@
 import type { LayerSpecification } from 'maplibre-gl';
 import { VEHICLE_FILL_OPACITY } from '@transitmapper/core/style/catalogStyle';
-import { type MapTheme } from '../mapThemePalette';
+import type { MapTheme } from '../mapThemePalette';
 import {
   LYR_SERVICE_ARROWS,
   LYR_STATIONS,

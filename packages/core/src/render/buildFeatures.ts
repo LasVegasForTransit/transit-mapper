@@ -87,7 +87,7 @@ import {
   type RenderTierStateResolver,
 } from './render-presentation';
 import { applyScreenDensity } from './screen-density';
-import { type RenderViewportCategory } from './viewport-index';
+import type { RenderViewportCategory } from './viewport-index';
 import {
   renderViewportCandidateSets,
   type RenderViewportCandidateSets,

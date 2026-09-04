@@ -1,5 +1,5 @@
 import type { LayerSpecification } from 'maplibre-gl';
-import { type MapTheme } from '../mapThemePalette';
+import type { MapTheme } from '../mapThemePalette';
 import {
   LYR_ENDPOINT_HINT,
   LYR_FACILITIES,

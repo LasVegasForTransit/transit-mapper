@@ -25,11 +25,11 @@ import {
   type WrapPlanOptions,
 } from './source-bank-updates';
 import type { SourceBankId } from './source-bank';
-import {
-  type ApplyRenderSceneOptions,
-  type RenderSceneSourceUpdatePlan,
-  type RenderSceneSourceUpdateResult,
-  type RenderSceneSourceUpdater,
+import type {
+  ApplyRenderSceneOptions,
+  RenderSceneSourceUpdatePlan,
+  RenderSceneSourceUpdateResult,
+  RenderSceneSourceUpdater,
 } from '@transitmapper/renderer/runtime';
 export type { SourceBankDataStore, SourceBankDataStoreOptions } from './source-bank-updates';
 

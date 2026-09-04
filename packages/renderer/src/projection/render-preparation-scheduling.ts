@@ -5,12 +5,12 @@ import type {
   RenderPreparationUnit,
   RenderPreparedSnapshot,
 } from '@transitmapper/core/render/render-preparation';
-import {
-  type CooperativeRenderJobHandle,
-  type CooperativeRenderJobScheduler,
-  type CooperativeRenderJobSchedulerStats,
-  type CooperativeRenderJobSettlement,
-  type CooperativeRenderJobUnitSequence,
+import type {
+  CooperativeRenderJobHandle,
+  CooperativeRenderJobScheduler,
+  CooperativeRenderJobSchedulerStats,
+  CooperativeRenderJobSettlement,
+  CooperativeRenderJobUnitSequence,
 } from './cooperative-render-job-scheduler';
 import type { GeographicFeatureProjectionPreparationStats } from './resumable-feature-projection';
 

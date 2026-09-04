@@ -7,10 +7,10 @@
  * MapCanvas should not reproduce normalization, diff, or rollback rules.
  */
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
-import {
-  type RenderDomainIdentity,
-  type RenderFeatureId,
-  type SystemFeatureSourceId,
+import type {
+  RenderDomainIdentity,
+  RenderFeatureId,
+  SystemFeatureSourceId,
 } from '@transitmapper/core/render/render-identity';
 import type { RenderScene, RenderSceneStats } from '@transitmapper/core/render/render-scene';
 import { visualTargetsForDomain, type IncrementalLiveSceneState } from './accepted-scene-state';

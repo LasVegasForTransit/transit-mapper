@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactElement, type ReactNode } from 'react';
-import { type FloatingAlign, type FloatingSide } from './floating-position';
+import type { FloatingAlign, FloatingSide } from './floating-position';
 import { NativePopover } from './native-popover';
 
 interface PopoverProps {
