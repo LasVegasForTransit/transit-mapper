@@ -1,10 +1,13 @@
 // Production sources only. See tsconfig.json beside this one for why the split
 // exists.
+//
+// A package generated today has no history to be checked against, so it takes
+// the shared config whole. The existing packages turn `exactOptionalPropertyTypes`
+// and `noUncheckedIndexedAccess` back off as recorded adoption debt; a new one
+// has none to record and should not start with any.
 {
-  "extends": "@transitmapper/tsconfig/base.json",
+  "extends": "@lvbt/typescript-config/node.json",
   "compilerOptions": {
-    "lib": ["ES2022"],
-    "types": ["node"],
     // The package's `exports` map points at TypeScript source rather than a
     // build, so its own modules and tests import each other with a `.ts`
     // suffix. Nothing here emits, which is what makes that legal.

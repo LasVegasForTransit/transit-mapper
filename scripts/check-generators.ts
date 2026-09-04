@@ -200,7 +200,7 @@ function assertTestFilenameGuard(): void {
   try {
     mkdirSync(dirname(supportFixture), { recursive: true });
     writeFileSync(supportFixture, 'export {};\n', 'utf8');
-    run('pnpm', ['--filter', '@transitmapper/gencheck', 'verify']);
+    run('pnpm', ['--filter', '@transitmapper/gencheck', 'test']);
 
     for (const path of allowed) {
       if (path === supportFixture) continue;
@@ -211,7 +211,7 @@ function assertTestFilenameGuard(): void {
       writeFileSync(path, contents, 'utf8');
     }
     assertFilenamesAccept('two-part source and three-part test filenames');
-    run('pnpm', ['--filter', '@transitmapper/gencheck', 'verify']);
+    run('pnpm', ['--filter', '@transitmapper/gencheck', 'test']);
 
     for (const path of rejected) {
       mkdirSync(dirname(path), { recursive: true });
@@ -230,11 +230,11 @@ function assertTestFilenameGuard(): void {
   }
 }
 
-function setGeneratedVerify(manifest: string, command: string): void {
+function setGeneratedTestScript(manifest: string, command: string): void {
   const parsed = JSON.parse(readFileSync(manifest, 'utf8')) as {
     scripts: Record<string, string>;
   };
-  parsed.scripts.verify = command;
+  parsed.scripts.test = command;
   writeFileSync(manifest, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
 }
 
@@ -243,19 +243,19 @@ function assertDirectVerifierLayoutGuard(): void {
   const original = readFileSync(manifest, 'utf8');
 
   try {
-    setGeneratedVerify(manifest, 'tsx src/index.ts && tsx tests/../src/index.ts');
+    setGeneratedTestScript(manifest, 'tsx src/index.ts && tsx tests/../src/index.ts');
     const duplicateOutput = assertContractRejects('packages/gencheck/src/index.ts');
     if (duplicateOutput.split('packages/gencheck/src/index.ts').length - 1 !== 1) {
       throw new Error('check:contract did not de-duplicate canonical direct verifier paths');
     }
 
-    setGeneratedVerify(manifest, 'tsx ././tests/index.test.ts');
+    setGeneratedTestScript(manifest, 'tsx ././tests/index.test.ts');
     assertContractAccepts('the canonical tests/ verifier path');
 
-    setGeneratedVerify(manifest, 'tsx --tsconfig "tsconfig.json" "src/index.ts"');
+    setGeneratedTestScript(manifest, 'tsx --tsconfig "tsconfig.json" "src/index.ts"');
     assertContractRejects('packages/gencheck/src/index.ts');
 
-    setGeneratedVerify(manifest, 'tsx --watch src/index.ts');
+    setGeneratedTestScript(manifest, 'tsx --watch src/index.ts');
     assertContractRejects('unverifiable direct tsx command');
 
     const bypasses = [
@@ -276,7 +276,7 @@ function assertDirectVerifierLayoutGuard(): void {
       },
     ];
     const missed = bypasses.flatMap(({ description, command, expected }) => {
-      setGeneratedVerify(manifest, command);
+      setGeneratedTestScript(manifest, command);
       const result = checkContract();
       return result.status !== 0 && result.output.includes(expected) ? [] : [description];
     });
