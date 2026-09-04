@@ -137,6 +137,29 @@ function findGrowth(ledgerPath: string, base: Ledger, current: Ledger): Offence[
   return offences;
 }
 
+/**
+ * Whether every changed line in a file is part of an import statement.
+ *
+ * A file whose only edit is the shape of an import was moved against, not
+ * edited: someone renamed a module, or changed the form an import has to take,
+ * and this file followed. Charging debt for that turns a mechanical migration
+ * into a demand to refactor every file it passes through, which is how such a
+ * migration stalls. `every` is the point — one changed line that is not an
+ * import closes the exemption.
+ *
+ * This mirrors `lvbt check debt` in @lvbt/cli, which owns the same ratchet for
+ * the organization.
+ */
+function onlyImportsChanged(baseRef: string, path: string): boolean {
+  const changed = git(['diff', baseRef, '--', path])
+    .split('\n')
+    .filter((line) => /^[+-]/.test(line) && !/^(\+\+\+|---)/.test(line));
+  return (
+    changed.length > 0 &&
+    changed.every((line) => /^[+-]\s*(import\b|\}?\s*from\s+['"]|[\w$]+,?\s*$)/.test(line))
+  );
+}
+
 /** Rule 2, over the files this branch touched. */
 function findUnpaidEdits({
   ledgerPath,
@@ -160,6 +183,8 @@ function findUnpaidEdits({
     const textBefore = show(baseRef, path);
     const linesAfter = lineCount(readFileSync(join(ROOT, path), 'utf8'));
     if (textBefore !== undefined && linesAfter < lineCount(textBefore)) continue;
+
+    if (onlyImportsChanged(baseRef, path)) continue;
 
     offences.push({
       path,
