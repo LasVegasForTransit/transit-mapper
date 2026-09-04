@@ -1,0 +1,59 @@
+name: Performance relevance
+description: Decide whether a pull request changes anything the browser gates measure.
+
+# Every package the map is drawn by, in one place. The list named only
+# apps/web and packages/core because the renderer lived inside apps/web when
+# it was written; extracting it into its own packages silently took the render
+# pipeline out of the gates' reach, and main drifted to a 16.5 s map paint
+# behind roughly forty renderer and map commits that never ran them. Three
+# jobs consume this, so it lives here rather than being restated per job
+# where one copy could be widened and the others left behind.
+
+inputs:
+  event-name:
+    description: github.event_name; anything but pull_request always runs
+    required: true
+  base-sha:
+    description: The pull request's base commit
+    required: false
+    default: ''
+  head-sha:
+    description: The pull request's head commit
+    required: false
+    default: ''
+
+outputs:
+  run:
+    description: '"true" when the browser gates need to run'
+    value: ${{ steps.decide.outputs.run }}
+
+runs:
+  using: composite
+  steps:
+    - name: Compare the pull request against the measured paths
+      id: decide
+      shell: bash
+      env:
+        EVENT_NAME: ${{ inputs.event-name }}
+        BASE_SHA: ${{ inputs.base-sha }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+      run: |
+        if [ "$EVENT_NAME" != 'pull_request' ]; then
+          echo 'run=true' >> "$GITHUB_OUTPUT"
+        elif git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+          apps/web \
+          packages/core \
+          packages/renderer \
+          packages/map \
+          packages/views \
+          packages/workspace \
+          package.json \
+          pnpm-lock.yaml \
+          pnpm-workspace.yaml \
+          .github/workflows/performance.yml \
+          .github/actions/perf-relevance \
+          .github/actions/setup-node-pnpm; then
+          echo 'run=false' >> "$GITHUB_OUTPUT"
+        else
+          echo 'run=true' >> "$GITHUB_OUTPUT"
+        fi

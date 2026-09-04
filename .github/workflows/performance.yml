@@ -53,36 +53,13 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      # Every package the map is drawn by. The list named only apps/web and
-      # packages/core because the renderer lived inside apps/web when this was
-      # written; extracting it into its own packages silently took the render
-      # pipeline out of the gate's reach, and main drifted to a 16.5 s map
-      # paint behind roughly forty renderer and map commits that never ran it.
       - name: Decide whether this pull request needs the RTC audit
         id: relevance
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if [ "$EVENT_NAME" != 'pull_request' ]; then
-            echo 'run=true' >> "$GITHUB_OUTPUT"
-          elif git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
-            apps/web \
-            packages/core \
-            packages/renderer \
-            packages/map \
-            packages/views \
-            packages/workspace \
-            package.json \
-            pnpm-lock.yaml \
-            pnpm-workspace.yaml \
-            .github/workflows/performance.yml \
-            .github/actions/setup-node-pnpm; then
-            echo 'run=false' >> "$GITHUB_OUTPUT"
-          else
-            echo 'run=true' >> "$GITHUB_OUTPUT"
-          fi
+        uses: ./.github/actions/perf-relevance
+        with:
+          event-name: ${{ github.event_name }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
 
       - name: Skip the RTC audit for an unrelated pull request
         if: steps.relevance.outputs.run != 'true'
@@ -128,7 +105,7 @@ jobs:
 
   functional-routes:
     name: Functional route smoke (desktop)
-    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.scope != 'soak')
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'soak'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -138,23 +115,40 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+          # The relevance check diffs the pull request's base against its head.
+          fetch-depth: 0
+
+      - name: Decide whether this pull request needs the smoke
+        id: relevance
+        uses: ./.github/actions/perf-relevance
+        with:
+          event-name: ${{ github.event_name }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+
+      - name: Skip the smoke for an unrelated pull request
+        if: steps.relevance.outputs.run != 'true'
+        run: echo 'No browser or render-pipeline change requires Chrome.'
 
       - name: Setup candidate Node + pnpm
+        if: steps.relevance.outputs.run == 'true'
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Confirm stable Chrome and virtual display
+        if: steps.relevance.outputs.run == 'true'
         run: |
           google-chrome --version
           command -v xvfb-run
 
       - name: Run the functional route smoke
+        if: steps.relevance.outputs.run == 'true'
         run: >-
           xvfb-run -a --server-args="$XVFB_ARGS"
           pnpm --filter @transitmapper/web smoke:release
 
   onboarding:
     name: Onboarding smoke (desktop)
-    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.scope != 'soak')
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'soak'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -164,27 +158,45 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+          # The relevance check diffs the pull request's base against its head.
+          fetch-depth: 0
+
+      - name: Decide whether this pull request needs the smoke
+        id: relevance
+        uses: ./.github/actions/perf-relevance
+        with:
+          event-name: ${{ github.event_name }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+
+      - name: Skip the smoke for an unrelated pull request
+        if: steps.relevance.outputs.run != 'true'
+        run: echo 'No browser or render-pipeline change requires Chrome.'
 
       - name: Setup candidate Node + pnpm
+        if: steps.relevance.outputs.run == 'true'
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Confirm stable Chrome and virtual display
+        if: steps.relevance.outputs.run == 'true'
         run: |
           google-chrome --version
           command -v xvfb-run
 
       - name: Configure artifact path
+        if: steps.relevance.outputs.run == 'true'
         run: |
           echo "CURRENT_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-onboarding" >> "$GITHUB_ENV"
 
       - name: Run the onboarding smoke
+        if: steps.relevance.outputs.run == 'true'
         run: >-
           xvfb-run -a --server-args="$XVFB_ARGS"
           pnpm perf -- --smoke --profile desktop --onboarding
           --output "$CURRENT_ARTIFACT"
 
       - name: Upload onboarding report
-        if: always()
+        if: always() && steps.relevance.outputs.run == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: performance-onboarding-${{ github.run_id }}-${{ github.run_attempt }}

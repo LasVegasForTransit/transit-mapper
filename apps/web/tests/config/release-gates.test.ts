@@ -22,17 +22,46 @@ describe('release performance gates', () => {
     expect(workflow).toContain('Run the repeated RTC audit');
     expect(workflow).toContain('pnpm perf -- --profile desktop --scenario rtc');
     expect(workflow).toContain('Skip the RTC audit for an unrelated pull request');
+  });
+
+  it('measures every package the map is drawn by, not only the two it started with', () => {
+    // The renderer used to live inside apps/web. Extracting it took the render
+    // pipeline out of the gates' reach without changing a line of this list,
+    // and main drifted to a 16.5 s map paint behind commits nothing measured.
+    // Naming the packages here means that silent removal fails a test.
+    const relevance = repositorySource('.github/actions/perf-relevance/action.yml');
+
     for (const relevantPath of [
       'apps/web',
       'packages/core',
+      'packages/renderer',
+      'packages/map',
+      'packages/views',
+      'packages/workspace',
       'package.json',
       'pnpm-lock.yaml',
       'pnpm-workspace.yaml',
       '.github/workflows/performance.yml',
+      '.github/actions/perf-relevance',
       '.github/actions/setup-node-pnpm',
     ]) {
-      expect(workflow).toContain(relevantPath);
+      expect(relevance).toContain(relevantPath);
     }
+  });
+
+  it('runs the release smokes on a pull request that touches those packages', () => {
+    // Twenty-six commits reached main between one green deploy and the next
+    // red one because these two jobs only ran after the merge. A regression
+    // they would have caught has to fail before it lands, not after.
+    const workflow = repositorySource('.github/workflows/performance.yml');
+    const smokeJobs = workflow.slice(
+      workflow.indexOf('  functional-routes:'),
+      workflow.indexOf('  audit:'),
+    );
+
+    expect(smokeJobs).not.toContain("github.event_name != 'pull_request'");
+    expect(smokeJobs.match(/uses: \.\/\.github\/actions\/perf-relevance/g)).toHaveLength(2);
+    expect(smokeJobs.match(/Skip the smoke for an unrelated pull request/g)).toHaveLength(2);
   });
 
   it('runs the production smoke phases as separate reusable jobs before Release Please', () => {
