@@ -14,12 +14,12 @@ import type { EditorCommands, EditorState, Selection } from '../editor/store';
 import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import { useDocumentView, type RepresentationId } from '../editor/document-view-controls';
 import { Icon } from './Icon';
-import type { servicesForSidebarLine } from './sidebarOutline';
 import {
   infrastructureOutlineProjection,
   limitSidebarItems,
   networkLineRows,
   sidebarTabStopKey,
+  type servicesForSidebarLine,
   type SidebarLineRow,
   type SidebarInfrastructureItem,
   type SidebarService,
@@ -291,6 +291,34 @@ function networkVisibleKeys(
   ]);
 }
 
+/** The three keys the roving tab stop needs, for the network outline.
+ *
+ * Its infrastructure counterpart is `infrastructureSelectionKeys`. Both are
+ * lifted out of their component because the branching that picks a first and
+ * a selected row is what pushed those components past their complexity cap. */
+function networkSelectionKeys(
+  visible: NetworkPlaces & { lines: (SidebarLineRow & { displayServices: SidebarService[] })[] },
+  selection: Selection,
+  normalized: string,
+  expanded: Set<string>,
+) {
+  const firstKey = visible.lines[0]
+    ? rowKey('line', visible.lines[0].line.id)
+    : visible.stops[0]
+      ? rowKey('stop', visible.stops[0].id)
+      : visible.stations[0]
+        ? rowKey('station', visible.stations[0].id)
+        : null;
+  const selectedKey =
+    selection?.kind === 'service' && selection.stopId
+      ? stopRowKey(selection.id, selection.stopId)
+      : selection
+        ? rowKey(selection.kind, selection.id)
+        : null;
+  const visibleKeys = networkVisibleKeys(visible.lines, visible, normalized, expanded);
+  return { firstKey, selectedKey, visibleKeys };
+}
+
 function visibleNetworkRows(
   lineRows: SidebarLineRow[],
   places: NetworkPlaces,
@@ -404,22 +432,9 @@ function NetworkOutline({
     normalized,
     presentation,
   );
-  const firstKey = visibleLines.items[0]
-    ? rowKey('line', visibleLines.items[0].line.id)
-    : visibleStops.items[0]
-      ? rowKey('stop', visibleStops.items[0].id)
-      : visibleStations.items[0]
-        ? rowKey('station', visibleStations.items[0].id)
-        : null;
-  const selectedKey =
-    selection?.kind === 'service' && selection.stopId
-      ? stopRowKey(selection.id, selection.stopId)
-      : selection
-        ? rowKey(selection.kind, selection.id)
-        : null;
-  const visibleKeys = networkVisibleKeys(
-    visibleLines.items,
-    { stops: visibleStops.items, stations: visibleStations.items },
+  const { firstKey, selectedKey, visibleKeys } = networkSelectionKeys(
+    { lines: visibleLines.items, stops: visibleStops.items, stations: visibleStations.items },
+    selection,
     normalized,
     presentation.expanded,
   );

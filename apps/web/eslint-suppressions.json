@@ -347,9 +347,6 @@
     }
   },
   "src/ui/SidebarPanel.tsx": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines": {
       "count": 1
     },
