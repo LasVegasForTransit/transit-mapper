@@ -24,10 +24,17 @@ on:
 permissions:
   contents: read
 
-# Cancel in-progress CI when a newer commit lands on the same ref.
+# Cancel in-progress CI when a newer commit lands on the same ref — except on
+# a merge group. The queue reads a cancelled required check as a failed one and
+# drops the entry, so cancelling a merge group's own validation is indistinguish-
+# able from that validation failing. The merge group ref is keyed on the base
+# commit rather than the entry, so re-forming a group for the same base lands in
+# this concurrency group a second time and cancels the run the queue is waiting
+# on. Every entry added since the merge_group trigger existed was dropped within
+# a minute for `failed_checks`, against green pull requests.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'merge_group' }}
 
 jobs:
   validate:
