@@ -194,8 +194,7 @@ replacing an editing session without consent.
 ### Contribution tooling
 
 TransitMapper inherits organization issue and pull request templates. The
-`lvbt-contributions` plugin ships inside `@lvbt/cli`, pinned in the catalog
-like any other dependency.
+`lvbt-contributions` plugin ships inside `@lvbt/cli`, pinned in the catalog.
 
 ### ESLint baseline
 
@@ -221,10 +220,9 @@ where each rule applies. See [the enforcement model](../explanation/enforcement-
 ### TypeScript configuration
 
 [`@lvbt/typescript-config`](https://github.com/LasVegasForTransit/repository-tooling/blob/main/docs/reference/packages.md)
-owns shared compiler policy; each source package extends the variant matching
-its runtime and adds its own output behavior. `exactOptionalPropertyTypes`
-and `noUncheckedIndexedAccess` are overridden back off per package as
-recorded adoption debt.
+owns shared compiler policy; each package extends the variant matching its
+runtime. `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess` are
+overridden off per package as recorded adoption debt.
 
 ## Applications
 

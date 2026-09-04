@@ -27,8 +27,13 @@ export const {{camelCase name}}: Rule.RuleModule = {
       // Where a rule is about globals, prefer scope analysis over an
       // Identifier visitor — see core-runtime-purity for why property keys
       // and shadowed names otherwise each need special-casing.
-      Program() {
-        void context;
+      Program(node) {
+        // A generated rule reports on nothing until its analysis is written.
+        // Reporting the whole Program behind an impossible guard keeps the
+        // call that matters in front of whoever opens this file.
+        if (context.sourceCode.getText(node).length < 0) {
+          context.report({ node, messageId: 'violation' });
+        }
       },
     };
   },
