@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.8.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.7.3...v0.8.0) (2026-09-04)
+
+
+### Features
+
+* **renderer:** Render Network routes as Lines ([874fea6](https://github.com/LasVegasForTransit/transit-mapper/commit/874fea697bcc95703ecb3555be0d6225ffa18d03))
+* **web:** Show the Pattern you are editing on the map ([f312928](https://github.com/LasVegasForTransit/transit-mapper/commit/f312928fe7ac712a3916dcc204b47898790d1995))
+
+
+### Bug Fixes
+
+* **ci:** Drop the frame-ratio budget rather than fake one ([da9ad57](https://github.com/LasVegasForTransit/transit-mapper/commit/da9ad570d8c0b3521f6ac936dd4c823dcffff68a))
+* **ci:** Gate the RTC audit on what main actually measures ([5135d5d](https://github.com/LasVegasForTransit/transit-mapper/commit/5135d5d40c0fbf158fc2e01e7f8c662f338ca3cf))
+* **ci:** Keep the onboarding smoke clicking on a busy main thread ([76a514b](https://github.com/LasVegasForTransit/transit-mapper/commit/76a514be883733c7a402a8e21e354cda99f1db48))
+* **ci:** Keep the queue's own push from cancelling its validation ([33fd6f2](https://github.com/LasVegasForTransit/transit-mapper/commit/33fd6f205d5569d86b579b85b404aec81371d3ea))
+* **ci:** Let the onboarding smoke outlast a slow renderer ([162e94a](https://github.com/LasVegasForTransit/transit-mapper/commit/162e94a4481f7ae16d8d8c931b026a645d8145d4))
+* **ci:** Run the release smokes on pull requests ([d50beb9](https://github.com/LasVegasForTransit/transit-mapper/commit/d50beb9b1d63960c3c0e4cdae359dbdadfb9722a))
+* **ci:** Run Validate on the merge group ([6cd7769](https://github.com/LasVegasForTransit/transit-mapper/commit/6cd7769746ed3e2c8cb2178db4fdf754027aa1ee))
+* **ci:** Set the RTC budgets from the runner's spread, not one run ([9c2781a](https://github.com/LasVegasForTransit/transit-mapper/commit/9c2781a61f88b46e4076b27a91f41989db3a6439))
+* **ci:** Stop cancelling the merge group's own validation ([d5bb843](https://github.com/LasVegasForTransit/transit-mapper/commit/d5bb843b121d4a5c4bacf305f876335e51bb1e4a))
+* **core:** Preserve Group member identity ([5c47ae3](https://github.com/LasVegasForTransit/transit-mapper/commit/5c47ae3cbe99e4eb1c74e2ef538d223d43718193))
+* **map:** Keep retrying style recovery until MapLibre is actually ready ([cb2e20f](https://github.com/LasVegasForTransit/transit-mapper/commit/cb2e20f3ff6db56b2bf77b9af4aa656c00880b50))
+* **renderer:** Cut the corridor fade expression down to size ([8be71a4](https://github.com/LasVegasForTransit/transit-mapper/commit/8be71a4c86da3fd4e99c8206db40ab7e19c785fd))
+* **renderer:** Draw only the Lines the map is showing ([dbfc9ce](https://github.com/LasVegasForTransit/transit-mapper/commit/dbfc9ced6947fd106c058ee827bd839f38e76569))
+* **renderer:** Keep compact view menus on screen ([a22340f](https://github.com/LasVegasForTransit/transit-mapper/commit/a22340fb35acc076dde19dd679b2d4dcd7898cd4))
+* **web:** Keep path editing out of ordinary map selection ([e69a753](https://github.com/LasVegasForTransit/transit-mapper/commit/e69a753ac19e91f49ddbe149759a397665d10a96))
+* **web:** Keep React out of the embed bundle ([66d5afe](https://github.com/LasVegasForTransit/transit-mapper/commit/66d5afecd046cfa433607c907d06d4f698a8dc1d))
+* **web:** Keep Service inspection separate from path editing ([427c248](https://github.com/LasVegasForTransit/transit-mapper/commit/427c2483d569d3de1e95284b0b7c7f355a29c91b))
+* **web:** Make embedded maps load less code ([596eb52](https://github.com/LasVegasForTransit/transit-mapper/commit/596eb5201d8f3e9547a4e7e219992f15e826e538))
+* **web:** Make path editing an explicit inspector task ([3929bba](https://github.com/LasVegasForTransit/transit-mapper/commit/3929bba77147e77119e611b21f1d9f00e988e313))
+* **web:** Make shared maps load less code ([dc6d1be](https://github.com/LasVegasForTransit/transit-mapper/commit/dc6d1bef91a605bfc3281a1371074a0b8c18a1ab))
+* **web:** Publish GTFS imports atomically ([1fb7fcd](https://github.com/LasVegasForTransit/transit-mapper/commit/1fb7fcd8f3c73089112de1c9d1c25c260df07fc8))
+* **web:** Re-record the checked delivery baseline ([3794c8b](https://github.com/LasVegasForTransit/transit-mapper/commit/3794c8b5b4eac1e25fcd1ba348fc1e38506ca0a1))
+* **web:** Remove sidebar empty-state instructions ([613eb5c](https://github.com/LasVegasForTransit/transit-mapper/commit/613eb5cf5b40cc06c7c0f27aa1a6bbb2d193b3ed))
+* **web:** Show the background map during onboarding ([f15fb09](https://github.com/LasVegasForTransit/transit-mapper/commit/f15fb0967031a2e0bddb73ac94bb76ca98751319))
+* **web:** Show the basemap during onboarding instead of a blank grid ([b476434](https://github.com/LasVegasForTransit/transit-mapper/commit/b47643401866a7696a98a29da3be26593f51c61e))
+* **web:** Stop dialogs opening off-centre before snapping into place ([73a229f](https://github.com/LasVegasForTransit/transit-mapper/commit/73a229f21f8d29b8edbcb5fec6fe29b64cad6849))
+
 ## [0.7.3](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.7.2...v0.7.3) (2026-08-27)
 
 
