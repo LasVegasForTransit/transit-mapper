@@ -1,6 +1,6 @@
 {
   "name": "@lvbt/cli",
-  "version": "0.3.0-rc.14",
+  "version": "0.3.0-rc.15",
   "description": "The lvbt command every LVBT repository runs for bootstrap, preflight, and deploy, plus the shared git hooks and the lvbt-contributions agent plugin.",
   "license": "MIT",
   "type": "module",
