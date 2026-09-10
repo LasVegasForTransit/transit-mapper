@@ -37,7 +37,7 @@ says **nothing**, the rule holds only because you follow it.
 | `packages/core` uses no browser-only globals                                    | core is typechecked against the browser _and_ workerd; a browser global compiles and then throws in production           | `lint`                          |
 | A migration that exists is never edited, renamed, or deleted                    | Wrangler records applied migrations by name and never re-runs one it has seen, so an edit silently diverges environments | `check:migrations`              |
 | Every package declares `lint`, `check-types`, `test`                            | a package missing one is skipped by Turborepo without an error, and CI stays green while it goes unchecked               | `check:contract`                |
-| Every dependency version comes from the catalog                                 | two packages on different versions of one library is invisible until it breaks                                           | `check:contract`                |
+| Product dependency versions come from the catalog; `@lvbt/*` resolves from the recorded vendor tree | two packages on different versions of one library is invisible until it breaks                                           | `check:contract`, `standards:check` |
 | Recognizable test material lives under the owning module's root `tests/` tree   | Production trees stay navigable, and runner globs cannot silently omit a colocated test                                  | `check:contract`                |
 | Test-only support lives under the owning module's root `tests/support/` tree    | A generic `support/` directory has no test-specific signal, so this semantic boundary depends on contributors            | **nothing**                     |
 | Relative links in `docs/` resolve                                               | three had been broken since the monorepo split, and nothing noticed                                                      | `check:docs`                    |
@@ -175,7 +175,6 @@ re-fetches what GitHub stored, and returns the verified URL.
 
 Humans use the native organization issue forms and pull request template.
 Agents use the same visible structure; there are no hidden markers or
-GitHub-side prose checks. The plugin ships inside `@lvbt/cli`, pinned in
-`pnpm-workspace.yaml`'s catalog like any other dependency, so `check:contract`
-— which already rejects a dependency pinned outside the catalog — is what
-keeps this repository from silently drifting onto a shadowed or stale copy.
+GitHub-side prose checks. The plugin ships inside the vendored `@lvbt/cli`.
+`pnpm standards:check` verifies the recorded release, source commit, content
+hash, and every file before any repository check runs.

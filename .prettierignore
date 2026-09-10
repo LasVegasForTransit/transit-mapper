@@ -2,6 +2,7 @@ node_modules/
 dist/
 .turbo/
 .wrangler/
+.lvbt/web-platform/
 .claude/worktrees/
 pnpm-lock.yaml
 *.tsbuildinfo

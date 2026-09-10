@@ -1,0 +1,22 @@
+---
+import { pageTitle } from '../lib/title';
+import '../styles/global.css';
+
+interface Props {
+  page?: string;
+}
+
+const { page } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle(page)}</title>
+  </head>
+  <body class="mx-auto max-w-2xl p-8 font-sans text-gray-900">
+    <slot />
+  </body>
+</html>

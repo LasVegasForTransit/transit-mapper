@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|mcp__github__create_issue|mcp__github__create_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/node_modules/@lvbt/cli/plugins/lvbt-contributions/hooks/codex-pre-tool-use.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

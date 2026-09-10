@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# The shared hook lives in @lvbt/cli; repository-specific steps go below it.
+set -eu
+ROOT=$(git rev-parse --show-toplevel)
+sh "$ROOT/node_modules/@lvbt/cli/hooks/commit-msg.sh" "$@"

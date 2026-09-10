@@ -1,0 +1,40 @@
+{
+  "name": "lvbt-with-vite-react-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bootstrap": "lvbt bootstrap",
+    "preflight": "lvbt preflight",
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "preview": "turbo run preview",
+    "lint": "turbo run lint",
+    "check-types": "turbo run check-types",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e --concurrency=1",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm format:check && markdownlint-cli2 && lvbt check && turbo run lint check-types test validate",
+    "check:fix": "pnpm format && markdownlint-cli2 --fix && turbo run lint -- --fix",
+    "prepare": "git config --local core.hooksPath .githooks 2>/dev/null || true",
+    "deploy": "lvbt deploy"
+  },
+  "lint-staged": {
+    "*": "prettier --write --ignore-unknown"
+  },
+  "devDependencies": {
+    "@lvbt/cli": "github:LasVegasForTransit/repository-tooling#v0.3.0-rc.14&path:/packages/cli",
+    "@lvbt/prettier-config": "github:LasVegasForTransit/repository-tooling#v0.3.0-rc.14&path:/packages/prettier-config",
+    "lint-staged": "catalog:",
+    "markdownlint-cli2": "catalog:",
+    "markdownlint-rule-relative-links": "catalog:",
+    "prettier": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:",
+    "wrangler": "catalog:"
+  },
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": "^24.20.0"
+  }
+}

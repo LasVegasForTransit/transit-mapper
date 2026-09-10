@@ -1,0 +1,28 @@
+{
+  "name": "@lvbt/cli",
+  "version": "0.3.0-rc.14",
+  "description": "The lvbt command every LVBT repository runs for bootstrap, preflight, and deploy, plus the shared git hooks and the lvbt-contributions agent plugin.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LasVegasForTransit/repository-tooling.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "bin": {
+    "lvbt": "src/cli.mjs"
+  },
+  "files": [
+    "src",
+    "hooks",
+    "plugins",
+    "catalog.json"
+  ],
+  "engines": {
+    "node": ">=24"
+  }
+}

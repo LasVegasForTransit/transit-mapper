@@ -123,11 +123,10 @@ GitHub, but GitHub does not police issue or pull request prose after
 creation.
 
 The durable rules remain testable without an agent process. CI does not run
-either harness, but the plugin ships inside `@lvbt/cli`, pinned in
-`pnpm-workspace.yaml`'s catalog like any other dependency — so drift in which
-release a checkout runs shows up as an ordinary `check:contract` failure
-("pins X to Y instead of catalog:") rather than needing a check of its own,
-and the portable rule remains declared in `AGENTS.md`.
+either harness, but the plugin ships inside the vendored `@lvbt/cli`.
+`pnpm standards:check` verifies the recorded release, source commit, content
+hash, and every vendored file before repository-specific checks begin. The
+portable contribution rule remains declared in `AGENTS.md`.
 
 ## Rules
 

@@ -1,13 +1,13 @@
 # Set up a local development environment
 
-Requirements: Node 24+ and [pnpm](https://pnpm.io). (`package.json` sets
-`engines.node` to `>=24`, and CI runs on 24 — an older Node fails in ways that
-don't obviously point at the version.)
+Requirements: Node 24.20.x and pnpm 11.25.x. `package.json` records both
+versions, and CI uses the same contract. A different Node line can expose
+runtime globals or module behavior that the supported toolchain does not.
 
 ```sh
 git clone git@github.com:LasVegasForTransit/transit-mapper.git
 cd transit-mapper
-pnpm install
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 

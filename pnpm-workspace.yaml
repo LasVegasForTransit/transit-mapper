@@ -12,13 +12,6 @@ allowBuilds:
 # drift onto different versions of the same library without it showing up as a
 # change to this file.
 catalog:
-  # Vendored from the LVBT repository standard's own git tags rather than a
-  # registry — see docs/development/reference/checks.md for what pins this.
-  '@lvbt/cli': 'github:LasVegasForTransit/repository-tooling#v0.2.5&path:/packages/cli'
-  '@lvbt/eslint-config': 'github:LasVegasForTransit/repository-tooling#v0.2.5&path:/packages/eslint-config'
-  '@lvbt/prettier-config': 'github:LasVegasForTransit/repository-tooling#v0.2.5&path:/packages/prettier-config'
-  '@lvbt/typescript-config': 'github:LasVegasForTransit/repository-tooling#v0.2.5&path:/packages/typescript-config'
-  '@lvbt/vitest-config': 'github:LasVegasForTransit/repository-tooling#v0.2.5&path:/packages/vitest-config'
   '@turbo/gen': '^2.10.7'
   '@typescript-eslint/parser': '^8.65.0'
   '@cloudflare/vitest-pool-workers': '^0.18.8'

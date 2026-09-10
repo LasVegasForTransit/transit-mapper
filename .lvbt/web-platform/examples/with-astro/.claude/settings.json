@@ -1,0 +1,38 @@
+{
+  "extraKnownMarketplaces": {
+    "lvbt": {
+      "source": {
+        "source": "github",
+        "repo": "LasVegasForTransit/repository-tooling",
+        "ref": "v0.3.0-rc.14"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "lvbt-contributions@lvbt": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm exec prettier --write --ignore-unknown \"$CLAUDE_FILE_PATHS\" 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Read(**/.dev.vars)",
+      "Read(**/.dev.vars.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/id_rsa*)"
+    ]
+  }
+}

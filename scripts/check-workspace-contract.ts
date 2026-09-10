@@ -284,6 +284,85 @@ interface Failure {
   message: string;
 }
 
+async function isVendoredLvbtRange(
+  packagePath: string,
+  name: string,
+  range: string,
+): Promise<boolean> {
+  if (!/^@lvbt\/[a-z0-9-]+$/.test(name) || !range.startsWith('file:')) return false;
+
+  const expected = resolve(ROOT, '.lvbt/web-platform/packages', name.slice('@lvbt/'.length));
+  if (resolve(ROOT, packagePath, range.slice('file:'.length)) !== expected) return false;
+
+  try {
+    const manifest = JSON.parse(await readFile(resolve(expected, 'package.json'), 'utf8')) as {
+      name?: string;
+    };
+    return manifest.name === name;
+  } catch {
+    return false;
+  }
+}
+
+async function dependencyFailures(
+  name: string,
+  path: string,
+  manifest: Manifest,
+): Promise<Failure[]> {
+  const failures: Failure[] = [];
+  for (const field of ['dependencies', 'devDependencies'] as const) {
+    for (const [dependency, range] of Object.entries(manifest[field] ?? {})) {
+      const allowed =
+        range.startsWith('catalog:') ||
+        range.startsWith('workspace:') ||
+        (await isVendoredLvbtRange(path, dependency, range));
+      if (allowed) continue;
+      failures.push({
+        kind: 'catalog',
+        message: `${name} (${path}/package.json) pins "${dependency}" to "${range}" instead of "catalog:"`,
+      });
+    }
+  }
+  return failures;
+}
+
+async function packageFailures(name: string, path: string, manifest: Manifest): Promise<Failure[]> {
+  if (path === '.') return [];
+
+  const failures: Failure[] = [];
+  const scripts = manifest.scripts ?? {};
+  if (await shipsCode(path)) {
+    for (const task of REQUIRED_TASKS) {
+      if (scripts[task]) continue;
+      failures.push({
+        kind: 'task',
+        message: `${name} (${path}/package.json) has no "${task}" script`,
+      });
+    }
+  }
+
+  const misplacedTests = new Set(await misplacedTestMaterial(path));
+  const directVerifiers = directTestEntries(scripts.test ?? '');
+  for (const entry of directVerifiers.entries) {
+    const canonical = canonicalPackagePath(path, entry);
+    if (canonical === 'tests' || canonical.startsWith('tests/')) continue;
+    misplacedTests.add(canonical);
+  }
+  for (const misplaced of [...misplacedTests].sort()) {
+    failures.push({
+      kind: 'test-layout',
+      message: `${name} keeps test material outside ${path}/tests/: ${workspacePath(path, misplaced)}`,
+    });
+  }
+  for (const command of [...new Set(directVerifiers.unverifiable)].sort()) {
+    failures.push({
+      kind: 'test-layout',
+      message: `${name} has an unverifiable direct tsx command in ${path}/package.json test: ${command}`,
+    });
+  }
+  return failures;
+}
+
 /** What to tell someone for each kind of failure. Every failure names the
  *  fix for *that* failure; a generic footer sends people down the wrong path. */
 const REMEDIATION: Record<Failure['kind'], string> = {
@@ -291,8 +370,8 @@ const REMEDIATION: Record<Failure['kind'], string> = {
     '  Turborepo skips a package that does not define the task, without an error.\n' +
     '  fix:  add the missing script to that package.json',
   catalog:
-    '  fix:  set the range to "catalog:", add it under `catalog:` in\n' +
-    '        pnpm-workspace.yaml, then run `pnpm install`',
+    '  fix:  use "catalog:" for product dependencies or the matching recorded\n' +
+    '        .lvbt vendor path for a shared standard package',
   'test-layout':
     "  Tests and test-only support belong under the owning package's tests/ directory.\n" +
     '  fix:  move each path to <package>/tests/, mirror its source area, and update imports',
@@ -314,56 +393,8 @@ async function main(): Promise<void> {
   }
 
   for (const { name, path, manifest } of manifests) {
-    if (path !== '.') {
-      const scripts = manifest.scripts ?? {};
-      if (await shipsCode(path)) {
-        for (const task of REQUIRED_TASKS) {
-          if (!scripts[task]) {
-            failures.push({
-              kind: 'task',
-              message: `${name} (${path}/package.json) has no "${task}" script`,
-            });
-          }
-        }
-      }
-
-      const misplacedTests = new Set(await misplacedTestMaterial(path));
-      const directVerifiers = directTestEntries(scripts.test ?? '');
-
-      for (const entry of directVerifiers.entries) {
-        const canonical = canonicalPackagePath(path, entry);
-        if (canonical === 'tests' || canonical.startsWith('tests/')) continue;
-        misplacedTests.add(canonical);
-      }
-
-      for (const misplaced of [...misplacedTests].sort()) {
-        failures.push({
-          kind: 'test-layout',
-          message: `${name} keeps test material outside ${path}/tests/: ${workspacePath(path, misplaced)}`,
-        });
-      }
-
-      for (const command of [...new Set(directVerifiers.unverifiable)].sort()) {
-        failures.push({
-          kind: 'test-layout',
-          message: `${name} has an unverifiable direct tsx command in ${path}/package.json test: ${command}`,
-        });
-      }
-    }
-
-    // Every external dependency resolves through the catalog in
-    // pnpm-workspace.yaml, so two packages cannot drift onto different
-    // versions of the same library without that showing up as a change to
-    // one shared file.
-    for (const field of ['dependencies', 'devDependencies'] as const) {
-      for (const [dep, range] of Object.entries(manifest[field] ?? {})) {
-        if (range.startsWith('catalog:') || range.startsWith('workspace:')) continue;
-        failures.push({
-          kind: 'catalog',
-          message: `${name} (${path}/package.json) pins "${dep}" to "${range}" instead of "catalog:"`,
-        });
-      }
-    }
+    failures.push(...(await packageFailures(name, path, manifest)));
+    failures.push(...(await dependencyFailures(name, path, manifest)));
   }
 
   if (failures.length > 0) {

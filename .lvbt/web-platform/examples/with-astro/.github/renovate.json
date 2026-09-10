@@ -1,0 +1,44 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits"],
+  "schedule": ["before 6am on monday"],
+  "timezone": "America/Los_Angeles",
+  "labels": ["dependencies"],
+  "prHourlyLimit": 4,
+  "prConcurrentLimit": 8,
+  "rangeStrategy": "pin",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "customManagers": [
+    {
+      "description": "The @lvbt/* packages install from git tags of repository-tooling with a path: suffix that the npm manager does not parse, and the Claude Code marketplace pins the same tag. Track both as one dependency on the repository's tags.",
+      "customType": "regex",
+      "managerFilePatterns": ["/(^|/)package\\.json$/", "/(^|/)\\.claude/settings\\.json$/"],
+      "matchStrings": [
+        "github:LasVegasForTransit/repository-tooling#(?<currentValue>v\\d+\\.\\d+\\.\\d+)&path:/packages/[a-z-]+",
+        "\"repo\": \"LasVegasForTransit/repository-tooling\",\\s*\"ref\": \"(?<currentValue>v\\d+\\.\\d+\\.\\d+)\""
+      ],
+      "depNameTemplate": "LasVegasForTransit/repository-tooling",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "semver"
+    }
+  ],
+  "packageRules": [
+    {
+      "groupName": "LVBT repository standard",
+      "matchDepNames": ["LasVegasForTransit/repository-tooling"]
+    },
+    {
+      "groupName": "dev dependencies (non-major)",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "branch"
+    }
+  ]
+}

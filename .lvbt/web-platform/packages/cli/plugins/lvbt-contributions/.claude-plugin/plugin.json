@@ -1,0 +1,12 @@
+{
+  "name": "lvbt-contributions",
+  "version": "0.2.0",
+  "description": "Create readable LVBT GitHub issues and pull requests through the organization workflow.",
+  "author": {
+    "name": "Las Vegans for Better Transit",
+    "url": "https://lasvegasfortransit.org"
+  },
+  "repository": "https://github.com/LasVegasForTransit/repository-tooling",
+  "license": "MIT",
+  "keywords": ["github", "issues", "pull-requests"]
+}

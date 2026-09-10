@@ -1,0 +1,7 @@
+{
+  "extends": "../packages/typescript-config/node.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true
+  },
+  "include": ["*.ts", "../packages/web-platform/src/**/*.ts"]
+}

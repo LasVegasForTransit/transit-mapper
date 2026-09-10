@@ -37,8 +37,8 @@
     "zustand": "catalog:"
   },
   "devDependencies": {
-    "@lvbt/typescript-config": "catalog:",
-    "@lvbt/vitest-config": "catalog:",
+    "@lvbt/typescript-config": "file:../../.lvbt/web-platform/packages/typescript-config",
+    "@lvbt/vitest-config": "file:../../.lvbt/web-platform/packages/vitest-config",
     "@types/geojson": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
