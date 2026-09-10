@@ -6,22 +6,64 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { applyPreset, verifyPreset } from './web-platform.ts';
-import { readRelease } from './web-platform-source.ts';
+import { readCommit, readRelease } from './web-platform-source.ts';
 
 const upstream = 'https://github.com/LasVegasForTransit/repository-tooling.git';
 
-async function update(root: string, release: string, source: string | undefined, dryRun: boolean) {
-  if (source) return applyPreset(root, readRelease(source, release), dryRun);
-  if (!/^v\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/.test(release))
-    throw new Error('An explicit version tag is required.');
+type SourceIdentity = { release: string; commit?: never } | { release?: never; commit: string };
+
+function sourceIdentity(release: string | undefined, commit: string | undefined): SourceIdentity {
+  if (Boolean(release) === Boolean(commit)) {
+    throw new Error(
+      'Usage: standards:update (--release <tag> | --commit <sha>) [--apply] [--json]. Provide either --release or --commit.',
+    );
+  }
+  return release ? { release } : { commit: commit ?? '' };
+}
+
+function readSource(repository: string, identity: SourceIdentity) {
+  return identity.release
+    ? readRelease(repository, identity.release)
+    : readCommit(repository, identity.commit ?? '');
+}
+
+async function update(
+  root: string,
+  identity: SourceIdentity,
+  source: string | undefined,
+  dryRun: boolean,
+) {
+  if (source) return applyPreset(root, readSource(source, identity), dryRun);
   const directory = await mkdtemp(path.join(os.tmpdir(), 'lvbt-standards-'));
   try {
-    execFileSync(
-      'git',
-      ['clone', '--depth', '1', '--branch', release, '--single-branch', '--', upstream, directory],
-      { stdio: 'pipe' },
-    );
-    return await applyPreset(root, readRelease(directory, release), dryRun);
+    if (identity.release) {
+      execFileSync(
+        'git',
+        [
+          'clone',
+          '--depth',
+          '1',
+          '--branch',
+          identity.release,
+          '--single-branch',
+          '--',
+          upstream,
+          directory,
+        ],
+        { stdio: 'pipe' },
+      );
+    } else {
+      execFileSync('git', ['init', '--quiet', directory], { stdio: 'pipe' });
+      execFileSync('git', ['-C', directory, 'remote', 'add', 'origin', upstream], {
+        stdio: 'pipe',
+      });
+      execFileSync(
+        'git',
+        ['-C', directory, 'fetch', '--quiet', '--depth', '1', 'origin', identity.commit ?? ''],
+        { stdio: 'pipe' },
+      );
+    }
+    return await applyPreset(root, readSource(directory, identity), dryRun);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -33,6 +75,7 @@ export async function main(args: string[]): Promise<void> {
     allowPositionals: true,
     options: {
       release: { type: 'string' },
+      commit: { type: 'string' },
       source: { type: 'string' },
       root: { type: 'string' },
       apply: { type: 'boolean' },
@@ -52,11 +95,11 @@ export async function main(args: string[]): Promise<void> {
       );
       return;
     }
-    if (command !== 'update' || !values.release)
-      throw new Error('Usage: standards:update --release <tag> [--apply] [--json]');
-    const plan = await update(root, values.release, values.source, !values.apply);
+    if (command !== 'update') throw new Error('Choose check or update.');
+    const identity = sourceIdentity(values.release, values.commit);
+    const plan = await update(root, identity, values.source, !values.apply);
     process.stdout.write(
-      `${JSON.stringify({ ok: true, applied: !!values.apply, release: values.release, plan }, null, values.json ? 0 : 2)}\n`,
+      `${JSON.stringify({ ok: true, applied: !!values.apply, release: values.release ?? null, commit: values.commit, plan }, null, values.json ? 0 : 2)}\n`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

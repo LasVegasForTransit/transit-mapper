@@ -1,6 +1,6 @@
 {
   "name": "@lvbt/vitest-config",
-  "version": "0.3.0-rc.15",
+  "version": "0.2.7",
   "description": "The Vitest configuration every LVBT repository spreads into its own.",
   "license": "MIT",
   "type": "module",

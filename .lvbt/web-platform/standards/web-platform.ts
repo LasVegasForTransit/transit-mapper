@@ -6,7 +6,7 @@ import path from 'node:path';
 export interface WebPreset {
   formatVersion: number;
   preset: string;
-  release: string;
+  release: string | null;
   commit: string;
   files: Record<string, string>;
   executables?: string[];
@@ -15,7 +15,7 @@ export interface WebPreset {
 export interface PresetMetadata {
   formatVersion: number;
   preset: string;
-  release: string;
+  release: string | null;
   commit: string;
   contentHash: string;
   executables: string[];
@@ -53,7 +53,7 @@ export async function verifyPreset(root: string): Promise<PresetMetadata> {
   if (
     metadata.formatVersion !== 1 ||
     metadata.preset !== 'lvbt-web' ||
-    !/^v\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/.test(metadata.release) ||
+    (metadata.release !== null && !/^v\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/.test(metadata.release)) ||
     !/^[a-f0-9]{40}$/.test(metadata.commit) ||
     metadata.contentHash !== fingerprint(files) ||
     JSON.stringify(metadata.executables) !== JSON.stringify(executables)
@@ -70,7 +70,7 @@ function validateBundle(bundle: WebPreset): void {
   if (
     bundle.formatVersion !== 1 ||
     bundle.preset !== 'lvbt-web' ||
-    !/^v\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/.test(bundle.release) ||
+    (bundle.release !== null && !/^v\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/.test(bundle.release)) ||
     !/^[a-f0-9]{40}$/.test(bundle.commit)
   )
     throw new Error('Invalid web preset provenance.');
