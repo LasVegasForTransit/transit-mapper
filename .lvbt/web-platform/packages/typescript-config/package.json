@@ -1,6 +1,6 @@
 {
   "name": "@lvbt/typescript-config",
-  "version": "0.3.0-rc.14",
+  "version": "0.3.0-rc.15",
   "description": "TypeScript configurations every LVBT repository extends.",
   "license": "MIT",
   "repository": {

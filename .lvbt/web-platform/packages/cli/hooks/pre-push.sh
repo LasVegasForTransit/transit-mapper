@@ -3,6 +3,11 @@
 # run is rare rather than routine. CI is still the authority.
 set -eu
 ROOT=$(git rev-parse --show-toplevel)
-unset $(git rev-parse --local-env-vars)
+LOCAL_ENV_VARS=$(git rev-parse --local-env-vars)
+while IFS= read -r variable; do
+  unset "$variable"
+done <<EOF
+$LOCAL_ENV_VARS
+EOF
 cd "$ROOT"
 pnpm check
