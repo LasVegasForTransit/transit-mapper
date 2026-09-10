@@ -1,0 +1,22 @@
+{
+  "formatVersion": 1,
+  "preset": "lvbt-web",
+  "release": "v0.3.0-rc.14",
+  "commit": "b236e7de4ce670d3af072392447e06741f15a650",
+  "contentHash": "eb6ad5861b339c165653b61b203715abaadc45c0772c6cf077bcd0eb216587bf",
+  "executables": [
+    "examples/with-astro/.githooks/commit-msg",
+    "examples/with-astro/.githooks/pre-commit",
+    "examples/with-astro/.githooks/pre-push",
+    "examples/with-astro/.githooks/prepare-commit-msg",
+    "examples/with-vite-react/.githooks/commit-msg",
+    "examples/with-vite-react/.githooks/pre-commit",
+    "examples/with-vite-react/.githooks/pre-push",
+    "examples/with-vite-react/.githooks/prepare-commit-msg",
+    "packages/cli/hooks/commit-msg.sh",
+    "packages/cli/hooks/pre-commit.sh",
+    "packages/cli/hooks/pre-push.sh",
+    "packages/cli/hooks/prepare-commit-msg.sh",
+    "packages/cli/src/cli.mjs"
+  ]
+}

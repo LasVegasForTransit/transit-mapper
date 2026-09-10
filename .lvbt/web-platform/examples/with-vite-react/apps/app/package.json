@@ -1,0 +1,36 @@
+{
+  "name": "@lvbt/app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@lvbt/eslint-config": "github:LasVegasForTransit/repository-tooling#v0.3.0-rc.14&path:/packages/eslint-config",
+    "@lvbt/playwright-config": "github:LasVegasForTransit/repository-tooling#v0.3.0-rc.14&path:/packages/playwright-config",
+    "@lvbt/typescript-config": "github:LasVegasForTransit/repository-tooling#v0.3.0-rc.14&path:/packages/typescript-config",
+    "@lvbt/vitest-config": "github:LasVegasForTransit/repository-tooling#v0.3.0-rc.14&path:/packages/vitest-config",
+    "@playwright/test": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "eslint": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

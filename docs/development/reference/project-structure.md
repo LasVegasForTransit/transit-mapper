@@ -194,7 +194,9 @@ replacing an editing session without consent.
 ### Contribution tooling
 
 TransitMapper inherits organization issue and pull request templates. The
-`lvbt-contributions` plugin ships inside `@lvbt/cli`, pinned in the catalog.
+`lvbt-contributions` ships inside the vendored `@lvbt/cli`. The repository
+records the standard's release, commit, and content hash in
+`.lvbt/web-platform.json`.
 
 ### ESLint baseline
 

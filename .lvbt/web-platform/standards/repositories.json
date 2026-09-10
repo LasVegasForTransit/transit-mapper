@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "repositories": [
+    {
+      "name": ".github",
+      "requiredStatus": "Validate"
+    },
+    {
+      "name": "analytics",
+      "requiredStatus": "Validate"
+    },
+    {
+      "name": "labs",
+      "requiredStatus": "Validate"
+    },
+    {
+      "name": "repository-tooling",
+      "requiredStatus": "Validate"
+    },
+    {
+      "name": "transit-mapper",
+      "requiredStatus": "Validate"
+    },
+    {
+      "name": "website",
+      "requiredStatus": "Validate"
+    }
+  ],
+  "exceptions": []
+}

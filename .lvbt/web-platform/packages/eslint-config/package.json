@@ -1,0 +1,40 @@
+{
+  "name": "@lvbt/eslint-config",
+  "version": "0.3.0-rc.14",
+  "description": "The ESLint configurations every LVBT repository uses.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LasVegasForTransit/repository-tooling.git",
+    "directory": "packages/eslint-config"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "exports": {
+    "./base": "./base.js",
+    "./react-internal": "./react-internal.js",
+    "./browser": "./browser.js"
+  },
+  "files": [
+    "base.js",
+    "react-internal.js",
+    "browser.js"
+  ],
+  "dependencies": {
+    "@eslint-community/eslint-plugin-eslint-comments": "4.7.2",
+    "@eslint/js": "10.0.1",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-sonarjs": "4.2.0",
+    "eslint-plugin-turbo": "2.10.12",
+    "globals": "17.11.0",
+    "typescript-eslint": "8.69.0"
+  },
+  "peerDependencies": {
+    "eslint": ">=10",
+    "typescript": ">=5.9"
+  }
+}

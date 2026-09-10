@@ -1,0 +1,20 @@
+{
+  "name": "lvbt",
+  "interface": {
+    "displayName": "Las Vegans for Better Transit"
+  },
+  "plugins": [
+    {
+      "name": "lvbt-contributions",
+      "source": {
+        "source": "local",
+        "path": "../../node_modules/@lvbt/cli/plugins/lvbt-contributions"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

@@ -65,6 +65,8 @@ For people changing the code rather than using the app.
 
 - [Run the checks](development/how-to/run-the-checks.md) — what `pnpm check`
   does, and the fix for each failure.
+- [Update the repository standard](development/how-to/update-the-repository-standard.md) — review
+  and apply an exact, integrity-checked tooling release.
 - [Measure browser performance](development/how-to/measure-performance.md) —
   the fixed Chrome protocol, hard gates, baselines, offline proof, and leak soak.
 - [Update application icons](development/how-to/update-application-icons.md) —

@@ -1,0 +1,25 @@
+{
+  "name": "@lvbt/prettier-config",
+  "version": "0.3.0-rc.14",
+  "description": "The Prettier configuration every LVBT repository uses.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LasVegasForTransit/repository-tooling.git",
+    "directory": "packages/prettier-config"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js"
+  ],
+  "peerDependencies": {
+    "prettier": ">=3"
+  }
+}

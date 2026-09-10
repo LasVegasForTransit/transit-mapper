@@ -1,0 +1,39 @@
+{
+  "name": "@lvbt/playwright-config",
+  "version": "0.3.0-rc.14",
+  "description": "The Playwright configuration every LVBT repository spreads into its own: end-to-end tests under tests/e2e, desktop and mobile projects, traces on failure.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LasVegasForTransit/repository-tooling.git",
+    "directory": "packages/playwright-config"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./accessibility": {
+      "types": "./accessibility.d.ts",
+      "default": "./accessibility.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "accessibility.js",
+    "accessibility.d.ts"
+  ],
+  "peerDependencies": {
+    "@playwright/test": ">=1.60"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "playwright-core": "1.62.1"
+  }
+}

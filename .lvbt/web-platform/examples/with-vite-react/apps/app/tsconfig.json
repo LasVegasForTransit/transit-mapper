@@ -1,0 +1,7 @@
+{
+  "extends": "@lvbt/typescript-config/react-library.json",
+  "compilerOptions": {
+    "types": ["vite/client"]
+  },
+  "include": ["src", "tests", "*.config.ts"]
+}

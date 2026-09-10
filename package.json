@@ -12,9 +12,9 @@
     "url": "https://github.com/LasVegasForTransit/transit-mapper/issues"
   },
   "type": "module",
-  "packageManager": "pnpm@11.15.1",
+  "packageManager": "pnpm@11.25.0",
   "engines": {
-    "node": ">=24"
+    "node": "^24.20.0"
   },
   "scripts": {
     "dev": "pnpm --filter @transitmapper/web dev",
@@ -41,7 +41,9 @@
     "format:check": "prettier --check .",
     "check:contract": "tsx scripts/check-workspace-contract.ts",
     "check:filenames": "tsx scripts/check-file-names.ts",
-    "check": "tsx scripts/run-checks.ts",
+    "standards:update": "node .lvbt/web-platform/standards/web-platform-cli.ts update",
+    "standards:check": "node .lvbt/web-platform/standards/web-platform-cli.ts check",
+    "check": "pnpm standards:check && tsx scripts/run-checks.ts",
     "check:fix": "pnpm check --fix",
     "check:docs": "tsx scripts/check-docs-links.ts",
     "check:migrations": "tsx scripts/check-migrations-append-only.ts",
@@ -63,9 +65,9 @@
   },
   "devDependencies": {
     "@clack/prompts": "catalog:",
-    "@lvbt/cli": "catalog:",
-    "@lvbt/eslint-config": "catalog:",
-    "@lvbt/prettier-config": "catalog:",
+    "@lvbt/cli": "file:.lvbt/web-platform/packages/cli",
+    "@lvbt/eslint-config": "file:.lvbt/web-platform/packages/eslint-config",
+    "@lvbt/prettier-config": "file:.lvbt/web-platform/packages/prettier-config",
     "@transitmapper/eslint-plugin": "workspace:*",
     "@turbo/gen": "catalog:",
     "@types/node": "catalog:",

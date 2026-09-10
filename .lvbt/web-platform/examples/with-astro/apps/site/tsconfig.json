@@ -1,0 +1,5 @@
+{
+  "extends": "@lvbt/typescript-config/astro.json",
+  "include": [".astro/types.d.ts", "src", "tests", "*.config.ts"],
+  "exclude": ["dist"]
+}

@@ -22,6 +22,7 @@
 import type { KnipConfig } from 'knip';
 
 const config: KnipConfig = {
+  ignore: ['.lvbt/web-platform/**'],
   workspaces: {
     '.': {
       entry: ['scripts/**/*.ts', 'turbo/generators/config.ts'],

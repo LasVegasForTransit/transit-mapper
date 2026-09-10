@@ -16,8 +16,8 @@
     "fflate": "catalog:"
   },
   "devDependencies": {
-    "@lvbt/typescript-config": "catalog:",
-    "@lvbt/vitest-config": "catalog:",
+    "@lvbt/typescript-config": "file:../../.lvbt/web-platform/packages/typescript-config",
+    "@lvbt/vitest-config": "file:../../.lvbt/web-platform/packages/vitest-config",
     "@types/geojson": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "vitest": "catalog:"

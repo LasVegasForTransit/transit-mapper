@@ -1,0 +1,22 @@
+{
+  "name": "lvbt-contributions",
+  "version": "0.2.0",
+  "description": "Create readable LVBT GitHub issues and pull requests through the organization workflow.",
+  "author": {
+    "name": "Las Vegans for Better Transit",
+    "url": "https://lasvegasfortransit.org"
+  },
+  "repository": "https://github.com/LasVegasForTransit/repository-tooling",
+  "license": "MIT",
+  "keywords": ["github", "issues", "pull-requests"],
+  "hooks": "./hooks/codex-hooks.json",
+  "interface": {
+    "displayName": "LVBT Contributions",
+    "shortDescription": "Create readable issues and pull requests",
+    "longDescription": "Guides agents through the LVBT issue and pull request workflow and blocks direct creation that bypasses the shared templates.",
+    "developerName": "Las Vegans for Better Transit",
+    "category": "Developer Tools",
+    "capabilities": ["Write"],
+    "websiteURL": "https://github.com/LasVegasForTransit/repository-tooling"
+  }
+}

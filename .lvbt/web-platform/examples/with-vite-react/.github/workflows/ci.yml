@@ -1,0 +1,47 @@
+# The organization ruleset requires one status check named "Validate" on every
+# pull request. Add steps to this job rather than renaming it.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches-ignore: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The secret scan reads history, not only the proposed tree.
+          fetch-depth: 0
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Check
+        run: pnpm check
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level=high
+
+      - name: Secret scan
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git --redact --no-banner --config /repo/.gitleaks.toml

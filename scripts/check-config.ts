@@ -40,6 +40,7 @@ import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
+const VENDORED_STANDARD_PREFIX = '.lvbt/web-platform/';
 
 /**
  * Extensions that make a root-level file configuration rather than source.
@@ -186,7 +187,9 @@ function judge(path: string): Offence | undefined {
 }
 
 function main(): void {
-  const tracked = git(['ls-files']).split('\n').filter(Boolean);
+  const tracked = git(['ls-files'])
+    .split('\n')
+    .filter((path) => path && !path.startsWith(VENDORED_STANDARD_PREFIX));
 
   // A directory holding a package.json is a module root. The repository root
   // holds one too, so this covers it without a special case.
