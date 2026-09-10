@@ -1,6 +1,6 @@
 {
   "name": "@lvbt/web-platform",
-  "version": "0.3.0-rc.15",
+  "version": "0.2.7",
   "description": "Provider-neutral deployment, provisioning, and validation primitives for LVBT web repositories.",
   "license": "MIT",
   "type": "module",

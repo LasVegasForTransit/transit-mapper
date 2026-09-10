@@ -1,6 +1,6 @@
 {
   "name": "@lvbt/prettier-config",
-  "version": "0.3.0-rc.15",
+  "version": "0.2.7",
   "description": "The Prettier configuration every LVBT repository uses.",
   "license": "MIT",
   "type": "module",

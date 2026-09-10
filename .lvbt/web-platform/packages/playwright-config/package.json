@@ -1,6 +1,6 @@
 {
   "name": "@lvbt/playwright-config",
-  "version": "0.3.0-rc.15",
+  "version": "0.2.7",
   "description": "The Playwright configuration every LVBT repository spreads into its own: end-to-end tests under tests/e2e, desktop and mobile projects, traces on failure.",
   "license": "MIT",
   "type": "module",
