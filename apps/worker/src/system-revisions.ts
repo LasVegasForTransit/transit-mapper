@@ -3,10 +3,10 @@ import {
   type SystemRevision,
 } from '@transitmapper/core/model/system-revision';
 
-type SystemRevisionRepositoryErrorCode =
+export type SystemRevisionRepositoryErrorCode =
   'invalid-revision' | 'revision-conflict' | 'corrupt-revision';
 
-class SystemRevisionRepositoryError extends Error {
+export class SystemRevisionRepositoryError extends Error {
   readonly code: SystemRevisionRepositoryErrorCode;
 
   constructor(code: SystemRevisionRepositoryErrorCode, message: string, options?: ErrorOptions) {
