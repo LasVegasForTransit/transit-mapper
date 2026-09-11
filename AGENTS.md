@@ -53,6 +53,19 @@ says **nothing**, the rule holds only because you follow it.
 | New module and asset filenames use kebab-case unless tooling requires otherwise | One predictable convention keeps imports and generated artifacts easy to find                                            | **nothing**                     |
 | Selection-dependent controls go in the right-hand inspector                     | one dynamic surface, not several                                                                                         | **nothing**                     |
 | The app shell renders before any load, fetch, or check resolves                 | see [waiting is something the app does](docs/product/explanation/design-principles.md)                                   | **nothing**                     |
+| A map surface never shows an empty backdrop where a basemap belongs             | a blank map reads as a broken product, and the bootstrap grid is a loading state rather than a destination               | **nothing** — see below         |
+
+The basemap row is unenforced because no check can see it. The basemap is
+`https://tiles.openfreemap.org/styles/positron`, which needs no key, so a
+blank map is never a missing credential — it is the local bootstrap style
+still on screen after the remote style should have replaced it.
+`initialBaseStyleTiming` in `apps/web/src/map/basemapLoading.ts` already
+encodes the rule: an empty document requests the basemap _before_ content,
+precisely so a new user never sits looking at the grid. Treat a blank map as
+a defect and find which stage stalled — style fetch, sprite, TileJSON, vector
+tile, or paint. One stage worth ruling out first: MapLibre composites only on
+an animation frame, so a map in a hidden or throttled tab paints nothing while
+every network request still succeeds.
 
 The `HTMLRewriter` row is unenforced by choice. The two places the Worker builds markup by interpolation are both
 correct, and telling a safe interpolation from an unsafe one needs value
