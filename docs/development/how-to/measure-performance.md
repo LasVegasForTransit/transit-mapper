@@ -110,7 +110,7 @@ payload. To diagnose one instrumented surface without replacing a baseline:
 
 ```bash
 pnpm perf -- --scenario rtc
-pnpm perf -- --scenario share
+pnpm perf -- --scenario viewer
 pnpm perf -- --scenario embed
 ```
 
@@ -309,8 +309,11 @@ diagnostics rather than interpreting those calls as a mixed visible update.
 The scheduler prepares each scene once with the fixed four-entity chunk size.
 An over-budget unit remains completed private work. The scheduler records the
 overrun and yields before the next unit instead of discarding the scene and
-retrying it. `maxProjectionUnitMs` and `maxProjectionSliceMs` still report the
-overrun, and either value above its budget fails performance review.
+retrying it. `maxProjectionUnitMs` and `maxProjectionSliceMs` report the
+overrun. Neither has a budget constant and neither is in `PERF_METRIC_NAMES`,
+so nothing fails on them automatically — read them yourself when a scene feels
+slow, and treat a rising value as a reason to investigate rather than as a
+gate that already ran.
 
 Absolute startup gates use the five-run p95. Direct-manipulation gates combine
 the raw samples across all five runs, so one bad run cannot hide behind a
