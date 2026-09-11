@@ -10,6 +10,12 @@ import {
 } from '../../../src/network/schema-v17-system/identity';
 import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures.test';
 
+/** These cases serve a document under its own ID, which is what a host does
+ * when storage has no separate identity for it. */
+function identityFor(system: TransitSystem): { contentId: string } {
+  return { contentId: system.id };
+}
+
 function v17System(): TransitSystem {
   const way = aRoad('identity-way', [
     [-115.2, 36.14],
@@ -49,7 +55,7 @@ describe('schema-v17 provider identity', () => {
   });
 
   it('reports modes in Line order rather than catalog order', async () => {
-    const descriptor = await descriptorForSystem(v17System());
+    const descriptor = await descriptorForSystem(v17System(), identityFor(v17System()));
 
     expect(descriptor.content.kind).toBe('transit-system');
     expect(descriptor.map.modeIds.length).toBeGreaterThan(0);
@@ -59,8 +65,11 @@ describe('schema-v17 provider identity', () => {
 
   it('digests schema 17 rather than the version the document migrated from', async () => {
     const system = v17System();
-    const first = await descriptorForSystem(system);
-    const second = await descriptorForSystem({ ...system, name: `${system.name} renamed` });
+    const first = await descriptorForSystem(system, identityFor(system));
+    const second = await descriptorForSystem(
+      { ...system, name: `${system.name} renamed` },
+      identityFor(system),
+    );
 
     if (first.content.kind !== 'transit-system' || second.content.kind !== 'transit-system') {
       throw new Error('The descriptor describes a transit system.');
@@ -95,7 +104,7 @@ describe('schema-v17 provider identity', () => {
       ],
     };
 
-    const descriptor = await descriptorForSystem(system);
+    const descriptor = await descriptorForSystem(system, identityFor(system));
 
     expect(descriptor.sources.map((source) => source.sourceId)).toEqual(['rtc', 'city']);
     expect(descriptor.attributions).toHaveLength(1);
@@ -106,12 +115,15 @@ describe('schema-v17 provider identity', () => {
 
   it('omits a licence a citation does not carry', async () => {
     const base = v17System();
-    const descriptor = await descriptorForSystem({
-      ...base,
-      sourceCitations: [
-        { sourceId: 'unlicensed', name: 'Unlicensed feed', attribution: { text: 'Anon' } },
-      ],
-    });
+    const descriptor = await descriptorForSystem(
+      {
+        ...base,
+        sourceCitations: [
+          { sourceId: 'unlicensed', name: 'Unlicensed feed', attribution: { text: 'Anon' } },
+        ],
+      },
+      identityFor(base),
+    );
 
     expect(descriptor.sources).toHaveLength(1);
     expect(descriptor.licenses).toHaveLength(0);
@@ -119,7 +131,7 @@ describe('schema-v17 provider identity', () => {
   });
 
   it('reports no provenance for a document that cites none', async () => {
-    const descriptor = await descriptorForSystem(v17System());
+    const descriptor = await descriptorForSystem(v17System(), identityFor(v17System()));
 
     expect(descriptor.sources).toHaveLength(0);
     expect(descriptor.attributions).toHaveLength(0);
@@ -130,7 +142,7 @@ describe('schema-v17 provider identity', () => {
     const system = v17System();
 
     expect(() =>
-      validateDescriptionReference(system, {
+      validateDescriptionReference(identityFor(system), {
         kind: 'transit-system',
         id: 'another-system',
         revision: { kind: 'latest' },
@@ -138,26 +150,26 @@ describe('schema-v17 provider identity', () => {
     ).toThrow(SchemaV17SystemProviderError);
   });
 
-  it('refuses a pinned revision until immutable storage exists', () => {
+  it('refuses a pinned revision when it holds only a working document', () => {
     const system = v17System();
 
     expect(() =>
-      validateDescriptionReference(system, {
+      validateDescriptionReference(identityFor(system), {
         kind: 'transit-system',
         id: system.id,
         revision: { kind: 'pinned', systemRevisionId: 'rev-1' },
       }),
-    ).toThrow(/Pinned system revisions are unavailable/);
+    ).toThrow(/cannot answer for a pinned revision/);
   });
 
   it('accepts the working reference it just described', async () => {
-    const descriptor = await descriptorForSystem(v17System());
+    const descriptor = await descriptorForSystem(v17System(), identityFor(v17System()));
 
     expect(() => validateResolvedReference(descriptor, descriptor.content)).not.toThrow();
   });
 
   it('rejects a working reference whose digest has moved on', async () => {
-    const descriptor = await descriptorForSystem(v17System());
+    const descriptor = await descriptorForSystem(v17System(), identityFor(v17System()));
     if (
       descriptor.content.kind !== 'transit-system' ||
       descriptor.content.revision.kind !== 'working'

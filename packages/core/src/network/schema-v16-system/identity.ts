@@ -79,6 +79,7 @@ function modesInLineOrder(system: TransitSystem): string[] {
 
 export async function descriptorForSystem(
   system: TransitSystem,
+  contentId: string,
 ): Promise<ResolvedContentDescriptor> {
   const contentDigest = await semanticDigest({
     encodingVersion: 'transit-system-json-v1',
@@ -89,7 +90,7 @@ export async function descriptorForSystem(
   return {
     content: {
       kind: 'transit-system',
-      id: system.id,
+      id: contentId,
       revision: { kind: 'working', contentDigest },
     },
     map: {
@@ -105,8 +106,8 @@ export async function descriptorForSystem(
   };
 }
 
-export function validateDescriptionReference(system: TransitSystem, reference: ContentRef): void {
-  if (reference.kind !== 'transit-system' || reference.id !== system.id) {
+export function validateDescriptionReference(contentId: string, reference: ContentRef): void {
+  if (reference.kind !== 'transit-system' || reference.id !== contentId) {
     throw new SchemaV16SystemProviderError(
       'content-not-found',
       'The requested content does not match this schema-v16 system.',
@@ -115,7 +116,7 @@ export function validateDescriptionReference(system: TransitSystem, reference: C
   if (reference.revision.kind === 'pinned') {
     throw new SchemaV16SystemProviderError(
       'revision-not-found',
-      'Pinned system revisions are unavailable until immutable revision storage exists.',
+      'A legacy schema-v16 document has no published revisions to pin.',
     );
   }
 }

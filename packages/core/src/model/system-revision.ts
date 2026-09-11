@@ -14,6 +14,23 @@ export interface SystemRevision {
   system: TransitSystem;
 }
 
+/**
+ * What a publication reports back.
+ *
+ * It carries the revision's identity and not the document: the caller already
+ * holds the document it published, and echoing it would double the response
+ * for nothing. The digest is included so a client can verify the snapshot is
+ * the one it meant to publish without fetching it again.
+ */
+export interface PublishedSystemRevisionResponse {
+  systemId: string;
+  systemRevisionId: string;
+  /** The first successful publication time. A republication of identical
+   * content reports the original, because that is the revision that exists. */
+  createdAt: string;
+  contentDigest: ContentDigest;
+}
+
 export interface CreateSystemRevisionInput {
   systemId: string;
   createdAt: string;

@@ -58,7 +58,7 @@ describe('schema-v16 system provider', () => {
         id: system.id,
         revision: { kind: 'pinned', systemRevisionId: 'not-stored-yet' },
       }),
-    ).rejects.toThrow(/pinned system revisions are unavailable/i);
+    ).rejects.toThrow(/no published revisions to pin/i);
     await expect(
       provider.describe({
         kind: 'transit-system',

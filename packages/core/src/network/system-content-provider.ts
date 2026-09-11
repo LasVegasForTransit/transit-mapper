@@ -5,6 +5,11 @@ import type { ContentProvider } from './content-provider';
 import { createSchemaV16SystemProvider } from './schema-v16-system-provider';
 import { createSchemaV17SystemProvider } from './schema-v17-system-provider';
 
+export interface SystemContentProviderOptions {
+  /** The ID callers name this System by. Defaults to the document's own ID. */
+  contentId?: string;
+}
+
 export interface SystemContentProviderResult {
   readonly provider: ContentProvider;
   /** Which document shape actually answers, so a host can say so rather than
@@ -25,13 +30,21 @@ export interface SystemContentProviderResult {
  */
 export function createSystemContentProvider(
   system: SchemaV16TransitSystem,
+  options: SystemContentProviderOptions = {},
 ): SystemContentProviderResult {
+  // Storage may name a System differently from the document inside it, and
+  // both providers must answer under the name a caller actually holds.
+  const contentId = options.contentId ?? system.id;
   const migration = migrateSchemaV16System(system);
   if (migration.kind === 'migrated') {
-    return { provider: createSchemaV17SystemProvider(migration.system), schema: 17, issues: [] };
+    return {
+      provider: createSchemaV17SystemProvider(migration.system, { contentId }),
+      schema: 17,
+      issues: [],
+    };
   }
   return {
-    provider: createSchemaV16SystemProvider(migration.system),
+    provider: createSchemaV16SystemProvider(migration.system, { contentId }),
     schema: 16,
     issues: migration.issues,
   };

@@ -10,26 +10,47 @@ import {
   validateResolvedReference,
   validateSystem,
   type SchemaV17SystemProviderErrorCode,
+  type SystemContentIdentity,
+  type SystemPublication,
 } from './schema-v17-system/identity';
 import { derivedId } from '../model/derived-id';
 
 export { SchemaV17SystemProviderError, type SchemaV17SystemProviderErrorCode };
+export type { SystemContentIdentity, SystemPublication };
 
-export function createSchemaV17SystemProvider(input: TransitSystem): ContentProvider {
+export interface SchemaV17SystemProviderOptions {
+  /** The ID callers name this System by, when storage identifies it
+   * differently from the document. Defaults to the document's own ID. */
+  contentId?: string;
+  /** Set when the document came out of immutable revision storage. Without it
+   * the provider answers as the working document, and refuses a pinned
+   * reference rather than returning editable content under a name that
+   * promises the content cannot change. */
+  publication?: SystemPublication;
+}
+
+export function createSchemaV17SystemProvider(
+  input: TransitSystem,
+  providerOptions: SchemaV17SystemProviderOptions = {},
+): ContentProvider {
   // The provider answers from a document nobody else can edit underneath it: a
   // caller holding the original could mutate an array between describe and
   // resolve, and the digest would then describe content the chunk does not.
   const system = structuredClone(input);
+  const identity: SystemContentIdentity = {
+    contentId: providerOptions.contentId ?? system.id,
+    ...(providerOptions.publication ? { publication: providerOptions.publication } : {}),
+  };
   let descriptorPromise: ReturnType<typeof descriptorForSystem> | undefined;
   const descriptor = () => {
     validateSystem(system);
-    descriptorPromise ??= descriptorForSystem(system);
+    descriptorPromise ??= descriptorForSystem(system, identity);
     return descriptorPromise;
   };
   return {
     async describe(reference, options) {
       abortIfRequested(options);
-      validateDescriptionReference(system, reference);
+      validateDescriptionReference(identity, reference);
       const result = await descriptor();
       abortIfRequested(options);
       return result;
