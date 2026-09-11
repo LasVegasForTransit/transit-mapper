@@ -14,6 +14,8 @@ import { handlePerformanceSample } from './performance-samples';
 import { runScheduledMaintenance } from './performance-maintenance';
 import { createApiV1 } from './api-v1';
 import { getActiveShare, touchExpiry } from './shares';
+import { createTransitApi } from './transit-api';
+import { backfillSystemRevisions, publishSystemDocument } from './system-publication';
 import { anonymousExpiry, randomEditToken, sha256Hex } from './anonymous-resource';
 import {
   deletePublishedViewResource,
@@ -342,6 +344,40 @@ app.delete('/api/systems/:id', async (c) => {
 // identity, failover and response ceilings; keeping those constraints here
 // prevents every browser session from becoming an uncoordinated public-API
 // client.
+app.route(
+  '/api/transit',
+  createTransitApi({
+    async getWorkingSystem(db, id) {
+      const share = await getActiveShare(db, id);
+      return share ? share.system : null;
+    },
+  }),
+);
+
+// Publishing snapshots the stored document. It is an authoring act on someone
+// else's share, so it carries the same edit token as PATCH rather than being
+// open to any reader who can see the map.
+app.post('/api/systems/:id/revisions', async (c) => {
+  const id = c.req.param('id');
+  if (!SHARE_ID_PATTERN.test(id)) return c.json({ error: 'Not found' }, 404);
+
+  const editToken = c.req.header('x-edit-token');
+  if (!editToken) return c.json({ error: 'Missing edit token' }, 403);
+
+  const share = await getActiveShare(c.env.DB, id);
+  if (!share) return c.json({ error: 'Not found' }, 404);
+
+  const tokenHash = await sha256Hex(editToken);
+  const owner = await c.env.DB.prepare(
+    'SELECT id FROM systems WHERE id = ? AND edit_token_hash = ?',
+  )
+    .bind(id, tokenHash)
+    .first<{ id: string }>();
+  if (!owner) return c.json({ error: 'Not authorized to publish this share' }, 403);
+
+  return publishSystemDocument(c.env.DB, id, share.system);
+});
+
 app.get('/api/places', (c) => handlePlaceSearch(c.req.raw, c.env, c.executionCtx));
 app.get('/api/openstreetmap/ways', (c) =>
   handleOpenStreetMapWays(c.req.raw, c.env, c.executionCtx),
@@ -699,6 +735,20 @@ app.all('*', async (c) => {
 
 async function scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
   await runScheduledMaintenance(env.DB);
+  // One bounded batch a night. Systems published before immutable revisions
+  // existed have no snapshot, and a pinned link to one cannot resolve until
+  // this has reached it. Failing here must not lose the maintenance run above,
+  // which is why it comes second and swallows its own error.
+  try {
+    const report = await backfillSystemRevisions(env.DB);
+    if (report.processed.length > 0) {
+      console.log(
+        `Backfilled ${report.processed.length} System revisions; more remaining: ${report.moreRemaining}`,
+      );
+    }
+  } catch (error) {
+    console.error('System revision backfill failed', error);
+  }
 }
 
 export default {
