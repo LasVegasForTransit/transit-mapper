@@ -27,11 +27,10 @@ wording differs:
 
 ## Global constraints
 
-- Work on `codex/transit-content-provider`. The draft pull request is #139.
-- Treat `690ace2b6d73828c6e925e76c46b4a17e8b9fb61` as the implementation
-  baseline. The commit changes the pure Line-scene boundary to use core
-  `RenderPresentation` and adds scene-level short-turn and temporary-plan
-  tests.
+- Pull request #139 merged on September 3, 2026 and `codex/transit-content-provider`
+  is gone. Tasks 1 through 7 are on `main`; branch from there for Task 8 onward.
+- Treat `origin/main` as the implementation baseline. The earlier baseline
+  commit `690ace2b6d73828c6e925e76c46b4a17e8b9fb61` is an ancestor of it.
 - Finish one task, run its focused proof, and commit it before starting the
   next task. Do not bundle cleanup from a later phase into an earlier commit.
 - Preserve the existing map while new content resolves. No task may introduce
@@ -110,13 +109,19 @@ flowchart LR
 
 ## Screenshot capture is blocked here
 
-Both remaining Phase 1 items are screenshots, and neither can be taken in a
-headless environment. Headless Chrome emits roughly three animation frames a
-second and stalls for over six seconds at a time. The capture harness and the
-`tm:first-system-paint` proof both wait on a MapLibre `render` event, which
-only fires on a frame, so capture ends in a settlement timeout at 5.5 s.
-Disabling background throttling and driving a CDP screencast both leave the
-stall unchanged. Take these on a machine with a real compositor.
+Both remaining Phase 1 items are screenshots, and neither has been taken.
+
+The cause is page visibility rather than headlessness. A hidden or backgrounded
+tab runs no animation frames at all — measured at zero callbacks over 2.77
+seconds in an automation browser on an M3 with a real Metal GL context. MapLibre
+composites only on a frame, so the map paints nothing while every network
+request still succeeds: style, sprites, TileJSON and vector tiles all return 200. `waitForSourceBankPaint` then fails with "Activated renderer bank did not
+paint in time", and the `tm:first-system-paint` proof times out the same way.
+
+A screenshot taken in that state still captures DOM chrome, so it shows the
+sidebar and toolbars around an empty map canvas. That is not a rendering
+defect, and it is not evidence of anything either. Take these with the browser
+window actually visible on screen.
 
 ## Task 1: Finish live Line-scene integration
 
@@ -339,18 +344,18 @@ This task completes the missing core part of Phase 3.
 - Keep schema-v16 fallback explicit for documents whose v16 migration returns
   `incompatible`.
 
-- [ ] Project Lines, ServicePlans, Patterns, schedules, stops, stations,
+- [x] Project Lines, ServicePlans, Patterns, schedules, stops, stations,
       Alignments, Ways, provenance, and operational facts into the common
       resolved-network records.
-- [ ] Push bounds, detail, modes, filters, and service time into resolution.
-- [ ] Supply complete same-Line semantic closure for every visible
+- [x] Push bounds, detail, modes, filters, and service time into resolution.
+- [x] Supply complete same-Line semantic closure for every visible
       `(Line, carrier)` seed. Only `visiblePatternLegFragmentIds` authorizes
       paint.
-- [ ] Keep stable logical fragment IDs separate from query-local shard IDs.
-- [ ] Add tests for latest and pinned references, bounded geometry, mode
+- [x] Keep stable logical fragment IDs separate from query-local shard IDs.
+- [x] Add tests for latest and pinned references, bounded geometry, mode
       filtering, same-Line closure, incompatible-v16 fallback, and a pinned
       revision.
-- [ ] Commit with the subject
+- [x] Commit with the subject
       `feat(core): Resolve schema v17 System content`.
 
 ## Task 7: Wire immutable System publication and reads through the Worker
@@ -375,16 +380,16 @@ This task completes Worker integration for Phase 3.
 - `pinned` loads one revision by ID and verifies its `systemId`.
 - API envelopes use the core network API contracts rather than D1 row types.
 
-- [ ] Add publication and read routes for working, latest-published, and pinned
+- [x] Add publication and read routes for working, latest-published, and pinned
       System content.
-- [ ] Connect the v17 content provider from Task 6. Keep the original v16
+- [x] Connect the v17 content provider from Task 6. Keep the original v16
       value readable when migration is incompatible.
-- [ ] Implement the declared backfill-status process without mutating an
+- [x] Implement the declared backfill-status process without mutating an
       already-applied migration.
-- [ ] Prove semantic deduplication, differing semantic content, immutable
+- [x] Prove semantic deduplication, differing semantic content, immutable
       historical reads, current-head movement, pinned resolution, and failed
       migration fallback.
-- [ ] Commit with the subject
+- [x] Commit with the subject
       `feat(worker): Serve immutable System revisions`.
 
 ## Task 8: Create provider-neutral Source contracts and adapters

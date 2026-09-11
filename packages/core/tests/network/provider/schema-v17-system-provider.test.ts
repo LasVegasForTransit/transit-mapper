@@ -48,7 +48,7 @@ describe('schema-v17 system provider', () => {
     expect(descriptor.map.representationIds).toContain('network');
   });
 
-  it('refuses a pinned revision it cannot honour', async () => {
+  it('refuses a pinned revision when it holds only a working document', async () => {
     const system = v17System();
     const provider = createSchemaV17SystemProvider(system);
 
@@ -59,6 +59,88 @@ describe('schema-v17 system provider', () => {
         revision: { kind: 'pinned', systemRevisionId: 'rev-1' },
       }),
     ).rejects.toThrow(SchemaV17SystemProviderError);
+  });
+
+  it('answers for the revision it was given, under the ID storage names it by', async () => {
+    const system = v17System();
+    const provider = createSchemaV17SystemProvider(system, {
+      contentId: 'share-id',
+      publication: { systemRevisionId: 'rev-1' },
+    });
+
+    const descriptor = await provider.describe({
+      kind: 'transit-system',
+      id: 'share-id',
+      revision: { kind: 'pinned', systemRevisionId: 'rev-1' },
+    });
+
+    // The share row and the authored document carry separate IDs, and a
+    // reference names the row.
+    expect(descriptor.content).toMatchObject({
+      kind: 'transit-system',
+      id: 'share-id',
+      revision: { kind: 'published', systemRevisionId: 'rev-1' },
+    });
+    expect(descriptor.content.id).not.toBe(system.id);
+  });
+
+  it('refuses a pinned reference that names a different revision of the same System', async () => {
+    const provider = createSchemaV17SystemProvider(v17System(), {
+      contentId: 'share-id',
+      publication: { systemRevisionId: 'rev-1' },
+    });
+
+    await expect(
+      provider.describe({
+        kind: 'transit-system',
+        id: 'share-id',
+        revision: { kind: 'pinned', systemRevisionId: 'rev-2' },
+      }),
+    ).rejects.toThrow(/different System revision/);
+  });
+
+  it('resolves a published reference into a bounded page', async () => {
+    const provider = createSchemaV17SystemProvider(v17System(), {
+      contentId: 'share-id',
+      publication: { systemRevisionId: 'rev-1' },
+    });
+
+    const result = await provider.resolve(
+      {
+        kind: 'transit-system',
+        id: 'share-id',
+        revision: { kind: 'published', systemRevisionId: 'rev-1' },
+      },
+      query(),
+    );
+
+    expect(result.descriptor.content).toMatchObject({
+      revision: { kind: 'published', systemRevisionId: 'rev-1' },
+    });
+    expect(result.chunks).toHaveLength(1);
+  });
+
+  it('treats a working reference against a published provider as a conflict', async () => {
+    const provider = createSchemaV17SystemProvider(v17System(), {
+      contentId: 'share-id',
+      publication: { systemRevisionId: 'rev-1' },
+    });
+
+    // Not "missing": the provider holds this System and is answering under
+    // one of its two names.
+    await expect(
+      provider.resolve(
+        {
+          kind: 'transit-system',
+          id: 'share-id',
+          revision: {
+            kind: 'working',
+            contentDigest: { algorithm: 'sha-256', value: '0'.repeat(64) },
+          },
+        },
+        query(),
+      ),
+    ).rejects.toThrow(/serves the published revision/);
   });
 
   it('resolves one bounded page whose visible legs authorise paint', async () => {
