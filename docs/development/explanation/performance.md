@@ -161,8 +161,8 @@ two cannot drift.
 ### Current shape
 
 The measurement infrastructure is about 17,000 lines: 5,500 in
-`apps/web/src/perf`, 8,600 across 44 files in `apps/web/scripts/perf`, and
-3,100 in `apps/web/scripts/renderer-capture`, plus 56 test files. Of the 806
+`apps/web/src/perf`, 8,200 across 41 files in `apps/web/scripts/perf`, and
+3,200 in `apps/web/scripts/renderer-capture`, plus 50 test files. Of the 806
 commits since July 2026, 100 touched the suite. A measurement layer
 consuming 12% of commit volume is maintenance the application is not
 getting.
@@ -179,9 +179,10 @@ Three findings say the structure is wrong, not just large:
   `497a549`. The checked baseline still carries that build's observer
   provenance, so the report types accept the legacy value until the baseline
   is re-frozen from a current run.
-- `frameStats.ts` and `report.ts` each implement percentile with different
-  rounding, and the suite has two frame-summary shapes. Two implementations
-  of one statistic eventually disagree in a report nobody can explain.
+- `frameStats.ts` and `report.ts` each implemented percentile with different
+  rounding. Both now call `statistics.ts`, so one rounding rule decides every
+  reported percentile. The suite still carries two frame-summary shapes,
+  `FrameStats` and `PerfMetricSummary`, and they have yet to be reconciled.
 
 ### Target shape
 
@@ -213,8 +214,11 @@ compiling.
 
 ### Rewrites
 
-- One statistics module: a single percentile and summary implementation
-  consumed by the frame meter, the gesture gate, and the report.
+- One statistics module: a single percentile and summary implementation. The
+  percentile is done — the frame meter, the calibration, and the report all
+  call `statistics.ts`. The summary is not: `summarizeMetric` still lives in
+  `report.ts`, which is why `gestureStats.ts` imports the report to summarize
+  a gesture.
 - The capture harness keeps its settlement-boundary waiting and fixtures,
   which are domain knowledge, and sheds the hand-rolled manifest, hash, and
   provenance bookkeeping in favor of a golden-file comparison.
