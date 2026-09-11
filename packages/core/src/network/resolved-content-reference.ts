@@ -1,12 +1,16 @@
 import type { Attribution, ContentDigest, LicenseRef } from '../source/value-types';
 
+/** Which of a System's two identities answered: the mutable document the
+ * author is editing, or one immutable published snapshot of it. */
+export type ResolvedSystemRevision =
+  | { kind: 'working'; contentDigest: ContentDigest }
+  | { kind: 'published'; systemRevisionId: string };
+
 export type ResolvedContentRef =
   | {
       kind: 'transit-system';
       id: string;
-      revision:
-        | { kind: 'working'; contentDigest: ContentDigest }
-        | { kind: 'published'; systemRevisionId: string };
+      revision: ResolvedSystemRevision;
     }
   | {
       kind: 'transit-dataset';

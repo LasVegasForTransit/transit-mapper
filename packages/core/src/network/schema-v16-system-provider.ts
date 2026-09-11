@@ -23,6 +23,9 @@ export { legacyDerivedId, SchemaV16SystemProviderError, type SchemaV16SystemProv
 
 export interface SchemaV16SystemProviderOptions {
   yieldControl?: () => Promise<void>;
+  /** The ID callers name this System by, when storage identifies it
+   * differently from the document. Defaults to the document's own ID. */
+  contentId?: string;
 }
 
 function yieldToHost(): Promise<void> {
@@ -34,16 +37,17 @@ export function createSchemaV16SystemProvider(
   providerOptions: SchemaV16SystemProviderOptions = {},
 ): ContentProvider {
   const system = structuredClone(input);
+  const contentId = providerOptions.contentId ?? system.id;
   let descriptorPromise: ReturnType<typeof descriptorForSystem> | undefined;
   const descriptor = () => {
     validateSystem(system);
-    descriptorPromise ??= descriptorForSystem(system);
+    descriptorPromise ??= descriptorForSystem(system, contentId);
     return descriptorPromise;
   };
   return {
     async describe(reference, options) {
       abortIfRequested(options);
-      validateDescriptionReference(system, reference);
+      validateDescriptionReference(contentId, reference);
       const result = await descriptor();
       abortIfRequested(options);
       return result;

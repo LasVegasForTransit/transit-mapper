@@ -3,7 +3,11 @@ import type { Attribution, LicenseRef } from '../../source/value-types';
 import type { ResolvedSourceStatus } from '../resolved-content-reference';
 import type { TransitSystem } from '../../transit/authored-system';
 import type { ContentRef } from '../content-reference';
-import type { ResolvedContentDescriptor, ResolvedContentRef } from '../resolved-content-reference';
+import type {
+  ResolvedContentDescriptor,
+  ResolvedContentRef,
+  ResolvedSystemRevision,
+} from '../resolved-content-reference';
 
 export type SchemaV17SystemProviderErrorCode =
   | 'content-not-found'
@@ -20,6 +24,34 @@ export class SchemaV17SystemProviderError extends Error {
     this.name = 'SchemaV17SystemProviderError';
     this.code = code;
   }
+}
+
+/**
+ * Names the immutable revision this provider answers for.
+ *
+ * Absent means the provider holds a working document that nobody has
+ * published. The distinction is the whole point of the type: a working
+ * document is identified by what it contains and changes under the author's
+ * hands, while a published revision is identified by a stored ID and cannot
+ * change at all. Serving one under the other's name would let a pinned link
+ * return content that has since moved.
+ */
+export interface SystemPublication {
+  readonly systemRevisionId: string;
+}
+
+/** How storage identifies the System this provider serves. */
+export interface SystemContentIdentity {
+  /**
+   * The ID a caller names this System by.
+   *
+   * Storage may identify a System differently from the document inside it — a
+   * share row and the authored document it holds carry separate IDs, and a
+   * ContentRef names the row. Defaulting this to the document's own ID would
+   * make every reference from a host miss.
+   */
+  readonly contentId: string;
+  readonly publication?: SystemPublication;
 }
 
 interface IdentifiedRecord {
@@ -132,18 +164,26 @@ function citedLicenses(system: TransitSystem): readonly LicenseRef[] {
 
 export async function descriptorForSystem(
   system: TransitSystem,
+  identity: SystemContentIdentity,
 ): Promise<ResolvedContentDescriptor> {
-  const contentDigest = await semanticDigest({
-    encodingVersion: 'transit-system-json-v1',
-    schemaVersion: 17,
-    system,
-  });
+  // A published revision already has a stored identity, so digesting the
+  // document again would cost a full canonical encoding to learn nothing.
+  const revision: ResolvedSystemRevision = identity.publication
+    ? { kind: 'published', systemRevisionId: identity.publication.systemRevisionId }
+    : {
+        kind: 'working',
+        contentDigest: await semanticDigest({
+          encodingVersion: 'transit-system-json-v1',
+          schemaVersion: 17,
+          system,
+        }),
+      };
   const modes = modesInLineOrder(system);
   return {
     content: {
       kind: 'transit-system',
-      id: system.id,
-      revision: { kind: 'working', contentDigest },
+      id: identity.contentId,
+      revision,
     },
     map: {
       defaultRepresentationId: 'network',
@@ -158,20 +198,30 @@ export async function descriptorForSystem(
   };
 }
 
-export function validateDescriptionReference(system: TransitSystem, reference: ContentRef): void {
-  if (reference.kind !== 'transit-system' || reference.id !== system.id) {
+export function validateDescriptionReference(
+  identity: SystemContentIdentity,
+  reference: ContentRef,
+): void {
+  if (reference.kind !== 'transit-system' || reference.id !== identity.contentId) {
     throw new SchemaV17SystemProviderError(
       'content-not-found',
       'The requested content does not match this schema-v17 system.',
     );
   }
-  // A pinned revision names immutable storage this provider does not have: it
-  // holds one in-memory document, so answering would return working content
-  // under a pinned name.
-  if (reference.revision.kind === 'pinned') {
+  // `latest` is resolved to a concrete revision before a provider is built, so
+  // by the time it arrives here the caller has already chosen what it means.
+  if (reference.revision.kind !== 'pinned') return;
+  const publication = identity.publication;
+  if (!publication) {
     throw new SchemaV17SystemProviderError(
       'revision-not-found',
-      'Pinned system revisions are unavailable until immutable revision storage exists.',
+      'This provider holds a working document, so it cannot answer for a pinned revision.',
+    );
+  }
+  if (reference.revision.systemRevisionId !== publication.systemRevisionId) {
+    throw new SchemaV17SystemProviderError(
+      'revision-not-found',
+      'This provider serves a different System revision than the pinned reference names.',
     );
   }
 }
@@ -180,26 +230,44 @@ export function validateResolvedReference(
   descriptor: ResolvedContentDescriptor,
   content: ResolvedContentRef,
 ): void {
-  if (content.kind !== 'transit-system' || content.id !== descriptor.content.id) {
+  if (
+    content.kind !== 'transit-system' ||
+    descriptor.content.kind !== 'transit-system' ||
+    content.id !== descriptor.content.id
+  ) {
     throw new SchemaV17SystemProviderError(
       'content-not-found',
       'The resolved content does not match this schema-v17 system.',
     );
   }
-  if (content.revision.kind !== 'working') {
+  const served = descriptor.content.revision;
+  const requested = content.revision;
+  // Crossing the two identities is a conflict rather than a missing revision:
+  // this provider does hold the System, and it is answering under one name.
+  if (served.kind !== requested.kind) {
     throw new SchemaV17SystemProviderError(
-      'revision-not-found',
-      'Published system revisions are unavailable until immutable revision storage exists.',
+      'revision-conflict',
+      `This provider serves the ${served.kind} revision, and the request names a ${requested.kind} one.`,
     );
   }
   if (
-    descriptor.content.kind !== 'transit-system' ||
-    descriptor.content.revision.kind !== 'working' ||
-    content.revision.contentDigest.value !== descriptor.content.revision.contentDigest.value
+    served.kind === 'working' &&
+    requested.kind === 'working' &&
+    served.contentDigest.value !== requested.contentDigest.value
   ) {
     throw new SchemaV17SystemProviderError(
       'revision-conflict',
       'The working system revision no longer matches this provider.',
+    );
+  }
+  if (
+    served.kind === 'published' &&
+    requested.kind === 'published' &&
+    served.systemRevisionId !== requested.systemRevisionId
+  ) {
+    throw new SchemaV17SystemProviderError(
+      'revision-conflict',
+      'The published system revision no longer matches this provider.',
     );
   }
 }
