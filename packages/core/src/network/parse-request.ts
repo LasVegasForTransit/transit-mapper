@@ -2,6 +2,9 @@ import {
   exactRecord,
   parseArray,
   parseBoolean,
+  parseEnum,
+  parseFiniteNumber,
+  parseSha256,
   parseString,
   parseText,
 } from '../model/schema-v17-system/parse-values';
@@ -27,17 +30,7 @@ import type { ResolvedContentRef } from './resolved-content-reference';
 const DETAIL_BANDS: readonly DetailBand[] = ['overview', 'district', 'street'];
 
 function parseDetailBand(value: unknown, label: string): DetailBand {
-  const text = parseString(value, label);
-  const band = DETAIL_BANDS.find((candidate) => candidate === text);
-  if (!band) throw new Error(`${label} must be one of ${DETAIL_BANDS.join(', ')}.`);
-  return band;
-}
-
-function parseFiniteNumber(value: unknown, label: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new Error(`${label} must be a finite number.`);
-  }
-  return value;
+  return parseEnum(value, label, DETAIL_BANDS);
 }
 
 function parseLongitude(value: unknown, label: string): number {
@@ -202,10 +195,7 @@ export function parseResolvedContentRef(value: unknown, label = 'content'): Reso
   const digest = exactRecord(revision.contentDigest, digestLabel, ['algorithm', 'value']);
   const algorithm = parseString(digest.algorithm, `${digestLabel}.algorithm`);
   if (algorithm !== 'sha-256') throw new Error(`${digestLabel}.algorithm must be sha-256.`);
-  const digestValue = parseString(digest.value, `${digestLabel}.value`);
-  if (!/^[0-9a-f]{64}$/.test(digestValue)) {
-    throw new Error(`${digestLabel}.value must be a lowercase SHA-256 digest.`);
-  }
+  const digestValue = parseSha256(digest.value, `${digestLabel}.value`);
   return {
     kind: 'transit-system',
     id,

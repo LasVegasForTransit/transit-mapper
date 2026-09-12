@@ -117,7 +117,7 @@ describe('parsing a resolved content reference', () => {
           contentDigest: { algorithm: 'sha-256', value: 'A'.repeat(64) },
         },
       }),
-    ).toThrow(/lowercase SHA-256 digest/);
+    ).toThrow(/64 lowercase hexadecimal digits/);
   });
 
   it('refuses a digest algorithm the identity rules do not use', () => {
@@ -238,7 +238,7 @@ describe('parsing a network query', () => {
 
   it('refuses a detail band outside the three the renderer knows', () => {
     expect(() => parseNetworkQuery({ ...validQuery, detailBand: 'city' })).toThrow(
-      /overview, district, street/,
+      /query\.detailBand is invalid/,
     );
   });
 

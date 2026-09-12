@@ -26,10 +26,21 @@ interface SystemRevisionRow {
   system_json: string;
 }
 
-const revisionColumns = `
-  id, system_id, created_at, schema_version,
-  content_digest_algorithm, content_digest_value, system_json
-`;
+const REVISION_COLUMN_NAMES = [
+  'id',
+  'system_id',
+  'created_at',
+  'schema_version',
+  'content_digest_algorithm',
+  'content_digest_value',
+  'system_json',
+] as const;
+
+const revisionColumns = REVISION_COLUMN_NAMES.join(', ');
+
+/** The same columns, qualified for a join. Written from one list so a new
+ * column cannot reach one query and miss the other. */
+const joinedRevisionColumns = REVISION_COLUMN_NAMES.map((name) => `r.${name}`).join(', ');
 
 async function canonicalCandidate(revision: SystemRevision): Promise<SystemRevision> {
   let canonical: SystemRevision;
@@ -177,15 +188,23 @@ export async function insertSystemRevision(
   return storedCandidate(db, candidate, systemJson);
 }
 
+/** One statement rather than a head lookup followed by a row lookup: the
+ * second never branched on the first, and this sits on every read of a
+ * published System. */
 export async function getCurrentSystemRevision(
   db: D1Database,
   systemId: string,
 ): Promise<SystemRevision | null> {
-  const head = await db
-    .prepare('SELECT revision_id FROM system_revision_heads WHERE system_id = ?')
+  const row = await db
+    .prepare(
+      `SELECT ${joinedRevisionColumns}
+       FROM system_revision_heads h
+       JOIN system_revisions r ON r.id = h.revision_id
+       WHERE h.system_id = ?`,
+    )
     .bind(systemId)
-    .first<{ revision_id: string }>();
-  return head ? getSystemRevision(db, head.revision_id) : null;
+    .first<SystemRevisionRow>();
+  return row ? revisionFromRow(row) : null;
 }
 
 export async function publishSystemRevision(
