@@ -15,14 +15,18 @@ interface MeterFixture {
   source: GeoJSONSource;
   originalSetData: GeoJSONSource['setData'];
   originalUpdateData: GeoJSONSource['updateData'];
+  setDataResult: Promise<void>;
+  updateDataResult: Promise<void>;
 }
 
 function createMeterFixture(): MeterFixture {
-  const originalSetData: GeoJSONSource['setData'] = function setData(this: GeoJSONSource) {
-    return this;
+  const setDataResult = Promise.resolve();
+  const updateDataResult = Promise.resolve();
+  const originalSetData: GeoJSONSource['setData'] = function setData() {
+    return setDataResult;
   };
-  const originalUpdateData: GeoJSONSource['updateData'] = function updateData(this: GeoJSONSource) {
-    return this;
+  const originalUpdateData: GeoJSONSource['updateData'] = function updateData() {
+    return updateDataResult;
   };
   const source = {
     setData: originalSetData,
@@ -32,31 +36,32 @@ function createMeterFixture(): MeterFixture {
     getStyle: () => ({ sources: { stations: { type: 'geojson' } } }),
     getSource: () => source,
   } as unknown as MLMap;
-  return { map, source, originalSetData, originalUpdateData };
+  return { map, source, originalSetData, originalUpdateData, setDataResult, updateDataResult };
 }
 
 describe('performance source upload meter', () => {
   it('counts full and differential source mutations once each', () => {
-    const { map, source, originalSetData, originalUpdateData } = createMeterFixture();
+    const { map, source, originalSetData, originalUpdateData, setDataResult, updateDataResult } =
+      createMeterFixture();
     const meter = attachSourceUploadMeter(map);
     const collection = { type: 'FeatureCollection' as const, features: [] };
 
-    expect(source.setData(collection)).toBe(source);
-    expect(source.updateData({ add: [] })).toBe(source);
+    expect(source.setData(collection)).toBe(setDataResult);
+    expect(source.updateData({ add: [] })).toBe(updateDataResult);
     expect(meter.count()).toBe(2);
 
     meter.detach();
     expect(source).toMatchObject({ setData: originalSetData, updateData: originalUpdateData });
-    source.setData(collection);
-    source.updateData({ add: [] });
+    void source.setData(collection);
+    void source.updateData({ add: [] });
     expect(meter.count()).toBe(2);
   });
 
   it('does not overwrite a source method replaced after attachment', () => {
     const { map, source, originalSetData } = createMeterFixture();
     const meter = attachSourceUploadMeter(map);
-    const replacement: GeoJSONSource['updateData'] = function updateData(this: GeoJSONSource) {
-      return this;
+    const replacement: GeoJSONSource['updateData'] = function updateData() {
+      return Promise.resolve();
     };
     source.updateData = replacement;
 
@@ -75,8 +80,8 @@ describe('performance source upload meter', () => {
       .mockReturnValueOnce(23.5);
     const meter = attachSourceUploadMeter(map);
 
-    source.setData({ type: 'FeatureCollection', features: [] });
-    source.updateData({ add: [] });
+    void source.setData({ type: 'FeatureCollection', features: [] });
+    void source.updateData({ add: [] });
 
     const snapshot = Reflect.get(meter, 'snapshot') as
       | (() => readonly {

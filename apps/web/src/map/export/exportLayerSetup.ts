@@ -70,6 +70,6 @@ export function setExportFeatureData(map: MLMap, features: SystemFeatures): void
   };
 
   for (const [sourceId, data] of Object.entries(sourceData)) {
-    map.getSource<GeoJSONSource>(sourceId)?.setData(data);
+    void map.getSource<GeoJSONSource>(sourceId)?.setData(data);
   }
 }

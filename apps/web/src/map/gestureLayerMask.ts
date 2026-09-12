@@ -1,4 +1,4 @@
-import type { FilterSpecification, Map as MLMap } from 'maplibre-gl';
+import type { FilterSpecification, Map as MLMap, VisibilitySpecification } from 'maplibre-gl';
 import type { GestureAffectedEntities } from './gestureProjection';
 import {
   SRC_CONNECTORS,
@@ -39,8 +39,8 @@ export interface GestureLayerMaskMap {
   getLayer: (layerId: string) => unknown;
   getFilter: MLMap['getFilter'];
   setFilter: (layerId: string, filter: FilterSpecification | null) => void;
-  getLayoutProperty: (layerId: string, property: string) => unknown;
-  setLayoutProperty: (layerId: string, property: string, value: unknown) => void;
+  getLayoutProperty(layerId: string, property: 'visibility'): VisibilitySpecification | undefined;
+  setLayoutProperty(layerId: string, property: 'visibility', value: VisibilitySpecification): void;
 }
 
 export interface GestureLayerMaskController {
@@ -124,10 +124,28 @@ export function createGestureLayerMaskController(
 ): GestureLayerMaskController {
   const filterRestores = new Map<string, FilterSpecification | undefined>();
   const appliedFilterKeys = new Map<string, string>();
-  const visibilityRestores = new Map<string, unknown>();
+  const visibilityRestores = new Map<string, VisibilitySpecification | undefined>();
   let appliedKey: string | null = null;
   const resolveLayerIds = (logicalLayerId: string) =>
     options.resolveLayerIds?.(logicalLayerId) ?? [logicalLayerId];
+  // Hands back every layer the previous plan owned and the incoming one does not.
+  const releaseFilters = (retained: ReadonlySet<string>) => {
+    for (const [layerId, filter] of filterRestores) {
+      const layerExists = Boolean(map.getLayer(layerId));
+      if (layerExists && retained.has(layerId)) continue;
+      if (layerExists) map.setFilter(layerId, filter ?? null);
+      filterRestores.delete(layerId);
+      appliedFilterKeys.delete(layerId);
+    }
+  };
+  const releaseVisibility = (retained: ReadonlySet<string>) => {
+    for (const [layerId, visibility] of visibilityRestores) {
+      const layerExists = Boolean(map.getLayer(layerId));
+      if (layerExists && retained.has(layerId)) continue;
+      if (layerExists) map.setLayoutProperty(layerId, 'visibility', visibility ?? 'visible');
+      visibilityRestores.delete(layerId);
+    }
+  };
 
   return {
     apply(affected) {
@@ -139,21 +157,8 @@ export function createGestureLayerMaskController(
         resolveLayerIds(rule.layerId).map((layerId) => ({ ...rule, layerId })),
       );
       const hiddenLayerIds = plan.hiddenLayerIds.flatMap(resolveLayerIds);
-      const nextFilteredLayers = new Set(filterRules.map((rule) => rule.layerId));
-      for (const [layerId, filter] of filterRestores) {
-        const layerExists = Boolean(map.getLayer(layerId));
-        if (layerExists && nextFilteredLayers.has(layerId)) continue;
-        if (layerExists) map.setFilter(layerId, filter ?? null);
-        filterRestores.delete(layerId);
-        appliedFilterKeys.delete(layerId);
-      }
-      const nextHiddenLayers = new Set(hiddenLayerIds);
-      for (const [layerId, visibility] of visibilityRestores) {
-        const layerExists = Boolean(map.getLayer(layerId));
-        if (layerExists && nextHiddenLayers.has(layerId)) continue;
-        if (layerExists) map.setLayoutProperty(layerId, 'visibility', visibility ?? 'visible');
-        visibilityRestores.delete(layerId);
-      }
+      releaseFilters(new Set(filterRules.map((rule) => rule.layerId)));
+      releaseVisibility(new Set(hiddenLayerIds));
 
       for (const rule of filterRules) {
         if (!map.getLayer(rule.layerId)) continue;

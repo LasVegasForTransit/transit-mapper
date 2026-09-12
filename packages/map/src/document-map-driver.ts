@@ -265,8 +265,16 @@ class DocumentMapDriver implements MapDriver {
       hasLayer: (layerId) => Boolean(map.getLayer(layerId)),
       setLayerVisibility: (layerId, visibility) =>
         map.setLayoutProperty(layerId, 'visibility', visibility),
+      // The renderer names paint properties as plain strings because it builds
+      // them from the scene, not from MapLibre's property union. MapLibre 6
+      // keys setPaintProperty on that union, and nothing checks the pair at
+      // compile time on either side of this seam.
       setLayerPaintProperty: (layerId, property, value) =>
-        map.setPaintProperty(layerId, property, value),
+        map.setPaintProperty(
+          layerId,
+          property as Parameters<typeof map.setPaintProperty>[1],
+          value as never,
+        ),
       ensureOverlay,
       now: () => scheduler.now(),
       scheduleFrame: (callback) => scheduler.scheduleFrame(callback),

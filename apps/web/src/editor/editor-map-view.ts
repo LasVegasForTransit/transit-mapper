@@ -1,10 +1,11 @@
-import type { GeoJSONSource, PaddingOptions } from 'maplibre-gl';
+import type { GeoJSONSource } from 'maplibre-gl';
 import type { LngLat } from '@transitmapper/core/model/system';
 import { routePath } from '@transitmapper/core/model/routeGraph';
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { MapViewStore } from '@transitmapper/map';
 import type { DocumentMapSession } from '@transitmapper/map/driver';
 import { SRC_PREVIEW } from '@transitmapper/renderer/layers';
+import type { MapFramePadding } from '../map/map-frame-padding';
 import { selectionFocus } from '../map/selectionFocus';
 import type { EditorStore } from './store';
 
@@ -13,7 +14,7 @@ type EditorMapState = ReturnType<EditorStore['getState']>;
 export interface EditorMapViewOptions {
   readonly store: MapViewStore;
   setRepresentation(id: string): void;
-  framePadding(margin: number): PaddingOptions | number;
+  framePadding(margin: number): MapFramePadding | number;
   renderView(): RenderViewOptions;
 }
 
@@ -31,7 +32,7 @@ export function syncRoutePreview(
       properties: { wrongWay: span.wrongWay === true },
       geometry: { type: 'LineString' as const, coordinates: path },
     }));
-  session.map.getSource<GeoJSONSource>(SRC_PREVIEW)?.setData({
+  void session.map.getSource<GeoJSONSource>(SRC_PREVIEW)?.setData({
     type: 'FeatureCollection',
     features,
   });

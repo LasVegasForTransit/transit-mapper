@@ -121,27 +121,27 @@ class FakeMap {
 }
 
 vi.mock('maplibre-gl', () => ({
-  default: {
-    Map: vi.fn(function FakeMapConstructor(options: MapOptions) {
-      const map = new FakeMap(options);
-      mapHarness.maps.push(map);
-      return map;
-    }),
-    AttributionControl: class FakeAttributionControl {
-      readonly kind = 'attribution';
-    },
-    Marker: class FakeMarker {
-      setLngLat(): this {
-        return this;
-      }
-      addTo(): this {
-        return this;
-      }
-      getElement(): HTMLElement {
-        return document.createElement('span');
-      }
-      remove(): void {}
-    },
+  // mapTheme configures the worker URL on import, so every stub needs it.
+  setWorkerUrl: () => undefined,
+  Map: vi.fn(function FakeMapConstructor(options: MapOptions) {
+    const map = new FakeMap(options);
+    mapHarness.maps.push(map);
+    return map;
+  }),
+  AttributionControl: class FakeAttributionControl {
+    readonly kind = 'attribution';
+  },
+  Marker: class FakeMarker {
+    setLngLat(): this {
+      return this;
+    }
+    addTo(): this {
+      return this;
+    }
+    getElement(): HTMLElement {
+      return document.createElement('span');
+    }
+    remove(): void {}
   },
 }));
 

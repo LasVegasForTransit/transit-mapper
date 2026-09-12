@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { GeoJSONSource, PaddingOptions, StyleSpecification } from 'maplibre-gl';
+import type { GeoJSONSource, StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   createMapRuntime,
@@ -39,6 +39,7 @@ import { PointerBadge } from './PointerBadge';
 import { getMap, setMap } from './mapRef';
 import { basemapStyleForScheme, localBlankStyleForScheme } from './mapTheme';
 import type { EditorMapDriverPorts, EditorMapStyleBridge } from './editor-map-ports';
+import type { MapFramePadding } from './map-frame-padding';
 import { createEditorMapStartupScheduler } from './editor-map-startup';
 import { initialBaseStyleTiming } from './basemapLoading';
 
@@ -114,7 +115,7 @@ export interface EditorMapSurfaceProps {
   vehiclePaintingSuspended?: boolean;
 }
 
-function chromePadding(container: HTMLElement): PaddingOptions {
+function chromePadding(container: HTMLElement): MapFramePadding {
   const style = getComputedStyle(container);
   const side = (name: string) => Number.parseFloat(style.getPropertyValue(name)) || 0;
   return {
@@ -125,19 +126,14 @@ function chromePadding(container: HTMLElement): PaddingOptions {
   };
 }
 
-function framePadding(container: HTMLElement | null, margin: number): PaddingOptions | number {
+function framePadding(container: HTMLElement | null, margin: number): MapFramePadding | number {
   if (!container) return margin;
-  const chrome = chromePadding(container);
-  return {
-    top: chrome.top + margin,
-    bottom: chrome.bottom + margin,
-    left: chrome.left + margin,
-    right: chrome.right + margin,
-  };
+  const { top, bottom, left, right } = chromePadding(container);
+  return { top: top + margin, bottom: bottom + margin, left: left + margin, right: right + margin };
 }
 
 function clearActionAnchor(): void {
-  getMap()
+  void getMap()
     ?.getSource<GeoJSONSource>(SRC_ACTION_ANCHOR)
     ?.setData({ type: 'FeatureCollection', features: [] });
 }

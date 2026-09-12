@@ -1,8 +1,10 @@
-import maplibregl, {
+import {
+  AttributionControl,
+  NavigationControl,
+  Map as MapLibreMap,
   type AttributionControlOptions,
   type ControlPosition,
   type IControl,
-  type Map as MapLibreMap,
   type MapOptions,
   type NavigationControlOptions,
   type PaddingOptions,
@@ -116,7 +118,7 @@ function camerasEqual(
 function createOwnedMap<ThemeId extends string>(options: MapRuntimeOptions<ThemeId>): MapLibreMap {
   const initialCamera = options.viewStore.getSnapshot().camera;
   const { disableTouchRotation = true, ...interaction } = options.interaction;
-  const createMap = options.createMap ?? ((mapOptions) => new maplibregl.Map(mapOptions));
+  const createMap = options.createMap ?? ((mapOptions) => new MapLibreMap(mapOptions));
   const map = createMap({
     ...options.mapOptions,
     ...interaction,
@@ -139,14 +141,14 @@ function addOwnedControls<ThemeId extends string>(
     const { position, ...controlOptions } = navigation;
     const createNavigationControl =
       options.createNavigationControl ??
-      ((currentOptions) => new maplibregl.NavigationControl(currentOptions));
+      ((currentOptions) => new NavigationControl(currentOptions));
     map.addControl(createNavigationControl(controlOptions), position);
   }
   if (attribution !== false && attribution !== undefined) {
     const { position, ...controlOptions } = attribution;
     const createAttributionControl =
       options.createAttributionControl ??
-      ((currentOptions) => new maplibregl.AttributionControl(currentOptions));
+      ((currentOptions) => new AttributionControl(currentOptions));
     map.addControl(createAttributionControl(controlOptions), position);
   }
 }

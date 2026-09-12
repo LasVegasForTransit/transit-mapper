@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FilterSpecification } from 'maplibre-gl';
+import type { FilterSpecification, VisibilitySpecification } from 'maplibre-gl';
 import {
   LYR_STATIONS,
   LYR_SERVICES_SOLID,
@@ -33,9 +33,9 @@ function createStatefulMaskMap(): StatefulMaskMapFixture {
     [LYR_WAYS_SOLID, originalWayFilter],
     [LYR_STATIONS, originalStopFilter],
   ]);
-  const visibility = new Map<string, unknown>([[LYR_WAY_LABELS, 'visible']]);
+  const visibility = new Map<string, VisibilitySpecification>([[LYR_WAY_LABELS, 'visible']]);
   const filterCalls: Array<{ layerId: string; filter: FilterSpecification | null }> = [];
-  const visibilityCalls: Array<{ layerId: string; value: unknown }> = [];
+  const visibilityCalls: Array<{ layerId: string; value: VisibilitySpecification }> = [];
   const map: GestureLayerMaskMap = {
     getLayer: (layerId) => (visibleLayers.has(layerId) ? {} : undefined),
     getFilter: (layerId) => filters.get(layerId),
@@ -105,8 +105,8 @@ describe('gesture settled-layer mask', () => {
       setFilter: (layerId: string, filter: unknown) => {
         filterCalls.push({ layerId, filter });
       },
-      getLayoutProperty: () => 'visible',
-      setLayoutProperty: (layerId: string, _property: string, visibility: unknown) => {
+      getLayoutProperty: () => 'visible' as const,
+      setLayoutProperty: (layerId: string, _property: 'visibility', visibility: unknown) => {
         visibilityCalls.push({ layerId, visibility });
       },
     };

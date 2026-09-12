@@ -1,5 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, type Ref } from 'react';
-import maplibregl, { type Map as MLMap } from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import type { Map as MLMap } from 'maplibre-gl';
 import type { ImportBBox } from '@transitmapper/core/model/import';
 import { normalizeImportBounds } from '@transitmapper/core/model/import-area';
 import type { LngLat } from '@transitmapper/core/model/system';
@@ -49,7 +50,7 @@ function setMarker(map: MLMap, marker: { current: maplibregl.Marker | null }, ce
 
 function waitForMove(map: MLMap, move: () => void): Promise<void> {
   return new Promise((resolve) => {
-    map.once('moveend', resolve);
+    map.once('moveend', () => resolve());
     move();
   });
 }

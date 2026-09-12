@@ -141,7 +141,10 @@ function installSnapshotSources(map: MapLibreMap, features: SystemFeatures): voi
     const data = sourceData(features, sourceId);
     const source: GeoJSONSource | undefined = map.getSource(sourceId);
     if (source) {
-      source.setData(data);
+      // MapLibre 6 resolves this once the worker has ingested the data. The
+      // snapshot consumer waits on the map's own paint events instead, so
+      // holding the promise here would only duplicate that wait.
+      void source.setData(data);
       continue;
     }
     const heavy = sourceId === 'tm-ways' || sourceId === 'tm-services';

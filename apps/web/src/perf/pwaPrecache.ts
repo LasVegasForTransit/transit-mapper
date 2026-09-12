@@ -73,6 +73,10 @@ const EMBED_DOCUMENT_FILE = 'embed.html';
 const OFFLINE_EDITOR_WORKER_PREFIXES = [
   'assets/diagram-layout-worker-entry-',
   'assets/feature-projection-worker-entry-',
+  // MapLibre parses every tile in this worker. Without it the basemap paints
+  // nothing, so an installed editor that skipped it would open offline to a
+  // blank map. See src/map/maplibre-worker.ts for how its URL is resolved.
+  'assets/maplibre-gl-worker-',
   'assets/storage-deserializer-worker-',
 ] as const;
 

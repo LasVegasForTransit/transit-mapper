@@ -261,8 +261,8 @@ function attachEditorInteractions(context: EditorAttachmentContext): void {
       isNetworkMode: () => options.view.store.getSnapshot().representationId === 'network',
       openContextMenu: (...args) => options.interactions.openContextMenu(...args),
       closeContextMenu: () => options.interactions.closeContextMenu(),
-      setActionAnchor: (at) =>
-        session.map.getSource<GeoJSONSource>(SRC_ACTION_ANCHOR)?.setData(
+      setActionAnchor: (at) => {
+        void session.map.getSource<GeoJSONSource>(SRC_ACTION_ANCHOR)?.setData(
           at
             ? {
                 type: 'FeatureCollection',
@@ -271,7 +271,8 @@ function attachEditorInteractions(context: EditorAttachmentContext): void {
                 ],
               }
             : empty,
-        ),
+        );
+      },
       onDirectManipulationStart: () => {
         state.directManipulationActive = true;
         callEditorMapSafely(context, () => options.simulation.notify());

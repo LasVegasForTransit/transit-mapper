@@ -1,4 +1,5 @@
-import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import type { GeoJSONSource, Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { INITIAL_STYLE_FALLBACK_TIMEOUT_MS } from '@transitmapper/map/base-style';
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
@@ -84,7 +85,7 @@ function createMap(
   // throwing. Without this an embed that half-renders does so in total silence,
   // which is the worst possible failure mode for something running inside
   // someone else's page.
-  map.on('error', (event) => console.error('[transitmapper embed]', event.error ?? event));
+  map.on('error', (event) => console.error('[transitmapper embed]', event.error));
   return map;
 }
 
@@ -186,7 +187,7 @@ export function installEmbedSceneSources(map: MLMap, scene: SystemFeatures): voi
     const data = dataBySource[sourceId];
     const source: GeoJSONSource | undefined = map.getSource(sourceId);
     if (source) {
-      source.setData(data);
+      void source.setData(data);
       continue;
     }
     const heavy = sourceId === SRC_WAYS || sourceId === SRC_SERVICES;
