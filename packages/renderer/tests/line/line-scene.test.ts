@@ -172,7 +172,7 @@ describe('Line scene', () => {
     expect(stripes.map((feature) => stringProperty(feature, 'lineId'))).toEqual(['bus-line']);
   });
 
-  it('renders one casing and ordered Line stripes for a shared corridor', async () => {
+  it('casings each Line separately and orders the stripes on a shared corridor', async () => {
     const way = aRoad('shared-way', [
       [-115.2, 36.14],
       [-115.16, 36.14],
@@ -192,8 +192,22 @@ describe('Line scene', () => {
     const casings = features.filter((feature) => feature.properties?.routeRole === 'casing');
     const stripes = features.filter((feature) => feature.properties?.routeRole === 'stripe');
 
-    expect(casings).toHaveLength(1);
-    expect(casings[0]?.properties).not.toHaveProperty('lineId');
+    // One casing per Line, not one behind the corridor: a Line's own casing is
+    // what closes its stripe along the sides and around both caps.
+    expect(casings).toHaveLength(stripes.length);
+    // A casing still carries no Line identity, so selecting a Line lights the
+    // stripe rather than the outline shared with its neighbours.
+    expect(casings.every((feature) => !('lineId' in (feature.properties ?? {})))).toBe(true);
+    // Each casing sits on its stripe, so the outline tracks the Line it closes.
+    // Compared as sets: the scene orders features canonically, and a casing
+    // carries no Line identity to sort alongside the stripe it belongs to.
+    const placement = (features: typeof casings) =>
+      features
+        .map(
+          (feature) => `${String(feature.properties?.offset)}@${String(feature.properties?.width)}`,
+        )
+        .sort();
+    expect(placement(casings)).toEqual(placement(stripes));
     expect(stripes.map((feature) => stringProperty(feature, 'lineId'))).toEqual([
       'first-line',
       'second-line',

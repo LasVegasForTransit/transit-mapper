@@ -71,7 +71,7 @@ describe('renderer LOD acceptance static surfaces', () => {
     expect(markup).not.toContain('paint-fragment');
   });
 
-  it('shares one casing between the Lines bundled on a corridor', async () => {
+  it('casings every Line bundled on a corridor, one apiece', async () => {
     const markup = await rendererLodAcceptanceSvgMarkup(
       createRendererFixture('shared-service-trunk'),
       SHARED_TRUNK_REQUEST,
@@ -80,8 +80,10 @@ describe('renderer LOD acceptance static surfaces', () => {
     const ids = routeFeatureIds(markup);
     const casings = ids.filter((id) => id.includes('line-casing')).length;
     const stripes = ids.filter((id) => id.includes('line-stripe')).length;
-    expect(casings).toBeGreaterThan(0);
-    expect(casings).toBeLessThan(stripes);
+    // A casing closes one Line along its sides and around both caps, so a
+    // corridor carries one per Line rather than one behind the bundle.
+    expect(stripes).toBeGreaterThan(0);
+    expect(casings).toBe(stripes);
   });
 
   it('leaves an infrastructure view on its per-Service geometry', async () => {

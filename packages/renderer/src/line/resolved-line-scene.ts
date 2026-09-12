@@ -68,6 +68,11 @@ function geometryKey(fragment: VisibleLineBundleFragment): string {
   return forward < reverse ? forward : reverse;
 }
 
+/** How far a casing extends past its stripe on each side. Matches the 2.5 px
+ * that `SERVICE_CASING_WIDTH_EXPR` adds to a feature's width, so two
+ * neighbouring Lines are separated by exactly their two casings meeting. */
+const CASING_WIDTH_PX = 2.5;
+
 function corridorKey(fragment: VisibleLineBundleFragment): string {
   return [
     fragment.lineBundleId,
@@ -140,24 +145,37 @@ function sceneFeatures(
         stripeByLineId.set(fragment.lineId, stripe);
     }
     const stripes = [...stripeByLineId.values()].sort(compareStripes);
-    const casing = stripes[0];
-    const totalWidth = stripes.reduce((sum, stripe) => sum + stripe.width, 0) + stripes.length - 1;
-    features.push({
-      type: 'Feature',
-      id: renderFeatureId(sourceId, 'line-casing', [casing.fragment.id]),
-      properties: {
-        routeRole: 'casing',
-        width: totalWidth,
-        offset: 0,
-        renderTier: 'overview',
-        renderOrder: -1,
-        tierOpacity: 1,
-      },
-      geometry: casing.fragment.geometry,
-    });
+    // Each Line is cased on its own rather than the corridor being cased as a
+    // whole. One casing behind the band outlined the band: the outer edge and
+    // the gaps between Lines read, but a Line's ends did not, because a round
+    // cap carries the colour past wherever that single casing stopped. Cased
+    // per Line, every stripe is closed by the casing colour along its sides
+    // and around both caps, and the casing's own cap is half one Line's width
+    // rather than half the whole corridor's.
+    //
+    // Casings are laid out on the same offsets as the stripes and are wider,
+    // so neighbours overlap. They paint opaque for that reason — two
+    // translucent casings crossing would band the overlap darker than the
+    // rest of the outline.
+    const casingGap = CASING_WIDTH_PX;
+    const totalWidth =
+      stripes.reduce((sum, stripe) => sum + stripe.width, 0) + (stripes.length - 1) * casingGap;
     let offset = -totalWidth / 2;
     for (const [stripeIndex, stripe] of stripes.entries()) {
       offset += stripe.width / 2;
+      features.push({
+        type: 'Feature',
+        id: renderFeatureId(sourceId, 'line-casing', [stripe.fragment.id]),
+        properties: {
+          routeRole: 'casing',
+          width: stripe.width,
+          offset,
+          renderTier: 'overview',
+          renderOrder: -1,
+          tierOpacity: 1,
+        },
+        geometry: stripe.fragment.geometry,
+      });
       const featureId = renderFeatureId(sourceId, 'line-stripe', [stripe.fragment.id]);
       features.push({
         type: 'Feature',
@@ -178,7 +196,7 @@ function sceneFeatures(
         domainIdentity: renderDomainIdentity('line', stripe.fragment.lineId),
         renderFeatureIds: [featureId],
       });
-      offset += stripe.width / 2 + 1;
+      offset += stripe.width / 2 + casingGap;
     }
   }
   return { collection: { type: 'FeatureCollection', features }, bindings };

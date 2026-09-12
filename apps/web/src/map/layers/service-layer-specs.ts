@@ -213,19 +213,19 @@ export function lineSceneLayerSpecs(theme: MapTheme): LayerSpecification[] {
       source: SRC_SERVICES,
       filter: ['==', ['get', 'routeRole'], 'casing'],
       layout: {
-        // Butt, alone among these layers. A casing spans every stripe on the
-        // corridor, so its width is the whole band and a round cap put a dome
-        // of half that past the end — far wider than any one Line. The stripes
-        // it backs keep their own round ends, which now read as the Lines
-        // finishing rather than as the corridor bulging.
-        'line-cap': 'butt',
+        // Round: a casing belongs to one Line, not to the corridor, so its cap
+        // is half that Line's width plus the casing. It closes the stripe's
+        // own cap instead of doming over the whole band.
+        'line-cap': 'round',
         'line-join': 'round',
         'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
       },
       paint: {
         'line-color': theme.routeCasing,
         'line-width': SERVICE_CASING_WIDTH_EXPR as never,
-        'line-opacity': tierOpacityExpr(0.72) as never,
+        // Opaque: neighbouring Lines' casings meet, and two translucent ones
+        // overlapping would band the seam darker than the outline around it.
+        'line-opacity': tierOpacityExpr(1) as never,
         'line-offset': ['get', 'offset'],
       },
     },
