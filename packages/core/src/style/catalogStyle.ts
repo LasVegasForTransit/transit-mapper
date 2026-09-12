@@ -12,6 +12,7 @@
 // styling the editor uses. It stays a separate style/ module for the same
 // reason it always was: rendering concerns never belong in model/.
 import type { Grade } from '../model/catalog';
+import type { FacilityTypeId, LaneKindId, ModeId, WayTypeId } from '../model/catalog';
 export { LINE_COLORS } from '../model/catalog';
 
 /**
@@ -19,11 +20,9 @@ export { LINE_COLORS } from '../model/catalog';
  * does not belong in `model/`. That separation costs a second list, and a
  * second list drifts: `WAY_TYPES.pedestrian` had no entry in
  * `WAY_TYPE_RENDER`, so every pedestrian path drew itself as a grey heavy-rail
- * track. `tests/style/catalog-paint.test.ts` fails when a catalog gains an entry
- * these tables do not cover, which is the only thing keeping the two lists
- * honest. A compile-time guarantee would be better and is possible — see the
- * note in that test — but it needs `model/catalog.ts` to stop erasing its own
- * key types, and that file is 243 lines over its limit and may not grow.
+ * track. Each table is keyed by its catalog's ID type, so a catalog entry with
+ * no paint — or paint for an entry no catalog defines — fails to compile
+ * here, before anything can render.
  *
  * The lookups below therefore only reach their fallback for an ID no catalog
  * knows — a document written by a newer build. Such a thing renders as
@@ -39,7 +38,7 @@ export interface RenderStyle {
 }
 
 // ---- Way-type infrastructure render -----------------------------------------
-export const WAY_TYPE_RENDER: Record<string, RenderStyle> = {
+export const WAY_TYPE_RENDER: Record<WayTypeId, RenderStyle> = {
   heavyRail: { color: '#7b8188', width: 3 },
   lightRail: { color: '#9aa0a6', width: 2 },
   monorail: { color: '#a89bd6', width: 2 },
@@ -95,9 +94,15 @@ export const UNKNOWN_FACILITY_RENDER: FacilityRenderStyle = {
   icon: 'square',
 };
 
+/* Each lookup below takes whatever ID a stored document carries, which is a
+ * plain string and may match nothing. The tables stay keyed by catalog ID so a
+ * missing entry cannot compile; these views are how a runtime miss stays
+ * expressible. */
+const wayTypePaint: Record<string, RenderStyle | undefined> = WAY_TYPE_RENDER;
+
 /** Effective infrastructure render for a way: type base overridden by its class. */
 export function wayRender(typeId: string, classId?: string): RenderStyle {
-  const base = WAY_TYPE_RENDER[typeId] ?? UNKNOWN_WAY_RENDER;
+  const base = wayTypePaint[typeId] ?? UNKNOWN_WAY_RENDER;
   const override = classId ? WAY_CLASS_RENDER[typeId]?.[classId] : undefined;
   return override ? { ...base, ...override } : base;
 }
@@ -116,7 +121,7 @@ export interface LaneRenderStyle {
   surface: boolean;
 }
 
-export const LANE_KIND_RENDER: Record<string, LaneRenderStyle> = {
+export const LANE_KIND_RENDER: Record<LaneKindId, LaneRenderStyle> = {
   drive: { color: '#787c83', surface: true },
   bus: { color: '#a3543f', surface: true }, // red-painted transit lane
   turnPocket: { color: '#82868d', surface: true },
@@ -130,8 +135,10 @@ export const LANE_KIND_RENDER: Record<string, LaneRenderStyle> = {
   channel: { color: '#9cc7e0', surface: false },
 };
 
+const laneKindPaint: Record<string, LaneRenderStyle | undefined> = LANE_KIND_RENDER;
+
 export function laneRender(kindId: string): LaneRenderStyle {
-  return LANE_KIND_RENDER[kindId] ?? UNKNOWN_LANE_RENDER;
+  return laneKindPaint[kindId] ?? UNKNOWN_LANE_RENDER;
 }
 
 // Painted road markings — real-world semantics (white lane lines, yellow
@@ -141,7 +148,7 @@ export const CENTER_LINE_COLOR = '#d9a62e';
 export const LANE_ARROW_COLOR = '#f4f2ec';
 
 // ---- Mode (service) render --------------------------------------------------
-export const MODE_RENDER: Record<string, RenderStyle> = {
+export const MODE_RENDER: Record<ModeId, RenderStyle> = {
   subway: { color: '#c0392b', width: 5 },
   commuterRail: { color: '#8e44ad', width: 4 },
   lightRail: { color: '#e4572e', width: 4 },
@@ -153,8 +160,10 @@ export const MODE_RENDER: Record<string, RenderStyle> = {
   ferry: { color: '#0891b2', width: 4 },
 };
 
+const modePaint: Record<string, RenderStyle | undefined> = MODE_RENDER;
+
 export function modeRender(modeId: string): RenderStyle {
-  return MODE_RENDER[modeId] ?? UNKNOWN_MODE_RENDER;
+  return modePaint[modeId] ?? UNKNOWN_MODE_RENDER;
 }
 
 // ---- Vehicle paint (Infrastructure view) ------------------------------------
@@ -185,7 +194,7 @@ export interface FacilityRenderStyle {
   icon: string;
 }
 
-export const FACILITY_RENDER: Record<string, FacilityRenderStyle> = {
+export const FACILITY_RENDER: Record<FacilityTypeId, FacilityRenderStyle> = {
   entrance: { color: '#191a17', radius: 9, icon: 'door' },
   bikeDock: { color: '#0f9d58', radius: 9, icon: 'bike' },
   elevator: { color: '#5b5c57', radius: 9, icon: 'elevator' },
@@ -196,8 +205,10 @@ export const FACILITY_RENDER: Record<string, FacilityRenderStyle> = {
   platform: { color: '#3b6ea5', radius: 9, icon: 'platform' },
 };
 
+const facilityPaint: Record<string, FacilityRenderStyle | undefined> = FACILITY_RENDER;
+
 export function facilityRender(typeId: string): FacilityRenderStyle {
-  return FACILITY_RENDER[typeId] ?? UNKNOWN_FACILITY_RENDER;
+  return facilityPaint[typeId] ?? UNKNOWN_FACILITY_RENDER;
 }
 
 // ---- Physical footprints / platforms -------------------------------------------

@@ -15,11 +15,6 @@
       "count": 2
     }
   },
-  "src/model/catalog.ts": {
-    "max-lines": {
-      "count": 1
-    }
-  },
   "src/model/components.ts": {
     "@typescript-eslint/no-dynamic-delete": {
       "count": 1

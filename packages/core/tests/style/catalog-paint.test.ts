@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { FACILITY_TYPES, LANE_KINDS, MODES, WAY_TYPES } from '../../src/model/catalog';
 import {
   FACILITY_RENDER,
   LANE_KIND_RENDER,
@@ -19,44 +18,17 @@ import {
 
 /**
  * Rendering does not belong in `model/`, so paint lives in a second table
- * keyed by the same catalog IDs, and these cases are the only thing keeping
- * the two lists in step.
+ * keyed by the same catalog IDs. Whether the two lists agree is no longer a
+ * question a test answers: each table is typed `Record<WayTypeId, …>` and
+ * friends, so a catalog entry with no paint fails to compile, and so does
+ * paint for an entry no catalog defines.
  *
- * A compile-time guarantee would be strictly better, and it works: annotate
- * the catalogs `satisfies Record<string, T>` instead of `: Record<string, T>`,
- * export `keyof typeof`, and key each paint table by that. Verified — a
- * missing entry and an orphan entry both fail `tsc`. It is not done because
- * `model/catalog.ts` is 643 lines against a 400-line limit and carries a
- * `max-lines` suppression, so the debt ratchet refuses to let it grow by the
- * dozen lines this needs. Splitting that catalog into per-family modules is
- * the change that unblocks it.
- *
- * What only these cases check is the behaviour that made the drift invisible.
- * `pedestrian` was in `WAY_TYPES` with no entry in `WAY_TYPE_RENDER`, and
- * every pedestrian path drew as a grey heavy-rail track, because the lookup
- * fell back to `heavyRail` instead of saying it did not know.
+ * What only a test can check is the behaviour that made the drift invisible
+ * for as long as it lasted. `pedestrian` was in `WAY_TYPES` with no entry in
+ * `WAY_TYPE_RENDER`, and every pedestrian path drew as a grey heavy-rail
+ * track, because the lookup fell back to `heavyRail` rather than saying it
+ * did not know the ID.
  */
-const families = [
-  ['way type', WAY_TYPES, WAY_TYPE_RENDER],
-  ['lane kind', LANE_KINDS, LANE_KIND_RENDER],
-  ['mode', MODES, MODE_RENDER],
-  ['facility type', FACILITY_TYPES, FACILITY_RENDER],
-] as const;
-
-describe('every catalog entry has paint', () => {
-  for (const [label, catalog, paint] of families) {
-    it(`paints every ${label} the catalog defines`, () => {
-      const missing = Object.keys(catalog).filter((id) => !(id in paint));
-      expect(missing).toEqual([]);
-    });
-
-    it(`paints no ${label} the catalog does not define`, () => {
-      const orphans = Object.keys(paint).filter((id) => !(id in catalog));
-      expect(orphans).toEqual([]);
-    });
-  }
-});
-
 describe('an unknown ID renders as unknown', () => {
   // A document from a newer build can name something this catalog has never
   // heard of. Borrowing another entry's paint would state something false
