@@ -21,7 +21,7 @@ export default defineConfig({
         // honest starting point: a floor set above the floor fails every branch
         // until somebody deletes it.
         statements: 85.11,
-        branches: 72.59,
+        branches: 72.63,
         functions: 90.8,
         lines: 89.15,
         // Raises a threshold that has been beaten and rewrites this file, so

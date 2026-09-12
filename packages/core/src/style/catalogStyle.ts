@@ -13,6 +13,21 @@
 // reason it always was: rendering concerns never belong in model/.
 import type { Grade } from '../model/catalog';
 export { LINE_COLORS } from '../model/catalog';
+
+/**
+ * Paint tables are keyed by catalog IDs but declared here, because rendering
+ * does not belong in `model/`. That separation costs a second list, and a
+ * second list drifts: `WAY_TYPES.pedestrian` had no entry in
+ * `WAY_TYPE_RENDER`, so every pedestrian path drew itself as a grey heavy-rail
+ * track. `tests/style/catalog-paint.test.ts` now fails when a catalog gains an
+ * entry these tables do not cover, which is the only thing keeping the two
+ * lists honest.
+ *
+ * The lookups below therefore only reach their fallback for an ID no catalog
+ * knows — a document written by a newer build. Such a thing renders as
+ * explicitly unknown rather than borrowing another entry's paint, because a
+ * ferry silently drawn as a bus is worse than one drawn as a question mark.
+ */
 export interface RenderStyle {
   color: string;
   /** Base line width in px at the reference zoom. */
@@ -30,10 +45,16 @@ export const WAY_TYPE_RENDER: Record<string, RenderStyle> = {
   bike: { color: '#0f9d58', width: 3 },
   aerial: { color: '#a78bfa', width: 2, dashed: true },
   water: { color: '#38bdf8', width: 2, dashed: true },
+  // A footway reads as a path, not a corridor: thin, dashed, and lighter than
+  // the bike path it often runs beside.
+  pedestrian: { color: '#b9b3a4', width: 1.5, dashed: true },
 };
 
-// Facility-class overrides, layered over the way type's base render.
-export const WAY_CLASS_RENDER: Record<string, Record<string, Partial<RenderStyle>>> = {
+// Facility-class overrides, layered over the way type's base render. Partial
+// on purpose: only road and bike subdivide into classes, so a lookup for any
+// other way type finds nothing, and the type says so rather than making the
+// caller's optional chain look redundant.
+export const WAY_CLASS_RENDER: Record<string, Record<string, Partial<RenderStyle>> | undefined> = {
   road: {
     transitway: { color: '#6b7280', width: 5 },
     arterial: { color: '#9ca3af', width: 4 },
@@ -55,14 +76,25 @@ export const WAY_CLASS_RENDER: Record<string, Record<string, Partial<RenderStyle
  * on (show it); a rail track *is* the colored service line, so a grey line
  * underneath would be redundant (don't show it).
  */
-export const WAY_TYPE_SHOW_WHEN_SERVED: Record<string, boolean> = {
+export const WAY_TYPE_SHOW_WHEN_SERVED: Record<string, boolean | undefined> = {
   road: true,
   bike: true,
 };
 
+/** Paint for an ID this build's catalog does not contain. Deliberately drab
+ * and dashed: it should read as "this build does not know what this is". */
+export const UNKNOWN_WAY_RENDER: RenderStyle = { color: '#9a9a92', width: 2, dashed: true };
+export const UNKNOWN_LANE_RENDER: LaneRenderStyle = { color: '#9a9a92', surface: true };
+export const UNKNOWN_MODE_RENDER: RenderStyle = { color: '#9a9a92', width: 3, dashed: true };
+export const UNKNOWN_FACILITY_RENDER: FacilityRenderStyle = {
+  color: '#9a9a92',
+  radius: 9,
+  icon: 'square',
+};
+
 /** Effective infrastructure render for a way: type base overridden by its class. */
 export function wayRender(typeId: string, classId?: string): RenderStyle {
-  const base = WAY_TYPE_RENDER[typeId] ?? WAY_TYPE_RENDER.heavyRail;
+  const base = WAY_TYPE_RENDER[typeId] ?? UNKNOWN_WAY_RENDER;
   const override = classId ? WAY_CLASS_RENDER[typeId]?.[classId] : undefined;
   return override ? { ...base, ...override } : base;
 }
@@ -96,7 +128,7 @@ export const LANE_KIND_RENDER: Record<string, LaneRenderStyle> = {
 };
 
 export function laneRender(kindId: string): LaneRenderStyle {
-  return LANE_KIND_RENDER[kindId] ?? LANE_KIND_RENDER.drive;
+  return LANE_KIND_RENDER[kindId] ?? UNKNOWN_LANE_RENDER;
 }
 
 // Painted road markings — real-world semantics (white lane lines, yellow
@@ -119,7 +151,7 @@ export const MODE_RENDER: Record<string, RenderStyle> = {
 };
 
 export function modeRender(modeId: string): RenderStyle {
-  return MODE_RENDER[modeId] ?? MODE_RENDER.bus;
+  return MODE_RENDER[modeId] ?? UNKNOWN_MODE_RENDER;
 }
 
 // ---- Vehicle paint (Infrastructure view) ------------------------------------
@@ -162,7 +194,7 @@ export const FACILITY_RENDER: Record<string, FacilityRenderStyle> = {
 };
 
 export function facilityRender(typeId: string): FacilityRenderStyle {
-  return FACILITY_RENDER[typeId] ?? FACILITY_RENDER.entrance;
+  return FACILITY_RENDER[typeId] ?? UNKNOWN_FACILITY_RENDER;
 }
 
 // ---- Physical footprints / platforms -------------------------------------------

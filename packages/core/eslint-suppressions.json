@@ -315,14 +315,6 @@
       "count": 4
     }
   },
-  "src/style/catalogStyle.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 1
-    }
-  },
   "tests/geometry/vehicleLane.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
