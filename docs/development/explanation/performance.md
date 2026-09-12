@@ -135,7 +135,7 @@ The editor owns startup, persistence, and delivery. Startup publishes the
 `tm:*` milestones and must render the shell before any load resolves. Saves
 serialize cooperatively and commit atomically to IndexedDB; the report
 separates draw-commit, serialization, and write time. The build keeps
-MapLibre, React, and the renderer in stable cache chunks, with an 810 kB raw
+MapLibre, React, and the renderer in stable cache chunks, with a 1,060 kB raw
 limit on the MapLibre chunk and 500 kB on every other output.
 `apps/web/src/perf` holds the budgets; `apps/web/scripts/perf` holds the
 harness that enforces them.

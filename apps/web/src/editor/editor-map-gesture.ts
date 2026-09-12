@@ -55,7 +55,7 @@ export function createEditorMapGesture(
 
   const clearPreview = () => {
     if (!previewVisible) return;
-    session.map.getSource<GeoJSONSource>(SRC_GESTURE)?.setData(empty);
+    void session.map.getSource<GeoJSONSource>(SRC_GESTURE)?.setData(empty);
     options.recordSourceUpload();
     previewVisible = false;
   };
@@ -69,7 +69,7 @@ export function createEditorMapGesture(
       const source = session.map.getSource<GeoJSONSource>(SRC_GESTURE);
       if (!source) return false;
       if (candidate.data.features.length > 0) {
-        source.setData(candidate.data);
+        void source.setData(candidate.data);
         options.recordSourceUpload();
         previewVisible = true;
       } else {

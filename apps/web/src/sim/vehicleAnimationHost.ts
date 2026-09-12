@@ -143,7 +143,7 @@ export function attachVehicleAnimation(
     features: FeatureCollection<Point, VehicleProps>,
   ) => {
     const hasData = features.features.length > 0;
-    if (hasData || networkHasData) source?.setData(features);
+    if (hasData || networkHasData) void source?.setData(features);
     networkHasData = hasData;
   };
 
@@ -152,14 +152,13 @@ export function attachVehicleAnimation(
     features: FeatureCollection<Polygon, VehicleProps>,
   ) => {
     const hasData = features.features.length > 0;
-    if (hasData || infrastructureHasData) source?.setData(features);
+    if (hasData || infrastructureHasData) void source?.setData(features);
     infrastructureHasData = hasData;
   };
 
   const clearSources = (source?: GeoJSONSource, infraSource?: GeoJSONSource) => {
-    if (collection.features.length !== 0) collection.features.length = 0;
-    if (infrastructureCollection.features.length !== 0)
-      infrastructureCollection.features.length = 0;
+    collection.features.length = 0;
+    infrastructureCollection.features.length = 0;
     setNetworkData(source, collection);
     setInfrastructureData(infraSource, infrastructureCollection);
   };

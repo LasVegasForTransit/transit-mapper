@@ -250,7 +250,10 @@ const createdWorkers: FakeProjectionWorker[] = [];
 // The factory runs when the runtime is imported, which this file defers to a
 // dynamic import so these classes exist by then.
 vi.mock('maplibre-gl', () => ({
-  default: { Map: FakeEmbedMap, NavigationControl: FakeNavigationControl },
+  // mapTheme configures the worker URL on import, so every stub needs it.
+  setWorkerUrl: () => undefined,
+  Map: FakeEmbedMap,
+  NavigationControl: FakeNavigationControl,
 }));
 
 /** A scene nothing but this test can have produced, so the source data names

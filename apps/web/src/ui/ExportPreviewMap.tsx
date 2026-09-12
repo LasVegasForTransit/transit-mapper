@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import maplibregl, { type Map as MLMap } from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import type { Map as MLMap } from 'maplibre-gl';
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import { SRC_STATIONS } from '@transitmapper/renderer/layers';
 import { registerMapIcons } from '../map/layers';
@@ -33,7 +34,8 @@ function createExportPreviewMap(container: HTMLDivElement, system: TransitSystem
     style: basemapStyleForScheme('light'),
     center: system.viewport.center,
     zoom: system.viewport.zoom,
-    preserveDrawingBuffer: true, // needed to read the canvas back out for PNG export
+    // Needed to read the canvas back out for PNG export.
+    canvasContextAttributes: { preserveDrawingBuffer: true },
     attributionControl: false,
     // The export UI promises pan and zoom, not a second 3D camera. Keeping it
     // flat and north-up lets SVG projection run exactly off-thread.

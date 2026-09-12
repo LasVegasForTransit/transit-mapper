@@ -94,14 +94,6 @@
       "count": 1
     }
   },
-  "src/map/gestureLayerMask.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 1
-    }
-  },
   "src/map/gestureProjection.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1

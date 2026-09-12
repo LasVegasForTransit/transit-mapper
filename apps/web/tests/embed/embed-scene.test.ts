@@ -14,7 +14,10 @@ import type {
 import { EMBED_FEATURE_SOURCES } from '../../src/embed/config';
 import { installEmbedSceneSources, projectEmbedScene } from '../../src/embed/embed-map-runtime';
 
-vi.mock('maplibre-gl', () => ({ default: {} }));
+vi.mock('maplibre-gl', () => ({
+  // mapTheme configures the worker URL on import, so every stub needs it.
+  setWorkerUrl: () => undefined,
+}));
 
 const OPERATIONAL_PROPERTIES = ['serviceId', 'patternId', 'wayId', 'modeId', 'typeId'];
 

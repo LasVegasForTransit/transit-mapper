@@ -18,7 +18,12 @@ export type PerformanceChunkName =
 export type PerformanceChunkKind = 'map-engine' | 'standard';
 
 export const DEFAULT_CHUNK_MAXIMUM_RAW_BYTES = 500_000;
-export const MAP_ENGINE_MAXIMUM_RAW_BYTES = 810_000;
+// Sized to MapLibre itself plus a little headroom, so the number moves only
+// when the dependency does. MapLibre 4 built to 803 kB and this was 810_000;
+// MapLibre 6 builds to 1,024 kB, and we are on 6 because CVE-2026-85061 is
+// fixed in 6.4.1 and nowhere on the 4.x line. Raise this only for another
+// MapLibre release, never to let our own code grow into the slack.
+export const MAP_ENGINE_MAXIMUM_RAW_BYTES = 1_060_000;
 
 export interface PerformanceChunkSize {
   file: string;

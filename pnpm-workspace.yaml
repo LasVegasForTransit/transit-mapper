@@ -46,7 +46,7 @@ catalog:
   jsdom: '^29.1.1'
   knip: '^6.32.0'
   lucide-react: '^1.27.0'
-  maplibre-gl: '^4.7.1'
+  maplibre-gl: '^6.4.1'
   playwright-core: '^1.62.0'
   prettier: '^3.9.6'
   react: '^18.3.1'
@@ -61,7 +61,7 @@ catalog:
   vite-plugin-pwa: '^1.3.0'
   wrangler: '^4.114.0'
   zustand: '^5.0.2'
-  sharp: ^0.35.3
+  sharp: ^0.35.4
 
 minimumReleaseAgeExclude:
   - brace-expansion@1.1.17 || 2.1.3 || 5.0.9
@@ -71,6 +71,12 @@ minimumReleaseAgeExclude:
   - browserslist@4.28.8
 
 overrides:
+  # GHSA-rgj7-g3m4-5g8c: libheif flaws reached through sharp. Our own
+  # dependency is already patched; this is miniflare's pin, which
+  # @cloudflare/vitest-pool-workers has not picked up yet. Within 0.35.x, so
+  # it is the same library with the fix. Drop it when the pool-workers release
+  # carrying a patched miniflare reaches the catalog.
+  sharp@<0.35.4: ^0.35.4
   brace-expansion@<1.1.17: ^1.1.17
   brace-expansion@>=2.0.0 <2.1.3: ^2.1.3
   brace-expansion@>=4.0.0 <5.0.9: ^5.0.9

@@ -1,4 +1,5 @@
-import maplibregl, { type Map as MLMap } from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import type { Map as MLMap } from 'maplibre-gl';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
@@ -82,7 +83,8 @@ export function renderSystemForExport(
     const map = new maplibregl.Map({
       container,
       style: basemapStyleForScheme('light'),
-      preserveDrawingBuffer: true, // this offscreen instance is the ONE place that reads pixels back
+      // This offscreen instance is the ONE place that reads pixels back.
+      canvasContextAttributes: { preserveDrawingBuffer: true },
       attributionControl: false,
       fadeDuration: 0,
       interactive: false,
@@ -120,7 +122,7 @@ export function renderSystemForExport(
       () => map.triggerRepaint(),
     );
 
-    map.on('error', (e) => fail(e.error ?? new Error('Export map error.')));
+    map.on('error', (e) => fail(e.error));
     map.on('load', () => {
       void (async () => {
         try {

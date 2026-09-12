@@ -13,7 +13,7 @@ interface CompiledStyleExpression {
 }
 
 interface StyleExpressionRuntime {
-  createExpression(expression: unknown): unknown;
+  createExpression(expression: unknown, rootKey: string): unknown;
   validateStyleMin(style: unknown): unknown;
 }
 
@@ -44,15 +44,19 @@ function isCompiledExpressionResult(value: unknown): value is CompiledExpression
 }
 
 const appRequire = createRequire(import.meta.url);
-const mapLibreRequire = createRequire(appRequire.resolve('maplibre-gl'));
+// MapLibre 6 ships ESM only and exposes no CJS entry, so resolve its manifest
+// rather than its module to find the style-spec copy it actually compiles with.
+const mapLibreRequire = createRequire(appRequire.resolve('maplibre-gl/package.json'));
 const loadedRuntime = mapLibreRequire('@maplibre/maplibre-gl-style-spec') as unknown;
 if (!isStyleExpressionRuntime(loadedRuntime)) {
   throw new Error('MapLibre style expression runtime is unavailable');
 }
 const styleRuntime: StyleExpressionRuntime = loadedRuntime;
 
-function compileStyleExpression(expression: unknown): CompiledStyleExpression {
-  const result = styleRuntime.createExpression(expression);
+// MapLibre 6 requires the style-JSON location of an expression so its runtime
+// warnings can name the layer that produced them.
+function compileStyleExpression(expression: unknown, rootKey: string): CompiledStyleExpression {
+  const result = styleRuntime.createExpression(expression, rootKey);
   if (!isCompiledExpressionResult(result)) {
     throw new Error(`MapLibre rejected expression: ${JSON.stringify(result)}`);
   }
@@ -70,7 +74,10 @@ function styleValidationMessages(style: unknown): string[] {
   });
 }
 
-const BASE_TIER_OPACITY = compileStyleExpression(tierOpacityExpr(1));
+const BASE_TIER_OPACITY = compileStyleExpression(
+  tierOpacityExpr(1),
+  'layers[0].paint.line-opacity',
+);
 type RenderTier = 'overview' | 'district' | 'street';
 
 interface TierAvailability {
@@ -205,7 +212,10 @@ describe('tier opacity during camera and source-patch gaps', () => {
 
   it('allocates alpha by paint order without a midpoint brightness trough', () => {
     const baseOpacity = 0.85;
-    const expression = compileStyleExpression(tierOpacityExpr(baseOpacity));
+    const expression = compileStyleExpression(
+      tierOpacityExpr(baseOpacity),
+      'layers[0].paint.line-opacity',
+    );
     for (const width of [2, 2.25, 2.5, 3, 3.5, 3.75, 4]) {
       const lower = evaluateTierOpacity({
         tier: 'overview',
@@ -357,7 +367,10 @@ describe('tier opacity during camera and source-patch gaps', () => {
   });
 
   it('preserves service focus while the retained tier bridges a camera gap', () => {
-    const expression = compileStyleExpression(serviceFocusOpacityExpr(1, true));
+    const expression = compileStyleExpression(
+      serviceFocusOpacityExpr(1, true),
+      'layers[0].paint.line-opacity',
+    );
     const options = {
       tier: 'overview' as const,
       corridorW14: 2,

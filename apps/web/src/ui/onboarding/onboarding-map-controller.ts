@@ -1,7 +1,8 @@
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { RenderViewOptions, ViewOptions } from '@transitmapper/core/render/buildFeatures';
-import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import type { Map as MapLibreMap } from 'maplibre-gl';
 import { setExportFeatureData } from '../../map/export/exportLayerSetup';
 import { SRC_SERVICES, SRC_STATIONS, SRC_WAYS } from '@transitmapper/renderer/layers';
 import { registerMapIcons } from '../../map/layers';
@@ -126,7 +127,13 @@ function updateLayerPaint(
 ): void {
   if (!map.getLayer(layer.id) || !layer.paint) return;
   for (const [property, value] of Object.entries(layer.paint)) {
-    map.setPaintProperty(layer.id, property, value);
+    // The spec table is plain data, so its keys are strings; MapLibre 6 keys
+    // setPaintProperty on its own property union.
+    map.setPaintProperty(
+      layer.id,
+      property as Parameters<typeof map.setPaintProperty>[1],
+      value as never,
+    );
   }
 }
 

@@ -1,4 +1,7 @@
 import type { StyleSpecification } from 'maplibre-gl';
+// Imported for its side effect: it points MapLibre at the worker Vite emitted,
+// before anything here hands a style to a map constructor.
+import './maplibre-worker';
 import type { ColorScheme } from '../theme/color-scheme';
 import { createLayerSpecs } from './layers/layerSpecs';
 import { MAP_THEMES } from './mapThemePalette';

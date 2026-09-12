@@ -124,7 +124,7 @@ export function createEditorMapProjection(
     featureState.applySelection();
     const guideSource = session.map.getSource<GeoJSONSource>(SRC_JUNCTION_GUIDES);
     if (guideSource) {
-      guideSource.setData(
+      void guideSource.setData(
         infrastructure
           ? selectedJunctionConnectorFeatures(
               state.system,
@@ -141,7 +141,7 @@ export function createEditorMapProjection(
     ] as const) {
       const source = session.map.getSource<GeoJSONSource>(sourceId);
       if (!source) continue;
-      source.setData(data);
+      void source.setData(data);
       options.recordSourceUpload();
     }
   };

@@ -75,6 +75,8 @@ import {
   SRC_SHARING,
 } from '@transitmapper/renderer/layers';
 
+const EMPTY_COLLECTION = { type: 'FeatureCollection' as const, features: [] };
+
 /** A screen-space pixel coordinate (as opposed to LngLat's map-space one). */
 interface ScreenPoint {
   x: number;
@@ -1349,7 +1351,7 @@ export function attachInteractions(
       }));
     if (features.length === 0 && !sharingPreviewVisible) return;
     sharingPreviewVisible = features.length > 0;
-    map.getSource<GeoJSONSource>(SRC_SHARING)?.setData({
+    void map.getSource<GeoJSONSource>(SRC_SHARING)?.setData({
       type: 'FeatureCollection',
       features,
     });
@@ -1393,7 +1395,7 @@ export function attachInteractions(
   const setPreview = (coords: LngLat[] | null, properties: PreviewProperties = {}) => {
     if (coords === null && !previewVisible) return;
     previewVisible = coords !== null;
-    map.getSource<GeoJSONSource>(SRC_PREVIEW)?.setData({
+    void map.getSource<GeoJSONSource>(SRC_PREVIEW)?.setData({
       type: 'FeatureCollection',
       features: coords
         ? [
@@ -1413,7 +1415,7 @@ export function attachInteractions(
   const setEndpointHint = (coord: LngLat | null) => {
     if (coord === null && !endpointHintVisible) return;
     endpointHintVisible = coord !== null;
-    map.getSource<GeoJSONSource>(SRC_ENDPOINT_HINT)?.setData({
+    void map.getSource<GeoJSONSource>(SRC_ENDPOINT_HINT)?.setData({
       type: 'FeatureCollection',
       features: coord
         ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: coord } }]
@@ -1431,7 +1433,7 @@ export function attachInteractions(
       const ll = map.unproject(p as [number, number]);
       return [ll.lng, ll.lat];
     });
-    map.getSource<GeoJSONSource>(SRC_MARQUEE)?.setData({
+    void map.getSource<GeoJSONSource>(SRC_MARQUEE)?.setData({
       type: 'FeatureCollection',
       features: [
         {
@@ -1443,10 +1445,7 @@ export function attachInteractions(
     });
   };
   const clearMarquee = () => {
-    map.getSource<GeoJSONSource>(SRC_MARQUEE)?.setData({
-      type: 'FeatureCollection',
-      features: [],
-    });
+    void map.getSource<GeoJSONSource>(SRC_MARQUEE)?.setData(EMPTY_COLLECTION);
   };
 
   // Shift-drag on truly empty space (nothing else under the cursor) rubber-

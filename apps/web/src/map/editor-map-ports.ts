@@ -13,6 +13,7 @@ import type { VehicleAnimationGateController } from '../sim/vehicle-animation-ga
 import type { SimClock } from '../sim/simClock';
 import type { ColorScheme } from '../theme/color-scheme';
 import type { TerminusConnectionChoice } from './interactions';
+import type { MapFramePadding } from './map-frame-padding';
 
 export interface EditorMapStyleBridge {
   readonly runtime: MapRuntime<ColorScheme> | null;
@@ -38,9 +39,7 @@ export interface EditorMapDriverPorts {
   readonly vehicleGate: VehicleAnimationGateController;
   readonly tuning: InputTuning;
   readonly container: () => HTMLElement | null;
-  framePadding(
-    margin: number,
-  ): number | { top: number; bottom: number; left: number; right: number };
+  framePadding(margin: number): number | MapFramePadding;
   setRepresentation(mode: string): void;
   openShortcuts(): void;
   toggleUi(): void;

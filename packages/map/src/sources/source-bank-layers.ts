@@ -195,6 +195,21 @@ interface BankedLayerRecord {
   visibility: RenderLayerVisibility;
 }
 
+// MapLibre 6 widened `layout.visibility` to admit an expression. Every spec in
+// this repository writes a literal, and the bank controller flips visibility by
+// assignment, so an expression here would silently stop responding to that.
+// Reject it at the boundary instead of carrying the wider type inward.
+function initialVisibility(spec: LayerSpecification): RenderLayerVisibility {
+  const visibility = spec.layout?.visibility;
+  if (visibility === undefined) {
+    return 'visible';
+  }
+  if (visibility !== 'visible' && visibility !== 'none') {
+    throw new Error(`Banked layer visibility must be a literal: ${spec.id}`);
+  }
+  return visibility;
+}
+
 function initialTranslate(
   spec: LayerSpecification,
   properties: readonly string[],
@@ -227,8 +242,8 @@ class SourceBankLayerControllerImplementation implements SourceBankLayerControll
       translateProperties: renderLayerTranslateProperties(spec),
       translate: initialTranslate(spec, renderLayerTranslateProperties(spec)),
       translateAnchor: initialTranslateAnchors(spec, renderLayerTranslateProperties(spec)),
-      paintOverrides: new Map(),
-      visibility: spec.layout?.visibility ?? 'visible',
+      paintOverrides: new Map<string, unknown>(),
+      visibility: initialVisibility(spec),
     }));
     this.layerIds = new Set(
       options.logicalSpecs.flatMap((spec) =>

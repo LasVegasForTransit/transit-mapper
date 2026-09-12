@@ -64,7 +64,10 @@ import { createEditorStore } from '../../src/editor/store';
 
 // The embed runtime constructs a map at import time only when it is started;
 // importing it still pulls MapLibre in, which needs a browser to evaluate.
-vi.mock('maplibre-gl', () => ({ default: {} }));
+vi.mock('maplibre-gl', () => ({
+  // mapTheme configures the worker URL on import, so every stub needs it.
+  setWorkerUrl: () => undefined,
+}));
 
 /** A Line's identity in a drawing is its colour: the stripe feature IDs are
  *  content digests, so nothing in the markup names the Line that painted a

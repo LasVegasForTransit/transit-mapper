@@ -162,7 +162,8 @@ vi.mock('maplibre-gl', () => {
     remove(): void {}
   }
 
-  return { default: { Map: FakeMap } };
+  // mapTheme configures the worker URL on import, so the stub needs it.
+  return { Map: FakeMap, setWorkerUrl: () => undefined };
 });
 
 vi.mock('../../src/map/layers', async (importOriginal) => {

@@ -1,5 +1,6 @@
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
-import maplibregl, { type GeoJSONSource, type Map as MapLibreMap } from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import type { GeoJSONSource, Map as MapLibreMap } from 'maplibre-gl';
 import {
   SRC_PREVIEW,
   SRC_SERVICES,
@@ -14,7 +15,7 @@ import type { OnboardingSceneId } from './slides';
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
 function sourceData(map: MapLibreMap, sourceId: string, data: GeoJSON.FeatureCollection): void {
-  map.getSource<GeoJSONSource>(sourceId)?.setData(data);
+  void map.getSource<GeoJSONSource>(sourceId)?.setData(data);
 }
 
 function lineCollection(
