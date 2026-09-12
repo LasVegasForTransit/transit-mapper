@@ -7,6 +7,7 @@ import { chromium, type Browser, type BrowserContext, type Page } from 'playwrig
 import { generatePerfFixture } from '../../src/perf/fixtures';
 import { PERF_SCENARIOS } from '../../src/perf/scenarios';
 import { closeContext, configureSurfaceRoutes, seedIndexedDbFixture } from './browser';
+import { assertBasemapPainted, assertMapSurfacePainted, routeBasemapProof } from './map-paint';
 import {
   PERFORMANCE_PUBLIC_OUTPUT_DIRECTORY,
   startPreview,
@@ -32,13 +33,16 @@ async function createContext(browser: Browser): Promise<BrowserContext> {
   return context;
 }
 
-async function visibleMap(page: Page): Promise<void> {
+async function visibleMap(page: Page, subject: string): Promise<void> {
   const canvas = page.locator('.maplibregl-canvas').first();
   await canvas.waitFor({ state: 'visible', timeout: 30_000 });
   const bounds = await canvas.boundingBox();
   if (!bounds || bounds.width < 100 || bounds.height < 100) {
     throw new Error('The map did not expose usable interactive bounds.');
   }
+  // Bounds prove the canvas is laid out, not that anything reached it. A map
+  // whose worker never started keeps its geometry and paints nothing.
+  await assertMapSurfacePainted(page, subject);
 }
 
 async function exerciseEditor(browser: Browser, site: string): Promise<void> {
@@ -56,7 +60,7 @@ async function exerciseEditor(browser: Browser, site: string): Promise<void> {
     if ((await page.getByLabel('System name').inputValue()) !== fixture.name) {
       throw new Error('The editor did not restore the seeded system.');
     }
-    await visibleMap(page);
+    await visibleMap(page, 'the editor');
   } finally {
     await closeContext(context);
   }
@@ -95,7 +99,7 @@ async function configurePublishedRoutes(page: Page): Promise<void> {
 async function exerciseWorkspaceRoute(page: Page, url: string): Promise<void> {
   await page.goto(url, { waitUntil: 'load', timeout: 30_000 });
   await page.locator('.viewer-brand').waitFor({ state: 'visible', timeout: 30_000 });
-  await visibleMap(page);
+  await visibleMap(page, url);
 }
 
 async function exercisePublishedSurfaces(browser: Browser, site: string): Promise<void> {
@@ -109,9 +113,37 @@ async function exercisePublishedSurfaces(browser: Browser, site: string): Promis
     const fixture = generatePerfFixture('small');
     await configureSurfaceRoutes(page, PERF_SCENARIOS.embed, JSON.stringify(fixture));
     await page.goto(`${site}/e/perfembed`, { waitUntil: 'load', timeout: 30_000 });
-    await visibleMap(page);
+    await visibleMap(page, 'the share embed');
     await page.goto(`${site}/embed/${VIEW_ID}`, { waitUntil: 'load', timeout: 30_000 });
-    await visibleMap(page);
+    await visibleMap(page, 'the named View embed');
+  } finally {
+    await closeContext(context);
+  }
+}
+
+/**
+ * The editor with no seeded system, over a basemap whose only visible content
+ * comes from a source. Nothing of ours can paint here, so the assertion can
+ * only pass when the basemap itself reached the canvas.
+ *
+ * This is the enforcement for the invariant in CLAUDE.md: a map surface never
+ * shows an empty backdrop where a basemap belongs.
+ */
+async function exerciseBasemap(browser: Browser, site: string): Promise<void> {
+  const context = await browser.newContext({
+    viewport: { width: 1_440, height: 900 },
+    reducedMotion: 'no-preference',
+    serviceWorkers: 'block',
+  });
+  await routeBasemapProof(context);
+  const page = await context.newPage();
+  try {
+    await page.goto(`${site}/`, { waitUntil: 'load', timeout: 30_000 });
+    await page.locator('.app[data-document-status="ready"]').waitFor({
+      state: 'attached',
+      timeout: 30_000,
+    });
+    await assertBasemapPainted(page, 'the editor basemap');
   } finally {
     await closeContext(context);
   }
@@ -125,7 +157,10 @@ async function main(): Promise<void> {
     browser = await chromium.launch({ channel: 'chrome', headless: true });
     await exerciseEditor(browser, preview.url);
     await exercisePublishedSurfaces(browser, preview.url);
-    console.log('Release editor, viewer, named View, and embed journeys passed.');
+    await exerciseBasemap(browser, preview.url);
+    console.log(
+      'Release editor, viewer, named View, and embed journeys passed, and the basemap painted.',
+    );
   } finally {
     await browser?.close();
     await stopPreview(preview);
