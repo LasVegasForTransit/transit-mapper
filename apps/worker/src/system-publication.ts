@@ -102,11 +102,18 @@ export interface BackfillReport {
  * table that grows with every share ever published. */
 const BACKFILL_BATCH_SIZE = 25;
 
+interface BackfillResult {
+  /** The `version` the stored document declared, when it declared a usable
+   * one. Null records that the document did not say. */
+  legacySchemaVersion: number | null;
+  /** The revision this row produced, or null when it produced none. */
+  revisionId: string | null;
+}
+
 async function recordBackfillOutcome(
   db: D1Database,
   row: LegacySystemRow,
-  legacySchemaVersion: number | null,
-  revisionId: string | null,
+  { legacySchemaVersion, revisionId }: BackfillResult,
 ): Promise<BackfillOutcome> {
   const resultKind = revisionId ? 'migrated' : 'invalid-legacy-system';
   await db
@@ -143,12 +150,16 @@ async function backfillOne(db: D1Database, row: LegacySystemRow): Promise<Backfi
   try {
     parsed = JSON.parse(row.data);
   } catch {
-    return recordBackfillOutcome(db, row, null, null);
+    return recordBackfillOutcome(db, row, { legacySchemaVersion: null, revisionId: null });
   }
   const version = legacySchemaVersion(parsed);
   try {
     const migrated = migrateSchemaV16System(parsed as SchemaV16TransitSystem);
-    if (migrated.kind !== 'migrated') return await recordBackfillOutcome(db, row, version, null);
+    if (migrated.kind !== 'migrated')
+      return await recordBackfillOutcome(db, row, {
+        legacySchemaVersion: version,
+        revisionId: null,
+      });
     const stored = await publishSystemRevision(
       db,
       await createSystemRevision({
@@ -157,13 +168,16 @@ async function backfillOne(db: D1Database, row: LegacySystemRow): Promise<Backfi
         system: migrated.system,
       }),
     );
-    return await recordBackfillOutcome(db, row, version, stored.id);
+    return await recordBackfillOutcome(db, row, {
+      legacySchemaVersion: version,
+      revisionId: stored.id,
+    });
   } catch (error) {
     // A document that throws somewhere inside migration is recorded as
     // terminal rather than retried forever. Nothing about it will change on a
     // later run, and a poison row must not block the rest of the batch.
     console.error(`Backfilling System ${row.id} failed`, error);
-    return recordBackfillOutcome(db, row, version, null);
+    return recordBackfillOutcome(db, row, { legacySchemaVersion: version, revisionId: null });
   }
 }
 

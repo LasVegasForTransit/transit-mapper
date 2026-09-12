@@ -6,8 +6,10 @@ import {
   MODE_RENDER,
   WAY_TYPE_RENDER,
   facilityRender,
+  gradeFlags,
   laneRender,
   modeRender,
+  showWayWhenServed,
   wayRender,
   UNKNOWN_FACILITY_RENDER,
   UNKNOWN_LANE_RENDER,
@@ -17,10 +19,22 @@ import {
 
 /**
  * Rendering does not belong in `model/`, so paint lives in a second table
- * keyed by the same catalog IDs. These cases are what stops that second table
- * drifting: `pedestrian` was in `WAY_TYPES` with no entry in
- * `WAY_TYPE_RENDER`, and every pedestrian path drew as a grey heavy-rail
- * track because the lookup fell back to `heavyRail`.
+ * keyed by the same catalog IDs, and these cases are the only thing keeping
+ * the two lists in step.
+ *
+ * A compile-time guarantee would be strictly better, and it works: annotate
+ * the catalogs `satisfies Record<string, T>` instead of `: Record<string, T>`,
+ * export `keyof typeof`, and key each paint table by that. Verified — a
+ * missing entry and an orphan entry both fail `tsc`. It is not done because
+ * `model/catalog.ts` is 643 lines against a 400-line limit and carries a
+ * `max-lines` suppression, so the debt ratchet refuses to let it grow by the
+ * dozen lines this needs. Splitting that catalog into per-family modules is
+ * the change that unblocks it.
+ *
+ * What only these cases check is the behaviour that made the drift invisible.
+ * `pedestrian` was in `WAY_TYPES` with no entry in `WAY_TYPE_RENDER`, and
+ * every pedestrian path drew as a grey heavy-rail track, because the lookup
+ * fell back to `heavyRail` instead of saying it did not know.
  */
 const families = [
   ['way type', WAY_TYPES, WAY_TYPE_RENDER],
@@ -70,5 +84,42 @@ describe('an unknown ID renders as unknown', () => {
   it('still paints a known ID from its own entry', () => {
     expect(modeRender('bus')).toEqual(MODE_RENDER.bus);
     expect(wayRender('pedestrian')).toEqual(WAY_TYPE_RENDER.pedestrian);
+  });
+});
+
+describe('a way type shows under the services riding it only when listed', () => {
+  // The map is partial on purpose — only surfaces a service sits *on* show
+  // through. A rail track is the coloured line, so a grey line under it would
+  // be redundant. That partiality is why the lookup coerces rather than
+  // returning the stored value.
+  it('shows a road and a bike path under their services', () => {
+    expect(showWayWhenServed('road')).toBe(true);
+    expect(showWayWhenServed('bike')).toBe(true);
+  });
+
+  it('hides a way type the map does not list, including an unknown one', () => {
+    expect(showWayWhenServed('heavyRail')).toBe(false);
+    expect(showWayWhenServed('teleporter')).toBe(false);
+  });
+});
+
+describe('grade flags', () => {
+  it('reports exactly one flag per grade, and none for at-grade', () => {
+    expect(gradeFlags('underground')).toEqual({ underground: true, elevated: false });
+    expect(gradeFlags('elevated')).toEqual({ underground: false, elevated: true });
+    expect(gradeFlags('atGrade')).toEqual({ underground: false, elevated: false });
+  });
+});
+
+describe('a way class layers over its type', () => {
+  it('overrides the base render for a class the type defines', () => {
+    expect(wayRender('road', 'local')).toEqual({
+      ...WAY_TYPE_RENDER.road,
+      ...{ color: '#cbd0d8', width: 2 },
+    });
+  });
+
+  it('keeps the base render for a way type that has no classes', () => {
+    expect(wayRender('heavyRail', 'local')).toEqual(WAY_TYPE_RENDER.heavyRail);
   });
 });

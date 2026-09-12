@@ -170,39 +170,59 @@ async function providerForResolvedReference(
   return workingProvider(db, dependencies, content.id);
 }
 
-interface RequestBody {
-  value: Record<string, unknown>;
-}
+/** Tagged rather than discriminated by which fields happen to be present:
+ * the two arms are otherwise unrelated shapes, so `'value' in body` read as a
+ * shape probe rather than as "did this parse". */
+type RequestBody =
+  { ok: true; value: Record<string, unknown> } | { ok: false; error: TransitApiError };
 
-async function boundedRequest(c: Context<TransitApiEnv>): Promise<RequestBody | TransitApiError> {
+async function boundedRequest(c: Context<TransitApiEnv>): Promise<RequestBody> {
   const declaredLength = Number(c.req.header('content-length'));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_TRANSIT_API_BODY_BYTES) {
-    return apiError('invalid-request', 'The transit content request is too large.');
+    return {
+      ok: false,
+      error: apiError('invalid-request', 'The transit content request is too large.'),
+    };
   }
   const raw = await c.req.text();
   if (new TextEncoder().encode(raw).byteLength > MAX_TRANSIT_API_BODY_BYTES) {
-    return apiError('invalid-request', 'The transit content request is too large.');
+    return {
+      ok: false,
+      error: apiError('invalid-request', 'The transit content request is too large.'),
+    };
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return apiError('invalid-request', 'The transit content request is not valid JSON.');
+    return {
+      ok: false,
+      error: apiError('invalid-request', 'The transit content request is not valid JSON.'),
+    };
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return apiError('invalid-request', 'The transit content request must be an object.');
+    return {
+      ok: false,
+      error: apiError('invalid-request', 'The transit content request must be an object.'),
+    };
   }
   const envelope = parsed as Record<string, unknown>;
   // The version gates the whole envelope, so it is read before anything inside
   // it: a future version may spell these fields differently.
   if (envelope.version !== 'transit-network-v1') {
-    return apiError('unsupported-version', 'The request names an unsupported API version.');
+    return {
+      ok: false,
+      error: apiError('unsupported-version', 'The request names an unsupported API version.'),
+    };
   }
   const value = envelope.value;
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return apiError('invalid-request', 'The transit content request carries no value object.');
+    return {
+      ok: false,
+      error: apiError('invalid-request', 'The transit content request carries no value object.'),
+    };
   }
-  return { value: value as Record<string, unknown> };
+  return { ok: true, value: value as Record<string, unknown> };
 }
 
 function respondWithFailure(c: Context<TransitApiEnv>, error: TransitApiError): Response {
@@ -212,7 +232,7 @@ function respondWithFailure(c: Context<TransitApiEnv>, error: TransitApiError): 
 function describeContentHandler(dependencies: TransitApiDependencies): Handler<TransitApiEnv> {
   return async (c) => {
     const body = await boundedRequest(c);
-    if (!('value' in body)) return respondWithFailure(c, body);
+    if (!body.ok) return respondWithFailure(c, body.error);
 
     let reference: ContentRef;
     try {
@@ -233,7 +253,7 @@ function describeContentHandler(dependencies: TransitApiDependencies): Handler<T
 function networkPageHandler(dependencies: TransitApiDependencies): Handler<TransitApiEnv> {
   return async (c) => {
     const body = await boundedRequest(c);
-    if (!('value' in body)) return respondWithFailure(c, body);
+    if (!body.ok) return respondWithFailure(c, body.error);
 
     let content: ResolvedContentRef;
     let query;

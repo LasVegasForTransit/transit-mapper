@@ -24,6 +24,15 @@ function v17System(): TransitSystem {
   return result.system;
 }
 
+/** A provider serving one stored revision, under the ID storage names it by
+ * rather than the document's own. */
+function publishedProvider(system: TransitSystem = v17System()) {
+  return createSchemaV17SystemProvider(system, {
+    contentId: 'share-id',
+    publication: { systemRevisionId: 'rev-1' },
+  });
+}
+
 function query(overrides: Partial<NetworkQuery> = {}): NetworkQuery {
   return {
     bounds: { kind: 'ordinary', west: -116, south: 35.5, east: -114, north: 36.9 },
@@ -63,10 +72,7 @@ describe('schema-v17 system provider', () => {
 
   it('answers for the revision it was given, under the ID storage names it by', async () => {
     const system = v17System();
-    const provider = createSchemaV17SystemProvider(system, {
-      contentId: 'share-id',
-      publication: { systemRevisionId: 'rev-1' },
-    });
+    const provider = publishedProvider(system);
 
     const descriptor = await provider.describe({
       kind: 'transit-system',
@@ -85,10 +91,7 @@ describe('schema-v17 system provider', () => {
   });
 
   it('refuses a pinned reference that names a different revision of the same System', async () => {
-    const provider = createSchemaV17SystemProvider(v17System(), {
-      contentId: 'share-id',
-      publication: { systemRevisionId: 'rev-1' },
-    });
+    const provider = publishedProvider();
 
     await expect(
       provider.describe({
@@ -100,10 +103,7 @@ describe('schema-v17 system provider', () => {
   });
 
   it('resolves a published reference into a bounded page', async () => {
-    const provider = createSchemaV17SystemProvider(v17System(), {
-      contentId: 'share-id',
-      publication: { systemRevisionId: 'rev-1' },
-    });
+    const provider = publishedProvider();
 
     const result = await provider.resolve(
       {
@@ -121,10 +121,7 @@ describe('schema-v17 system provider', () => {
   });
 
   it('treats a working reference against a published provider as a conflict', async () => {
-    const provider = createSchemaV17SystemProvider(v17System(), {
-      contentId: 'share-id',
-      publication: { systemRevisionId: 'rev-1' },
-    });
+    const provider = publishedProvider();
 
     // Not "missing": the provider holds this System and is answering under
     // one of its two names.

@@ -55,7 +55,8 @@ describe('schema-v17 provider identity', () => {
   });
 
   it('reports modes in Line order rather than catalog order', async () => {
-    const descriptor = await descriptorForSystem(v17System(), identityFor(v17System()));
+    const system = v17System();
+    const descriptor = await descriptorForSystem(system, identityFor(system));
 
     expect(descriptor.content.kind).toBe('transit-system');
     expect(descriptor.map.modeIds.length).toBeGreaterThan(0);
@@ -131,7 +132,8 @@ describe('schema-v17 provider identity', () => {
   });
 
   it('reports no provenance for a document that cites none', async () => {
-    const descriptor = await descriptorForSystem(v17System(), identityFor(v17System()));
+    const system = v17System();
+    const descriptor = await descriptorForSystem(system, identityFor(system));
 
     expect(descriptor.sources).toHaveLength(0);
     expect(descriptor.attributions).toHaveLength(0);
@@ -163,13 +165,15 @@ describe('schema-v17 provider identity', () => {
   });
 
   it('accepts the working reference it just described', async () => {
-    const descriptor = await descriptorForSystem(v17System(), identityFor(v17System()));
+    const system = v17System();
+    const descriptor = await descriptorForSystem(system, identityFor(system));
 
     expect(() => validateResolvedReference(descriptor, descriptor.content)).not.toThrow();
   });
 
   it('rejects a working reference whose digest has moved on', async () => {
-    const descriptor = await descriptorForSystem(v17System(), identityFor(v17System()));
+    const system = v17System();
+    const descriptor = await descriptorForSystem(system, identityFor(system));
     if (
       descriptor.content.kind !== 'transit-system' ||
       descriptor.content.revision.kind !== 'working'

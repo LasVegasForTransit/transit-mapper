@@ -19,9 +19,11 @@ export { LINE_COLORS } from '../model/catalog';
  * does not belong in `model/`. That separation costs a second list, and a
  * second list drifts: `WAY_TYPES.pedestrian` had no entry in
  * `WAY_TYPE_RENDER`, so every pedestrian path drew itself as a grey heavy-rail
- * track. `tests/style/catalog-paint.test.ts` now fails when a catalog gains an
- * entry these tables do not cover, which is the only thing keeping the two
- * lists honest.
+ * track. `tests/style/catalog-paint.test.ts` fails when a catalog gains an entry
+ * these tables do not cover, which is the only thing keeping the two lists
+ * honest. A compile-time guarantee would be better and is possible — see the
+ * note in that test — but it needs `model/catalog.ts` to stop erasing its own
+ * key types, and that file is 243 lines over its limit and may not grow.
  *
  * The lookups below therefore only reach their fallback for an ID no catalog
  * knows — a document written by a newer build. Such a thing renders as
@@ -84,6 +86,7 @@ export const WAY_TYPE_SHOW_WHEN_SERVED: Record<string, boolean | undefined> = {
 /** Paint for an ID this build's catalog does not contain. Deliberately drab
  * and dashed: it should read as "this build does not know what this is". */
 export const UNKNOWN_WAY_RENDER: RenderStyle = { color: '#9a9a92', width: 2, dashed: true };
+
 export const UNKNOWN_LANE_RENDER: LaneRenderStyle = { color: '#9a9a92', surface: true };
 export const UNKNOWN_MODE_RENDER: RenderStyle = { color: '#9a9a92', width: 3, dashed: true };
 export const UNKNOWN_FACILITY_RENDER: FacilityRenderStyle = {
