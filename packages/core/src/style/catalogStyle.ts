@@ -87,6 +87,8 @@ export const WAY_TYPE_SHOW_WHEN_SERVED: Record<string, boolean | undefined> = {
 export const UNKNOWN_WAY_RENDER: RenderStyle = { color: '#9a9a92', width: 2, dashed: true };
 
 export const UNKNOWN_LANE_RENDER: LaneRenderStyle = { color: '#9a9a92', surface: true };
+// Thinner than any real mode as well as grey and dashed: an ID this build
+// cannot identify should not compete with the network it sits in.
 export const UNKNOWN_MODE_RENDER: RenderStyle = { color: '#9a9a92', width: 3, dashed: true };
 export const UNKNOWN_FACILITY_RENDER: FacilityRenderStyle = {
   color: '#9a9a92',
@@ -148,16 +150,30 @@ export const CENTER_LINE_COLOR = '#d9a62e';
 export const LANE_ARROW_COLOR = '#f4f2ec';
 
 // ---- Mode (service) render --------------------------------------------------
+//
+// Three weights, heaviest for the mode that moves the most people on the most
+// permanent right-of-way. A reader should be able to see a network's hierarchy
+// before reading a single label, which is the one job this ordering does.
+//
+// These are flat pixels, not a base at some reference zoom: a Network or
+// Diagram stripe reads `width` straight through at every zoom (the zoom-scaled
+// branch of `serviceWidthExpr` applies only to Infrastructure lane detail).
+// They were one step lighter until a shared corridor made the point — three
+// bus Lines at 3px inside a 2.5px casing disappeared against the streets under
+// them once the map was zoomed past a metro view.
 export const MODE_RENDER: Record<ModeId, RenderStyle> = {
-  subway: { color: '#c0392b', width: 5 },
-  commuterRail: { color: '#8e44ad', width: 4 },
-  lightRail: { color: '#e4572e', width: 4 },
-  tram: { color: '#16a085', width: 3 },
-  monorail: { color: '#8b5cf6', width: 4 },
-  brt: { color: '#2e86e4', width: 4 },
-  bus: { color: '#2ea44f', width: 3 },
-  gondola: { color: '#7c3aed', width: 4 },
-  ferry: { color: '#0891b2', width: 4 },
+  // Trunk rail: its own right-of-way, highest capacity.
+  subway: { color: '#c0392b', width: 7 },
+  // Intermediate: separated or partly separated, rail-scale capacity.
+  commuterRail: { color: '#8e44ad', width: 6 },
+  lightRail: { color: '#e4572e', width: 6 },
+  monorail: { color: '#8b5cf6', width: 6 },
+  brt: { color: '#2e86e4', width: 6 },
+  gondola: { color: '#7c3aed', width: 6 },
+  ferry: { color: '#0891b2', width: 6 },
+  // Surface: shares the street, lowest capacity.
+  tram: { color: '#16a085', width: 5 },
+  bus: { color: '#2ea44f', width: 5 },
 };
 
 const modePaint: Record<string, RenderStyle | undefined> = MODE_RENDER;

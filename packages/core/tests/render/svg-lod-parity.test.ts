@@ -8,6 +8,7 @@ import {
   resolveStaticVisualScene,
   type ResolvedStaticPolygon,
 } from '../../src/render/static-visual-scene';
+import { MODE_RENDER } from '../../src/style/catalogStyle';
 import { systemSvg } from '../../src/render/svg';
 import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
 
@@ -121,7 +122,11 @@ describe('SVG screen-space LOD parity', () => {
 
     expect(svg).toContain('data-render-tier="overview"');
     expect(svg).toContain('data-render-tier="district"');
-    expect(svg).toContain('data-resolved-width="3.000"');
+    // The service stripe, at its mode's weight. Read from the table rather
+    // than repeated here: it used to say 3, which matched this case's own
+    // argument by coincidence and read as though the view width were being
+    // asserted back.
+    expect(svg).toContain(`data-resolved-width="${MODE_RENDER.bus.width.toFixed(3)}"`);
     expect(svg).toMatch(/data-render-tier="overview"[^>]+opacity="0\.8182"/);
     expect(svg).toMatch(/data-render-tier="district"[^>]+opacity="0\.4500"/);
     expect(svg).toMatch(/data-render-tier="district"[^>]+stroke="#191a17"/);
