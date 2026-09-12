@@ -213,9 +213,11 @@ export function lineSceneLayerSpecs(theme: MapTheme): LayerSpecification[] {
       source: SRC_SERVICES,
       filter: ['==', ['get', 'routeRole'], 'casing'],
       layout: {
-        // Butt, not round. A casing spans every stripe on the corridor, so its
-        // round cap had a radius of half the whole band — a dome far larger
-        // than any one Line is wide, stuck on the end of the route.
+        // Butt, alone among these layers. A casing spans every stripe on the
+        // corridor, so its width is the whole band and a round cap put a dome
+        // of half that past the end — far wider than any one Line. The stripes
+        // it backs keep their own round ends, which now read as the Lines
+        // finishing rather than as the corridor bulging.
         'line-cap': 'butt',
         'line-join': 'round',
         'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
@@ -233,9 +235,9 @@ export function lineSceneLayerSpecs(theme: MapTheme): LayerSpecification[] {
       source: SRC_SERVICES,
       filter: ['==', ['get', 'routeRole'], 'stripe'],
       layout: {
-        // Square with the casing it sits in. A terminus reads from its stop
-        // marker, not from the shape of the paint ending.
-        'line-cap': 'butt',
+        // Round: this is one Line's own end, and half a stripe width is a cap,
+        // not a dome. Only the casing underneath squares off.
+        'line-cap': 'round',
         'line-join': 'round',
         'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
       },
@@ -254,9 +256,8 @@ export function lineSceneLayerSpecs(theme: MapTheme): LayerSpecification[] {
       source: SRC_SERVICES,
       filter: ['==', ['get', 'routeRole'], 'stripe'],
       layout: {
-        // Matches the stripe it highlights: a selection halo is wider still,
-        // so a round cap here would dome further than the casing did.
-        'line-cap': 'butt',
+        // Matches the stripe it highlights.
+        'line-cap': 'round',
         'line-join': 'round',
         'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
       },
