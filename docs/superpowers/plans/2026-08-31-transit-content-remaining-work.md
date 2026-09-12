@@ -107,21 +107,39 @@ flowchart LR
   Worker --> Views
 ```
 
-## Screenshot capture is blocked here
+## How to capture a screenshot here
 
-Both remaining Phase 1 items are screenshots, and neither has been taken.
+Both remaining Phase 1 screenshots are taken. The way to take one is worth
+recording, because the obvious way does not work.
 
-The cause is page visibility rather than headlessness. A hidden or backgrounded
-tab runs no animation frames at all — measured at zero callbacks over 2.77
-seconds in an automation browser on an M3 with a real Metal GL context. MapLibre
-composites only on a frame, so the map paints nothing while every network
-request still succeeds: style, sprites, TileJSON and vector tiles all return 200. `waitForSourceBankPaint` then fails with "Activated renderer bank did not
-paint in time", and the `tm:first-system-paint` proof times out the same way.
+Page visibility decides whether a map can be photographed at all, and
+headlessness does not. A hidden or backgrounded tab runs no animation frames —
+measured at zero callbacks over 2.77 seconds, on an M3 with a real Metal GL
+context. MapLibre composites only on a frame, so the map paints nothing while
+every network request still succeeds: style, sprites, TileJSON and vector tiles
+all return 200. `waitForSourceBankPaint` then fails with "Activated renderer
+bank did not paint in time", and `tm:first-system-paint` times out the same
+way. A screenshot taken then still captures DOM chrome, so it shows the sidebar
+and toolbars around an empty canvas, which is not evidence of anything.
 
-A screenshot taken in that state still captures DOM chrome, so it shows the
-sidebar and toolbars around an empty map canvas. That is not a rendering
-defect, and it is not evidence of anything either. Take these with the browser
-window actually visible on screen.
+Playwright's own Chromium reports its pages visible and runs a full sixty
+frames a second — 182 callbacks in three seconds, against zero in every
+attached browser. Drive captures from there, with the throttling flags
+`auditBrowserArguments` already sets.
+
+`generatePerfFixture` cannot show the Line rule. It lays every route on its own
+short stub, so nothing shares a carrier and there is no collapse to see. Build
+a corridor instead: one trunk carrying several ServicePlans across a few Lines,
+with a short turn over part of it. The rule is that the trunk paints one stripe
+per Line and never one per plan.
+
+One gap is worth knowing about before someone reads it as a regression. With a
+document seeded straight into IndexedDB, the editor's Diagram view rendered
+nothing for that corridor, while the reader's Diagram rendered the same system
+correctly at the same moment. Thirty seconds of settling did not change it. The
+seeding bypasses the normal import path, so the fixture is the first suspect
+rather than the Diagram, and the reader capture is what stands as the evidence
+for Diagram identity. Nobody has run this down.
 
 ## Task 1: Finish live Line-scene integration
 
@@ -162,7 +180,7 @@ before any read-only host conversion begins.
       replacement, Diagram Line identity, and accepted-scene retention. Run
       that test before implementing the corresponding behavior.
 - [x] Run the focused renderer and web tests with `--maxWorkers=2`.
-- [ ] Start the production build locally. Capture Network and Diagram desktop
+- [x] Start the production build locally. Capture Network and Diagram desktop
       screenshots over the same dense corridor. Reject the task if one Line
       appears as repeated operational stripes.
 - [x] Commit with the subject
@@ -203,7 +221,7 @@ editor.
       layer IDs.
 - [x] Add parity tests that render the same System in editor, reader, and embed
       and compare Line identities and visible geometry counts.
-- [ ] Capture one reader and one embed screenshot from the same content and
+- [x] Capture one reader and one embed screenshot from the same content and
       camera. The embed must contain no authoring controls or blocking loader.
 - [x] Commit with the subject
       `chore(web): Share Line scenes across reader and embed maps`.
