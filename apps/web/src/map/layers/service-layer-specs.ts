@@ -213,7 +213,10 @@ export function lineSceneLayerSpecs(theme: MapTheme): LayerSpecification[] {
       source: SRC_SERVICES,
       filter: ['==', ['get', 'routeRole'], 'casing'],
       layout: {
-        'line-cap': 'round',
+        // Butt, not round. A casing spans every stripe on the corridor, so its
+        // round cap had a radius of half the whole band — a dome far larger
+        // than any one Line is wide, stuck on the end of the route.
+        'line-cap': 'butt',
         'line-join': 'round',
         'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
       },
@@ -230,7 +233,9 @@ export function lineSceneLayerSpecs(theme: MapTheme): LayerSpecification[] {
       source: SRC_SERVICES,
       filter: ['==', ['get', 'routeRole'], 'stripe'],
       layout: {
-        'line-cap': 'round',
+        // Square with the casing it sits in. A terminus reads from its stop
+        // marker, not from the shape of the paint ending.
+        'line-cap': 'butt',
         'line-join': 'round',
         'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
       },
@@ -249,7 +254,9 @@ export function lineSceneLayerSpecs(theme: MapTheme): LayerSpecification[] {
       source: SRC_SERVICES,
       filter: ['==', ['get', 'routeRole'], 'stripe'],
       layout: {
-        'line-cap': 'round',
+        // Matches the stripe it highlights: a selection halo is wider still,
+        // so a round cap here would dome further than the casing did.
+        'line-cap': 'butt',
         'line-join': 'round',
         'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
       },
