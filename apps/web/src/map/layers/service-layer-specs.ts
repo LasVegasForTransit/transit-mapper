@@ -237,6 +237,15 @@ export function lineSceneLayerSpecs(theme: MapTheme): LayerSpecification[] {
       layout: {
         // Round: this is one Line's own end, and half a stripe width is a cap,
         // not a dome. Only the casing underneath squares off.
+        //
+        // A round cap is safe here even though the scene paints only what the
+        // camera asked for. `lineSpanCandidates` keeps a visible shard whole
+        // rather than clipping it to the query bounds, so the geometry always
+        // runs past the edge of the view and the cut end's cap is drawn
+        // off-screen. A round cap therefore only ever appears where a span
+        // genuinely ends. Verified by rendering a corridor long enough to
+        // leave the viewport: the real terminus is capped, the cut end simply
+        // reaches the edge.
         'line-cap': 'round',
         'line-join': 'round',
         'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
