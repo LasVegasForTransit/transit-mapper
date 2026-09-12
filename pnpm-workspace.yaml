@@ -22,7 +22,7 @@ catalog:
   '@turbo/gen': '^2.10.7'
   '@typescript-eslint/parser': '^8.65.0'
   '@cloudflare/vitest-pool-workers': '^0.18.8'
-  vitest: '^4.1.10'
+  vitest: '^4.1.11'
   '@vitest/coverage-v8': '^4.1.10'
   lint-staged: '^17.2.0'
   '@clack/prompts': '^1.4.0'
