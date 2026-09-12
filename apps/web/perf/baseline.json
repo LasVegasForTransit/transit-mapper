@@ -31,15 +31,15 @@
   "bundles": [
     {
       "entry": "embed",
-      "rawBytes": 1047214,
-      "gzipBytes": 301998,
-      "brotliBytes": 256323
+      "rawBytes": 1291508,
+      "gzipBytes": 367147,
+      "brotliBytes": 306939
     },
     {
       "entry": "main",
-      "rawBytes": 2152441,
-      "gzipBytes": 639226,
-      "brotliBytes": 551910
+      "rawBytes": 2400319,
+      "gzipBytes": 705563,
+      "brotliBytes": 603534
     }
   ],
   "firstSessions": [
