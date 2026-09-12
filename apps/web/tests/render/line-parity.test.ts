@@ -105,7 +105,9 @@ const WEEKEND_RUN_END_T = 1 / 3;
  * Route 109 runs the whole resort corridor, so it draws that corridor once —
  * as two stretches, because coverage changes a third of the way along and the
  * stretch both plans run is one stripe, not one per plan. The two downtown
- * Lines each draw their corridor whole, over a single casing they share.
+ * Lines each draw their corridor whole, and each carries its own casing: a
+ * casing closes one Line along its sides and around both caps, so two Lines
+ * sharing a corridor produce two full-length casings rather than one.
  */
 const LINE_FIRST_RESULT: LineSurfaceSummary = {
   stripeSpansByLineId: {
@@ -113,7 +115,7 @@ const LINE_FIRST_RESULT: LineSurfaceSummary = {
     'route-201': [1],
     'route-202': [1],
   },
-  casingSpans: [0.33, 0.67, 1],
+  casingSpans: [0.33, 0.67, 1, 1],
 };
 
 interface LineSurfaceSummary {
@@ -631,7 +633,7 @@ describe('every passenger surface resolves one Line-first scene', () => {
     }
   });
 
-  it('a corridor two Lines share carries one casing on every surface', () => {
+  it('a corridor two Lines share carries a casing per Line on every surface', () => {
     for (const [name, surface] of surfaces) {
       expect({ name, casings: surface.casingSpans }).toEqual({
         name,

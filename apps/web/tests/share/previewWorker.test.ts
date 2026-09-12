@@ -169,7 +169,8 @@ describe('share preview Worker runtime', () => {
       }),
     );
 
-    expect(routeRoleCounts(card)).toEqual({ casings: 1, stripes: 2 });
+    // One casing per Line — see render/preview.test.ts for why.
+    expect(routeRoleCounts(card)).toEqual({ casings: 2, stripes: 2 });
     expect(card).toContain('stroke="#123456"');
     expect(card).toContain('stroke="#abcdef"');
   });

@@ -351,7 +351,9 @@ describe('render/preview: the passenger Lines a share card draws', () => {
 
     const card = await cardFor(system);
 
-    expect(routeRoleCounts(card)).toEqual({ casings: 1, stripes: 2 });
+    // One casing per Line: a casing closes one Line's stripe, sides and
+    // caps, rather than backing the bundle they share.
+    expect(routeRoleCounts(card)).toEqual({ casings: 2, stripes: 2 });
     expect(card).toContain('stroke="#123456"');
     expect(card).toContain('stroke="#abcdef"');
   });
