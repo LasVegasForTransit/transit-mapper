@@ -24,6 +24,10 @@
     {
       "name": "website",
       "requiredStatus": "Validate"
+    },
+    {
+      "name": "week-without-driving",
+      "requiredStatus": "Validate"
     }
   ],
   "exceptions": []

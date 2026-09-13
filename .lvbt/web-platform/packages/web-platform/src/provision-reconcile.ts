@@ -78,3 +78,25 @@ export async function reconcileResources(resources: ProvisionResource[], apply: 
     operations,
   };
 }
+
+export async function reconcileResourceGroups(groups: ProvisionResource[][], apply: boolean) {
+  const resources = groups.flat();
+  if (new Set(resources.map((resource) => resource.id)).size !== resources.length)
+    throw new Error('Provisioning resource IDs must be unique.');
+  if (!apply) return reconcileResources(resources, false);
+
+  const operations: ProvisionOperation[] = [];
+  let changed: boolean | null = false;
+  for (const [index, group] of groups.entries()) {
+    const result = await reconcileResources(group, true);
+    operations.push(...result.operations);
+    if (result.changed === null) changed = null;
+    else if (result.changed && changed !== null) changed = true;
+    if (!result.ok) {
+      for (const remaining of groups.slice(index + 1).flat())
+        operations.push({ id: remaining.id, status: 'withheld' });
+      return { ok: false, changed, operations };
+    }
+  }
+  return { ok: true, changed, operations };
+}

@@ -1,5 +1,9 @@
 import { expect, test } from 'vitest';
-import { reconcileResources, type ProvisionResource } from '../src/provision-reconcile.ts';
+import {
+  reconcileResourceGroups,
+  reconcileResources,
+  type ProvisionResource,
+} from '../src/provision-reconcile.ts';
 
 function resource(
   id: string,
@@ -70,5 +74,43 @@ test('reports an ambiguous write and withholds remaining operations', async () =
     'unconfirmed',
     'withheld',
   ]);
+  expect(writes).toEqual([]);
+});
+
+test('reconciles dependency groups in order without weakening each group plan', async () => {
+  const repository = { value: null as null | string };
+  const rules = { value: null as null | string };
+  const writes: string[] = [];
+  const dependent = resource('rules', rules, 'configured', writes);
+  dependent.read = () =>
+    repository.value === null
+      ? Promise.reject(new Error('repository missing'))
+      : Promise.resolve(rules.value);
+
+  const groups = [[resource('repository', repository, 'created', writes)], [dependent]];
+  const flat = await reconcileResources(groups.flat(), true);
+  expect(flat.ok).toBe(false);
+  expect(writes).toEqual([]);
+
+  const applied = await reconcileResourceGroups(groups, true);
+  expect(applied.ok).toBe(true);
+  expect(applied.changed).toBe(true);
+  expect(applied.operations.map(({ status }) => status)).toEqual(['verified', 'verified']);
+  expect(writes).toEqual(['repository', 'rules']);
+  expect((await reconcileResourceGroups(groups, true)).changed).toBe(false);
+});
+
+test('withholds later groups after an unconfirmed stage', async () => {
+  const writes: string[] = [];
+  const failed = resource('repository', { value: null }, 'created', writes);
+  failed.write = () => Promise.reject(new Error('ambiguous provider result'));
+  const result = await reconcileResourceGroups(
+    [[failed], [resource('rules', { value: null }, 'configured', writes)]],
+    true,
+  );
+
+  expect(result.ok).toBe(false);
+  expect(result.changed).toBeNull();
+  expect(result.operations.map(({ status }) => status)).toEqual(['unconfirmed', 'withheld']);
   expect(writes).toEqual([]);
 });

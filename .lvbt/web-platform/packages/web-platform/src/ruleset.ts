@@ -2,6 +2,12 @@ import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 
 function managedFieldsMatch(expected: unknown, actual: unknown): boolean {
+  if (Array.isArray(expected))
+    return (
+      Array.isArray(actual) &&
+      actual.length === expected.length &&
+      expected.every((value, index) => managedFieldsMatch(value, actual[index]))
+    );
   const fields = z.record(z.string(), z.unknown()).safeParse(expected);
   if (!fields.success) return isDeepStrictEqual(expected, actual);
   const candidate = z.record(z.string(), z.unknown()).safeParse(actual);
@@ -11,6 +17,10 @@ function managedFieldsMatch(expected: unknown, actual: unknown): boolean {
       managedFieldsMatch(value, candidate.data[key]),
     )
   );
+}
+
+export function matchesPinnedRuleset(input: unknown, standard: unknown) {
+  return managedFieldsMatch(standard, input);
 }
 
 export function matchesPinnedRules(input: unknown, standard: unknown) {
