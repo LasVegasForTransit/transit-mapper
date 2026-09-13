@@ -1,5 +1,9 @@
 export { assertDeploymentCheckout } from './deployment-checkout.js';
-export { previewConfiguration, previewUploadReceipt } from './pr-preview-config.js';
+export {
+  previewConfiguration,
+  previewUploadReceipt,
+  stagingPreviewConfiguration,
+} from './pr-preview-config.js';
 export { publishPreviews } from './pr-preview.js';
 export type { PreviewOperations, PreviewReceipt } from './pr-preview.js';
 export { uploadPreview } from './pr-preview-upload.js';

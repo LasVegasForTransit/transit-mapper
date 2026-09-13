@@ -3,6 +3,14 @@
 // from another checkout would otherwise load @playwright/test twice, which it refuses.
 import { devices } from 'playwright-core';
 
+// Astro treats agent-launched servers as detached processes unless these
+// markers identify the process as the foreground server Playwright owns.
+export const foregroundServerEnvironment = {
+  ...process.env,
+  ASTRO_DEV_BACKGROUND: '1',
+  ASTRO_PREVIEW_BACKGROUND: '1',
+};
+
 /**
  * The shared Playwright configuration for every LVBT repository. End-to-end
  * tests live under `tests/e2e/` and end in `.spec.ts`; every suite runs on one
@@ -14,7 +22,11 @@ import { devices } from 'playwright-core';
  *   import { sharedConfig } from '@lvbt/playwright-config';
  *   export default defineConfig({
  *     ...sharedConfig,
- *     webServer: { command: 'pnpm preview', url: 'http://127.0.0.1:4321' },
+ *     webServer: {
+ *       command: 'pnpm preview',
+ *       env: foregroundServerEnvironment,
+ *       url: 'http://127.0.0.1:4321',
+ *     },
  *     use: { ...sharedConfig.use, baseURL: 'http://127.0.0.1:4321' },
  *   });
  *

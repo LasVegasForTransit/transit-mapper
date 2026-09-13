@@ -6,12 +6,17 @@ import { promisify } from 'node:util';
 import { z } from 'zod';
 import { activeVersion, uploadedVersion } from './cloudflare-release.js';
 import type { CloudflareRead } from './doctor-cloudflare.js';
-import { previewUploadReceipt, previewConfiguration } from './pr-preview-config.js';
+import type { PreviewReceipt } from './pr-preview.js';
+import {
+  previewUploadReceipt,
+  previewConfiguration,
+  stagingPreviewConfiguration,
+} from './pr-preview-config.js';
 
 interface Target {
   directory: string;
   worker: string;
-  mode: 'version' | 'temporary';
+  mode: 'version' | 'temporary' | 'staging';
   repository: string;
   pullRequest: number;
   commit: string;
@@ -96,15 +101,29 @@ async function validateConfiguration(target: Target) {
       preview_urls: z.boolean(),
     })
     .parse(config);
-  previewConfiguration(config, target.worker, settings.assets.directory, target.mode);
+  if (target.mode === 'staging')
+    stagingPreviewConfiguration(config, target.worker, settings.assets.directory);
+  else previewConfiguration(config, target.worker, settings.assets.directory, target.mode);
   if (
     (settings.account_id !== undefined && settings.account_id !== target.accountId) ||
-    settings.vars !== undefined ||
-    settings.workers_dev !== (target.mode === 'temporary') ||
-    !settings.preview_urls
+    (target.mode !== 'staging' && settings.vars !== undefined) ||
+    settings.workers_dev !== (target.mode !== 'version') ||
+    settings.preview_urls !== (target.mode !== 'staging')
   )
     throw new Error('Preview configuration does not match the isolated target.');
   return configPath;
+}
+
+async function verifyUploadIsolation(
+  target: Target,
+  current: () => Promise<string | null>,
+  previousVersion: string | null,
+  receipt: PreviewReceipt,
+) {
+  if (target.mode === 'version' && (await current()) !== previousVersion)
+    throw new Error('The production deployment changed during preview upload.');
+  if (target.mode === 'staging' && (await current()) !== receipt.version)
+    throw new Error('The staging deployment changed during preview verification.');
 }
 
 export async function uploadPreview(
@@ -123,8 +142,8 @@ export async function uploadPreview(
         .parse(await read.get(`${base}/${target.worker}/deployments`)).deployments,
     );
   const previousVersion = exists ? await current() : null;
-  if (target.mode === 'version' && previousVersion === null)
-    throw new Error('Version previews require an existing production deployment.');
+  if (target.mode !== 'temporary' && previousVersion === null)
+    throw new Error('Version and staging previews require an existing deployment.');
   const owner = `LVBT preview ${target.repository}#${target.pullRequest} `;
   if (previousVersion) {
     const version = z
@@ -154,7 +173,6 @@ export async function uploadPreview(
     target.mode === 'version'
       ? previewUploadReceipt(contents, target.worker)
       : temporaryReceipt(contents, target.worker);
-  if (target.mode === 'version' && (await current()) !== previousVersion)
-    throw new Error('The production deployment changed during preview upload.');
+  await verifyUploadIsolation(target, current, previousVersion, receipt);
   return { ...receipt, previousVersion };
 }

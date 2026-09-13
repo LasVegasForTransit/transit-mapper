@@ -47,6 +47,31 @@ export function previewConfiguration(
   };
 }
 
+const stagingConfig = z
+  .object({
+    name: z.string(),
+    compatibility_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    assets: z.object({ directory: z.string() }).loose(),
+    routes: z.array(z.unknown()).max(0),
+    route: z.never().optional(),
+    workers_dev: z.literal(true),
+    preview_urls: z.literal(false),
+    vars: z.record(z.string(), z.unknown()).optional(),
+  })
+  .loose();
+
+export function stagingPreviewConfiguration(input: unknown, worker: string, assets: string) {
+  z.string()
+    .regex(/^[a-z0-9-]{1,63}$/)
+    .parse(worker);
+  if (!path.isAbsolute(assets)) throw new Error('Staging preview assets require an absolute path.');
+  const config = stagingConfig.parse(input);
+  if (config.name !== worker) throw new Error('Staging preview Worker name does not match.');
+  if (Object.hasOwn(config.vars ?? {}, 'CLOUDFLARE_WEB_ANALYTICS_TOKEN'))
+    throw new Error('Staging previews cannot include production analytics.');
+  return { ...config, assets: { ...config.assets, directory: assets }, routes: [] };
+}
+
 export function previewUploadReceipt(output: string, worker: string) {
   const records = output
     .split('\n')

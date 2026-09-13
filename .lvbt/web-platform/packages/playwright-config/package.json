@@ -21,13 +21,19 @@
     "./accessibility": {
       "types": "./accessibility.d.ts",
       "default": "./accessibility.js"
+    },
+    "./page-health": {
+      "types": "./page-health.d.ts",
+      "default": "./page-health.js"
     }
   },
   "files": [
     "index.js",
     "index.d.ts",
     "accessibility.js",
-    "accessibility.d.ts"
+    "accessibility.d.ts",
+    "page-health.js",
+    "page-health.d.ts"
   ],
   "peerDependencies": {
     "@playwright/test": ">=1.60"
