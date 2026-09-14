@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.9.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.8.0...v0.9.0) (2026-09-14)
+
+
+### Features
+
+* **core:** Widen every Line stripe by two pixels ([dfd58f6](https://github.com/LasVegasForTransit/transit-mapper/commit/dfd58f65fc47cc9b43753f903e8a637286faf6d3))
+* **renderer:** Case each Line rather than the corridor ([e670c24](https://github.com/LasVegasForTransit/transit-mapper/commit/e670c2475564f539da0f3f810abb14aff07d48b5))
+
+
+### Bug Fixes
+
+* **core:** Make catalog paint drift a compile error ([8445674](https://github.com/LasVegasForTransit/transit-mapper/commit/844567461a07f095791ae01e7c90302b8f9799d7))
+* **core:** Stop unpainted catalog entries borrowing other paint ([54adf38](https://github.com/LasVegasForTransit/transit-mapper/commit/54adf38401153a9008dd257d15eef71afe989421))
+* **dx:** Keep generated packages installable ([83ea33d](https://github.com/LasVegasForTransit/transit-mapper/commit/83ea33de33470fc903426184ef75fc7089ca046a))
+* **dx:** Stop the boundary tests failing on the clock ([a167e8f](https://github.com/LasVegasForTransit/transit-mapper/commit/a167e8f0b73deb1f14b1d83ac9d54660a49f036e))
+* **web:** Round a Line's end, square the corridor's ([a0d0c8e](https://github.com/LasVegasForTransit/transit-mapper/commit/a0d0c8ea665c80517cdae7ccf093115e634a5baf))
+* **web:** Square the ends of a Line ([6ee114e](https://github.com/LasVegasForTransit/transit-mapper/commit/6ee114e0833630f3af3469b680865a480b64338a))
+
 ## [0.8.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.7.3...v0.8.0) (2026-09-04)
 
 
