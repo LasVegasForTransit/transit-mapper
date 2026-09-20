@@ -232,8 +232,8 @@ overridden off per package as recorded adoption debt.
 ### Web
 
 `apps/web` owns the Vite and React editor, read-only embed, browser storage,
-installable PWA, and production analytics. It depends on core for domain
-decisions and on the PWA updater for activation state.
+and installable PWA. It depends on core for domain decisions and on the PWA
+updater for activation state.
 
 #### Application host
 
