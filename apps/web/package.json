@@ -22,6 +22,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@lasvegasfortransit/analytics": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@transitmapper/core": "workspace:*",
     "@transitmapper/map": "workspace:*",

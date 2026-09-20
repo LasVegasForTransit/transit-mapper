@@ -3,6 +3,7 @@
   // The Worker name. Rename it before the first deploy.
   "name": "lvbt-app",
   "compatibility_date": "2026-08-31",
+  "preview_urls": true,
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application",

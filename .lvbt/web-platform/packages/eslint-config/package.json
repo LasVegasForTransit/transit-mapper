@@ -1,6 +1,6 @@
 {
   "name": "@lvbt/eslint-config",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "The ESLint configurations every LVBT repository uses.",
   "license": "MIT",
   "type": "module",

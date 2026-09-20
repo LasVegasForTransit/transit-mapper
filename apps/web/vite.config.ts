@@ -25,6 +25,7 @@ const distDirectory = resolveBuildOutputDirectory(
 const buildInfo = loadBuildInfo({ repositoryRoot });
 
 export default defineConfig({
+  envPrefix: ['VITE_', 'PUBLIC_'],
   define: {
     __TRANSITMAPPER_BUILD_INFO__: JSON.stringify(buildInfo),
   },

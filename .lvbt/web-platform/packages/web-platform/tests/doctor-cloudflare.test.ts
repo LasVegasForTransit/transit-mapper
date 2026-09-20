@@ -31,6 +31,14 @@ const fixtures: Record<string, unknown> = {
     { name: 'labs.example.org', proxied: true, type: 'AAAA' },
   ],
   'accounts/account/workers/scripts': [{ id: 'lvbt-labs-home' }, { id: 'lvbt-labs-map' }],
+  'accounts/account/workers/scripts/lvbt-labs-home/subdomain': {
+    enabled: false,
+    previews_enabled: true,
+  },
+  'accounts/account/workers/scripts/lvbt-labs-map/subdomain': {
+    enabled: false,
+    previews_enabled: true,
+  },
   'accounts/account/rum/site_info/list': [
     {
       site_token: 'public-id',
@@ -56,4 +64,15 @@ test('flags route collisions while preserving an unknown analytics result', asyn
   const result = await cloudflareDoctor(target, { get: reader, list: reader });
   expect(result.find((check) => check.id === 'cloudflare.routes')?.status).toBe('fail');
   expect(result.find((check) => check.id === 'cloudflare.analytics')?.status).toBe('unknown');
+});
+
+test('fails when any published Worker has version previews disabled', async () => {
+  const reader = (endpoint: string) => {
+    if (endpoint.endsWith('lvbt-labs-map/subdomain'))
+      return Promise.resolve({ enabled: false, previews_enabled: false });
+    return read(endpoint);
+  };
+
+  const result = await cloudflareDoctor(target, { get: reader, list: reader });
+  expect(result.find((check) => check.id === 'cloudflare.worker-previews')?.status).toBe('fail');
 });

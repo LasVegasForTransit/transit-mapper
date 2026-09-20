@@ -18,6 +18,18 @@
       "requiredStatus": "Validate"
     },
     {
+      "name": "template-basic",
+      "requiredStatus": "Validate"
+    },
+    {
+      "name": "template-with-astro",
+      "requiredStatus": "Validate"
+    },
+    {
+      "name": "template-with-vite-react",
+      "requiredStatus": "Validate"
+    },
+    {
       "name": "transit-mapper",
       "requiredStatus": "Validate"
     },

@@ -33,7 +33,7 @@ const fixture: Record<string, unknown> = {
     ],
   },
   '/environments/production/variables': {
-    variables: [{ name: 'CLOUDFLARE_WEB_ANALYTICS_TOKEN', value: 'public-analytics-id' }],
+    variables: [{ name: 'PUBLIC_LVBT_CWA_TOKEN', value: 'public-analytics-id' }],
   },
   '/environments/preview': { id: 42 },
   '/environments/preview/secrets': { secrets: [{ name: 'CLOUDFLARE_PREVIEW_API_TOKEN' }] },

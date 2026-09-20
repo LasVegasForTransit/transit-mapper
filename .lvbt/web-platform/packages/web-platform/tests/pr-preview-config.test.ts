@@ -12,7 +12,7 @@ test('isolates static preview configuration from production routes and variables
       compatibility_date: '2026-08-31',
       assets: { directory: './dist', not_found_handling: '404-page' },
       routes: [{ pattern: 'labs.example.org', custom_domain: true }],
-      vars: { CLOUDFLARE_WEB_ANALYTICS_TOKEN: 'production-token' },
+      vars: { PUBLIC_LVBT_CWA_TOKEN: 'production-token' },
     },
     'lvbt-labs-pr-3-home',
     '/tmp/preview/assets',
@@ -88,7 +88,7 @@ test.each([
     routes: [],
     workers_dev: true,
     preview_urls: false,
-    vars: { CLOUDFLARE_WEB_ANALYTICS_TOKEN: 'production-token' },
+    vars: { PUBLIC_LVBT_CWA_TOKEN: 'production-token' },
   },
 ])('rejects a staging configuration that is not isolated', (unsafe) => {
   expect(() =>

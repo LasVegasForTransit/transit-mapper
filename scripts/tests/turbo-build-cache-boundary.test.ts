@@ -82,6 +82,8 @@ describe('Turbo task overrides', () => {
       'TRANSITMAPPER_PERFORMANCE_SAMPLING_ENABLED',
       'TRANSITMAPPER_PERFORMANCE_ORDINARY_BASIS_POINTS',
       'TRANSITMAPPER_PERFORMANCE_RELEASE_BASIS_POINTS',
+      'LVBT_REQUIRE_ANALYTICS',
+      'PUBLIC_LVBT_CWA_TOKEN',
       'VITE_PERF_BUILD',
       // The preview deploy builds the same tree against a per-pull-request
       // hostname. Listing it is what lets it reach vite under strict env mode,

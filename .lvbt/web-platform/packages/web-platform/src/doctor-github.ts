@@ -150,8 +150,7 @@ export async function githubDoctor(target: GitHubTarget, read: Read) {
         variables
           .parse(await read(`${environment}/variables`))
           .variables.some(
-            (value) =>
-              value.name === 'CLOUDFLARE_WEB_ANALYTICS_TOKEN' && value.value.trim().length > 0,
+            (value) => value.name === 'PUBLIC_LVBT_CWA_TOKEN' && value.value.trim().length > 0,
           ),
     ),
   ];

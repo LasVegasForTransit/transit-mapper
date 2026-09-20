@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 # One preview per pull request, newest push wins. Closing shares the group on
 # purpose: it cancels a deploy still in flight so teardown cannot delete a
@@ -100,6 +101,7 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
+      packages: read
       # The sticky comment. Nothing else here writes to the repository.
       pull-requests: write
     # Scopes the Cloudflare credentials to this environment and records a

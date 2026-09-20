@@ -8,5 +8,5 @@ export type { CloudflareRead, CloudflareTarget } from './doctor-cloudflare.js';
 export { provisionRoutes } from './provision-routes.js';
 export { provisionCustomDomain } from './provision-domain.js';
 export { provisionAnalytics } from './provision-analytics.js';
-export { provisionWorkerPresence } from './provision-worker.js';
+export { provisionWorkerPresence, provisionWorkerPreviewUrls } from './provision-worker.js';
 export { activeVersion, uploadedVersion, verifyArchiveVersion } from './cloudflare-release.js';

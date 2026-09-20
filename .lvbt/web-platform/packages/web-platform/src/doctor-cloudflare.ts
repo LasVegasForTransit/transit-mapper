@@ -145,6 +145,20 @@ export async function cloudflareDoctor(target: CloudflareTarget, read: Cloudflar
         workers.some((existing) => existing.id === worker.name),
       );
     }),
+    await check(
+      'worker-previews',
+      'Every published Worker has immutable version preview URLs enabled.',
+      async () => {
+        const settings = await Promise.all(
+          target.workers.map((worker) =>
+            read.get(`${account}/workers/scripts/${worker.name}/subdomain`),
+          ),
+        );
+        return settings.every(
+          (value) => z.object({ previews_enabled: z.literal(true) }).safeParse(value).success,
+        );
+      },
+    ),
     await check('analytics', 'One Web Analytics site includes the Labs hostname.', async () =>
       validAnalytics(await read.list(`${account}/rum/site_info/list`), target.hostname),
     ),

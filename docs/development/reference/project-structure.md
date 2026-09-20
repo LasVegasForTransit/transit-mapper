@@ -11,6 +11,7 @@ Dependencies flow from the applications toward shared packages:
 
 ```text
 apps/web ────────┬──> packages/workspace ────> packages/map ──> packages/renderer ──> packages/core
+                 ├──> @lasvegasfortransit/analytics
                  ├──> packages/map ───────> packages/renderer ──> packages/core
                  ├──> packages/renderer ─────> packages/core
                  ├──> packages/views ─────> packages/core
@@ -231,8 +232,8 @@ overridden off per package as recorded adoption debt.
 ### Web
 
 `apps/web` owns the Vite and React editor, read-only embed, browser storage,
-and installable PWA. It depends on core for domain decisions and on the PWA
-updater for activation state.
+installable PWA, and production analytics. It depends on core for domain
+decisions and on the PWA updater for activation state.
 
 #### Application host
 
