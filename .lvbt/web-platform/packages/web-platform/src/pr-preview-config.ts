@@ -33,7 +33,7 @@ export function previewConfiguration(
     .regex(/^[a-z0-9-]{1,63}$/)
     .parse(worker);
   if (!path.isAbsolute(assets)) throw new Error('Preview assets require an absolute bundle path.');
-  if (Object.keys(config.vars ?? {}).some((key) => key !== 'CLOUDFLARE_WEB_ANALYTICS_TOKEN'))
+  if (Object.keys(config.vars ?? {}).some((key) => key !== 'PUBLIC_LVBT_CWA_TOKEN'))
     throw new Error('Application variables require explicit isolated preview configuration.');
   return {
     name: worker,
@@ -67,7 +67,7 @@ export function stagingPreviewConfiguration(input: unknown, worker: string, asse
   if (!path.isAbsolute(assets)) throw new Error('Staging preview assets require an absolute path.');
   const config = stagingConfig.parse(input);
   if (config.name !== worker) throw new Error('Staging preview Worker name does not match.');
-  if (Object.hasOwn(config.vars ?? {}, 'CLOUDFLARE_WEB_ANALYTICS_TOKEN'))
+  if (Object.hasOwn(config.vars ?? {}, 'PUBLIC_LVBT_CWA_TOKEN'))
     throw new Error('Staging previews cannot include production analytics.');
   return { ...config, assets: { ...config.assets, directory: assets }, routes: [] };
 }

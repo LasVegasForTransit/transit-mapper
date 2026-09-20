@@ -21,6 +21,7 @@ on:
 # Least-privilege defaults.
 permissions:
   contents: read
+  packages: read
 
 # Cancel in-progress CI when a newer commit lands on the same ref — except on
 # a merge group. The queue reads a cancelled required check as a failed one and

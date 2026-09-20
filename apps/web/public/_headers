@@ -18,7 +18,7 @@
   # The editor is an application surface, not something to be framed. The one
   # deliberate exception is /e/:id, which the Worker serves with its own
   # frame-ancestors and never reaches this file.
-  Content-Security-Policy: frame-ancestors 'none'
+  Content-Security-Policy: frame-ancestors 'none'; script-src https://static.cloudflareinsights.com; connect-src https://cloudflareinsights.com https://events.lasvegasfortransit.org
   # Stop a browser second-guessing our content types.
   X-Content-Type-Options: nosniff
   # Send the origin to third parties, never the full path — a share id should

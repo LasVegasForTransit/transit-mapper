@@ -4,6 +4,15 @@ Requirements: Node 24.20.x and pnpm 11.25.x. `package.json` records both
 versions, and CI uses the same contract. A different Node line can expose
 runtime globals or module behavior that the supported toolchain does not.
 
+The shared analytics package is restricted to LVBT repositories on GitHub
+Packages. Authenticate GitHub CLI once with package read access, then pass its
+stored credential to pnpm's trusted user configuration without printing it:
+
+```sh
+gh auth refresh --hostname github.com --scopes read:packages
+pnpm config set --location=user //npm.pkg.github.com/:_authToken "$(gh auth token)"
+```
+
 ```sh
 git clone git@github.com:LasVegasForTransit/transit-mapper.git
 cd transit-mapper

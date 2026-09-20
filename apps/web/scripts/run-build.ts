@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { assertAnalyticsBuildEnvironment } from './analytics-environment';
 import { buildEnvironment, readGitBuildState } from './build-metadata';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
@@ -12,6 +13,7 @@ const forwarded = process.argv.slice(2);
 // means "everything after this belongs to the task", which would hand `--force`
 // to tsc instead. Drop it so the flags stay Turbo's.
 if (forwarded[0] === '--') forwarded.shift();
+assertAnalyticsBuildEnvironment(process.env);
 const result = spawnSync('pnpm', ['exec', 'turbo', 'run', 'build', ...forwarded], {
   cwd: repositoryRoot,
   env: buildEnvironment(process.env, readGitBuildState(repositoryRoot)),

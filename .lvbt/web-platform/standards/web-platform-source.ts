@@ -35,7 +35,7 @@ function readPreset(repository: string, ref: string, release: string | null): We
 
 export function readRelease(repository: string, release: string): WebPreset {
   if (!/^v\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/.test(release)) {
-    throw new Error('Use an explicit version tag, such as v0.2.7.');
+    throw new Error('Use an explicit version tag, such as v0.2.8.');
   }
   return readPreset(repository, `refs/tags/${release}`, release);
 }

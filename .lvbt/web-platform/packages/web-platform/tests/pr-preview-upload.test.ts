@@ -6,7 +6,7 @@ import { uploadPreview } from '../src/pr-preview-upload.ts';
 
 test.each([
   { account_id: 'other' },
-  { vars: { CLOUDFLARE_WEB_ANALYTICS_TOKEN: 'production-token' } },
+  { vars: { PUBLIC_LVBT_CWA_TOKEN: 'production-token' } },
   { workers_dev: true },
   { preview_urls: false },
 ])('refuses unsafe preview configuration before provider writes: %j', async (override) => {

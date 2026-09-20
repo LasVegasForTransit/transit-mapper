@@ -15,6 +15,9 @@ catalogs:
     '@cloudflare/workers-types':
       specifier: ^4.20241205.0
       version: 4.20260702.1
+    '@lasvegasfortransit/analytics':
+      specifier: 0.1.0
+      version: 0.1.0
     '@tailwindcss/vite':
       specifier: ^4.3.3
       version: 4.3.3
@@ -215,6 +218,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@lasvegasfortransit/analytics':
+        specifier: 'catalog:'
+        version: 0.1.0(react@18.3.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.3.3(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
@@ -1888,6 +1894,24 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
+
+  '@lasvegasfortransit/analytics@0.1.0':
+    resolution: {integrity: sha512-i8tsAi7cGjBtPQUozrgEJYNZJS6qaixRkW2LoqEr+xwPRp0EkSygsNsh2PPif8CwQRIjD3dED/H2ZsHqepZtFw==}
+    hasBin: true
+    peerDependencies:
+      '@playwright/test': '>=1.62 <2'
+      astro: '>=6 <8'
+      react: '>=18 <20'
+      vite: '>=6 <9'
+    peerDependenciesMeta:
+      '@playwright/test':
+        optional: true
+      astro:
+        optional: true
+      react:
+        optional: true
+      vite:
+        optional: true
 
   '@lvbt/cli@file:.lvbt/web-platform/packages/cli':
     resolution: {directory: .lvbt/web-platform/packages/cli, type: directory}
@@ -5930,6 +5954,11 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@lasvegasfortransit/analytics@0.1.0(react@18.3.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))':
+    optionalDependencies:
+      react: 18.3.1
+      vite: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
   '@lvbt/cli@file:.lvbt/web-platform/packages/cli': {}
 

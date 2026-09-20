@@ -4,6 +4,9 @@ Everything here needs access to the Las Vegas for Better Transit Cloudflare
 account. If you don't have it, the person who does is the one who can act on
 any of this.
 
+Production-only measurement setup and verification are documented in
+[Operate TransitMapper analytics](analytics.md).
+
 Production is one Cloudflare Worker (`transitmapper`) on
 `map.lasvegasfortransit.org`, serving the built SPA as static assets and
 handling `/api/*`, `/s/*`, `/v/*`, `/e/*` and `/embed/*` itself, with one D1
