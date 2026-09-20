@@ -88,6 +88,8 @@ const NOT_TYPESCRIPT: Exemption[] = [
 /** Names a tool defines for itself, valid at any scanned root. */
 const TOOL_OWNED = [
   /^package\.json$/,
+  // npm and pnpm only discover registry configuration under this name.
+  /^\.npmrc$/,
   // TypeScript resolves `extends` and `--project` by these names.
   /^tsconfig(\.[a-z0-9-]+)?\.json$/,
   /^turbo\.json$/,
@@ -142,6 +144,8 @@ function extension(name: string): string {
 function judge(path: string): Offence | undefined {
   const name = basename(path);
 
+  if (TOOL_OWNED.some((pattern) => pattern.test(name))) return undefined;
+
   if (RC_NAME.test(name)) {
     const tool = name.slice(1).replace(/rc(\.[a-z]+)?$/i, '');
     return {
@@ -175,7 +179,6 @@ function judge(path: string): Offence | undefined {
   }
 
   if (OWNED_PATHS.has(path)) return undefined;
-  if (TOOL_OWNED.some((pattern) => pattern.test(name))) return undefined;
   if (!DATA_EXTENSIONS.has(extension(name))) return undefined;
 
   const tool = name.replace(/\.[a-z]+$/i, '');

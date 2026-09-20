@@ -58,11 +58,25 @@ catalog:
   sharp: ^0.35.4
 
 minimumReleaseAgeExclude:
+  - '@lasvegasfortransit/analytics@0.1.0'
   - brace-expansion@1.1.17 || 2.1.3 || 5.0.9
   - fast-uri@3.1.6
   - undici@7.29.0
   - nanoid@3.3.18
   - browserslist@4.28.8
+
+# The published package currently omits its adapter peer metadata.
+packageExtensions:
+  '@lasvegasfortransit/analytics@0.1.0':
+    peerDependenciesMeta:
+      '@playwright/test':
+        optional: true
+      astro:
+        optional: true
+      react:
+        optional: true
+      vite:
+        optional: true
 
 overrides:
   # GHSA-rgj7-g3m4-5g8c: libheif flaws reached through sharp. Our own
