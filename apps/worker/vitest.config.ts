@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
 import { defineConfig } from 'vitest/config';
 
-import { sharedConfig } from '@lvbt/vitest-config';
+import { sharedConfig } from '@lasvegasfortransit/vitest-config';
 
 // API note for anyone following older documentation: as of
 // @cloudflare/vitest-pool-workers 0.18, there is no `/config` subpath and no

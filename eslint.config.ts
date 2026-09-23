@@ -1,15 +1,15 @@
-// The org's baseline lives in @lvbt/eslint-config, so this file holds only
+// The org's baseline lives in @lasvegasfortransit/eslint-config, so this file holds only
 // what is true of this repository and nothing that would be true of any
 // other. Each block below is scoped to the package it is about.
 //
 // One file rather than one per package: ESLint's flat config resolves by
 // walking up from the linted file to the nearest eslint.config.*, so every
-// package's `eslint .` already reaches this file. @lvbt/eslint-config ships
+// package's `eslint .` already reaches this file. @lasvegasfortransit/eslint-config ships
 // separate `base`/`browser`/`react-internal` entry points for repositories
 // that give each package its own config file; this repository instead layers
 // the same globals and rules those entry points add, scoped to the packages
 // that need them, onto the one shared `base`.
-import { config as baseConfig } from '@lvbt/eslint-config/base';
+import { config as baseConfig } from '@lasvegasfortransit/eslint-config/base';
 import transitmapper from '@transitmapper/eslint-plugin';
 import type { ESLint } from 'eslint';
 import globals from 'globals';
@@ -25,7 +25,7 @@ const reactHooksPlugin = reactHooks as unknown as ESLint.Plugin;
 
 // Packages whose src touches the DOM (own tsconfig admits the DOM lib), so
 // `no-undef`-style resolution needs the browser and service-worker globals
-// @lvbt/eslint-config/browser would add. packages/core deliberately stays
+// @lasvegasfortransit/eslint-config/browser would add. packages/core deliberately stays
 // out of this list: it also includes the DOM lib, for ambient fetch/crypto
 // typings only, and giving it real browser globals would blur the boundary
 // the transitmapper/core-runtime-purity rule below exists to enforce.

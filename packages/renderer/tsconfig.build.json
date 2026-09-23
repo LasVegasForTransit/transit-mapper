@@ -1,7 +1,7 @@
 // Production sources only. See tsconfig.json beside this one for why the split
 // exists.
 {
-  "extends": "@lvbt/typescript-config/browser.json",
+  "extends": "@lasvegasfortransit/typescript-config/browser.json",
   "compilerOptions": {
     "types": ["vite/client"],
     "noEmit": false,

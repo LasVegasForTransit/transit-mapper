@@ -147,7 +147,7 @@ function findGrowth(ledgerPath: string, base: Ledger, current: Ledger): Offence[
  * migration stalls. `every` is the point — one changed line that is not an
  * import closes the exemption.
  *
- * This mirrors `lvbt check debt` in @lvbt/cli, which owns the same ratchet for
+ * This mirrors `lvbt check debt` in @lasvegasfortransit/cli, which owns the same ratchet for
  * the organization.
  */
 function onlyImportsChanged(baseRef: string, path: string): boolean {

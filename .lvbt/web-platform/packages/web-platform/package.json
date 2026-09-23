@@ -1,6 +1,6 @@
 {
-  "name": "@lvbt/web-platform",
-  "version": "0.2.8",
+  "name": "@lasvegasfortransit/web-platform",
+  "version": "0.3.3",
   "description": "Provider-neutral deployment, provisioning, and validation primitives for LVBT web repositories.",
   "license": "MIT",
   "type": "module",
@@ -8,6 +8,10 @@
     "type": "git",
     "url": "https://github.com/LasVegasForTransit/repository-tooling.git",
     "directory": "packages/web-platform"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
   },
   "exports": {
     ".": "./src/index.ts",

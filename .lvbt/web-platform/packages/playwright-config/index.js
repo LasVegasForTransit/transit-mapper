@@ -19,7 +19,7 @@ export const foregroundServerEnvironment = {
  * Spread it into a package's playwright.config.ts and add the web server:
  *
  *   import { defineConfig } from '@playwright/test';
- *   import { sharedConfig } from '@lvbt/playwright-config';
+ *   import { sharedConfig } from '@lasvegasfortransit/playwright-config';
  *   export default defineConfig({
  *     ...sharedConfig,
  *     webServer: {

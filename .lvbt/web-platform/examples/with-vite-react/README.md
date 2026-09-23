@@ -28,5 +28,5 @@ repository's boundaries.
 `pnpm run deploy` builds and runs `wrangler deploy` for every app with a wrangler config;
 `.github/workflows/deploy.yml` does the same on every push to `main`.
 
-Lint, format, TypeScript, and test settings extend the `@lvbt/*` packages from
+Lint, format, TypeScript, and test settings extend the `@lasvegasfortransit/*` packages from
 [`LasVegasForTransit/repository-tooling`](https://github.com/LasVegasForTransit/repository-tooling).

@@ -20,10 +20,10 @@ of every tool for the whole organization. A package writes `"catalog:"` as a ver
 pinned one.
 
 <a id="eslint"></a>**ESLint**: finds likely bugs and enforces code rules. The rules come from
-`@lvbt/eslint-config`.
+`@lasvegasfortransit/eslint-config`.
 
 <a id="prettier"></a>**Prettier**: formats code the same way for everyone, so formatting is never
-discussed in review. The settings come from `@lvbt/prettier-config`.
+discussed in review. The settings come from `@lasvegasfortransit/prettier-config`.
 
 <a id="vitest"></a>**Vitest**: runs unit tests under `tests/`.
 

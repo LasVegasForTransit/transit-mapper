@@ -1,7 +1,7 @@
 // Production sources only. See tsconfig.json beside this one for why the split
 // exists.
 {
-  "extends": "@lvbt/typescript-config/node.json",
+  "extends": "@lasvegasfortransit/typescript-config/node.json",
   "compilerOptions": {
     // The package's `exports` map points at TypeScript source rather than a
     // build, so its own modules import each other with a `.ts` suffix. Nothing

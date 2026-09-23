@@ -145,6 +145,49 @@ export async function applyPreset(root: string, bundle: WebPreset, dryRun = fals
       .sort()
       .filter((name) => !(name in bundle.files)),
   };
+  const consumerChanged = await migrateLegacyPackageScope(root, dryRun);
   if (!dryRun) await install(root, bundle);
-  return plan;
+  return { ...plan, consumerChanged };
+}
+
+const SKIPPED_DIRECTORIES = new Set(['.git', 'node_modules', 'dist', '.turbo', 'test-results']);
+const LEGACY_PLATFORM_PACKAGES = [
+  'cli',
+  'eslint-config',
+  'playwright-config',
+  'prettier-config',
+  'typescript-config',
+  'vitest-config',
+  'web-platform',
+] as const;
+
+async function consumerFiles(root: string, relative = ''): Promise<string[]> {
+  const directory = path.join(root, relative);
+  const files: string[] = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (entry.name === '.lvbt' && relative === '') continue;
+    if (entry.isDirectory()) {
+      if (!SKIPPED_DIRECTORIES.has(entry.name))
+        files.push(...(await consumerFiles(root, path.join(relative, entry.name))));
+      continue;
+    }
+    if (entry.isFile()) files.push(path.join(relative, entry.name));
+  }
+  return files;
+}
+
+async function migrateLegacyPackageScope(root: string, dryRun: boolean): Promise<string[]> {
+  const changed: string[] = [];
+  for (const relative of await consumerFiles(root)) {
+    const file = path.join(root, relative);
+    const source = await readFile(file, 'utf8').catch(() => null);
+    if (source === null || source.includes('\0')) continue;
+    let next = source;
+    for (const name of LEGACY_PLATFORM_PACKAGES)
+      next = next.replaceAll(`@lvbt/${name}`, `@lasvegasfortransit/${name}`);
+    if (next === source) continue;
+    changed.push(relative.split(path.sep).join('/'));
+    if (!dryRun) await writeFile(file, next);
+  }
+  return changed.sort();
 }

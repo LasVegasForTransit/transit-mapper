@@ -15,8 +15,8 @@
     "react": "^18.3.1"
   },
   "devDependencies": {
-    "@lvbt/typescript-config": "file:../../.lvbt/web-platform/packages/typescript-config",
-    "@lvbt/vitest-config": "file:../../.lvbt/web-platform/packages/vitest-config",
+    "@lasvegasfortransit/typescript-config": "file:../../.lvbt/web-platform/packages/typescript-config",
+    "@lasvegasfortransit/vitest-config": "file:../../.lvbt/web-platform/packages/vitest-config",
     "@types/react": "catalog:",
     "vite-plugin-pwa": "catalog:",
     "vitest": "catalog:"

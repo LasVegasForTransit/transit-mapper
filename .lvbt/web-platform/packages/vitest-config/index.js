@@ -8,7 +8,7 @@
  * Spread it into a package's vitest.config.ts:
  *
  *   import { defineConfig } from 'vitest/config';
- *   import { sharedConfig } from '@lvbt/vitest-config';
+ *   import { sharedConfig } from '@lasvegasfortransit/vitest-config';
  *   export default defineConfig({ ...sharedConfig });
  *
  * @type {import("vitest/config").UserConfig}

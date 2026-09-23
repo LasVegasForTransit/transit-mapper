@@ -65,7 +65,7 @@ const config: KnipConfig = {
     // Its `lvbt` binary and the lvbt-contributions plugin it ships are run by
     // path from .githooks/*, .codex/hooks.json, and AGENTS.md's contribution
     // helper — never imported, so knip cannot see the usage.
-    '@lvbt/cli',
+    '@lasvegasfortransit/cli',
   ],
 };
 

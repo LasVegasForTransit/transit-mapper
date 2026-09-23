@@ -123,7 +123,7 @@ GitHub, but GitHub does not police issue or pull request prose after
 creation.
 
 The durable rules remain testable without an agent process. CI does not run
-either harness, but the plugin ships inside the vendored `@lvbt/cli`.
+either harness, but the plugin ships inside the vendored `@lasvegasfortransit/cli`.
 `pnpm standards:check` verifies the recorded release, source commit, content
 hash, and every vendored file before repository-specific checks begin. The
 portable contribution rule remains declared in `AGENTS.md`.

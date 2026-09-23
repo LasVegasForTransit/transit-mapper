@@ -5,7 +5,7 @@
 // not the file to reach for when tightening what `src` may depend on. Tighten
 // here.
 {
-  "extends": "@lvbt/typescript-config/base.json",
+  "extends": "@lasvegasfortransit/typescript-config/base.json",
   "compilerOptions": {
     // DOM only for the ambient fetch/crypto/structuredClone typings (part of
     // lib.dom.d.ts) — core has no actual DOM/browser dependency, but these

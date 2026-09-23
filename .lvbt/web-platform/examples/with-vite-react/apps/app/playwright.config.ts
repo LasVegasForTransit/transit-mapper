@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
-import { sharedConfig } from '@lvbt/playwright-config';
+import { sharedConfig } from '@lasvegasfortransit/playwright-config';
 
 const url = 'http://127.0.0.1:4173';
 
