@@ -451,19 +451,15 @@ modules.
 
 #### HTTP delivery
 
-The Worker routes API requests, shares, embeds, static assets, sampled reports,
-and maintenance. Stored text enters HTML through `HTMLRewriter`.
+The Worker routes APIs, shares, embeds, assets, samples, maintenance, and the
+Labs path alias through `labs-mount.ts`. Stored text enters HTML through
+`HTMLRewriter`.
 
-`labs-mount.ts` adapts the Labs alias to rooted Worker routes and assets.
-
-`api-v1.ts` mounts new resources below `/api/v1`; legacy APIs remain
-unversioned. `views-api.ts` owns public View creation, reads, edits, deletion,
-expiry, and edit-token checks. The main router injects shared-system lookup so
-a View read can keep its map alive without coupling the two route modules.
-The Worker serves metadata-rich reader pages at `/v/:id`, frameable embed
-shells at `/embed/:id`, and oEmbed records for both named Views and legacy
-shared systems. Reader pages reject framing. Embed routes allow it explicitly.
-`gtfs-feeds.ts` owns reviewed metadata and R2 archive lookup.
+`api-v1.ts` mounts `/api/v1`; legacy APIs remain unversioned. `views-api.ts`
+owns View CRUD, expiry, and edit-token checks. Shared-system lookup keeps a
+View's map alive without coupling route modules. Reader pages at `/v/:id`
+reject framing; `/embed/:id` permits it. oEmbed covers Views and legacy
+shares. `gtfs-feeds.ts` owns reviewed metadata and R2 archive lookup.
 
 `POST /api/performance-samples` accepts 8 KiB of same-origin JSON, honors
 GPC/DNT, validates it, and stores allowlisted columns.
