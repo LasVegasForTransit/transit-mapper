@@ -1,6 +1,6 @@
 {
-  "name": "@lvbt/typescript-config",
-  "version": "0.2.8",
+  "name": "@lasvegasfortransit/typescript-config",
+  "version": "0.3.3",
   "description": "TypeScript configurations every LVBT repository extends.",
   "license": "MIT",
   "repository": {

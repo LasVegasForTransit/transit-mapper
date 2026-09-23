@@ -21,8 +21,8 @@ apps/web ────────┬──> packages/workspace ────> pac
 apps/worker ──────┬──> packages/views ────> packages/core
                   └──> packages/core
 
-all TypeScript packages ──> @lvbt/typescript-config
-repository linting ───────> @lvbt/eslint-config ──> packages/eslint-plugin
+all TypeScript packages ──> @lasvegasfortransit/typescript-config
+repository linting ───────> @lasvegasfortransit/eslint-config ──> packages/eslint-plugin
 repository contribution tooling ──> pinned LVBT standard release
 ```
 
@@ -195,13 +195,13 @@ replacing an editing session without consent.
 ### Contribution tooling
 
 TransitMapper inherits organization issue and pull request templates. The
-`lvbt-contributions` ships inside the vendored `@lvbt/cli`. The repository
+`lvbt-contributions` ships inside the vendored `@lasvegasfortransit/cli`. The repository
 records the standard's release, commit, and content hash in
 `.lvbt/web-platform.json`.
 
 ### ESLint baseline
 
-[`@lvbt/eslint-config`](https://github.com/LasVegasForTransit/repository-tooling/blob/main/docs/reference/packages.md)
+[`@lasvegasfortransit/eslint-config`](https://github.com/LasVegasForTransit/repository-tooling/blob/main/docs/reference/packages.md)
 exports the type-aware and syntax-only organization rule sets consumed by the
 root lint configuration.
 
@@ -222,7 +222,7 @@ where each rule applies. See [the enforcement model](../explanation/enforcement-
 
 ### TypeScript configuration
 
-[`@lvbt/typescript-config`](https://github.com/LasVegasForTransit/repository-tooling/blob/main/docs/reference/packages.md)
+[`@lasvegasfortransit/typescript-config`](https://github.com/LasVegasForTransit/repository-tooling/blob/main/docs/reference/packages.md)
 owns shared compiler policy; each package extends the variant matching its
 runtime. `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess` are
 overridden off per package as recorded adoption debt.

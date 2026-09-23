@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { expectNoAccessibilityViolations } from '@lvbt/playwright-config/accessibility';
-import { monitorPageHealth } from '@lvbt/playwright-config/page-health';
+import { expectNoAccessibilityViolations } from '@lasvegasfortransit/playwright-config/accessibility';
+import { monitorPageHealth } from '@lasvegasfortransit/playwright-config/page-health';
 
 test('the button counts clicks', async ({ page }) => {
   const health = monitorPageHealth(page);

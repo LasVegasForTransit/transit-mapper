@@ -65,9 +65,9 @@
   },
   "devDependencies": {
     "@clack/prompts": "catalog:",
-    "@lvbt/cli": "file:.lvbt/web-platform/packages/cli",
-    "@lvbt/eslint-config": "file:.lvbt/web-platform/packages/eslint-config",
-    "@lvbt/prettier-config": "file:.lvbt/web-platform/packages/prettier-config",
+    "@lasvegasfortransit/cli": "file:.lvbt/web-platform/packages/cli",
+    "@lasvegasfortransit/eslint-config": "file:.lvbt/web-platform/packages/eslint-config",
+    "@lasvegasfortransit/prettier-config": "file:.lvbt/web-platform/packages/prettier-config",
     "@transitmapper/eslint-plugin": "workspace:*",
     "@turbo/gen": "catalog:",
     "@types/node": "catalog:",

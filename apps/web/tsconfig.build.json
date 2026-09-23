@@ -6,7 +6,7 @@
 // makes this the file that decides what `src` may reference: a source file
 // that reaches for `process` compiles under the wide config and fails here.
 {
-  "extends": "@lvbt/typescript-config/browser.json",
+  "extends": "@lasvegasfortransit/typescript-config/browser.json",
   "compilerOptions": {
     "useDefineForClassFields": true,
     "allowImportingTsExtensions": true,

@@ -35,7 +35,10 @@
     },
     "check-types": {
       "dependsOn": ["^check-types"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/node_modules/@lvbt/typescript-config/*.json"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/node_modules/@lasvegasfortransit/typescript-config/*.json"
+      ],
       "outputs": ["*.tsbuildinfo"]
     },
     "lint": {
@@ -48,7 +51,10 @@
     },
     "test": {
       "dependsOn": ["^check-types"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/node_modules/@lvbt/typescript-config/*.json"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/node_modules/@lasvegasfortransit/typescript-config/*.json"
+      ],
       "outputs": []
     },
     "check:types": {

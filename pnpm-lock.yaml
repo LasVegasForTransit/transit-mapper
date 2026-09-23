@@ -43,8 +43,8 @@ catalogs:
       specifier: ^4.3.4
       version: 4.7.0
     '@vitest/coverage-v8':
-      specifier: ^4.1.10
-      version: 4.1.10
+      specifier: ^4.1.11
+      version: 4.1.11
     dependency-cruiser:
       specifier: ^18.1.1
       version: 18.1.1
@@ -154,13 +154,13 @@ importers:
       '@clack/prompts':
         specifier: 'catalog:'
         version: 1.7.0
-      '@lvbt/cli':
+      '@lasvegasfortransit/cli':
         specifier: file:.lvbt/web-platform/packages/cli
         version: file:.lvbt/web-platform/packages/cli
-      '@lvbt/eslint-config':
+      '@lasvegasfortransit/eslint-config':
         specifier: file:.lvbt/web-platform/packages/eslint-config
         version: file:.lvbt/web-platform/packages/eslint-config(eslint@10.8.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(turbo@2.10.5)(typescript@6.0.3)
-      '@lvbt/prettier-config':
+      '@lasvegasfortransit/prettier-config':
         specifier: file:.lvbt/web-platform/packages/prettier-config
         version: file:.lvbt/web-platform/packages/prettier-config(prettier@3.9.6)
       '@transitmapper/eslint-plugin':
@@ -216,7 +216,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   apps/web:
     dependencies:
@@ -263,10 +263,10 @@ importers:
         specifier: 'catalog:'
         version: 5.0.14(@types/react@18.3.31)(react@18.3.1)
     devDependencies:
-      '@lvbt/typescript-config':
+      '@lasvegasfortransit/typescript-config':
         specifier: file:../../.lvbt/web-platform/packages/typescript-config
         version: file:.lvbt/web-platform/packages/typescript-config
-      '@lvbt/vitest-config':
+      '@lasvegasfortransit/vitest-config':
         specifier: file:../../.lvbt/web-platform/packages/vitest-config
         version: file:.lvbt/web-platform/packages/vitest-config(vitest@4.1.11)
       '@types/geojson':
@@ -304,7 +304,7 @@ importers:
         version: 1.3.0(supports-color@10.2.2)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))(workbox-build@7.4.1(@types/babel__core@7.20.5)(supports-color@10.2.2))(workbox-window@7.4.1)
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   apps/worker:
     dependencies:
@@ -320,14 +320,14 @@ importers:
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: 'catalog:'
-        version: 0.18.8(@cloudflare/workers-types@4.20260702.1)(@types/node@24.13.3)(@vitest/runner@4.1.11)(@vitest/snapshot@4.1.11)(vitest@4.1.11(@types/node@24.13.3)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)))
+        version: 0.18.8(@cloudflare/workers-types@4.20260702.1)(@types/node@24.13.3)(@vitest/runner@4.1.11)(@vitest/snapshot@4.1.11)(vitest@4.1.11)
       '@cloudflare/workers-types':
         specifier: 'catalog:'
         version: 4.20260702.1
-      '@lvbt/typescript-config':
+      '@lasvegasfortransit/typescript-config':
         specifier: file:../../.lvbt/web-platform/packages/typescript-config
         version: file:.lvbt/web-platform/packages/typescript-config
-      '@lvbt/vitest-config':
+      '@lasvegasfortransit/vitest-config':
         specifier: file:../../.lvbt/web-platform/packages/vitest-config
         version: file:.lvbt/web-platform/packages/vitest-config(vitest@4.1.11)
       tsx:
@@ -335,7 +335,7 @@ importers:
         version: 4.23.1
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
       wrangler:
         specifier: 'catalog:'
         version: 4.131.1(@cloudflare/workers-types@4.20260702.1)(@types/node@24.13.3)
@@ -346,10 +346,10 @@ importers:
         specifier: 'catalog:'
         version: 0.8.3
     devDependencies:
-      '@lvbt/typescript-config':
+      '@lasvegasfortransit/typescript-config':
         specifier: file:../../.lvbt/web-platform/packages/typescript-config
         version: file:.lvbt/web-platform/packages/typescript-config
-      '@lvbt/vitest-config':
+      '@lasvegasfortransit/vitest-config':
         specifier: file:../../.lvbt/web-platform/packages/vitest-config
         version: file:.lvbt/web-platform/packages/vitest-config(vitest@4.1.11)
       '@types/geojson':
@@ -357,17 +357,17 @@ importers:
         version: 7946.0.16
       '@vitest/coverage-v8':
         specifier: 'catalog:'
-        version: 4.1.10(vitest@4.1.11)
+        version: 4.1.11(vitest@4.1.11)
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/eslint-plugin:
     devDependencies:
-      '@lvbt/typescript-config':
+      '@lasvegasfortransit/typescript-config':
         specifier: file:../../.lvbt/web-platform/packages/typescript-config
         version: file:.lvbt/web-platform/packages/typescript-config
-      '@lvbt/vitest-config':
+      '@lasvegasfortransit/vitest-config':
         specifier: file:../../.lvbt/web-platform/packages/vitest-config
         version: file:.lvbt/web-platform/packages/vitest-config(vitest@4.1.11)
       '@typescript-eslint/parser':
@@ -378,7 +378,7 @@ importers:
         version: 10.8.0(jiti@2.7.0)(supports-color@10.2.2)
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/map:
     dependencies:
@@ -392,10 +392,10 @@ importers:
         specifier: 'catalog:'
         version: 6.9.0
     devDependencies:
-      '@lvbt/typescript-config':
+      '@lasvegasfortransit/typescript-config':
         specifier: file:../../.lvbt/web-platform/packages/typescript-config
         version: file:.lvbt/web-platform/packages/typescript-config
-      '@lvbt/vitest-config':
+      '@lasvegasfortransit/vitest-config':
         specifier: file:../../.lvbt/web-platform/packages/vitest-config
         version: file:.lvbt/web-platform/packages/vitest-config(vitest@4.1.11)
       '@types/geojson':
@@ -406,7 +406,7 @@ importers:
         version: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/pwa-updater:
     dependencies:
@@ -414,10 +414,10 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1
     devDependencies:
-      '@lvbt/typescript-config':
+      '@lasvegasfortransit/typescript-config':
         specifier: file:../../.lvbt/web-platform/packages/typescript-config
         version: file:.lvbt/web-platform/packages/typescript-config
-      '@lvbt/vitest-config':
+      '@lasvegasfortransit/vitest-config':
         specifier: file:../../.lvbt/web-platform/packages/vitest-config
         version: file:.lvbt/web-platform/packages/vitest-config(vitest@4.1.11)
       '@types/react':
@@ -428,7 +428,7 @@ importers:
         version: 1.3.0(supports-color@10.2.2)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))(workbox-build@7.4.1(@types/babel__core@7.20.5)(supports-color@10.2.2))(workbox-window@7.4.1)
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/renderer:
     dependencies:
@@ -436,10 +436,10 @@ importers:
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@lvbt/typescript-config':
+      '@lasvegasfortransit/typescript-config':
         specifier: file:../../.lvbt/web-platform/packages/typescript-config
         version: file:.lvbt/web-platform/packages/typescript-config
-      '@lvbt/vitest-config':
+      '@lasvegasfortransit/vitest-config':
         specifier: file:../../.lvbt/web-platform/packages/vitest-config
         version: file:.lvbt/web-platform/packages/vitest-config(vitest@4.1.11)
       '@types/geojson':
@@ -450,7 +450,7 @@ importers:
         version: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/views:
     dependencies:
@@ -458,15 +458,15 @@ importers:
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@lvbt/typescript-config':
+      '@lasvegasfortransit/typescript-config':
         specifier: file:../../.lvbt/web-platform/packages/typescript-config
         version: file:.lvbt/web-platform/packages/typescript-config
-      '@lvbt/vitest-config':
+      '@lasvegasfortransit/vitest-config':
         specifier: file:../../.lvbt/web-platform/packages/vitest-config
         version: file:.lvbt/web-platform/packages/vitest-config(vitest@4.1.11)
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/workspace:
     dependencies:
@@ -474,10 +474,10 @@ importers:
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@lvbt/typescript-config':
+      '@lasvegasfortransit/typescript-config':
         specifier: file:../../.lvbt/web-platform/packages/typescript-config
         version: file:.lvbt/web-platform/packages/typescript-config
-      '@lvbt/vitest-config':
+      '@lasvegasfortransit/vitest-config':
         specifier: file:../../.lvbt/web-platform/packages/vitest-config
         version: file:.lvbt/web-platform/packages/vitest-config(vitest@4.1.11)
       '@transitmapper/map':
@@ -500,7 +500,7 @@ importers:
         version: 18.3.1(react@18.3.1)
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
 packages:
 
@@ -1897,6 +1897,7 @@ packages:
 
   '@lasvegasfortransit/analytics@0.1.0':
     resolution: {integrity: sha512-K59fZ8eY/CH24MmbvwVMPD57Sqx5eV4w1jwCWAwdgzpYJx6tmDgcO3hn48tFBrpfZUJhiqXSAzMPgjj3elNeXw==, tarball: https://npm.pkg.github.com/download/@lasvegasfortransit/analytics/0.1.0/f2fce6c94d49786e6f61711b2c35dab104e90e2e}
+    hasBin: true
     peerDependencies:
       '@playwright/test': '>=1.62 <2'
       astro: '>=6 <8'
@@ -1912,25 +1913,26 @@ packages:
       vite:
         optional: true
 
-  '@lvbt/cli@file:.lvbt/web-platform/packages/cli':
+  '@lasvegasfortransit/cli@file:.lvbt/web-platform/packages/cli':
     resolution: {directory: .lvbt/web-platform/packages/cli, type: directory}
     engines: {node: '>=24'}
+    hasBin: true
 
-  '@lvbt/eslint-config@file:.lvbt/web-platform/packages/eslint-config':
+  '@lasvegasfortransit/eslint-config@file:.lvbt/web-platform/packages/eslint-config':
     resolution: {directory: .lvbt/web-platform/packages/eslint-config, type: directory}
     peerDependencies:
       eslint: '>=10'
       typescript: '>=5.9'
 
-  '@lvbt/prettier-config@file:.lvbt/web-platform/packages/prettier-config':
+  '@lasvegasfortransit/prettier-config@file:.lvbt/web-platform/packages/prettier-config':
     resolution: {directory: .lvbt/web-platform/packages/prettier-config, type: directory}
     peerDependencies:
       prettier: '>=3'
 
-  '@lvbt/typescript-config@file:.lvbt/web-platform/packages/typescript-config':
+  '@lasvegasfortransit/typescript-config@file:.lvbt/web-platform/packages/typescript-config':
     resolution: {directory: .lvbt/web-platform/packages/typescript-config, type: directory}
 
-  '@lvbt/vitest-config@file:.lvbt/web-platform/packages/vitest-config':
+  '@lasvegasfortransit/vitest-config@file:.lvbt/web-platform/packages/vitest-config':
     resolution: {directory: .lvbt/web-platform/packages/vitest-config, type: directory}
     peerDependencies:
       vitest: '>=4'
@@ -2661,11 +2663,11 @@ packages:
     peerDependencies:
       vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
 
-  '@vitest/coverage-v8@4.1.10':
-    resolution: {integrity: sha512-IM49HmthevbgAO4anp1hwtoT9wYe59w0LR00gr+eagHE+ZJ5lK4sLPeO0ubgoJcwLk6dehU3R24N+FbEEKDc8g==}
+  '@vitest/coverage-v8@4.1.11':
+    resolution: {integrity: sha512-8MVGEFnJIcdGjcbfKmeq8z0pZHH0JlVtoVZH9Q/qwUp6wyFnEJUBMrw9DCaj+ra3vShGmhavjalMIhPNxZAUcw==}
     peerDependencies:
-      '@vitest/browser': 4.1.10
-      vitest: 4.1.10
+      '@vitest/browser': 4.1.11
+      vitest: 4.1.11
     peerDependenciesMeta:
       '@vitest/browser':
         optional: true
@@ -2684,9 +2686,6 @@ packages:
       vite:
         optional: true
 
-  '@vitest/pretty-format@4.1.10':
-    resolution: {integrity: sha512-W1HsjSH4MXQ9YfmmhLAoIYf1HRfekQCGngeIgcei6MP5QQGWUe0gkopdZQaVCFO+JDJMrAJGwa5pRpNpvy4P8Q==}
-
   '@vitest/pretty-format@4.1.11':
     resolution: {integrity: sha512-yiZzPbGTS9Sr/JpFl8zHrcIkAofNbFV6k21vIgQN/cY/oxZeXhJv5sc/MBJ5jFKWmWs+oJHw0UXLZjmf931+Vw==}
 
@@ -2698,9 +2697,6 @@ packages:
 
   '@vitest/spy@4.1.11':
     resolution: {integrity: sha512-apNa/prQy2qCeywhnixOHPRCgGNhvg7T4Dapfl1GahLp/R+uhBm5cPyFoNVyqsNd2h1nJxL6BqqdIjiABL60YA==}
-
-  '@vitest/utils@4.1.10':
-    resolution: {integrity: sha512-fy9am/HWxbaGt/Sawrp90vt6Y6jQwf1RX77cz3uwoJwJVMli/e1IEwRPnMNJ7vKfPTwo0diXifkpPvwH9v7nGA==}
 
   '@vitest/utils@4.1.11':
     resolution: {integrity: sha512-zTCVGpyFsGWBhllOyKlTw/vnr6D9qxsfSDyfbyZmTyjHw5N/VuvzHpHoQjm2ZJzn4RJgx5w4r7V0er69CmLgPQ==}
@@ -3032,6 +3028,7 @@ packages:
 
   eslint-config-prettier@10.1.8:
     resolution: {integrity: sha512-82GZUjRS0p/jganf6q1rEO25VSoHH0hKPCTrgillPjdI/3bgBhAE1QzHrHTizjpRvy6pGAvKjDJtk2pF9NDq8w==}
+    hasBin: true
     peerDependencies:
       eslint: '>=7.0.0'
 
@@ -3067,6 +3064,7 @@ packages:
   eslint@10.8.0:
     resolution: {integrity: sha512-nuKKvN+oIBO0koN7Tm7dlkmnkc21mtt0QJLwAKzjLq14y6lRTdVG36MZHJ8eQHwdJMwZbQNMlPOYedMq/oVJvQ==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+    hasBin: true
     peerDependencies:
       jiti: '*'
     peerDependenciesMeta:
@@ -4306,6 +4304,7 @@ packages:
 
   update-browserslist-db@1.3.2:
     resolution: {integrity: sha512-UQ+MSxlhRm1bzjhU+DcuXfjFO1FzNtqhK5+9Yvlp90ItDLk5vT932A0rFu619nf7RVS+Y/VeaUW1jaRDqZ8VJw==}
+    hasBin: true
     peerDependencies:
       browserslist: ^4.28.7
 
@@ -4327,6 +4326,7 @@ packages:
   vite@6.4.3:
     resolution: {integrity: sha512-NTKlcQjlAK7MlQoyb6LgaqHc8sso/pVyUJYWMws3jg21uTJw/LddqIFPcPqP6PzpgbIcZyKI85sFE4HBrQDA8A==}
     engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
+    hasBin: true
     peerDependencies:
       '@types/node': ^18.0.0 || ^20.0.0 || >=22.0.0
       jiti: '>=1.21.0'
@@ -4366,6 +4366,7 @@ packages:
   vitest@4.1.11:
     resolution: {integrity: sha512-fhACrNXUidIbGSBr5FlbuBkO7VWC1ZyLl0DO4CU2DrQoAPxX84Ysxs+HeGQpii5lZWV1Q4gBZTTu49mF+A6Edw==}
     engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
+    hasBin: true
     peerDependencies:
       '@edge-runtime/vm': '*'
       '@opentelemetry/api': ^1.9.0
@@ -4515,6 +4516,7 @@ packages:
   wrangler@4.114.0:
     resolution: {integrity: sha512-M65P25t5UHA1TIJfgZXDcj+YzVobgKdRguM2QPz0xnxLFuOcuE3ErgllDht0iaho7MS4o0g/Bb4YK2+GT+bibg==}
     engines: {node: '>=22.0.0'}
+    hasBin: true
     peerDependencies:
       '@cloudflare/workers-types': ^5.20260722.1
     peerDependenciesMeta:
@@ -4524,6 +4526,7 @@ packages:
   wrangler@4.131.1:
     resolution: {integrity: sha512-1u5FMdJAn6UOcL02cVsIITcnHrk6mC7N+RF10EkVhPL18R/o9g5BZb4PCjByL+3AsRP5wQpppCIPHhYPRmIJwg==}
     engines: {node: '>=22.0.0'}
+    hasBin: true
     peerDependencies:
       '@cloudflare/workers-types': ^5.20260911.1
     peerDependenciesMeta:
@@ -5337,14 +5340,14 @@ snapshots:
     optionalDependencies:
       workerd: 1.20260911.1
 
-  '@cloudflare/vitest-pool-workers@0.18.8(@cloudflare/workers-types@4.20260702.1)(@types/node@24.13.3)(@vitest/runner@4.1.11)(@vitest/snapshot@4.1.11)(vitest@4.1.11(@types/node@24.13.3)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)))':
+  '@cloudflare/vitest-pool-workers@0.18.8(@cloudflare/workers-types@4.20260702.1)(@types/node@24.13.3)(@vitest/runner@4.1.11)(@vitest/snapshot@4.1.11)(vitest@4.1.11)':
     dependencies:
       '@vitest/runner': 4.1.11
       '@vitest/snapshot': 4.1.11
       cjs-module-lexer: 1.2.3
       esbuild: 0.28.1
       miniflare: 4.20260722.0(@types/node@24.13.3)
-      vitest: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+      vitest: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
       wrangler: 4.114.0(@cloudflare/workers-types@4.20260702.1)(@types/node@24.13.3)
       zod: 3.25.76
     transitivePeerDependencies:
@@ -5915,9 +5918,9 @@ snapshots:
       react: 18.3.1
       vite: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
-  '@lvbt/cli@file:.lvbt/web-platform/packages/cli': {}
+  '@lasvegasfortransit/cli@file:.lvbt/web-platform/packages/cli': {}
 
-  '@lvbt/eslint-config@file:.lvbt/web-platform/packages/eslint-config(eslint@10.8.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(turbo@2.10.5)(typescript@6.0.3)':
+  '@lasvegasfortransit/eslint-config@file:.lvbt/web-platform/packages/eslint-config(eslint@10.8.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(turbo@2.10.5)(typescript@6.0.3)':
     dependencies:
       '@eslint-community/eslint-plugin-eslint-comments': 4.7.2(eslint@10.8.0(jiti@2.7.0)(supports-color@10.2.2))
       '@eslint/js': 10.0.1(eslint@10.8.0(jiti@2.7.0)(supports-color@10.2.2))
@@ -5933,15 +5936,15 @@ snapshots:
       - supports-color
       - turbo
 
-  '@lvbt/prettier-config@file:.lvbt/web-platform/packages/prettier-config(prettier@3.9.6)':
+  '@lasvegasfortransit/prettier-config@file:.lvbt/web-platform/packages/prettier-config(prettier@3.9.6)':
     dependencies:
       prettier: 3.9.6
 
-  '@lvbt/typescript-config@file:.lvbt/web-platform/packages/typescript-config': {}
+  '@lasvegasfortransit/typescript-config@file:.lvbt/web-platform/packages/typescript-config': {}
 
-  '@lvbt/vitest-config@file:.lvbt/web-platform/packages/vitest-config(vitest@4.1.11)':
+  '@lasvegasfortransit/vitest-config@file:.lvbt/web-platform/packages/vitest-config(vitest@4.1.11)':
     dependencies:
-      vitest: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+      vitest: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   '@mapbox/jsonlint-lines-primitives@2.0.3': {}
 
@@ -6516,10 +6519,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@vitest/coverage-v8@4.1.10(vitest@4.1.11)':
+  '@vitest/coverage-v8@4.1.11(vitest@4.1.11)':
     dependencies:
       '@bcoe/v8-coverage': 1.0.2
-      '@vitest/utils': 4.1.10
+      '@vitest/utils': 4.1.11
       ast-v8-to-istanbul: 1.0.5
       istanbul-lib-coverage: 3.2.2
       istanbul-lib-report: 3.0.1
@@ -6528,7 +6531,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+      vitest: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
   '@vitest/expect@4.1.11':
     dependencies:
@@ -6547,10 +6550,6 @@ snapshots:
     optionalDependencies:
       vite: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
-  '@vitest/pretty-format@4.1.10':
-    dependencies:
-      tinyrainbow: 3.1.0
-
   '@vitest/pretty-format@4.1.11':
     dependencies:
       tinyrainbow: 3.1.0
@@ -6568,12 +6567,6 @@ snapshots:
       pathe: 2.0.3
 
   '@vitest/spy@4.1.11': {}
-
-  '@vitest/utils@4.1.10':
-    dependencies:
-      '@vitest/pretty-format': 4.1.10
-      convert-source-map: 2.0.0
-      tinyrainbow: 3.1.0
 
   '@vitest/utils@4.1.11':
     dependencies:
@@ -8499,7 +8492,7 @@ snapshots:
       tsx: 4.23.1
       yaml: 2.9.0
 
-  vitest@4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)):
+  vitest@4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.11
       '@vitest/mocker': 4.1.11(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
@@ -8523,7 +8516,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.13.3
-      '@vitest/coverage-v8': 4.1.10(vitest@4.1.11)
+      '@vitest/coverage-v8': 4.1.11(vitest@4.1.11)
       jsdom: 29.1.1
     transitivePeerDependencies:
       - msw

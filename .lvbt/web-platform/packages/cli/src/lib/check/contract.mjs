@@ -25,18 +25,22 @@ const IGNORED = new Set([
 ]);
 
 /** Version specifiers the standard permits besides the catalog. */
-function allowedRange(range) {
+function allowedRange(name, range) {
   return (
     range.startsWith('catalog:') ||
     range.startsWith('workspace:') ||
-    range.startsWith('github:LasVegasForTransit/repository-tooling#') ||
+    (/^@lasvegasfortransit\/[a-z0-9-]+$/.test(name) && /^\d+\.\d+\.\d+$/.test(range)) ||
     range.startsWith('link:')
   );
 }
 
 function vendoredRange(root, directory, name, range) {
-  if (!/^@lvbt\/[a-z0-9-]+$/.test(name) || !range.startsWith('file:')) return false;
-  const expected = path.resolve(root, '.lvbt/web-platform/packages', name.slice('@lvbt/'.length));
+  if (!/^@lasvegasfortransit\/[a-z0-9-]+$/.test(name) || !range.startsWith('file:')) return false;
+  const expected = path.resolve(
+    root,
+    '.lvbt/web-platform/packages',
+    name.slice('@lasvegasfortransit/'.length),
+  );
   if (path.resolve(root, directory, range.slice('file:'.length)) !== expected) return false;
   try {
     return JSON.parse(readFileSync(path.join(expected, 'package.json'), 'utf8')).name === name;
@@ -130,7 +134,7 @@ function dependencyFailures(root, directory) {
   const failures = [];
   for (const field of ['dependencies', 'devDependencies']) {
     for (const [name, range] of Object.entries(manifest[field] ?? {})) {
-      if (!allowedRange(range) && !vendoredRange(root, directory, name, range)) {
+      if (!allowedRange(name, range) && !vendoredRange(root, directory, name, range)) {
         failures.push(
           `${directory}/package.json pins "${name}" to "${range}" instead of "catalog:"`,
         );

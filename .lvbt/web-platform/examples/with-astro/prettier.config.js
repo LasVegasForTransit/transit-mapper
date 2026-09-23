@@ -1,4 +1,4 @@
-import lvbt from '@lvbt/prettier-config';
+import lvbt from '@lasvegasfortransit/prettier-config';
 
 export default {
   ...lvbt,

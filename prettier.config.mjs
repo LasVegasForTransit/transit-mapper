@@ -2,7 +2,7 @@
 // — `<tool>.config.<ext>` — rather than `.prettierrc.json`. ESM rather than
 // TypeScript because Prettier has no dependencies and loads no transpiler;
 // `check:config` records that exemption.
-import lvbtConfig from '@lvbt/prettier-config';
+import lvbtConfig from '@lasvegasfortransit/prettier-config';
 
 export default {
   ...lvbtConfig,

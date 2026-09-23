@@ -1,7 +1,7 @@
 // Production sources only. See tsconfig.json beside this one for why the split
 // exists.
 {
-  "extends": "@lvbt/typescript-config/base.json",
+  "extends": "@lasvegasfortransit/typescript-config/base.json",
   "compilerOptions": {
     "noEmit": false,
     "rootDir": "src",

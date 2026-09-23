@@ -20,8 +20,8 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
     "@cloudflare/workers-types": "catalog:",
-    "@lvbt/typescript-config": "file:../../.lvbt/web-platform/packages/typescript-config",
-    "@lvbt/vitest-config": "file:../../.lvbt/web-platform/packages/vitest-config",
+    "@lasvegasfortransit/typescript-config": "file:../../.lvbt/web-platform/packages/typescript-config",
+    "@lasvegasfortransit/vitest-config": "file:../../.lvbt/web-platform/packages/vitest-config",
     "tsx": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"

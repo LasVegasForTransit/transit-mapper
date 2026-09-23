@@ -82,6 +82,35 @@ test('updates a stale analytics variable without creating another site', async (
   expect(variables.get('PUBLIC_LVBT_CWA_TOKEN')).toBe('current-token');
 });
 
+test('recognizes a hostname-created analytics site when rules are omitted', async () => {
+  const sites = [
+    {
+      host: target.hostname,
+      site_tag: 'site',
+      site_token: 'current-token',
+    },
+  ];
+  const variables = new Map<string, string>();
+  let siteWrites = 0;
+  const resources = provisionAnalytics(target, {
+    readSites: () => Promise.resolve(sites),
+    createSite: () => {
+      siteWrites += 1;
+      return Promise.resolve();
+    },
+    readVariables: () =>
+      Promise.resolve({ variables: [...variables].map(([name, value]) => ({ name, value })) }),
+    writeVariable: (_method, _endpoint, body) => {
+      variables.set(body.name, body.value);
+      return Promise.resolve();
+    },
+  });
+
+  expect((await reconcileResources(resources, true)).ok).toBe(true);
+  expect(siteWrites).toBe(0);
+  expect(variables.get('PUBLIC_LVBT_CWA_TOKEN')).toBe('current-token');
+});
+
 test('refuses duplicate or conflicting analytics sites', async () => {
   for (const sites of [
     [
@@ -93,7 +122,7 @@ test('refuses duplicate or conflicting analytics sites', async () => {
       {
         site_tag: 'two',
         site_token: 'two',
-        rules: [{ host: target.hostname, inclusive: true, is_paused: false }],
+        host: target.hostname,
       },
     ],
     [

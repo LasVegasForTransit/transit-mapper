@@ -1,5 +1,5 @@
 {
-  "name": "@lvbt/app",
+  "name": "@lasvegasfortransit/app",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -17,10 +17,10 @@
     "react-dom": "catalog:"
   },
   "devDependencies": {
-    "@lvbt/eslint-config": "github:LasVegasForTransit/repository-tooling#v0.2.8&path:/packages/eslint-config",
-    "@lvbt/playwright-config": "github:LasVegasForTransit/repository-tooling#v0.2.8&path:/packages/playwright-config",
-    "@lvbt/typescript-config": "github:LasVegasForTransit/repository-tooling#v0.2.8&path:/packages/typescript-config",
-    "@lvbt/vitest-config": "github:LasVegasForTransit/repository-tooling#v0.2.8&path:/packages/vitest-config",
+    "@lasvegasfortransit/eslint-config": "0.3.3",
+    "@lasvegasfortransit/playwright-config": "0.3.3",
+    "@lasvegasfortransit/typescript-config": "0.3.3",
+    "@lasvegasfortransit/vitest-config": "0.3.3",
     "@playwright/test": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",

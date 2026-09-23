@@ -9,6 +9,7 @@ const targetSchema = z.object({
   environment: z.string().min(1),
 });
 const siteSchema = z.object({
+  host: z.string().optional(),
   site_tag: z.string().min(1),
   site_token: z.string().min(1),
   rules: z
@@ -40,11 +41,12 @@ function analyticsToken(input: unknown, hostname: string) {
   const referenced = z
     .array(siteSchema)
     .parse(input)
-    .filter((site) => site.rules?.some((rule) => rule.host === hostname));
+    .filter((site) => site.host === hostname || site.rules?.some((rule) => rule.host === hostname));
   if (referenced.length > 1) throw new Error('Duplicate Web Analytics sites require review.');
   const site = referenced[0];
   if (site === undefined) return null;
   if (
+    site.host !== hostname &&
     !site.rules?.some(
       (rule) => rule.host === hostname && rule.inclusive === true && rule.is_paused !== true,
     )

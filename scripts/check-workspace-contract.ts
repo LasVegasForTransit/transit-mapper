@@ -289,9 +289,8 @@ async function isVendoredLvbtRange(
   name: string,
   range: string,
 ): Promise<boolean> {
-  if (!/^@lvbt\/[a-z0-9-]+$/.test(name) || !range.startsWith('file:')) return false;
-
-  const expected = resolve(ROOT, '.lvbt/web-platform/packages', name.slice('@lvbt/'.length));
+  if (!/^@lasvegasfortransit\/[a-z0-9-]+$/.test(name) || !range.startsWith('file:')) return false;
+  const expected = resolve(ROOT, '.lvbt/web-platform/packages', name.split('/').pop() ?? '');
   if (resolve(ROOT, packagePath, range.slice('file:'.length)) !== expected) return false;
 
   try {

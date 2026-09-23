@@ -32,28 +32,28 @@ Most of these are enforced. Where the right-hand column says a command, you
 do not need to carry the rule — break it and the command tells you. Where it
 says **nothing**, the rule holds only because you follow it.
 
-| Invariant                                                                                           | Why it exists                                                                                                            | Enforced by                         |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
-| `packages/core` uses no browser-only globals                                                        | core is typechecked against the browser _and_ workerd; a browser global compiles and then throws in production           | `lint`                              |
-| A migration that exists is never edited, renamed, or deleted                                        | Wrangler records applied migrations by name and never re-runs one it has seen, so an edit silently diverges environments | `check:migrations`                  |
-| Every package declares `lint`, `check-types`, `test`                                                | a package missing one is skipped by Turborepo without an error, and CI stays green while it goes unchecked               | `check:contract`                    |
-| Product dependency versions come from the catalog; `@lvbt/*` resolves from the recorded vendor tree | two packages on different versions of one library is invisible until it breaks                                           | `check:contract`, `standards:check` |
-| Recognizable test material lives under the owning module's root `tests/` tree                       | Production trees stay navigable, and runner globs cannot silently omit a colocated test                                  | `check:contract`                    |
-| Test-only support lives under the owning module's root `tests/support/` tree                        | A generic `support/` directory has no test-specific signal, so this semantic boundary depends on contributors            | **nothing**                         |
-| Relative links in `docs/` resolve                                                                   | three had been broken since the monorepo split, and nothing noticed                                                      | `check:docs`                        |
-| A tool is configured in `<tool>.config.<ext>`, TypeScript unless it cannot                          | accepting each tool's default filename leaves a root nobody can predict, and two files had already drifted               | `check:config`                      |
-| `worker-configuration.d.ts` matches `wrangler.toml`                                                 | it is generated and committed, so it can describe a deployment that no longer exists                                     | `check:types`                       |
-| Commit subjects are conventional, ≤72 chars                                                         | see [commit messages](docs/development/reference/commit-messages.md)                                                     | `commit-msg` hook                   |
-| A `Co-Authored-By` footer is well-formed and in the footer block                                    | a misplaced or address-less one looks like attribution and parses as nothing, so the credit is silently lost             | `commit-msg` hook                   |
-| An agent-assisted commit carries a `Co-Authored-By` footer                                          | a diff cannot say who wrote it; `prepare-commit-msg` adds it and `commit-msg` refuses the commit without it              | both commit hooks                   |
-| No secret reaches a commit                                                                          | see [secrets](docs/security/reference/secrets.md)                                                                        | pre-commit, CI, push protection     |
-| Stored values are injected with `HTMLRewriter`, never string concatenation                          | `system.name` is unauthenticated text with no sanitization at write time                                                 | **nothing** — see below             |
-| `/api` paths name a resource; the verb is the HTTP method                                           | `DELETE /api/session`, not `POST /api/auth/signout`                                                                      | **nothing**                         |
-| Parameter and prop types are named interfaces, even single-use ones                                 | `interface ShareDialogProps { onClose: () => void }`, not an inline object type                                          | **nothing**                         |
-| New module and asset filenames use kebab-case unless tooling requires otherwise                     | One predictable convention keeps imports and generated artifacts easy to find                                            | **nothing**                         |
-| Selection-dependent controls go in the right-hand inspector                                         | one dynamic surface, not several                                                                                         | **nothing**                         |
-| The app shell renders before any load, fetch, or check resolves                                     | see [waiting is something the app does](docs/product/explanation/design-principles.md)                                   | **nothing**                         |
-| A map surface never shows an empty backdrop where a basemap belongs                                 | a blank map reads as a broken product, and the bootstrap grid is a loading state rather than a destination               | **nothing** — see below             |
+| Invariant                                                                                                         | Why it exists                                                                                                            | Enforced by                         |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| `packages/core` uses no browser-only globals                                                                      | core is typechecked against the browser _and_ workerd; a browser global compiles and then throws in production           | `lint`                              |
+| A migration that exists is never edited, renamed, or deleted                                                      | Wrangler records applied migrations by name and never re-runs one it has seen, so an edit silently diverges environments | `check:migrations`                  |
+| Every package declares `lint`, `check-types`, `test`                                                              | a package missing one is skipped by Turborepo without an error, and CI stays green while it goes unchecked               | `check:contract`                    |
+| Product dependency versions come from the catalog; `@lasvegasfortransit/*` resolves from the recorded vendor tree | two packages on different versions of one library is invisible until it breaks                                           | `check:contract`, `standards:check` |
+| Recognizable test material lives under the owning module's root `tests/` tree                                     | Production trees stay navigable, and runner globs cannot silently omit a colocated test                                  | `check:contract`                    |
+| Test-only support lives under the owning module's root `tests/support/` tree                                      | A generic `support/` directory has no test-specific signal, so this semantic boundary depends on contributors            | **nothing**                         |
+| Relative links in `docs/` resolve                                                                                 | three had been broken since the monorepo split, and nothing noticed                                                      | `check:docs`                        |
+| A tool is configured in `<tool>.config.<ext>`, TypeScript unless it cannot                                        | accepting each tool's default filename leaves a root nobody can predict, and two files had already drifted               | `check:config`                      |
+| `worker-configuration.d.ts` matches `wrangler.toml`                                                               | it is generated and committed, so it can describe a deployment that no longer exists                                     | `check:types`                       |
+| Commit subjects are conventional, ≤72 chars                                                                       | see [commit messages](docs/development/reference/commit-messages.md)                                                     | `commit-msg` hook                   |
+| A `Co-Authored-By` footer is well-formed and in the footer block                                                  | a misplaced or address-less one looks like attribution and parses as nothing, so the credit is silently lost             | `commit-msg` hook                   |
+| An agent-assisted commit carries a `Co-Authored-By` footer                                                        | a diff cannot say who wrote it; `prepare-commit-msg` adds it and `commit-msg` refuses the commit without it              | both commit hooks                   |
+| No secret reaches a commit                                                                                        | see [secrets](docs/security/reference/secrets.md)                                                                        | pre-commit, CI, push protection     |
+| Stored values are injected with `HTMLRewriter`, never string concatenation                                        | `system.name` is unauthenticated text with no sanitization at write time                                                 | **nothing** — see below             |
+| `/api` paths name a resource; the verb is the HTTP method                                                         | `DELETE /api/session`, not `POST /api/auth/signout`                                                                      | **nothing**                         |
+| Parameter and prop types are named interfaces, even single-use ones                                               | `interface ShareDialogProps { onClose: () => void }`, not an inline object type                                          | **nothing**                         |
+| New module and asset filenames use kebab-case unless tooling requires otherwise                                   | One predictable convention keeps imports and generated artifacts easy to find                                            | **nothing**                         |
+| Selection-dependent controls go in the right-hand inspector                                                       | one dynamic surface, not several                                                                                         | **nothing**                         |
+| The app shell renders before any load, fetch, or check resolves                                                   | see [waiting is something the app does](docs/product/explanation/design-principles.md)                                   | **nothing**                         |
+| A map surface never shows an empty backdrop where a basemap belongs                                               | a blank map reads as a broken product, and the bootstrap grid is a loading state rather than a destination               | **nothing** — see below             |
 
 The basemap row is unenforced because no check can see it. The basemap is
 `https://tiles.openfreemap.org/styles/positron`, which needs no key, so a
@@ -161,9 +161,9 @@ pull request. It carries the organization checklist, readable templates, and
 the only approved creation helper:
 
 ```bash
-node node_modules/@lvbt/cli/plugins/lvbt-contributions/scripts/github-create.mjs issue \
+node node_modules/@lasvegasfortransit/cli/plugins/lvbt-contributions/scripts/github-create.mjs issue \
   --type bug|feature --title <title> --body-file <file>
-node node_modules/@lvbt/cli/plugins/lvbt-contributions/scripts/github-create.mjs pr \
+node node_modules/@lasvegasfortransit/cli/plugins/lvbt-contributions/scripts/github-create.mjs pr \
   --title <title> --body-file <file> --base main
 ```
 
@@ -175,6 +175,6 @@ re-fetches what GitHub stored, and returns the verified URL.
 
 Humans use the native organization issue forms and pull request template.
 Agents use the same visible structure; there are no hidden markers or
-GitHub-side prose checks. The plugin ships inside the vendored `@lvbt/cli`.
+GitHub-side prose checks. The plugin ships inside the vendored `@lasvegasfortransit/cli`.
 `pnpm standards:check` verifies the recorded release, source commit, content
 hash, and every file before any repository check runs.

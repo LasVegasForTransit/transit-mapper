@@ -1,3 +1,3 @@
-import { config } from '@lvbt/eslint-config/react-internal';
+import { config } from '@lasvegasfortransit/eslint-config/react-internal';
 
 export default config;
