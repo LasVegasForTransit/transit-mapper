@@ -20,6 +20,12 @@ const robots = readFileSync(resolve(appRoot, 'public/robots.txt'), 'utf8');
 
 const PREVIEW_ORIGIN = 'https://transitmapper-pr-9999.example.workers.dev';
 
+describe('static asset security headers', () => {
+  it('does not block the editor bundles or user-selected data sources', () => {
+    expect(headers).toMatch(/^ {2}Content-Security-Policy: frame-ancestors 'none'$/mu);
+  });
+});
+
 describe('reading the origin a build advertises', () => {
   it('takes the origin from the canonical link', () => {
     expect(siteOriginFromIndexHtml(`<link rel="canonical" href="${PREVIEW_ORIGIN}/" />`)).toBe(

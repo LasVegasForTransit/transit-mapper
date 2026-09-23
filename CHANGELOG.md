@@ -10,6 +10,7 @@
 
 ### Bug Fixes
 
+* Restore the editor after the analytics CSP blocked its JavaScript and data requests.
 * Keep Worker routing within the debt budget ([3da707a](https://github.com/LasVegasForTransit/transit-mapper/commit/3da707a66c3eb0103a1b7b9581cd4b79f05694e7))
 
 ## [0.9.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.8.0...v0.9.0) (2026-09-20)
