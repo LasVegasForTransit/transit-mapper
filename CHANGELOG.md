@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.9.0...v0.10.0) (2026-09-23)
+
+
+### Features
+
+* Serve TransitMapper at the Labs path ([7d12926](https://github.com/LasVegasForTransit/transit-mapper/commit/7d1292693ae5347d1e2e9422b5bdedc41bcdbff4))
+
+
+### Bug Fixes
+
+* Keep Worker routing within the debt budget ([3da707a](https://github.com/LasVegasForTransit/transit-mapper/commit/3da707a66c3eb0103a1b7b9581cd4b79f05694e7))
+
 ## [0.9.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.8.0...v0.9.0) (2026-09-20)
 
 
