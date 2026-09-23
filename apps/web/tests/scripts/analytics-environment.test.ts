@@ -13,8 +13,18 @@ describe('the analytics build environment', () => {
       assertAnalyticsBuildEnvironment({
         LVBT_REQUIRE_ANALYTICS: '1',
         PUBLIC_LVBT_CWA_TOKEN: ' analytics-token ',
+        PUBLIC_LVBT_LABS_CWA_TOKEN: ' labs-token ',
       }),
     ).not.toThrow();
+  });
+
+  it('rejects a production build without the Labs token', () => {
+    expect(() =>
+      assertAnalyticsBuildEnvironment({
+        LVBT_REQUIRE_ANALYTICS: '1',
+        PUBLIC_LVBT_CWA_TOKEN: 'map-token',
+      }),
+    ).toThrow('PUBLIC_LVBT_LABS_CWA_TOKEN');
   });
 
   it('allows local, preview, and archive builds to omit analytics', () => {

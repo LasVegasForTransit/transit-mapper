@@ -171,6 +171,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       LVBT_REQUIRE_ANALYTICS: '1'
       PUBLIC_LVBT_CWA_TOKEN: ${{ vars.PUBLIC_LVBT_CWA_TOKEN }}
+      PUBLIC_LVBT_LABS_CWA_TOKEN: ${{ vars.PUBLIC_LVBT_LABS_CWA_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

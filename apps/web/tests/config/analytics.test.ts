@@ -72,6 +72,29 @@ describe('TransitMapper analytics', () => {
     expect(analytics).toMatchObject({ enabled: false, reason: 'excluded-path' });
   });
 
+  it('uses the Labs property and prefixed exclusions on the Labs route', () => {
+    const options = transitMapperAnalyticsOptions(
+      'map-token',
+      'labs-token',
+      'labs.lasvegasfortransit.org',
+    );
+
+    expect(options).toMatchObject({ site: 'labs.lasvegasfortransit.org', token: 'labs-token' });
+    expect(
+      shouldEnable({
+        ...options,
+        hostname: 'labs.lasvegasfortransit.org',
+        pathname: '/transit-mapper/',
+      }),
+    ).toEqual({ enabled: true });
+    expect(options.exclude?.some((pattern) => pattern.test('/transit-mapper/e/example'))).toBe(
+      true,
+    );
+    expect(options.noPageviews?.some((pattern) => pattern.test('/transit-mapper/s/example'))).toBe(
+      true,
+    );
+  });
+
   it('stays absent when local, preview, or archive builds omit the token', () => {
     const analytics = shouldEnable({
       ...transitMapperAnalyticsOptions(''),
