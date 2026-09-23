@@ -1,18 +1,21 @@
 # Operate TransitMapper analytics
 
 TransitMapper uses the shared LVBT analytics package on
-`map.lasvegasfortransit.org`. The Vite entry point initializes it in
-`apps/web/src/analytics-entry.ts` before React renders.
+`map.lasvegasfortransit.org` and the independently owned
+`labs.lasvegasfortransit.org/transit-mapper/` route. The Vite entry point
+initializes it in `apps/web/src/analytics-entry.ts` before React renders.
 
-Only the production deployment provides `PUBLIC_LVBT_CWA_TOKEN`, as a GitHub
-Actions variable on the `production` environment. That workflow also sets
-`LVBT_REQUIRE_ANALYTICS=1`, so a missing or blank token fails the build instead
-of deploying an unmeasured production release. Local, pull request preview,
-and retired archive builds omit both values and initialize no analytics.
+Only the production deployment provides `PUBLIC_LVBT_CWA_TOKEN` and
+`PUBLIC_LVBT_LABS_CWA_TOKEN`, as GitHub Actions variables on the `production`
+environment. The hostname selects the map or Labs property. That workflow also
+sets `LVBT_REQUIRE_ANALYTICS=1`, so a missing or blank token fails the build
+instead of deploying an unmeasured production release. Local, pull request
+preview, and retired archive builds omit the tokens and initialize no analytics.
 
 The `/e/` embed prefix is fully excluded. The `/s/` share prefix suppresses
-pageviews while leaving allowlisted analytics events available. Automatic SPA
-pageviews remain enabled on allowed routes.
+pageviews while leaving allowlisted analytics events available. The same rules
+apply beneath `/transit-mapper/` on Labs. Automatic SPA pageviews remain enabled
+on allowed routes.
 
 The static asset policy in `apps/web/public/_headers` permits only the shared
 Cloudflare script, Cloudflare measurement endpoint, and LVBT event collector.
@@ -31,6 +34,10 @@ Verify production after deployment:
 ```bash
 pnpm exec lvbt-analytics verify https://map.lasvegasfortransit.org \
   --site map.lasvegasfortransit.org \
+  --expect present
+
+pnpm exec lvbt-analytics verify https://labs.lasvegasfortransit.org/transit-mapper/ \
+  --site labs.lasvegasfortransit.org \
   --expect present
 ```
 
