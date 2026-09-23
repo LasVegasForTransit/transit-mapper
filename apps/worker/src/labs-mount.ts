@@ -32,6 +32,7 @@ export async function fetchLabsMount(
   context: ExecutionContext,
   appFetch: AppFetch,
 ): Promise<Response> {
+  if (!isLabsMount(request)) return appFetch(request, env, context);
   const url = new URL(request.url);
   url.pathname = url.pathname.slice(LABS_MOUNT_PATH.length) || '/';
   const mountedRequest = new Request(url, request);
