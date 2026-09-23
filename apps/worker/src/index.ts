@@ -10,7 +10,7 @@ import {
 import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from '@transitmapper/core/render/preview';
 import { checkPreviewPng, MAX_PREVIEW_BYTES } from '@transitmapper/core/render/pngBytes';
 import { handleOpenStreetMapWays, handlePlaceSearch } from './osm-gateway';
-import { fetchLabsMount, isLabsMount } from './labs-mount';
+import { fetchLabsMount } from './labs-mount';
 import { handlePerformanceSample } from './performance-samples';
 import { runScheduledMaintenance } from './performance-maintenance';
 import { createApiV1 } from './api-v1';
@@ -722,13 +722,9 @@ app.get('/e/:id/', handleEmbedPage);
 app.get('/embed/:id', handleEmbedPage);
 app.get('/embed/:id/', handleEmbedPage);
 
-// Only API, reader, and embed prefixes reach the Worker (see run_worker_first
-// in wrangler.toml), so this catches ids under them that matched no earlier
-// route. Assets and ordinary client routes never get here — they're served
-// straight from the assets binding, which also owns the SPA fallback again.
-//
-// The editor is never framable: it's a real application surface, and the
-// embed route above is the one deliberate exception.
+// Only API, reader, embed, and Labs mount paths reach the Worker. Unmatched
+// rooted paths return the editor shell; the embed route is the sole framing
+// exception. Other assets and client routes use the assets binding directly.
 app.all('*', async (c) => {
   const shell = await fetchAppShell(c);
   return withHtmlSecurityHeaders(shell, "'none'");
@@ -753,9 +749,7 @@ async function scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
 }
 
 export default {
-  async fetch(request: Request, env: Env, context: ExecutionContext): Promise<Response> {
-    if (!isLabsMount(request)) return app.fetch(request, env, context);
-    return fetchLabsMount(request, env, context, app.fetch.bind(app));
-  },
+  fetch: (request: Request, env: Env, context: ExecutionContext) =>
+    fetchLabsMount(request, env, context, app.fetch.bind(app)),
   scheduled,
 };

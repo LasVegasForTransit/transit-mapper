@@ -51,4 +51,17 @@ describe('Labs mount routing', () => {
     expect(new URL(appFetch.mock.calls[0][0].url).pathname).toBe('/s/example');
     expect(assetFetch).not.toHaveBeenCalled();
   });
+
+  it('leaves the canonical map hostname rooted', async () => {
+    const assetFetch = vi.fn((_request: Request) => Promise.resolve(new Response('asset')));
+    const appFetch = vi.fn((_request: Request) => Promise.resolve(new Response('app')));
+    const env = { ASSETS: { fetch: assetFetch } } as unknown as Env;
+    const request = new Request('https://map.lasvegasfortransit.org/api/places');
+
+    const response = await fetchLabsMount(request, env, {} as ExecutionContext, appFetch);
+
+    expect(await response.text()).toBe('app');
+    expect(new URL(appFetch.mock.calls[0][0].url).pathname).toBe('/api/places');
+    expect(assetFetch).not.toHaveBeenCalled();
+  });
 });
