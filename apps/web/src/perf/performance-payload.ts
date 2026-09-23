@@ -1,4 +1,5 @@
 import type { PerformanceSample } from '@transitmapper/core/performance/contract';
+import { publicPath } from '../app/public-path';
 
 const MAX_FIELD_SAMPLE_BODY_BYTES = 8 * 1024;
 
@@ -39,7 +40,7 @@ export async function sendPerformanceBody(
   try {
     if (
       transport.sendBeacon(
-        '/api/performance-samples',
+        publicPath('/api/performance-samples'),
         new Blob([body], { type: 'application/json' }),
       )
     ) {
@@ -50,7 +51,7 @@ export async function sendPerformanceBody(
     // the beacon. The bounded keepalive request is the only fallback.
   }
   try {
-    await transport.fetch('/api/performance-samples', {
+    await transport.fetch(publicPath('/api/performance-samples'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body,

@@ -10,6 +10,7 @@ import {
 import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from '@transitmapper/core/render/preview';
 import { checkPreviewPng, MAX_PREVIEW_BYTES } from '@transitmapper/core/render/pngBytes';
 import { handleOpenStreetMapWays, handlePlaceSearch } from './osm-gateway';
+import { fetchLabsMount, isLabsMount } from './labs-mount';
 import { handlePerformanceSample } from './performance-samples';
 import { runScheduledMaintenance } from './performance-maintenance';
 import { createApiV1 } from './api-v1';
@@ -752,6 +753,9 @@ async function scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
 }
 
 export default {
-  fetch: app.fetch,
+  async fetch(request: Request, env: Env, context: ExecutionContext): Promise<Response> {
+    if (!isLabsMount(request)) return app.fetch(request, env, context);
+    return fetchLabsMount(request, env, context, app.fetch.bind(app));
+  },
   scheduled,
 };

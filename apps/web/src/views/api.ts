@@ -7,6 +7,7 @@ import {
   type UpdateViewRequest,
 } from '@transitmapper/views';
 import { fetchWithTimeout, type FetchWithTimeoutOptions } from '../network/fetchWithTimeout';
+import { publicPath } from '../app/public-path';
 
 export type PublishedViewRequestOptions = FetchWithTimeoutOptions;
 
@@ -33,7 +34,7 @@ export async function createPublishedView(
 ): Promise<CreateViewResponse> {
   const serialized = serializeCreateViewRequest(request);
   const response = await fetchWithTimeout(
-    '/api/v1/views',
+    publicPath('/api/v1/views'),
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -50,7 +51,11 @@ export async function fetchPublishedView(
   id: string,
   options: PublishedViewRequestOptions = {},
 ): Promise<GetViewResponse> {
-  const response = await fetchWithTimeout(`/api/v1/views/${encodeURIComponent(id)}`, {}, options);
+  const response = await fetchWithTimeout(
+    publicPath(`/api/v1/views/${encodeURIComponent(id)}`),
+    {},
+    options,
+  );
   if (!response.ok) throw await viewRequestError(response, 'Could not load the View');
   const payload: unknown = await response.json();
   return payload as GetViewResponse;
@@ -64,7 +69,7 @@ export async function updatePublishedView(
 ): Promise<GetViewResponse> {
   const serialized = serializeUpdateViewRequest(request);
   const response = await fetchWithTimeout(
-    `/api/v1/views/${encodeURIComponent(id)}`,
+    publicPath(`/api/v1/views/${encodeURIComponent(id)}`),
     {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', 'x-edit-token': editToken },
@@ -83,7 +88,7 @@ export async function deletePublishedView(
   options: PublishedViewRequestOptions = {},
 ): Promise<void> {
   const response = await fetchWithTimeout(
-    `/api/v1/views/${encodeURIComponent(id)}`,
+    publicPath(`/api/v1/views/${encodeURIComponent(id)}`),
     {
       method: 'DELETE',
       headers: { 'x-edit-token': editToken },

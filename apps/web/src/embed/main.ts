@@ -14,6 +14,7 @@ import {
   type EmbedReference,
 } from './embed-bootstrap';
 import { fetchPublishedView } from '../views/api';
+import { appRoutePath, publicPath } from '../app/public-path';
 
 const startupMilestones = createEmbedStartupMilestones();
 startupMilestones.bootstrapStarted();
@@ -33,7 +34,11 @@ function fail(message: string): void {
 }
 
 async function loadSystem(id: string, signal: AbortSignal): Promise<TransitSystem> {
-  const res = await fetchWithTimeout(`/api/systems/${encodeURIComponent(id)}`, {}, { signal });
+  const res = await fetchWithTimeout(
+    publicPath(`/api/systems/${encodeURIComponent(id)}`),
+    {},
+    { signal },
+  );
   if (res.status === 404) throw new Error('This shared system was not found.');
   if (!res.ok) throw new Error(`Couldn't load this system (${res.status}).`);
   const data = (await res.json()) as GetShareResponse;
@@ -49,7 +54,7 @@ async function loadEmbedContent(
     return {
       system,
       title: system.name || 'Transit system',
-      openPath: `/s/${reference.id}`,
+      openPath: publicPath(`/s/${reference.id}`),
       state: createDocumentPresentationState({ camera: system.viewport }),
     };
   }
@@ -59,14 +64,14 @@ async function loadEmbedContent(
   return {
     system,
     title: published.view.title,
-    openPath: `/v/${reference.id}`,
+    openPath: publicPath(`/v/${reference.id}`),
     state: parseMapViewState(published.view.state),
   };
 }
 
 async function start(): Promise<void> {
   startupMilestones.shellMounted();
-  const reference = parseEmbedReference(window.location.pathname);
+  const reference = parseEmbedReference(appRoutePath(window.location.pathname));
   if (!reference) {
     fail('No system to show.');
     return;
