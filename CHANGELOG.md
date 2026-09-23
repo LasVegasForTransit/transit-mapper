@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.10.0...v0.10.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* Track TransitMapper visits on Labs ([bc28abf](https://github.com/LasVegasForTransit/transit-mapper/commit/bc28abff6dae34b568393d7e6b52bdae2deedb4c))
+
 ## [0.10.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.9.0...v0.10.0) (2026-09-23)
 
 
