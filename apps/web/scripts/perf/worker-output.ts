@@ -15,16 +15,27 @@ interface WorkerSourceReferences {
   modules: string[];
 }
 
+interface WorkerConstructor {
+  index: number;
+  reference: string;
+}
+
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function supportedDedicatedWorkerConstructors(source: string): RegExpMatchArray[] {
-  return [
+function supportedDedicatedWorkerConstructors(source: string): WorkerConstructor[] {
+  const direct = [
     ...source.matchAll(
       /new\s+Worker\s*\(\s*new\s+URL\s*\(\s*(["'`])([^"'`]+\.m?js(?:[?#][^"'`]*)?)\1\s*,\s*import\.meta\.url\s*\)/g,
     ),
-  ];
+  ].map((match) => ({ index: match.index, reference: match[2] }));
+  const relative = [
+    ...source.matchAll(
+      /new\s+Worker\s*\(\s*new\s+URL\s*\(\s*(["'`])\1\s*\+\s*new\s+URL\s*\(\s*(["'`])([^"'`]+\.m?js(?:[?#][^"'`]*)?)\2\s*,\s*import\.meta\.url\s*\)\.href\s*,\s*import\.meta\.url\s*\)/g,
+    ),
+  ].map((match) => ({ index: match.index, reference: match[3] }));
+  return [...direct, ...relative];
 }
 
 function unsupportedDedicatedWorkerReferences(source: string): string[] {
@@ -69,7 +80,7 @@ function workerSourceReferences(path: string, files: BundleOutputFiles): WorkerS
     );
   }
   return {
-    workers: supportedDedicatedWorkerConstructors(source).map((match) => match[2]),
+    workers: supportedDedicatedWorkerConstructors(source).map((match) => match.reference),
     modules: moduleReferences(source),
   };
 }

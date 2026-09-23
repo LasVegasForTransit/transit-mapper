@@ -8,10 +8,19 @@ Production-only measurement setup and verification are documented in
 [Operate TransitMapper analytics](analytics.md).
 
 Production is one Cloudflare Worker (`transitmapper`) on
-`map.lasvegasfortransit.org`, serving the built SPA as static assets and
-handling `/api/*`, `/s/*`, `/v/*`, `/e/*` and `/embed/*` itself, with one D1
-database (also `transitmapper`) holding shared systems and short-lived
-anonymous performance samples.
+`map.lasvegasfortransit.org` and
+`labs.lasvegasfortransit.org/transit-mapper`. It serves the built SPA as static
+assets and handles `/api/*`, `/s/*`, `/v/*`, `/e/*` and `/embed/*` itself. Both
+hostnames use the same D1 database (also `transitmapper`) for shared systems and
+short-lived anonymous performance samples. The Labs route is an alias for the
+current project, not a graduation or a separate deployment.
+
+The Labs Worker route strips `/transit-mapper` before routing API and reader
+requests or fetching built assets. HTML responses prefix root-relative asset
+paths so the Vite build works on both hostnames. The browser path helper keeps
+navigation and API calls under the Labs prefix. A Labs route deployment must
+pass direct refresh checks for the editor, a built JS asset, a share page, and
+an API request; the map hostname remains the canonical public address.
 
 ## Deploy
 

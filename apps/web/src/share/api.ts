@@ -15,6 +15,7 @@ import {
   type CancelableFlight,
 } from '../network/cancelableFlight';
 import { addPreviewToSharePayload, ShareTooLargeError } from './publish';
+import { publicPath, publicUrl } from '../app/public-path';
 
 export interface ShareRequestOptions {
   signal?: AbortSignal;
@@ -51,7 +52,7 @@ async function createShare(
   signal: AbortSignal,
 ): Promise<CreateShareResponse & { data: string }> {
   const res = await fetchWithTimeout(
-    '/api/systems',
+    publicPath('/api/systems'),
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -73,7 +74,7 @@ async function updateShare(
   signal: AbortSignal,
 ): Promise<string> {
   const res = await fetchWithTimeout(
-    `/api/systems/${encodeURIComponent(shareId)}`,
+    publicPath(`/api/systems/${encodeURIComponent(shareId)}`),
     {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', 'x-edit-token': editToken },
@@ -86,10 +87,6 @@ async function updateShare(
     throw new Error(`Updating the share failed (${res.status}): ${msg}`);
   }
   return request.data;
-}
-
-function shareUrl(id: string): string {
-  return `${window.location.origin}/s/${id}`;
 }
 
 /**
@@ -106,13 +103,13 @@ async function publishShare(
 ): Promise<string> {
   const existing = getMyShare(system.id);
   if (existing && existing.lastSharedData === initialRequest.data)
-    return shareUrl(existing.shareId);
+    return publicUrl(`/s/${existing.shareId}`);
   const request = await sharePayload(initialRequest, signal);
 
   if (existing) {
     await updateShare(existing.shareId, existing.editToken, request, signal);
     setMyShare({ ...existing, lastSharedData: request.data, updatedAt: Date.now() });
-    return shareUrl(existing.shareId);
+    return publicUrl(`/s/${existing.shareId}`);
   }
 
   const created = await createShare(request, signal);
@@ -125,7 +122,7 @@ async function publishShare(
       updatedAt: Date.now(),
     });
   }
-  return shareUrl(created.id);
+  return publicUrl(`/s/${created.id}`);
 }
 
 /** Publishing is latest-wins per document. Reopening the dialog for an

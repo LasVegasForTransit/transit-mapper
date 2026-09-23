@@ -454,6 +454,8 @@ modules.
 The Worker routes API requests, shares, embeds, static assets, sampled reports,
 and maintenance. Stored text enters HTML through `HTMLRewriter`.
 
+`labs-mount.ts` adapts the Labs alias to rooted Worker routes and assets.
+
 `api-v1.ts` mounts new resources below `/api/v1`; legacy APIs remain
 unversioned. `views-api.ts` owns public View creation, reads, edits, deletion,
 expiry, and edit-token checks. The main router injects shared-system lookup so

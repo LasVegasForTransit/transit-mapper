@@ -20,14 +20,15 @@ head_sampling_rate = 1
 # true` every JS chunk, stylesheet and favicon on every page load was one of
 # those — roughly a dozen per visit, for no reason.
 #
-# Scoped to the paths that genuinely need Worker logic. Everything else —
-# every JS chunk, stylesheet and favicon — is served straight from assets,
-# free and without invoking anything.
+# Scoped to the paths that genuinely need Worker logic, plus the Labs mount
+# that must be normalized before assets resolve. Everything else — every JS
+# chunk, stylesheet and favicon on the canonical hostname — is served straight
+# from assets, free and without invoking anything.
 [assets]
 directory = "../web/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api/*", "/s/*", "/e/*", "/v/*", "/embed/*"]
+run_worker_first = ["/api/*", "/s/*", "/e/*", "/v/*", "/embed/*", "/transit-mapper", "/transit-mapper/*"]
 
 
 # Share creation is the only endpoint that writes caller-supplied bytes to
@@ -133,6 +134,14 @@ crons = ["0 0 * * *"]
 [[routes]]
 pattern = "map.lasvegasfortransit.org"
 custom_domain = true
+
+[[routes]]
+pattern = "labs.lasvegasfortransit.org/transit-mapper"
+zone_name = "lasvegasfortransit.org"
+
+[[routes]]
+pattern = "labs.lasvegasfortransit.org/transit-mapper/*"
+zone_name = "lasvegasfortransit.org"
 
 [vars]
 # Used to build absolute URLs (og:url, canonical) for share pages.

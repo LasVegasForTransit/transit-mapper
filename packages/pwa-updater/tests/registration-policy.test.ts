@@ -9,6 +9,8 @@ describe('service-worker registration policy', () => {
     expect(serviceWorkerRegistrationEnabled('/s')).toBe(false);
     expect(serviceWorkerRegistrationEnabled('/e/embedded-share')).toBe(false);
     expect(serviceWorkerRegistrationEnabled('/e')).toBe(false);
+    expect(serviceWorkerRegistrationEnabled('/transit-mapper')).toBe(false);
+    expect(serviceWorkerRegistrationEnabled('/transit-mapper/s/public-share')).toBe(false);
     expect(serviceWorkerRegistrationEnabled('/elevator')).toBe(true);
   });
 });

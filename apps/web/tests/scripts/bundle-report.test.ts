@@ -434,7 +434,7 @@ describe('bundle report delivery graphs', () => {
   it('validates supported Worker boundaries created inside a Worker source graph', () => {
     const files = fixtureFiles();
     files['assets/main.js'] = encoded(
-      'new Worker(new URL("/assets/storage-worker.js",import.meta.url));',
+      'new Worker(new URL(""+new URL("storage-worker.js",import.meta.url).href,import.meta.url));',
     );
     files['assets/storage-worker.js'] = encoded(
       'new Worker(new URL("./dialog-worker.js",import.meta.url));',

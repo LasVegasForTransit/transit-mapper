@@ -1,5 +1,6 @@
 import { Component, lazy, Suspense, useMemo, type ErrorInfo, type ReactNode } from 'react';
 import { parseRouteIntent } from './route-intent';
+import { appRoutePath } from './public-path';
 import type { RouteHostLoader } from './route-host';
 import './app-root.css';
 
@@ -50,7 +51,7 @@ export function AppRoot({
   loadViewerApplication = loadConcreteViewerApplication,
 }: AppRootProps) {
   const routeIntent = useMemo(
-    () => parseRouteIntent(pathname ?? window.location.pathname),
+    () => parseRouteIntent(appRoutePath(pathname ?? window.location.pathname)),
     [pathname],
   );
   const routeHostLoader =

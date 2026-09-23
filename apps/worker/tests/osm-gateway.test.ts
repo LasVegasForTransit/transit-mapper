@@ -48,7 +48,7 @@ describe('GET /api/places', () => {
   it('is registered on the deployed Worker router', async () => {
     const response = await worker.fetch(
       new Request('https://example.com/api/places?q='),
-      {},
+      {} as Env,
       executionContext() as unknown as ExecutionContext,
     );
 

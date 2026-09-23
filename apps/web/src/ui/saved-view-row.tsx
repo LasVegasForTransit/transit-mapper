@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { LocalViewRecord } from '../views/local-view-library';
 import { copyViewLink } from '../views/view-link';
+import { publicUrl } from '../app/public-path';
 import { DropdownMenu, DropdownMenuItem } from './DropdownMenu';
 import { Icon } from './Icon';
 
@@ -84,7 +85,7 @@ function DeleteConfirmation({ view, onCancel, onConfirm }: DeleteConfirmationPro
 
 function PublishedLink({ view }: { view: LocalViewRecord }) {
   if (!view.publishedId) return null;
-  const link = `${window.location.origin}/v/${encodeURIComponent(view.publishedId)}`;
+  const link = publicUrl(`/v/${encodeURIComponent(view.publishedId)}`);
   return (
     <div className="saved-view-link-row">
       <input
