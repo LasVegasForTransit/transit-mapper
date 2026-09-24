@@ -99,7 +99,8 @@ pushing here already requires write access.
 A preview needs a `CLOUDFLARE_API_TOKEN` secret and a `CLOUDFLARE_ACCOUNT_ID`
 variable on the `preview` GitHub environment, plus the shared database.
 `pnpm bootstrap` creates all three, but until somebody runs it there is
-nowhere to deploy to.
+nowhere to deploy to. [Set up production from
+scratch](../../operations/how-to/set-up-production.md) walks through it.
 
 A `Preview configuration` job checks for the credentials first and the deploy
 is skipped when they are missing, with the reason in the job summary. Failing
