@@ -56,10 +56,48 @@ export function isOrganizationOwned(io: BootstrapIo): boolean {
   return result.data === 'Organization';
 }
 
+/** GitHub's largest page. */
+const PAGE_SIZE = 100;
+
+/** A hard stop, so a response that never shrinks cannot loop forever. */
+const MAX_PAGES = 50;
+
+/** Everything a list endpoint returned, or why it could not all be read. */
+export type Listing<T> = { ok: true; items: T[] } | { ok: false; error: string };
+
+/**
+ * Every item of a paginated GET, or the error that stopped the read.
+ *
+ * A read that stops at the first page answers "absent" for whatever is on
+ * the second, and something wrongly absent is something the caller then
+ * creates a second copy of. A read that fails partway is a failed read, not
+ * a shorter list, for the same reason.
+ */
+export function listAll<T>(
+  io: BootstrapIo,
+  path: string,
+  itemsOf: (page: unknown) => T[] | null,
+): Listing<T> {
+  const items: T[] = [];
+  const separator = path.includes('?') ? '&' : '?';
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const result = ghApi(io, `"${path}${separator}per_page=${PAGE_SIZE}&page=${page}"`);
+    if (!result.ok) return { ok: false, error: result.error };
+    const pageItems = itemsOf(result.data);
+    if (!pageItems) return { ok: false, error: `unexpected response from ${path}` };
+    items.push(...pageItems);
+    if (pageItems.length < PAGE_SIZE) return { ok: true, items };
+  }
+  return { ok: false, error: `${path} did not end within ${MAX_PAGES} pages` };
+}
+
 interface Ruleset {
   id: number;
   name: string;
 }
+
+/** A ruleset lookup that can tell "there is none" from "could not tell". */
+export type RulesetLookup = { ok: true; ruleset: Ruleset | null } | { ok: false; error: string };
 
 /**
  * Finds a ruleset by name.
@@ -69,11 +107,17 @@ interface Ruleset {
  * organization, which cannot be updated through the repository endpoint —
  * so a match against one produces an update that fails, or worse, a second
  * repository-level ruleset shadowing it.
+ *
+ * A failed read is returned as a failure, never as "none". Treating it as
+ * none is how a run that could not see the existing ruleset created a
+ * second one with the same name.
  */
-export function findRuleset(io: BootstrapIo, name: string): Ruleset | null {
-  const listed = ghApi(io, '"repos/:owner/:repo/rulesets?includes_parents=false&per_page=100"');
-  if (!listed.ok || !Array.isArray(listed.data)) return null;
-  return (listed.data as Ruleset[]).find((r) => r.name === name) ?? null;
+export function findRuleset(io: BootstrapIo, name: string): RulesetLookup {
+  const listed = listAll(io, 'repos/:owner/:repo/rulesets?includes_parents=false', (page) =>
+    Array.isArray(page) ? (page as Ruleset[]) : null,
+  );
+  if (!listed.ok) return listed;
+  return { ok: true, ruleset: listed.items.find((r) => r.name === name) ?? null };
 }
 
 interface RuleShape {
@@ -121,6 +165,8 @@ function parameterDifferences(actual: RuleShape, desired: RuleShape): string[] {
 }
 
 export interface RulesetDrift {
+  /** False when the ruleset could not be read, so nothing is known. */
+  readable: boolean;
   /** Human-readable differences. Empty when the ruleset matches. */
   differences: string[];
 }
@@ -136,7 +182,7 @@ export interface RulesetDrift {
 export function rulesetDrift(io: BootstrapIo, id: number, desired: RulesetBody): RulesetDrift {
   const actual = ghApi(io, `"repos/:owner/:repo/rulesets/${id}?includes_parents=false"`);
   if (!actual.ok || typeof actual.data !== 'object' || actual.data === null) {
-    return { differences: ['could not read the existing ruleset to compare against'] };
+    return { readable: false, differences: [] };
   }
 
   const current = actual.data as RulesetBody;
@@ -158,5 +204,5 @@ export function rulesetDrift(io: BootstrapIo, id: number, desired: RulesetBody):
     differences.push(...parameterDifferences(live, rule));
   }
 
-  return { differences };
+  return { readable: true, differences };
 }
