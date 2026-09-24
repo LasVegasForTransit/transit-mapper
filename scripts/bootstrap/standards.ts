@@ -6,10 +6,36 @@
  * them. Changing the standard means editing this file, not the phase.
  */
 
-export const REQUIRED_STATUS_CHECKS = [
-  { context: 'Validate' },
-  { context: 'RTC responsiveness (desktop)' },
-] as const;
+/**
+ * Status checks a pull request must pass before it can merge.
+ *
+ * Only checks CI reports both on the pull request and on the merge queue's
+ * merge group. The queue waits for every required check on the merge group
+ * and drops the entry when one never reports, so a check that runs on pull
+ * requests alone (the RTC audit, for one) would stop anything from merging.
+ * scripts/tests/governance-standard.test.ts holds this list to the workflows.
+ */
+export const REQUIRED_STATUS_CHECKS = [{ context: 'Validate' }] as const;
+
+/**
+ * How the merge queue lands a pull request, copied from the live ruleset.
+ *
+ * REBASE, like the pull request rule below: every commit reaches `main` as it
+ * was reviewed, and `main` never gains a merge commit or a squashed stand-in
+ * for the commits somebody read.
+ */
+const MERGE_QUEUE = {
+  type: 'merge_queue',
+  parameters: {
+    merge_method: 'REBASE',
+    grouping_strategy: 'ALLGREEN',
+    check_response_timeout_minutes: 60,
+    max_entries_to_build: 5,
+    max_entries_to_merge: 5,
+    min_entries_to_merge: 1,
+    min_entries_to_merge_wait_minutes: 5,
+  },
+} as const;
 
 /** Rules on the default branch, as a GitHub repository ruleset. */
 export const BRANCH_RULESET = {
@@ -44,7 +70,13 @@ export const BRANCH_RULESET = {
         require_code_owner_review: false,
         require_last_push_approval: false,
         required_review_thread_resolution: false,
-        allowed_merge_methods: ['squash', 'rebase'],
+        // Kept as the live ruleset has it. The update writes the whole rule,
+        // so a parameter left out here would be reset on the next repair.
+        require_extra_approval_for_unattributed_changes: true,
+        // Rebase only. Squash would replace the reviewed commits with one
+        // nobody reviewed, and a merge commit breaks the linear history the
+        // rule above requires.
+        allowed_merge_methods: ['rebase'],
       },
     },
     {
@@ -58,7 +90,39 @@ export const BRANCH_RULESET = {
         required_status_checks: REQUIRED_STATUS_CHECKS,
       },
     },
+    MERGE_QUEUE,
   ],
+} as const;
+
+/** The ruleset to hold a repository to, given who owns it. */
+export type BranchRuleset = Omit<typeof BRANCH_RULESET, 'rules'> & {
+  readonly rules: readonly (typeof BRANCH_RULESET)['rules'][number][];
+};
+
+/**
+ * The standard ruleset for this repository's owner.
+ *
+ * A repository owned by a personal account cannot have a merge queue (see
+ * REQUIRES_ORGANIZATION), so its ruleset leaves that one rule out rather than
+ * failing to save at all.
+ */
+export function branchRulesetFor(organizationOwned: boolean): BranchRuleset {
+  return organizationOwned
+    ? BRANCH_RULESET
+    : { ...BRANCH_RULESET, rules: BRANCH_RULESET.rules.filter((rule) => rule !== MERGE_QUEUE) };
+}
+
+/**
+ * Merge buttons the repository offers, under Settings → General.
+ *
+ * The ruleset already refuses squash and merge commits on `main`; turning the
+ * buttons off as well means nobody is offered a method that then fails, and a
+ * ruleset that is ever relaxed does not quietly bring them back.
+ */
+export const REPOSITORY_MERGE_SETTINGS = {
+  allow_merge_commit: false,
+  allow_squash_merge: false,
+  allow_rebase_merge: true,
 } as const;
 
 /** Settings under the repository's `security_and_analysis` object. */
@@ -108,6 +172,7 @@ export const REQUIRED_ENVIRONMENTS = ['production', 'preview'] as const;
  */
 export const GOVERNANCE_APPLY_ORDER = [
   'environments',
+  'merge-methods',
   'ruleset',
   'security',
   'vulnerability-alerts',

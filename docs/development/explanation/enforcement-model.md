@@ -87,10 +87,13 @@ is sacred everywhere.
 
 ### Merge method
 
-Pull requests land by rebase or squash merge. Merge commits are off, so
-`main` remains a straight line. Use rebase when the branch already tells a
-useful sequence; use squash when its intermediate commits are only working
-history.
+Pull requests land by rebase merge through the merge queue, and by nothing
+else. Squash merges and merge commits are both off, in the repository's merge
+buttons and in the ruleset, so `main` is a straight line of the commits that
+were reviewed. Tidy a branch's working commits before it merges, because they
+reach `main` as they are. `scripts/bootstrap/standards.ts` declares both
+settings, and `scripts/tests/governance-standard.test.ts` fails if either
+ever allows squash or a merge commit again.
 
 ### Required approvals
 

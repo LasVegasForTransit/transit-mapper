@@ -38,9 +38,10 @@ concurrency:
 
 jobs:
   rtc:
-    # This exact name is the required status context in
-    # scripts/bootstrap/standards.ts. Keep this job terminal for every pull
-    # request even when the Chrome steps are unnecessary.
+    # Reported on every pull request, even when the Chrome steps are
+    # unnecessary, so the result is always visible. It is not a required
+    # check: it never runs on the merge queue's merge group, and a required
+    # check that never reports there would stop every merge.
     name: RTC responsiveness (desktop)
     if: github.event_name != 'workflow_dispatch' || inputs.scope != 'soak'
     runs-on: ubuntu-latest

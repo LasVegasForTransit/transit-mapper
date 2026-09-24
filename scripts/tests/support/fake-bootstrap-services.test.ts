@@ -101,6 +101,12 @@ export class FakeServices {
   secrets = new Map<string, Set<string>>();
   variables = new Map<string, Map<string, string>>();
   rulesets: FakeRuleset[] = [];
+  /** A new repository offers every merge button, as GitHub's defaults do. */
+  repository: Record<string, unknown> = {
+    allow_merge_commit: true,
+    allow_squash_merge: true,
+    allow_rebase_merge: true,
+  };
   security: Record<string, string> = {
     secret_scanning: 'disabled',
     secret_scanning_push_protection: 'disabled',
@@ -296,7 +302,7 @@ export class FakeServices {
 
   private apiRoutes(): ApiRoute[] {
     return [
-      [/^GET \/$/u, ({ jq }) => (jq === '.owner.type' ? ok('Organization') : this.securityState())],
+      [/^GET \/$/u, ({ jq }) => this.repositoryState(jq)],
       [/^PATCH \/$/u, ({ body }) => this.patchSecurity(body)],
       [/^GET \/environments$/u, ({ page }) => this.listEnvironments(page)],
       [/^PUT \/environments\/(\w+)$/u, ({ match }) => this.addEnvironment(match[1] ?? '')],
@@ -317,15 +323,26 @@ export class FakeServices {
     ];
   }
 
-  private securityState(): CommandResult {
-    return json(
-      Object.fromEntries(Object.entries(this.security).map(([key, status]) => [key, { status }])),
+  /** `GET repos/:owner/:repo`, narrowed the way the `--jq` filters ask. */
+  private repositoryState(jq: string | undefined): CommandResult {
+    const security = Object.fromEntries(
+      Object.entries(this.security).map(([key, status]) => [key, { status }]),
     );
+    if (jq === '.owner.type') return ok('Organization');
+    if (jq === '.security_and_analysis') return json(security);
+    return json({
+      ...this.repository,
+      owner: { type: 'Organization' },
+      security_and_analysis: security,
+    });
   }
 
   private patchSecurity(body: Record<string, unknown>): CommandResult {
-    const requested = (body.security_and_analysis ?? {}) as Record<string, { status: string }>;
+    const { security_and_analysis: requested = {}, ...settings } = body as {
+      security_and_analysis?: Record<string, { status: string }>;
+    };
     for (const [setting, value] of Object.entries(requested)) this.security[setting] = value.status;
+    Object.assign(this.repository, settings);
     return ok();
   }
 

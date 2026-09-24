@@ -32,6 +32,88 @@ import {
 
 const OTHER_ACCOUNT = 'ffffffffffffffffffffffffffffffff';
 
+/**
+ * The `org-standard` ruleset exactly as GitHub returned it for this
+ * repository on 2026-09-23, including the parameters GitHub fills in that
+ * the standard never declares. A run against it must change nothing.
+ */
+const LIVE_RULESET = {
+  id: 19856475,
+  name: 'org-standard',
+  target: 'branch',
+  source_type: 'Repository',
+  source: 'LasVegasForTransit/transit-mapper',
+  enforcement: 'active',
+  bypass_actors: [],
+  conditions: { ref_name: { exclude: [], include: ['~DEFAULT_BRANCH'] } },
+  rules: [
+    { type: 'deletion' },
+    { type: 'non_fast_forward' },
+    { type: 'required_linear_history' },
+    {
+      type: 'pull_request',
+      parameters: {
+        allowed_merge_methods: ['rebase'],
+        dismiss_stale_reviews_on_push: true,
+        dismissal_restriction: { allowed_actors: [], enabled: false },
+        require_code_owner_review: false,
+        require_extra_approval_for_unattributed_changes: true,
+        require_last_push_approval: false,
+        required_approving_review_count: 0,
+        required_review_thread_resolution: false,
+        required_reviewers: [],
+      },
+    },
+    {
+      type: 'required_status_checks',
+      parameters: {
+        do_not_enforce_on_create: false,
+        required_status_checks: [{ context: 'Validate' }],
+        strict_required_status_checks_policy: true,
+      },
+    },
+    {
+      type: 'merge_queue',
+      parameters: {
+        check_response_timeout_minutes: 60,
+        grouping_strategy: 'ALLGREEN',
+        max_entries_to_build: 5,
+        max_entries_to_merge: 5,
+        merge_method: 'REBASE',
+        min_entries_to_merge: 1,
+        min_entries_to_merge_wait_minutes: 5,
+      },
+    },
+  ],
+};
+
+/** The repository's merge buttons as GitHub reported them on the same day. */
+const LIVE_MERGE_SETTINGS = {
+  allow_merge_commit: false,
+  allow_squash_merge: false,
+  allow_rebase_merge: true,
+};
+
+/** The ruleset this repository's standard used to declare: squash allowed. */
+const SQUASH_ALLOWED_RULESET = {
+  ...LIVE_RULESET,
+  rules: LIVE_RULESET.rules.map((rule) =>
+    rule.type === 'pull_request'
+      ? { ...rule, parameters: { ...rule.parameters, allowed_merge_methods: ['squash', 'rebase'] } }
+      : rule,
+  ),
+};
+
+interface RuleBody {
+  type?: string;
+  parameters?: { allowed_merge_methods?: unknown };
+}
+
+function allowedMergeMethods(body: Record<string, unknown>): unknown {
+  const rules = (body.rules ?? []) as RuleBody[];
+  return rules.find((rule) => rule.type === 'pull_request')?.parameters?.allowed_merge_methods;
+}
+
 const DEFAULTS: BootstrapOptions = { doctor: false, rotateToken: false, replaceAccountId: false };
 
 async function run(
@@ -195,6 +277,42 @@ describe('repository governance', () => {
 
     expect(next.success).toBe(true);
     expect(mutations(next)).toEqual([]);
+  });
+
+  it('changes nothing on the repository as GitHub reports it today', async () => {
+    await run(services);
+    const standard = services.rulesets.find((ruleset) => ruleset.name === 'org-standard');
+    if (!standard) throw new Error('the first run created no org-standard ruleset');
+    standard.body = structuredClone(LIVE_RULESET);
+    services.repository = { ...LIVE_MERGE_SETTINGS };
+
+    const next = await run(services);
+
+    expect(next.success).toBe(true);
+    expect(mutations(next)).toEqual([]);
+  });
+
+  it('turns squash and merge commits off wherever they were allowed', async () => {
+    await run(services);
+    const standard = services.rulesets.find((ruleset) => ruleset.name === 'org-standard');
+    if (!standard) throw new Error('the first run created no org-standard ruleset');
+    standard.body = structuredClone(SQUASH_ALLOWED_RULESET);
+    services.repository = {
+      allow_merge_commit: true,
+      allow_squash_merge: true,
+      allow_rebase_merge: true,
+    };
+
+    const next = await run(services);
+
+    expect(next.success).toBe(true);
+    expect(allowedMergeMethods(standard.body)).toEqual(['rebase']);
+    expect(services.repository).toMatchObject({
+      allow_merge_commit: false,
+      allow_squash_merge: false,
+      allow_rebase_merge: true,
+    });
+    expect(mutations(await run(services))).toEqual([]);
   });
 });
 

@@ -12,8 +12,10 @@ import type { BootstrapIo } from '../lib/io.js';
 import type { PhaseContext, PhaseResult } from '../lib/phase.js';
 import type { ToolRow } from '../lib/ui.js';
 import {
-  BRANCH_RULESET,
+  branchRulesetFor,
+  REPOSITORY_MERGE_SETTINGS,
   SECURITY_SETTINGS,
+  type BranchRuleset,
   ACTIONS_POLICY_SETTINGS,
   ACTIONS_SETTINGS,
   GOVERNANCE_APPLY_ORDER,
@@ -40,8 +42,8 @@ interface Drift {
   row: ToolRow;
 }
 
-function rulesetState(io: BootstrapIo): Drift | ToolRow {
-  const lookup = findRuleset(io, BRANCH_RULESET.name);
+function rulesetState(io: BootstrapIo, standard: BranchRuleset): Drift | ToolRow {
+  const lookup = findRuleset(io, standard.name);
   // Not drift: nothing is known, and a write made on "nothing is known" is
   // how a second ruleset with the same name gets created.
   if (!lookup.ok) {
@@ -57,18 +59,18 @@ function rulesetState(io: BootstrapIo): Drift | ToolRow {
       row: {
         label: 'Branch ruleset',
         status: 'failed',
-        detail: `"${BRANCH_RULESET.name}" absent — the default branch accepts direct pushes`,
+        detail: `"${standard.name}" absent — the default branch accepts direct pushes`,
       },
     };
   }
 
   // A ruleset with the right name is not a ruleset with the right rules.
-  const drift = rulesetDrift(io, lookup.ruleset.id, BRANCH_RULESET);
+  const drift = rulesetDrift(io, lookup.ruleset.id, standard);
   if (!drift.readable) {
     return {
       label: 'Branch ruleset',
       status: 'failed',
-      detail: `could not read "${BRANCH_RULESET.name}" to compare it, so nothing was changed`,
+      detail: `could not read "${standard.name}" to compare it, so nothing was changed`,
     };
   }
   if (drift.differences.length > 0) {
@@ -77,12 +79,37 @@ function rulesetState(io: BootstrapIo): Drift | ToolRow {
       row: {
         label: 'Branch ruleset',
         status: 'failed',
-        detail: `"${BRANCH_RULESET.name}" differs — ${drift.differences.join('; ')}`,
+        detail: `"${standard.name}" differs — ${drift.differences.join('; ')}`,
       },
     };
   }
 
-  return { label: 'Branch ruleset', status: 'ready', detail: `"${BRANCH_RULESET.name}" matches` };
+  return { label: 'Branch ruleset', status: 'ready', detail: `"${standard.name}" matches` };
+}
+
+/**
+ * The repository's merge buttons: rebase on, squash and merge commits off.
+ *
+ * Read from the repository itself rather than inferred from the ruleset, so a
+ * button somebody switched back on in Settings is reported and repaired even
+ * while the ruleset still refuses it on `main`.
+ */
+function mergeMethodsState(io: BootstrapIo): Drift | ToolRow {
+  const repo = ghApi(io, 'repos/:owner/:repo');
+  if (!repo.ok || typeof repo.data !== 'object' || repo.data === null) {
+    return { label: 'Merge methods', status: 'failed', detail: 'could not read current settings' };
+  }
+  const wrong = settingDrift(repo.data as Record<string, unknown>, REPOSITORY_MERGE_SETTINGS);
+  return wrong.length === 0
+    ? { label: 'Merge methods', status: 'ready', detail: 'rebase only' }
+    : {
+        key: 'merge-methods',
+        row: {
+          label: 'Merge methods',
+          status: 'failed',
+          detail: `${wrong.join(', ')} not at the standard`,
+        },
+      };
 }
 
 type SecurityState = Record<string, { status?: string } | undefined>;
@@ -274,10 +301,10 @@ function writeRow(label: string, result: GhResult, detail: string): ToolRow {
     : { label, status: 'failed', detail: result.error.slice(0, 160) };
 }
 
-function applyRuleset(io: BootstrapIo): ToolRow[] {
+function applyRuleset(io: BootstrapIo, standard: BranchRuleset): ToolRow[] {
   // Read again right before writing, and write nothing when the read fails:
   // only a successful read that finds no ruleset may create one.
-  const lookup = findRuleset(io, BRANCH_RULESET.name);
+  const lookup = findRuleset(io, standard.name);
   if (!lookup.ok) {
     return [
       {
@@ -292,9 +319,14 @@ function applyRuleset(io: BootstrapIo): ToolRow[] {
   // means stale rules survive an update that looks like it replaced them.
   const existing = lookup.ruleset;
   const result = existing
-    ? ghApi(io, `--method PUT repos/:owner/:repo/rulesets/${existing.id}`, BRANCH_RULESET)
-    : ghApi(io, '--method POST repos/:owner/:repo/rulesets', BRANCH_RULESET);
+    ? ghApi(io, `--method PUT repos/:owner/:repo/rulesets/${existing.id}`, standard)
+    : ghApi(io, '--method POST repos/:owner/:repo/rulesets', standard);
   return [writeRow('Branch ruleset', result, existing ? 'updated to the standard' : 'created')];
+}
+
+function applyMergeMethods(io: BootstrapIo): ToolRow[] {
+  const result = ghApi(io, '--method PATCH repos/:owner/:repo', REPOSITORY_MERGE_SETTINGS);
+  return [writeRow('Merge methods', result, 'rebase only')];
 }
 
 function applySecurity(io: BootstrapIo): ToolRow[] {
@@ -354,8 +386,9 @@ type GovernanceKey = (typeof GOVERNANCE_APPLY_ORDER)[number];
 
 /** How to converge each setting. A record, so a key added to the standard
  *  without a way to apply it fails to compile. */
-const APPLY: Record<GovernanceKey, (io: BootstrapIo) => ToolRow[]> = {
+const APPLY: Record<GovernanceKey, (io: BootstrapIo, standard: BranchRuleset) => ToolRow[]> = {
   environments: applyEnvironments,
+  'merge-methods': applyMergeMethods,
   ruleset: applyRuleset,
   security: applySecurity,
   'vulnerability-alerts': (io) =>
@@ -371,9 +404,13 @@ const APPLY: Record<GovernanceKey, (io: BootstrapIo) => ToolRow[]> = {
  * each call did. Separated from the phase so the decision to apply and the
  * applying itself are readable apart.
  */
-function applyGovernance(io: BootstrapIo, pending: readonly GovernanceKey[]): ToolRow[] {
+function applyGovernance(
+  io: BootstrapIo,
+  standard: BranchRuleset,
+  pending: readonly GovernanceKey[],
+): ToolRow[] {
   return GOVERNANCE_APPLY_ORDER.filter((key) => pending.includes(key)).flatMap((key) =>
-    APPLY[key](io),
+    APPLY[key](io, standard),
   );
 }
 
@@ -392,9 +429,15 @@ export async function runRepoConfigPhase({ doctor, io }: PhaseContext): Promise<
     return { success: false };
   }
 
+  // Asked first, because the answer decides which ruleset is the standard:
+  // a personal repository cannot hold the merge queue rule.
+  const organizationOwned = isOrganizationOwned(io);
+  const standard = branchRulesetFor(organizationOwned);
+
   const states = [
     environmentsState(io),
-    rulesetState(io),
+    mergeMethodsState(io),
+    rulesetState(io, standard),
     securityState(io),
     vulnerabilityAlertsState(io),
     dependabotSecurityUpdatesState(io),
@@ -404,7 +447,7 @@ export async function runRepoConfigPhase({ doctor, io }: PhaseContext): Promise<
   const rows = states.map((s) => (isDrift(s) ? s.row : s));
   const pending = states.filter(isDrift).map((s) => s.key);
 
-  if (!isOrganizationOwned(io)) {
+  if (!organizationOwned) {
     for (const blocked of REQUIRES_ORGANIZATION) {
       rows.push({
         label: blocked.setting,
@@ -427,7 +470,7 @@ export async function runRepoConfigPhase({ doctor, io }: PhaseContext): Promise<
   );
   if (!confirmed) return { success: false };
 
-  const applied = applyGovernance(io, pending);
+  const applied = applyGovernance(io, standard, pending);
 
   io.table('Applied', applied);
   return { success: applied.every((r) => r.status === 'ready') };
