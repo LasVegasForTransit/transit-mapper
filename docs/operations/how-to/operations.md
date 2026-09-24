@@ -158,10 +158,8 @@ Check which step failed before anything else; they fail for unrelated reasons.
 - **Apply D1 migrations** or **Deploy** with
   `Authentication error [code: 10000]` — the `CLOUDFLARE_API_TOKEN` secret in
   the repository's `production` environment lacks a permission. It needs
-  everything the **Edit Cloudflare Workers** template grants, which includes
-  `Account · Workers Scripts · Edit`, `Account · Workers R2 Storage · Edit`,
-  and `Zone · Workers Routes · Edit`, plus `Account · D1 · Edit`, which the
-  template lacks. Make a replacement with
+  the narrowly scoped Workers Scripts, D1, R2, account and zone read, and
+  Workers Routes permissions in the setup guide. Make a replacement with
   [the deploy token steps](set-up-production.md#make-the-deploy-token) and
   store it with `pnpm bootstrap --rotate-token`. (That environment also needs a
   `CLOUDFLARE_ACCOUNT_ID` **variable** — not a secret — which is easy to miss
@@ -184,7 +182,7 @@ Check which step failed before anything else; they fail for unrelated reasons.
 Production uses the `transitmapper-data` R2 bucket. The refresh workflow checks
 for it and creates it through the Cloudflare API before it downloads a feed.
 The `production` environment token needs `Account · Workers R2 Storage · Edit`,
-which the **Edit Cloudflare Workers** template it is made from already grants.
+which the custom token setup explicitly includes.
 Do not put that token on a command line; dispatch the workflow instead.
 
 The daily `Refresh GTFS feeds` workflow runs at 09:17 UTC. It downloads each

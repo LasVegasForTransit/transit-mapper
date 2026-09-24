@@ -26,16 +26,14 @@ function tokenDashboardUrl(account: CloudflareAccount): string {
 }
 
 /**
- * The account and zone permissions the "Edit Cloudflare Workers" template
- * fills in, in the dashboard's words. Listed so the reader can check the
- * screen before adding anything, instead of wondering whether one is missing.
+ * Permissions used by deployment, migrations, preview cleanup, and feed refresh.
  */
-const TEMPLATE_PERMISSIONS = [
+const DEPLOY_PERMISSIONS = [
   'Account · Workers Scripts · Edit',
-  'Account · Workers KV Storage · Edit',
   'Account · Workers R2 Storage · Edit   (the daily GTFS refresh needs it)',
-  'Account · Workers Tail · Read',
+  'Account · D1 · Edit   (production and preview migrations)',
   'Account · Account Settings · Read',
+  'Zone · Zone · Read',
   'Zone · Workers Routes · Edit',
 ];
 
@@ -43,10 +41,6 @@ const TEMPLATE_PERMISSIONS = [
  * Step-by-step instructions shown before the token prompt, for somebody who
  * has never made a Cloudflare API token: every name to type, every
  * permission to add, and every option to pick, so nothing is guessed.
- *
- * The one permission the template lacks is D1: the production and preview
- * workflows both apply D1 migrations before they deploy. R2 is already in
- * the template, which is why it is listed rather than added.
  *
  * Every copied value is pasted before anything else is copied: the prompt is
  * already waiting when the token is shown, and the bootstrap itself writes
@@ -61,23 +55,24 @@ function tokenPromptBody(account: CloudflareAccount, target: DeployTarget): stri
     '',
     'It is an account-owned token: it belongs to the LVBT account, not to',
     'you. Cloudflare lets only a Super Administrator of the account make one.',
+    'Check that this account is named Las Vegans for Better Transit. If it',
+    'still says Las Vegas for Better Transit, correct it in account settings.',
     '',
     `  1. Open ${tokenDashboardUrl(account)}`,
     '     (opening it for you now). In the dashboard this is',
     '     Manage Account → Account API Tokens.',
     '  2. Click "Create Token".',
-    '  3. Under "Permission policies", open the "Custom" dropdown and',
-    '     choose "Edit Cloudflare Workers".',
+    '  3. Under "Permission policies", choose "Create Custom Token".',
     `  4. Token name: ${site} deploy (GitHub Actions)`,
-    '  5. Keep every permission the template fills in. They include:',
-    ...TEMPLATE_PERMISSIONS.map((permission) => `       ${permission}`),
-    '     Add one more, because every deploy applies D1 migrations:',
-    '       Account · D1 · Edit',
-    `  6. Zone Resources: Include → Specific zone → ${zones}`,
-    '  7. Leave the expiration date empty, so deploys keep working.',
-    '  8. Click "Continue to summary", then "Create Token".',
-    '  9. Copy the token. Cloudflare shows it only once.',
-    ' 10. Paste it below. It is not shown on screen as you type.',
+    '  5. Add only these permissions:',
+    ...DEPLOY_PERMISSIONS.map((permission) => `       ${permission}`),
+    `  6. Account Resources: Include → ${account.name}. Leave All accounts off.`,
+    `  7. Zone Resources: Include → Specific zone → ${zones}.`,
+    '     Leave All zones off so the token cannot change other zones.',
+    '  8. Leave the expiration date empty, so deploys keep working.',
+    '  9. Click "Continue to summary", then "Create Token".',
+    ' 10. Copy the token. Cloudflare shows it only once.',
+    ' 11. Paste it below. It is not shown on screen as you type.',
     '',
     'The token is a secret. The bootstrap stores it only as the',
     `${TOKEN_SECRET} environment secret on the ${REQUIRED_ENVIRONMENTS.join(' and ')}`,
@@ -285,10 +280,10 @@ async function writeToken(
  * standard input and never touches a command line, the general subprocess
  * environment (see the denylist in lib/shell.ts), or any on-disk file.
  *
- * The same token for every environment, because Cloudflare has no per-script
- * token scope: any token that can deploy a preview Worker can also overwrite
- * the production one. Separate environments buy separate deployment records
- * and somewhere to put a narrower token the day one exists — not isolation.
+ * The same account-scoped token is currently used in both environments, so a
+ * preview credential can also change production Worker code. Cloudflare has
+ * per-Worker roles, but dynamically created preview Workers need account-level
+ * create rights. Separate environments record deployments, not isolation.
  */
 export async function runCiSecretsPhase({
   doctor,

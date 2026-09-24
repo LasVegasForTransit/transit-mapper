@@ -17,6 +17,9 @@ Everything TransitMapper runs on belongs to Las Vegans for Better Transit
 for Better Transit** (account ID `2557b5c2e166292ded0f8425b73075e9`), and the
 code lives in the **LasVegasForTransit** GitHub organization. Nothing in this
 guide should be created under a personal account.
+Check the account name in Cloudflare before starting. If it still says "Las Vegas
+for Better Transit", change it to "Las Vegans for Better Transit" under the
+account's settings.
 
 You need:
 
@@ -77,8 +80,9 @@ it. It is 32 letters and digits: `2557b5c2e166292ded0f8425b73075e9`.
 
 ### `PUBLIC_LVBT_CWA_TOKEN` and `PUBLIC_LVBT_LABS_CWA_TOKEN`
 
-These are the Cloudflare Web Analytics tokens for `map.lasvegasfortransit.org`
-and `labs.lasvegasfortransit.org`. They are public, because every page view
+Both variables use the organization's Cloudflare Web Analytics token for
+`lasvegasfortransit.org`. That property covers `map` and `labs` because both
+share the same apex domain. The tokens are public, because every page view
 sends them, so the bootstrap stores them as environment variables on the
 `production` environment. Each is 32 letters and digits. Do not skip them:
 the production build refuses to deploy without them. What they measure is in
@@ -103,25 +107,27 @@ can paste it the moment you copy it.
 1. Open <https://dash.cloudflare.com/2557b5c2e166292ded0f8425b73075e9/api-tokens>.
    In the dashboard this page is **Manage Account → Account API Tokens**.
 2. Click **Create Token**.
-3. Under **Permission policies**, open the **Custom** dropdown and choose
-   **Edit Cloudflare Workers**.
+3. Under **Permission policies**, choose **Create Custom Token**. Do not use
+   the personal **Edit Cloudflare Workers** template; it grants permissions
+   this repository does not use.
 4. Name the token `map.lasvegasfortransit.org deploy (GitHub Actions)`.
-5. Keep every permission the template fills in. They include Account ·
-   Workers Scripts · Edit, Account · Workers KV Storage · Edit, Account ·
-   Workers R2 Storage · Edit, Account · Workers Tail · Read, Account ·
-   Account Settings · Read, and Zone · Workers Routes · Edit.
-6. Add one more permission: Account · D1 · Edit. Every deploy and every
-   preview applies database migrations, and the template does not include
-   D1.
+5. Add only these permissions: Account · Workers Scripts · Edit; Account ·
+   Workers R2 Storage · Edit; Account · D1 · Edit; Account · Account Settings ·
+   Read; Zone · Zone · Read; and Zone · Workers Routes · Edit. Workers Scripts
+   deploys and removes Workers; D1 applies production and preview migrations;
+   R2 supports the daily GTFS refresh; the remaining rows read account and zone
+   details and attach routes.
+6. Under Account Resources, choose Include and the LVBT account by name. Leave
+   All accounts off so the token cannot act on another account.
 7. Under Zone Resources, choose Include, then Specific zone, then
-   `lasvegasfortransit.org`.
+   `lasvegasfortransit.org`. Leave All zones off so the token cannot change
+   another zone.
 8. Leave the expiration date empty, so deploys keep working.
 9. Click **Continue to summary**, then **Create Token**.
 10. Copy the token. Cloudflare shows it only once. Paste it into the
     terminal when the bootstrap asks; it is not shown as you type.
 
-The daily GTFS refresh needs Account · Workers R2 Storage · Edit, which the
-template already grants, so there is nothing to add for it.
+The daily GTFS refresh needs the R2 permission listed in step 5.
 
 If the token is ever rolled or deleted in Cloudflare, the stored copy stops
 working and every deploy fails. Make a new token with the steps above and
@@ -129,20 +135,24 @@ store it with `pnpm bootstrap --rotate-token`.
 
 ## Find the Web Analytics tokens
 
-Do this once for `map.lasvegasfortransit.org` and once for
-`labs.lasvegasfortransit.org`, in the order the bootstrap asks. Finish all
-six steps for one hostname, including the paste, before you start the next.
+Both hostnames use the existing `lasvegasfortransit.org` property. The bootstrap
+asks for its token twice because the production build currently has two
+variables; paste the same public token at each prompt. Finish the first paste
+before moving to the second prompt. Do not create a second property for a
+subdomain.
 
 1. Open
    <https://dash.cloudflare.com/2557b5c2e166292ded0f8425b73075e9/web-analytics>.
-2. If the hostname is already listed, click **Manage site** on it and go to
+2. If `lasvegasfortransit.org` is already listed, click **Manage site** on it and go to
    step 5.
-3. Click **Add a site** and type the hostname.
-4. Choose **Enable with JS Snippet installation**, not the automatic
-   **Enable** option. The site loads the analytics script itself.
+3. Click **Add a site**, choose `lasvegasfortransit.org`, and click **Done**.
+4. Open **Manage site** and choose **Enable with JS Snippet installation**
+   instead of automatic setup. TransitMapper loads the beacon itself, so
+   automatic injection would load it twice.
 5. In the JS snippet, copy only the token inside
    `data-cf-beacon='{"token": "..."}'`. It is 32 letters and digits.
-6. Paste it into the terminal when the bootstrap asks for that hostname.
+6. Paste it into the terminal at each bootstrap prompt, without copying
+   another value between the two prompts.
 
 ## Running it again
 
