@@ -11,15 +11,24 @@ import { deployTarget, readWranglerToml, type DeployTarget } from '../lib/wrangl
 import { REQUIRED_ENVIRONMENTS } from '../standards.js';
 
 /**
- * Where API tokens are created. The token is still limited to one account:
- * step 5 below includes only that account under Account Resources.
+ * The account's own API token page (Manage Account → Account API Tokens).
+ *
+ * An account-owned token, not one from a person's profile: it belongs to the
+ * LVBT account, so deploys keep working when the person who made it leaves
+ * or loses access. Cloudflare lists Workers, D1 and R2 as compatible with
+ * account-owned tokens, and its Workers CI/CD guide creates the deploy token
+ * on this page. Such a token cannot hold User permissions, which Wrangler
+ * does not need here: every workflow sets CLOUDFLARE_ACCOUNT_ID, and Wrangler
+ * reads that before it would look up the user's memberships.
  */
-const TOKEN_DASHBOARD_URL = 'https://dash.cloudflare.com/profile/api-tokens';
+function tokenDashboardUrl(account: CloudflareAccount): string {
+  return `https://dash.cloudflare.com/${account.id}/api-tokens`;
+}
 
 /**
- * What the "Edit Cloudflare Workers" template grants, in the order and words
- * the dashboard uses. Listed so the reader can check the screen matches
- * before adding anything, instead of wondering whether a row is missing.
+ * The account and zone permissions the "Edit Cloudflare Workers" template
+ * fills in, in the dashboard's words. Listed so the reader can check the
+ * screen before adding anything, instead of wondering whether one is missing.
  */
 const TEMPLATE_PERMISSIONS = [
   'Account · Workers Scripts · Edit',
@@ -28,14 +37,12 @@ const TEMPLATE_PERMISSIONS = [
   'Account · Workers Tail · Read',
   'Account · Account Settings · Read',
   'Zone · Workers Routes · Edit',
-  'User · User Details · Read',
-  'User · Memberships · Read',
 ];
 
 /**
  * Step-by-step instructions shown before the token prompt, for somebody who
- * has never made a Cloudflare API token: every name to type, every row to
- * add, and every option to pick, so nothing has to be guessed or looked up.
+ * has never made a Cloudflare API token: every name to type, every
+ * permission to add, and every option to pick, so nothing is guessed.
  *
  * The one permission the template lacks is D1: the production and preview
  * workflows both apply D1 migrations before they deploy. R2 is already in
@@ -48,18 +55,22 @@ function tokenPromptBody(account: CloudflareAccount, target: DeployTarget): stri
     'This token lets GitHub Actions deploy TransitMapper. You make it once;',
     'the bootstrap stores it and does not ask for it again.',
     '',
-    `  1. Open ${TOKEN_DASHBOARD_URL} (opening it for you now)`,
-    '     and click "Create Token".',
-    '  2. Next to "Edit Cloudflare Workers", click "Use template".',
-    `  3. Token name: ${site} deploy (GitHub Actions)`,
-    '  4. Under Permissions the template already has these rows. Keep them:',
+    'It is an account-owned token: it belongs to the LVBT account, not to',
+    'you. Cloudflare lets only a Super Administrator of the account make one.',
+    '',
+    `  1. Open ${tokenDashboardUrl(account)}`,
+    '     (opening it for you now). In the dashboard this is',
+    '     Manage Account → Account API Tokens.',
+    '  2. Click "Create Token".',
+    '  3. Under "Permission policies", open the "Custom" dropdown and',
+    '     choose "Edit Cloudflare Workers".',
+    `  4. Token name: ${site} deploy (GitHub Actions)`,
+    '  5. Keep every permission the template fills in. They include:',
     ...TEMPLATE_PERMISSIONS.map((permission) => `       ${permission}`),
-    '     Add one more row, because every deploy applies D1 migrations:',
+    '     Add one more, because every deploy applies D1 migrations:',
     '       Account · D1 · Edit',
-    `  5. Account Resources: Include → ${account.name}`,
-    '     (not "All accounts").',
     `  6. Zone Resources: Include → Specific zone → ${zones}`,
-    '  7. Leave TTL empty, so deploys keep working.',
+    '  7. Leave the expiration date empty, so deploys keep working.',
     '  8. Click "Continue to summary", then "Create Token".',
     '  9. Copy the token. Cloudflare shows it only once.',
     ' 10. Paste it below. It is not shown on screen as you type.',
@@ -245,7 +256,7 @@ async function writeToken(
   // the same token invites two different tokens, and then one environment
   // deploys with credentials nobody knows about.
   io.note(tokenPromptBody(account, deployTarget(readWranglerToml(io))), 'Cloudflare API token');
-  io.openUrl(TOKEN_DASHBOARD_URL);
+  io.openUrl(tokenDashboardUrl(account));
   const token = await io.secret('Paste the Cloudflare API token:');
   const written = setOnEnvironments(io, {
     kind: 'secret',

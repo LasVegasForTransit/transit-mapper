@@ -20,7 +20,8 @@ guide should be created under a personal account.
 
 You need:
 
-- a Cloudflare login that is a member of the LVBT account;
+- a Cloudflare login that is a member of the LVBT account, with the Super
+  Administrator role if you are the one making the deploy token;
 - admin access to the `LasVegasForTransit/transit-mapper` repository on
   GitHub, because only admins can change its environments and rules;
 - a checkout set up as described in
@@ -91,31 +92,33 @@ writes them for you; your only job is the pull request in step 9.
 
 ## Make the deploy token
 
-1. Open <https://dash.cloudflare.com/profile/api-tokens> and click
-   **Create Token**.
-2. Next to **Edit Cloudflare Workers**, click **Use template**.
-3. Name the token `map.lasvegasfortransit.org deploy (GitHub Actions)`.
-4. Under Permissions, check that the template has these eight rows, and keep
-   them all: Account · Workers Scripts · Edit, Account · Workers KV Storage ·
-   Edit, Account · Workers R2 Storage · Edit, Account · Workers Tail · Read,
-   Account · Account Settings · Read, Zone · Workers Routes · Edit, User ·
-   User Details · Read, and User · Memberships · Read.
-5. Add one more permission row and set it to Account · D1 · Edit. Every
-   deploy and every preview applies database migrations, and the template
-   does not include D1.
-6. Under Account Resources, choose Include and then the LVBT account, **Las
-   Vegans for Better Transit**. Do not choose "All accounts".
+The deploy token is an account-owned token. It belongs to the LVBT account
+instead of to you, so deploys keep working if you leave or lose access.
+Cloudflare lets only a Super Administrator of the account create one; if you
+are not one, ask someone who is to follow these steps.
+
+1. Open <https://dash.cloudflare.com/2557b5c2e166292ded0f8425b73075e9/api-tokens>.
+   In the dashboard this page is **Manage Account → Account API Tokens**.
+2. Click **Create Token**.
+3. Under **Permission policies**, open the **Custom** dropdown and choose
+   **Edit Cloudflare Workers**.
+4. Name the token `map.lasvegasfortransit.org deploy (GitHub Actions)`.
+5. Keep every permission the template fills in. They include Account ·
+   Workers Scripts · Edit, Account · Workers KV Storage · Edit, Account ·
+   Workers R2 Storage · Edit, Account · Workers Tail · Read, Account ·
+   Account Settings · Read, and Zone · Workers Routes · Edit.
+6. Add one more permission: Account · D1 · Edit. Every deploy and every
+   preview applies database migrations, and the template does not include
+   D1.
 7. Under Zone Resources, choose Include, then Specific zone, then
    `lasvegasfortransit.org`.
-8. Leave TTL empty, so deploys keep working.
+8. Leave the expiration date empty, so deploys keep working.
 9. Click **Continue to summary**, then **Create Token**.
 10. Copy the token. Cloudflare shows it only once. Paste it into the
     terminal when the bootstrap asks; it is not shown as you type.
 
-The token is created from your own Cloudflare profile, but it can reach only
-the LVBT account. The daily GTFS refresh needs
-Account · Workers R2 Storage · Edit, which the template already grants, so
-there is nothing to add for it.
+The daily GTFS refresh needs Account · Workers R2 Storage · Edit, which the
+template already grants, so there is nothing to add for it.
 
 If the token is ever rolled or deleted in Cloudflare, the stored copy stops
 working and every deploy fails. Make a new token with the steps above and
@@ -165,7 +168,7 @@ To replace a leaked or rolled deploy token:
    [make the deploy token](#make-the-deploy-token).
 2. Run `pnpm bootstrap --rotate-token` and paste it.
 3. Wait for the next deploy to succeed, then delete the old token on
-   <https://dash.cloudflare.com/profile/api-tokens>.
+   <https://dash.cloudflare.com/2557b5c2e166292ded0f8425b73075e9/api-tokens>.
 
 If the bootstrap reports that `CLOUDFLARE_ACCOUNT_ID` holds a different
 account from the one in `apps/worker/wrangler.toml`, find out which one is
