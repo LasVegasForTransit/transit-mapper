@@ -8,7 +8,7 @@ import {
   type CommandResult,
   type RunOptions,
 } from './shell.js';
-import { formatToolTable, promptConfirm, promptSecret, type ToolRow } from './ui.js';
+import { formatToolTable, promptConfirm, promptSecret, promptText, type ToolRow } from './ui.js';
 
 export type LogLevel = 'info' | 'success' | 'warn' | 'error';
 
@@ -32,6 +32,8 @@ export interface BootstrapIo {
   confirm: (message: string, initialValue: boolean) => Promise<boolean>;
   /** Masked prompt. The answer is never echoed or logged. */
   secret: (message: string) => Promise<string>;
+  /** Plain prompt for a value that is not secret, checked by `check`. */
+  text: (message: string, check: (value: string) => string | undefined) => Promise<string>;
   openUrl: (url: string) => boolean;
   note: (body: string, title: string) => void;
   /** A phase's status table. Structured so a test can read the statuses. */
@@ -50,6 +52,7 @@ export function nodeIo(root: string = process.cwd()): BootstrapIo {
     },
     confirm: promptConfirm,
     secret: promptSecret,
+    text: promptText,
     openUrl: tryOpenInBrowser,
     note: (body, title) => {
       note(body, title);

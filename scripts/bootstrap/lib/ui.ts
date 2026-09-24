@@ -1,4 +1,4 @@
-import { cancel, confirm, isCancel, password } from '@clack/prompts';
+import { cancel, confirm, isCancel, password, text } from '@clack/prompts';
 
 export type ToolRowStatus = 'ready' | 'failed' | 'deferred' | 'skipped';
 
@@ -49,4 +49,18 @@ export async function promptSecret(message: string): Promise<string> {
     }),
   );
   return result as string;
+}
+
+/**
+ * Plain prompt for a value that is not secret. `check` returns the reason a
+ * value is refused, or undefined to accept it.
+ */
+export async function promptText(
+  message: string,
+  check: (value: string) => string | undefined,
+): Promise<string> {
+  const result = await promptOrExit(
+    text({ message, validate: (value) => check((value ?? '').trim()) }),
+  );
+  return (result as string).trim();
 }
