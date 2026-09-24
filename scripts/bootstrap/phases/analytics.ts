@@ -35,7 +35,11 @@ function webAnalyticsUrl(account: CloudflareAccount): string {
   return `https://dash.cloudflare.com/${account.id}/web-analytics`;
 }
 
-/** The dashboard steps for one site, shown before its prompt. */
+/**
+ * The dashboard steps for one site, shown before its prompt. One site at a
+ * time, with its paste as the last step, so every copied token is pasted
+ * before the next is copied.
+ */
 function analyticsSteps(account: CloudflareAccount, variable: AnalyticsVariable): string {
   return [
     `This is the Web Analytics token for ${variable.host}. The production`,
