@@ -7,6 +7,8 @@ export const ACCOUNT_VARIABLE = 'CLOUDFLARE_ACCOUNT_ID';
 
 export interface CloudflareAccount {
   id: string;
+  /** The account's name as the dashboard shows it, for steps that pick it. */
+  name: string;
   /** Where the id came from, in words a reader can go and check. */
   source: string;
 }
@@ -15,7 +17,12 @@ export type AccountResolution =
   { ok: true; account: CloudflareAccount } | { ok: false; problem: string };
 
 interface WhoamiOutput {
-  accounts?: { id?: unknown }[];
+  accounts?: { id?: unknown; name?: unknown }[];
+}
+
+interface VisibleAccount {
+  id: string;
+  name: string;
 }
 
 /** JSON out of a command's stdout, or null. Whatever wrangler prints before
@@ -30,14 +37,18 @@ export function parseJsonOutput(stdout: string): unknown {
   }
 }
 
-/** Ids of the accounts the logged-in wrangler user can act on, or null when
+/** The accounts the logged-in wrangler user can act on, or null when
  *  wrangler cannot say (not logged in, or no network). */
-function visibleAccountIds(io: BootstrapIo): string[] | null {
+function visibleAccounts(io: BootstrapIo): VisibleAccount[] | null {
   const result = io.run(`${WRANGLER} whoami --json`);
   if (!result.ok) return null;
   const parsed = parseJsonOutput(result.stdout) as WhoamiOutput | null;
   if (!parsed || !Array.isArray(parsed.accounts)) return null;
-  return parsed.accounts.flatMap((account) => (typeof account.id === 'string' ? [account.id] : []));
+  return parsed.accounts.flatMap((account) =>
+    typeof account.id === 'string'
+      ? [{ id: account.id, name: typeof account.name === 'string' ? account.name : account.id }]
+      : [],
+  );
 }
 
 /**
@@ -69,7 +80,7 @@ function accountFromVariables(io: BootstrapIo): string | null {
  * different account from the one the first run provisioned.
  */
 export function resolveAccount(io: BootstrapIo): AccountResolution {
-  const visible = visibleAccountIds(io);
+  const visible = visibleAccounts(io);
   if (!visible) {
     return {
       ok: false,
@@ -79,8 +90,8 @@ export function resolveAccount(io: BootstrapIo): AccountResolution {
 
   const declared = declaredAccountId(readWranglerToml(io));
   const fromVariables = declared ? null : accountFromVariables(io);
-  const only = visible.length === 1 ? visible[0] : undefined;
-  const account: CloudflareAccount | null = declared
+  const only = visible.length === 1 ? visible[0]?.id : undefined;
+  const chosen = declared
     ? { id: declared, source: `account_id in ${WRANGLER_TOML}` }
     : fromVariables
       ? { id: fromVariables, source: `the ${ACCOUNT_VARIABLE} variable in GitHub` }
@@ -88,19 +99,20 @@ export function resolveAccount(io: BootstrapIo): AccountResolution {
         ? { id: only, source: 'the only account this login can use' }
         : null;
 
-  if (!account) {
+  if (!chosen) {
     return {
       ok: false,
       problem: `this login can use ${visible.length} accounts; add account_id = "<id>" to ${WRANGLER_TOML} to choose one`,
     };
   }
-  if (!visible.includes(account.id)) {
+  const member = visible.find((account) => account.id === chosen.id);
+  if (!member) {
     return {
       ok: false,
-      problem: `this wrangler login cannot use account ${account.id} (${account.source}) — log in as a member of it`,
+      problem: `this wrangler login cannot use account ${chosen.id} (${chosen.source}) — log in as a member of it`,
     };
   }
-  return { ok: true, account };
+  return { ok: true, account: { ...chosen, name: member.name } };
 }
 
 /**
