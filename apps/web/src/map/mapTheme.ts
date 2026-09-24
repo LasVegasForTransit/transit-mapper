@@ -2,6 +2,7 @@ import type { StyleSpecification } from 'maplibre-gl';
 // Imported for its side effect: it points MapLibre at the worker Vite emitted,
 // before anything here hands a style to a map constructor.
 import './maplibre-worker';
+import { publicPath } from '../app/public-path';
 import type { ColorScheme } from '../theme/color-scheme';
 import { createLayerSpecs } from './layers/layerSpecs';
 import { MAP_THEMES } from './mapThemePalette';
@@ -34,7 +35,7 @@ const LOCAL_BACKGROUND_LAYER_ID = 'transitmapper-local-background';
 function localGlyphsUrl(): string {
   const runtime: { readonly location?: { readonly origin?: string } } = globalThis;
   const origin = runtime.location?.origin ?? BROWSER_FREE_RENDERER_ORIGIN;
-  return `${origin}/glyphs/noto-sans-v1/{fontstack}/{range}.pbf`;
+  return `${origin}${publicPath('/glyphs/noto-sans-v1/{fontstack}/{range}.pbf')}`;
 }
 
 export function localBlankStyleForScheme(scheme: ColorScheme): StyleSpecification {

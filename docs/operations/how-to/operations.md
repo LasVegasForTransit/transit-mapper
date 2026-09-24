@@ -20,7 +20,9 @@ current project, not a graduation or a separate deployment.
 The Labs Worker route strips `/transit-mapper` before routing API and reader
 requests or fetching built assets. HTML responses prefix root-relative asset
 paths so the Vite build works on both hostnames. The browser path helper keeps
-navigation and API calls under the Labs prefix. A Labs route deployment must
+navigation, API calls, and local map-font requests under the Labs prefix. The
+web manifest uses relative launch, scope, and icon URLs so installation stays
+within whichever hostname and path served it. A Labs route deployment must
 pass direct refresh checks for the editor, a built JS asset, a share page, and
 an API request; the map hostname remains the canonical public address.
 

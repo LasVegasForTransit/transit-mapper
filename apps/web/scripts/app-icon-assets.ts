@@ -76,7 +76,7 @@ function assetName(icon: UnversionedInstallIcon, revision: string): string {
 
 function manifestIcon(icon: UnversionedInstallIcon, name: string): ManifestIcon {
   return {
-    src: `/icons/${name}`,
+    src: `icons/${name}`,
     sizes: icon.size === 'any' ? 'any' : `${icon.size}x${icon.size}`,
     type: icon.size === 'any' ? 'image/svg+xml' : 'image/png',
     purpose: icon.kind === 'maskable' ? 'maskable' : 'any',

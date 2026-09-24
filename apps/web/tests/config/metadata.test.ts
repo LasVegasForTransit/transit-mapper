@@ -30,6 +30,28 @@ describe('public product metadata', () => {
     expect(manifest.description).toMatch(/open beta/i);
   });
 
+  it('resolves manifest navigation and icons within either public mount', () => {
+    const manifest = JSON.parse(source('public/manifest.json')) as {
+      id?: string;
+      start_url: string;
+      scope: string;
+      icons: { src: string }[];
+    };
+
+    expect(manifest.id).toBeUndefined();
+    for (const mount of [
+      'https://map.lasvegasfortransit.org/',
+      'https://labs.lasvegasfortransit.org/transit-mapper/',
+    ]) {
+      const manifestUrl = new URL('manifest.json', mount);
+      expect(new URL(manifest.start_url, manifestUrl).href).toBe(mount);
+      expect(new URL(manifest.scope, manifestUrl).href).toBe(mount);
+      for (const icon of manifest.icons) {
+        expect(new URL(icon.src, manifestUrl).href.startsWith(`${mount}icons/`)).toBe(true);
+      }
+    }
+  });
+
   it('attributes the transferred copyright only to LVBT', () => {
     const license = readFileSync(resolve(REPOSITORY_ROOT, 'LICENSE'), 'utf8');
 

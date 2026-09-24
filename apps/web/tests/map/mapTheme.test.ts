@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   LYR_SERVICES_SOLID_CASING,
   LYR_SERVICES_UNDERGROUND_CASING,
@@ -59,6 +59,21 @@ describe('map themes', () => {
     expect(style.glyphs).toContain('{fontstack}');
     expect(style.glyphs).toContain('{range}');
     expect(layerSpecsForScheme('light').some((layer) => layer.type === 'symbol')).toBe(true);
+  });
+
+  it('keeps local glyph requests within the Labs mount', () => {
+    vi.stubGlobal('location', {
+      hostname: 'labs.lasvegasfortransit.org',
+      pathname: '/transit-mapper/',
+      origin: 'https://labs.lasvegasfortransit.org',
+    });
+    try {
+      expect(localBlankStyleForScheme('light').glyphs).toBe(
+        'https://labs.lasvegasfortransit.org/transit-mapper/glyphs/noto-sans-v1/{fontstack}/{range}.pbf',
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('keeps layer identity, source, filter, and order stable between schemes', () => {
