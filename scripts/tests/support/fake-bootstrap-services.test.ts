@@ -69,8 +69,12 @@ interface RecordedCall {
 export interface RunRecord {
   calls: RecordedCall[];
   prompts: string[];
+  /** The prompts that masked their answer. */
+  maskedPrompts: string[];
   writes: string[];
   tables: ToolRow[][];
+  /** Everything printed: notes, table rows, and log lines. */
+  output: string[];
 }
 
 /** One GitHub API request as the fake routes it. */
@@ -130,7 +134,14 @@ export class FakeServices {
 
   /** A fresh seam for one run, recording what that run does. */
   io(): BootstrapIo & { record: RunRecord } {
-    const record: RunRecord = { calls: [], prompts: [], writes: [], tables: [] };
+    const record: RunRecord = {
+      calls: [],
+      prompts: [],
+      maskedPrompts: [],
+      writes: [],
+      tables: [],
+      output: [],
+    };
     const ask = <T>(message: string, answer: T): Promise<T> => {
       record.prompts.push(message);
       return Promise.resolve(answer);
@@ -150,18 +161,26 @@ export class FakeServices {
         writeFileSync(path.join(this.root, relativePath), content, 'utf8');
       },
       confirm: (message) => ask(message, true),
-      secret: (message) => ask(message, FAKE_TOKEN),
+      secret: (message) => {
+        record.maskedPrompts.push(message);
+        return ask(message, FAKE_TOKEN);
+      },
       text: (message, check) => {
         const refused = check(FAKE_ANALYTICS_TOKEN);
         if (refused) throw new Error(`the fake analytics token was refused: ${refused}`);
         return ask(message, FAKE_ANALYTICS_TOKEN);
       },
       openUrl: () => true,
-      note: () => undefined,
+      note: (body) => {
+        record.output.push(body);
+      },
       table: (_title, rows) => {
         record.tables.push([...rows]);
+        record.output.push(...rows.map((row) => `${row.label} ${row.detail ?? ''}`));
       },
-      log: () => undefined,
+      log: (_level, message) => {
+        record.output.push(message);
+      },
     };
   }
 

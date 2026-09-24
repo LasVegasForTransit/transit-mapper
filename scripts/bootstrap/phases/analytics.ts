@@ -62,18 +62,29 @@ function analyticsSteps(account: CloudflareAccount, variable: AnalyticsVariable)
   ].join('\n');
 }
 
-/** Names of the variables the environment already holds a value for, or
- *  null when they could not be read. */
-function variablesSet(io: BootstrapIo): string[] | null {
+/** The environment's variables that hold a value, by name, or null when
+ *  they could not be read. */
+function variablesSet(io: BootstrapIo): Map<string, string> | null {
   const listed = io.run(`gh variable list --env ${ENVIRONMENT} --json name,value`);
   if (!listed.ok) return null;
   const rows = parseJsonOutput(listed.stdout);
   if (!Array.isArray(rows)) return null;
-  return (rows as { name?: unknown; value?: unknown }[]).flatMap((row) =>
-    typeof row.name === 'string' && typeof row.value === 'string' && row.value.trim()
-      ? [row.name]
-      : [],
+  return new Map(
+    (rows as { name?: unknown; value?: unknown }[]).flatMap((row) =>
+      typeof row.name === 'string' && typeof row.value === 'string' && row.value.trim()
+        ? [[row.name, row.value] as const]
+        : [],
+    ),
   );
+}
+
+/**
+ * The token itself, beside the host it belongs to. It is public, so hiding
+ * it would only stop somebody checking that the right site's token is
+ * stored, which is the one mistake this report can catch.
+ */
+function tokenDetail(variable: AnalyticsVariable, token: string): string {
+  return `${token} (${variable.host})`;
 }
 
 async function askAndStore(
@@ -91,6 +102,8 @@ async function askAndStore(
   });
   if (!result.ok) {
     io.log('error', `Failed to set ${variable.name}: ${result.stderr || result.stdout}`);
+  } else {
+    io.log('success', `${variable.name} is set to ${tokenDetail(variable, token)}.`);
   }
   return result.ok;
 }
@@ -114,12 +127,13 @@ export async function runAnalyticsPhase({ doctor, io }: PhaseContext): Promise<P
     return { success: false };
   }
 
-  const missing = ANALYTICS_VARIABLES.filter((variable) => !set.includes(variable.name));
-  const rows: ToolRow[] = ANALYTICS_VARIABLES.map((variable) =>
-    missing.includes(variable)
-      ? { label: variable.name, status: 'failed', detail: 'not set' }
-      : { label: variable.name, status: 'ready', detail: variable.host },
-  );
+  const missing = ANALYTICS_VARIABLES.filter((variable) => !set.has(variable.name));
+  const rows: ToolRow[] = ANALYTICS_VARIABLES.map((variable) => {
+    const token = set.get(variable.name);
+    return token === undefined
+      ? { label: variable.name, status: 'failed', detail: `not set (${variable.host})` }
+      : { label: variable.name, status: 'ready', detail: tokenDetail(variable, token) };
+  });
   io.table('Analytics variables', rows);
   if (missing.length === 0) return { success: true };
   if (doctor) return { success: false };

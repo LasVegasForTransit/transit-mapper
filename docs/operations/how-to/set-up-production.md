@@ -161,6 +161,11 @@ them and asks first, because the migrations come from your checkout.
 `pnpm preflight` runs the same checks and only reports. It never installs,
 creates, writes or asks anything.
 
+Both commands print every value that is not secret, such as the account ID,
+the database ids and the Web Analytics tokens, so you can check that each is
+the one you expect. The deploy token is the only value they hide: it is shown
+as set or not set, never printed, and typed at a prompt that does not echo.
+
 ## Replacing a value
 
 The bootstrap never replaces a value that is already set unless you ask for
