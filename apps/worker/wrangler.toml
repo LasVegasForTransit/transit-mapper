@@ -2,6 +2,13 @@ name = "transitmapper"
 main = "src/entry.ts"
 compatibility_date = "2025-07-01"
 
+# The Las Vegas for Better Transit Cloudflare account. Declared so that every
+# wrangler command acts on it even for a login that can see several accounts,
+# and so `pnpm bootstrap` knows which account the CLOUDFLARE_ACCOUNT_ID
+# variable in the GitHub environments must hold instead of guessing from the
+# login. Wrangler prefers this over a CLOUDFLARE_ACCOUNT_ID in the shell.
+account_id = "2557b5c2e166292ded0f8425b73075e9"
+
 # Worker logs are off by default, which is a poor way to launch: the first
 # time something fails in production is the worst time to discover there's no
 # record of it. Sampling stays at 100% — traffic here is far too low for the

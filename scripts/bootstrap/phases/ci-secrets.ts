@@ -2,7 +2,7 @@ import type { BootstrapIo } from '../lib/io.js';
 import type { PhaseContext, PhaseResult } from '../lib/phase.js';
 import { shellEscape } from '../lib/shell.js';
 import type { ToolRow } from '../lib/ui.js';
-import { WRANGLER } from '../lib/wrangler-config.js';
+import { ACCOUNT_VARIABLE, parseJsonOutput, resolveAccount } from '../lib/cloudflare-account.js';
 import { REQUIRED_ENVIRONMENTS } from '../standards.js';
 
 /**
@@ -44,106 +44,127 @@ function tokenPromptBody(accountId: string): string {
   ].join('\n');
 }
 
-/**
- * Extract `{ name, id }` pairs from a `wrangler whoami` table. Anchors on
- * the box-drawing pipe (`│`) plus a 32-character lowercase hex account id,
- * since wrangler's table format is the stable part of its output, not the
- * surrounding prose.
- */
-function parseAccountIds(stdout: string): string[] {
-  const rowRe = /│\s*([^│]+?)\s*│\s*([0-9a-f]{32})\s*│/g;
-  const ids: string[] = [];
-  for (const line of stdout.split('\n')) {
-    rowRe.lastIndex = 0;
-    const match = rowRe.exec(line);
-    if (!match) continue;
-    const name = (match[1] ?? '').trim();
-    const id = (match[2] ?? '').trim();
-    if (name.toLowerCase() === 'account name') continue;
-    ids.push(id);
-  }
-  return ids;
-}
+const TOKEN_SECRET = 'CLOUDFLARE_API_TOKEN';
 
-interface CiVariable {
-  name: string;
-  value: string;
-}
-
+/** What one GitHub environment holds now. Values of secrets are unreadable
+ *  by design, so the token is only ever known to be present or absent. */
 export interface CiEnvironmentState {
-  tokenReady: boolean;
-  accountIdReady: boolean;
+  environment: string;
+  tokenSet: boolean;
+  /** The CLOUDFLARE_ACCOUNT_ID variable's value, or null when it is unset. */
+  accountVariable: string | null;
 }
 
-export function ciEnvironmentState(
-  secretNames: readonly string[],
-  variables: readonly CiVariable[],
+/** Values the person asked, by flag, to replace even though they are set. */
+export interface CiReplaceFlags {
+  rotateToken: boolean;
+  replaceAccountId: boolean;
+}
+
+/** An account variable that holds a different account and was left alone. */
+export interface AccountConflict {
+  environment: string;
+  current: string;
+}
+
+export interface CiWritePlan {
+  /** Environments whose token secret this run writes. */
+  token: string[];
+  /** Environments whose account variable this run writes. */
+  account: string[];
+  conflicts: AccountConflict[];
+}
+
+/**
+ * Decides what to write, and nothing else.
+ *
+ * A set value is never written again without the flag that asks for it. A
+ * token cannot be read back, so "set" is the only evidence available, and
+ * asking for it again on every run is how a second token gets minted and the
+ * first is left live somewhere. An account variable holding a different
+ * account is reported, not corrected: either one could be the mistake, and
+ * the bootstrap is in no position to say which.
+ */
+export function planCiWrites(
+  states: readonly CiEnvironmentState[],
   accountId: string,
-): CiEnvironmentState {
+  flags: CiReplaceFlags,
+): CiWritePlan {
+  const differs = states.filter(
+    (state) => state.accountVariable !== null && state.accountVariable !== accountId,
+  );
   return {
-    tokenReady: secretNames.includes('CLOUDFLARE_API_TOKEN'),
-    accountIdReady: variables.some(
-      (variable) => variable.name === 'CLOUDFLARE_ACCOUNT_ID' && variable.value === accountId,
-    ),
+    token: states
+      .filter((state) => flags.rotateToken || !state.tokenSet)
+      .map((state) => state.environment),
+    account: states
+      .filter(
+        (state) =>
+          state.accountVariable === null || (flags.replaceAccountId && differs.includes(state)),
+      )
+      .map((state) => state.environment),
+    conflicts: flags.replaceAccountId
+      ? []
+      : differs.map((state) => ({
+          environment: state.environment,
+          current: state.accountVariable ?? '',
+        })),
   };
 }
 
-function readCiEnvironment(
-  io: BootstrapIo,
-  accountId: string,
-  environment: string,
-): CiEnvironmentState | null {
+function readCiEnvironment(io: BootstrapIo, environment: string): CiEnvironmentState | null {
   const secrets = io.run(`gh secret list --env ${environment} --json name`);
   const variables = io.run(`gh variable list --env ${environment} --json name,value`);
   if (!secrets.ok || !variables.ok) return null;
-  try {
-    const secretRows = JSON.parse(secrets.stdout) as { name: string }[];
-    const variableRows = JSON.parse(variables.stdout) as CiVariable[];
-    return ciEnvironmentState(
-      secretRows.map((row) => row.name),
-      variableRows,
-      accountId,
-    );
-  } catch {
-    return null;
-  }
+  const secretRows = parseJsonOutput(secrets.stdout);
+  const variableRows = parseJsonOutput(variables.stdout);
+  if (!Array.isArray(secretRows) || !Array.isArray(variableRows)) return null;
+  const account = (variableRows as { name?: unknown; value?: unknown }[]).find(
+    (row) => row.name === ACCOUNT_VARIABLE,
+  );
+  return {
+    environment,
+    tokenSet: (secretRows as { name?: unknown }[]).some((row) => row.name === TOKEN_SECRET),
+    accountVariable: typeof account?.value === 'string' ? account.value : null,
+  };
 }
 
-function ciEnvironmentRows(state: CiEnvironmentState, environment: string): ToolRow[] {
-  return [
-    state.tokenReady
-      ? { label: 'CLOUDFLARE_API_TOKEN', status: 'ready', detail: environment }
-      : {
-          label: 'CLOUDFLARE_API_TOKEN',
-          status: 'failed',
-          detail: `not set on the "${environment}" environment`,
-        },
-    state.accountIdReady
-      ? { label: 'CLOUDFLARE_ACCOUNT_ID', status: 'ready', detail: environment }
-      : {
-          label: 'CLOUDFLARE_ACCOUNT_ID',
-          status: 'failed',
-          detail: `missing or does not match the active Cloudflare account`,
-        },
-  ];
-}
-
-interface CiEnvironment {
-  environment: string;
-  state: CiEnvironmentState;
-}
-
-function readCiEnvironments(io: BootstrapIo, accountId: string): CiEnvironment[] | null {
-  const environments: CiEnvironment[] = [];
+function readCiEnvironments(io: BootstrapIo): CiEnvironmentState[] | null {
+  const states: CiEnvironmentState[] = [];
   for (const environment of REQUIRED_ENVIRONMENTS) {
-    const state = readCiEnvironment(io, accountId, environment);
+    const state = readCiEnvironment(io, environment);
     if (!state) {
       io.log('error', `Could not read the "${environment}" GitHub Environment credentials.`);
       return null;
     }
-    environments.push({ environment, state });
+    states.push(state);
   }
-  return environments;
+  return states;
+}
+
+function tokenRow(state: CiEnvironmentState, plan: CiWritePlan): ToolRow {
+  const label = `${TOKEN_SECRET} (${state.environment})`;
+  if (!plan.token.includes(state.environment)) return { label, status: 'ready', detail: 'set' };
+  return state.tokenSet
+    ? { label, status: 'deferred', detail: 'set — will be replaced, as --rotate-token asks' }
+    : { label, status: 'failed', detail: 'not set' };
+}
+
+function accountRow(state: CiEnvironmentState, accountId: string, plan: CiWritePlan): ToolRow {
+  const label = `${ACCOUNT_VARIABLE} (${state.environment})`;
+  if (state.accountVariable === accountId) return { label, status: 'ready', detail: accountId };
+  if (state.accountVariable === null) return { label, status: 'failed', detail: 'not set' };
+  return plan.account.includes(state.environment)
+    ? {
+        label,
+        status: 'deferred',
+        detail: `${state.accountVariable} — will be replaced with ${accountId}, as --replace-account-id asks`,
+      }
+    : {
+        label,
+        status: 'failed',
+        detail: `holds ${state.accountVariable}, not ${accountId} — left alone; re-run with --replace-account-id to overwrite it`,
+      };
 }
 
 /**
@@ -172,95 +193,110 @@ function setOnEnvironments(
   return true;
 }
 
+/** Prompts once for the token and writes it to every environment in the plan. */
+async function writeToken(
+  io: BootstrapIo,
+  accountId: string,
+  environments: string[],
+): Promise<boolean> {
+  // Prompted once even when several environments need it. Asking twice for
+  // the same token invites two different tokens, and then one environment
+  // deploys with credentials nobody knows about.
+  io.note(tokenPromptBody(accountId), 'Cloudflare API token');
+  io.openUrl(tokenDashboardUrl(accountId));
+  const token = await io.secret('Paste the Cloudflare API token:');
+  const written = setOnEnvironments(
+    io,
+    environments,
+    (environment) =>
+      `gh secret set ${TOKEN_SECRET} --env ${environment} --body ${shellEscape(token)}`,
+    TOKEN_SECRET,
+  );
+  if (!written) {
+    io.log(
+      'info',
+      'If an environment does not exist yet, run `pnpm bootstrap` — the repository governance phase creates it.',
+    );
+  }
+  return written;
+}
+
 /**
- * Prompts for a Cloudflare API token, derives the account id from
- * `wrangler whoami` (no need to ask the user to hunt it down and paste it),
- * and writes both into every GitHub Environment the deployment workflows use
- * (see REQUIRED_ENVIRONMENTS) via `gh`. The token is passed straight to
- * `gh secret set` and never touches the general subprocess environment (see
- * the denylist in lib/shell.ts) or any on-disk file.
+ * Makes sure every GitHub Environment the deployment workflows use (see
+ * REQUIRED_ENVIRONMENTS) holds a CLOUDFLARE_API_TOKEN secret and a
+ * CLOUDFLARE_ACCOUNT_ID variable naming the declared account, and writes
+ * only what is missing. The token is passed straight to `gh secret set` and
+ * never touches the general subprocess environment (see the denylist in
+ * lib/shell.ts) or any on-disk file.
  *
  * The same token for every environment, because Cloudflare has no per-script
  * token scope: any token that can deploy a preview Worker can also overwrite
  * the production one. Separate environments buy separate deployment records
  * and somewhere to put a narrower token the day one exists — not isolation.
  */
-export async function runCiSecretsPhase({ doctor, io }: PhaseContext): Promise<PhaseResult> {
-  const whoami = io.run(`${WRANGLER} whoami`);
-  if (!whoami.ok) {
-    io.log('error', '`wrangler whoami` failed — make sure the auth phase succeeded first.');
+export async function runCiSecretsPhase({
+  doctor,
+  io,
+  rotateToken,
+  replaceAccountId,
+}: PhaseContext): Promise<PhaseResult> {
+  const resolved = resolveAccount(io);
+  if (!resolved.ok) {
+    io.table('CI secrets', [
+      { label: 'Cloudflare account', status: 'failed', detail: resolved.problem },
+    ]);
     return { success: false };
   }
+  const accountId = resolved.account.id;
 
-  const accountIds = parseAccountIds(whoami.stdout);
-  const accountId = accountIds[0];
-  if (accountId === undefined) {
-    io.log('error', 'Could not parse an account id out of `wrangler whoami` output.');
-    return { success: false };
-  }
-  io.log('info', `Using Cloudflare account id ${accountId} (from \`wrangler whoami\`).`);
+  const states = readCiEnvironments(io);
+  if (!states) return { success: false };
 
-  const environments = readCiEnvironments(io, accountId);
-  if (!environments) return { success: false };
+  const plan = planCiWrites(states, accountId, { rotateToken, replaceAccountId });
+  io.table(
+    'CI secrets',
+    states.flatMap((state) => [tokenRow(state, plan), accountRow(state, accountId, plan)]),
+  );
 
-  const names = environments.map((entry) => entry.environment);
-  const rows = environments.flatMap((entry) => ciEnvironmentRows(entry.state, entry.environment));
-
-  if (environments.every((entry) => entry.state.tokenReady && entry.state.accountIdReady)) {
-    io.table('CI secrets', rows);
-    return { success: true };
-  }
+  const noConflicts = plan.conflicts.length === 0;
+  if (plan.token.length === 0 && plan.account.length === 0) return { success: noConflicts };
 
   // Doctor mode reports and returns. Prompting would make `pnpm preflight`
   // interactive, which defeats running it in a script or a fresh shell to
   // find out what is wrong.
-  if (doctor) {
-    io.table('CI secrets', rows);
-    return { success: false };
-  }
+  if (doctor) return { success: false };
 
+  const targets = [...new Set([...plan.token, ...plan.account])];
   const proceed = await io.confirm(
-    `Set missing CI credentials on the ${names.map((name) => `"${name}"`).join(' and ')} GitHub Environments now?`,
+    `Write the CI credentials listed above to the ${targets.map((name) => `"${name}"`).join(' and ')} GitHub Environments now?`,
     true,
   );
   if (!proceed) return { success: false };
 
-  // Prompted once even when several environments need it. Asking twice for the
-  // same token invites two different tokens, and then one environment deploys
-  // with credentials nobody knows about.
-  const needsToken = environments.filter((entry) => !entry.state.tokenReady);
-  if (needsToken.length > 0) {
-    io.note(tokenPromptBody(accountId), 'Cloudflare API token');
-    io.openUrl(tokenDashboardUrl(accountId));
-    const token = await io.secret('Paste the Cloudflare API token:');
-    const written = setOnEnvironments(
-      io,
-      needsToken.map((entry) => entry.environment),
-      (environment) =>
-        `gh secret set CLOUDFLARE_API_TOKEN --env ${environment} --body ${shellEscape(token)}`,
-      'CLOUDFLARE_API_TOKEN',
-    );
-    if (!written) {
-      io.log(
-        'info',
-        'If an environment does not exist yet, run `pnpm bootstrap` — the repository governance phase creates it.',
-      );
-      return { success: false };
-    }
+  if (plan.token.length > 0 && !(await writeToken(io, accountId, plan.token))) {
+    return { success: false };
   }
 
   const wroteAccountId = setOnEnvironments(
     io,
-    environments.filter((entry) => !entry.state.accountIdReady).map((entry) => entry.environment),
+    plan.account,
     (environment) =>
-      `gh variable set CLOUDFLARE_ACCOUNT_ID --env ${environment} --body ${shellEscape(accountId)}`,
-    'CLOUDFLARE_ACCOUNT_ID',
+      `gh variable set ${ACCOUNT_VARIABLE} --env ${environment} --body ${shellEscape(accountId)}`,
+    ACCOUNT_VARIABLE,
   );
   if (!wroteAccountId) return { success: false };
 
+  if (!noConflicts) {
+    io.log(
+      'error',
+      `${ACCOUNT_VARIABLE} names a different account on ${plan.conflicts.map((c) => c.environment).join(' and ')}. Nothing was overwritten. If ${accountId} (${resolved.account.source}) is right, re-run with --replace-account-id.`,
+    );
+    return { success: false };
+  }
+
   io.log(
     'success',
-    `CLOUDFLARE_API_TOKEN (secret) and CLOUDFLARE_ACCOUNT_ID (variable) are set on ${names.join(' and ')}. CI deploys should work on the next push to main.`,
+    `${TOKEN_SECRET} (secret) and ${ACCOUNT_VARIABLE} (variable) are set on ${states.map((state) => state.environment).join(' and ')}. CI deploys should work on the next push to main.`,
   );
   return { success: true };
 }

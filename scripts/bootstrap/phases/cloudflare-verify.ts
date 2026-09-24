@@ -1,3 +1,4 @@
+import { accountEnv, resolveAccount } from '../lib/cloudflare-account.js';
 import type { PhaseContext, PhaseResult } from '../lib/phase.js';
 import type { ToolRow } from '../lib/ui.js';
 import {
@@ -20,7 +21,14 @@ export function runCloudflareVerifyPhase({ io }: PhaseContext): Promise<PhaseRes
   let allReady = true;
 
   const toml = readWranglerToml(io);
-  const list = io.run(`${WRANGLER} d1 list`);
+  const resolved = resolveAccount(io);
+  if (!resolved.ok) {
+    io.table('Cloudflare deployment config', [
+      { label: 'Cloudflare account', status: 'failed', detail: resolved.problem },
+    ]);
+    return Promise.resolve({ success: false });
+  }
+  const list = io.run(`${WRANGLER} d1 list`, { env: accountEnv(resolved.account) });
 
   // Reported once, as itself. Without this every database below is described
   // as "not found in this account", which sends the reader looking for
