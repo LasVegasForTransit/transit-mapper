@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.11.0...v0.11.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* keep TransitMapper assets inside the Labs route ([22091ea](https://github.com/LasVegasForTransit/transit-mapper/commit/22091ea21b1feee1599b6e9439341a3429102868))
+
 ## [0.11.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.10.1...v0.11.0) (2026-09-24)
 
 
