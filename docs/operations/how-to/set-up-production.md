@@ -97,6 +97,9 @@ instead of to you, so deploys keep working if you leave or lose access.
 Cloudflare lets only a Super Administrator of the account create one; if you
 are not one, ask someone who is to follow these steps.
 
+Follow these steps while `pnpm bootstrap` is waiting for the token, so you
+can paste it the moment you copy it.
+
 1. Open <https://dash.cloudflare.com/2557b5c2e166292ded0f8425b73075e9/api-tokens>.
    In the dashboard this page is **Manage Account → Account API Tokens**.
 2. Click **Create Token**.
@@ -127,7 +130,8 @@ store it with `pnpm bootstrap --rotate-token`.
 ## Find the Web Analytics tokens
 
 Do this once for `map.lasvegasfortransit.org` and once for
-`labs.lasvegasfortransit.org`.
+`labs.lasvegasfortransit.org`, in the order the bootstrap asks. Finish all
+six steps for one hostname, including the paste, before you start the next.
 
 1. Open
    <https://dash.cloudflare.com/2557b5c2e166292ded0f8425b73075e9/web-analytics>.
@@ -164,9 +168,11 @@ it with a flag.
 
 To replace a leaked or rolled deploy token:
 
-1. Make a new token with the steps in
-   [make the deploy token](#make-the-deploy-token).
-2. Run `pnpm bootstrap --rotate-token` and paste it.
+1. Run `pnpm bootstrap --rotate-token`. It shows the token steps and waits.
+2. Make the new token with those steps, which are the same as
+   [make the deploy token](#make-the-deploy-token), and paste it at the
+   prompt as soon as you copy it. The bootstrap stores it in both the
+   `production` and `preview` environments for you.
 3. Wait for the next deploy to succeed, then delete the old token on
    <https://dash.cloudflare.com/2557b5c2e166292ded0f8425b73075e9/api-tokens>.
 
@@ -175,9 +181,11 @@ account from the one in `apps/worker/wrangler.toml`, find out which one is
 right before changing anything. If `wrangler.toml` is right, run
 `pnpm bootstrap --replace-account-id`.
 
-To change a Web Analytics token, open the repository on GitHub, go to
-**Settings → Environments → production**, and edit the variable under
-**Environment variables**.
+To change a Web Analytics token, first open the repository on GitHub, go to
+**Settings → Environments → production**, and click edit on the variable under
+**Environment variables**. Then copy the token with steps 1 to 5 of
+[find the Web Analytics tokens](#find-the-web-analytics-tokens) and paste it
+straight into that field.
 
 ## Not covered by the bootstrap
 

@@ -47,6 +47,10 @@ const TEMPLATE_PERMISSIONS = [
  * The one permission the template lacks is D1: the production and preview
  * workflows both apply D1 migrations before they deploy. R2 is already in
  * the template, which is why it is listed rather than added.
+ *
+ * Every copied value is pasted before anything else is copied: the prompt is
+ * already waiting when the token is shown, and the bootstrap itself writes
+ * it to both environments, so nobody holds one value while fetching another.
  */
 function tokenPromptBody(account: CloudflareAccount, target: DeployTarget): string {
   const site = target.host ?? 'TransitMapper';
