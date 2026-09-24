@@ -3,8 +3,10 @@ import {
   canAdminister,
   isOrganizationOwned,
   findRuleset,
+  listAll,
   rulesetDrift,
   type GhResult,
+  type Listing,
 } from '../lib/github.js';
 import type { BootstrapIo } from '../lib/io.js';
 import type { PhaseContext, PhaseResult } from '../lib/phase.js';
@@ -39,8 +41,17 @@ interface Drift {
 }
 
 function rulesetState(io: BootstrapIo): Drift | ToolRow {
-  const existing = findRuleset(io, BRANCH_RULESET.name);
-  if (!existing) {
+  const lookup = findRuleset(io, BRANCH_RULESET.name);
+  // Not drift: nothing is known, and a write made on "nothing is known" is
+  // how a second ruleset with the same name gets created.
+  if (!lookup.ok) {
+    return {
+      label: 'Branch ruleset',
+      status: 'failed',
+      detail: `could not read the rulesets, so nothing was changed — ${lookup.error.slice(0, 120)}`,
+    };
+  }
+  if (!lookup.ruleset) {
     return {
       key: 'ruleset',
       row: {
@@ -52,14 +63,21 @@ function rulesetState(io: BootstrapIo): Drift | ToolRow {
   }
 
   // A ruleset with the right name is not a ruleset with the right rules.
-  const { differences } = rulesetDrift(io, existing.id, BRANCH_RULESET);
-  if (differences.length > 0) {
+  const drift = rulesetDrift(io, lookup.ruleset.id, BRANCH_RULESET);
+  if (!drift.readable) {
+    return {
+      label: 'Branch ruleset',
+      status: 'failed',
+      detail: `could not read "${BRANCH_RULESET.name}" to compare it, so nothing was changed`,
+    };
+  }
+  if (drift.differences.length > 0) {
     return {
       key: 'ruleset',
       row: {
         label: 'Branch ruleset',
         status: 'failed',
-        detail: `"${BRANCH_RULESET.name}" differs — ${differences.join('; ')}`,
+        detail: `"${BRANCH_RULESET.name}" differs — ${drift.differences.join('; ')}`,
       },
     };
   }
@@ -185,20 +203,23 @@ function actionsWorkflowState(io: BootstrapIo): Drift | ToolRow {
       };
 }
 
-function environmentsState(io: BootstrapIo): Drift | ToolRow {
-  // One call for all of them: the per-environment endpoint would be a `gh`
-  // subprocess and a round trip each, and this list is the standard's to grow.
-  const current = ghApi(io, 'repos/:owner/:repo/environments');
-  const environments =
-    current.ok && typeof current.data === 'object' && current.data !== null
-      ? ((current.data as { environments?: { name?: string }[] }).environments ?? [])
-      : [];
-  const present = new Set(environments.map((environment) => environment.name));
-  const missing = REQUIRED_ENVIRONMENTS.filter((name) => !present.has(name));
+/** Names of the environments the repository has, read across every page. */
+function environmentNames(io: BootstrapIo): Listing<string> {
+  return listAll(io, 'repos/:owner/:repo/environments', (page) => {
+    if (typeof page !== 'object' || page === null) return null;
+    const environments = (page as { environments?: { name?: unknown }[] }).environments ?? [];
+    return environments.flatMap((environment) =>
+      typeof environment.name === 'string' ? [environment.name] : [],
+    );
+  });
+}
 
+function environmentsState(io: BootstrapIo): Drift | ToolRow {
+  const current = environmentNames(io);
   if (!current.ok) {
     return { label: 'Environments', status: 'failed', detail: 'could not read current settings' };
   }
+  const missing = REQUIRED_ENVIRONMENTS.filter((name) => !current.items.includes(name));
 
   return missing.length === 0
     ? { label: 'Environments', status: 'ready', detail: REQUIRED_ENVIRONMENTS.join(', ') }
@@ -213,22 +234,33 @@ function environmentsState(io: BootstrapIo): Drift | ToolRow {
 }
 
 /**
- * PUT is idempotent here, so this converges whether the environment is absent
- * or merely absent from the drift report. No body: protection rules are
- * deliberately not part of the standard, because a required reviewer on
- * `preview` would stall every push to every pull request.
+ * Creates each required environment that does not exist, and only those.
+ *
+ * Read again right before writing, like the ruleset, and a failed read writes
+ * nothing. An environment that exists is never PUT again: the endpoint
+ * creates *or updates*, and an update is a change to something somebody may
+ * have configured by hand. No body: protection rules are deliberately not
+ * part of the standard, because a required reviewer on `preview` would stall
+ * every push to every pull request.
  */
 function applyEnvironments(io: BootstrapIo): ToolRow[] {
-  return REQUIRED_ENVIRONMENTS.map((name) => {
-    const result = ghApi(io, `--method PUT repos/:owner/:repo/environments/${name}`);
-    return result.ok
-      ? { label: `Environment ${name}`, status: 'ready' as const, detail: 'present' }
-      : {
-          label: `Environment ${name}`,
-          status: 'failed' as const,
-          detail: result.error.slice(0, 160),
-        };
-  });
+  const current = environmentNames(io);
+  if (!current.ok) {
+    return [
+      {
+        label: 'Environments',
+        status: 'failed',
+        detail: `could not read them, so none were created — ${current.error.slice(0, 120)}`,
+      },
+    ];
+  }
+  return REQUIRED_ENVIRONMENTS.filter((name) => !current.items.includes(name)).map((name) =>
+    writeRow(
+      `Environment ${name}`,
+      ghApi(io, `--method PUT repos/:owner/:repo/environments/${name}`),
+      'created',
+    ),
+  );
 }
 
 function isDrift(value: Drift | ToolRow): value is Drift {
@@ -243,10 +275,22 @@ function writeRow(label: string, result: GhResult, detail: string): ToolRow {
 }
 
 function applyRuleset(io: BootstrapIo): ToolRow[] {
+  // Read again right before writing, and write nothing when the read fails:
+  // only a successful read that finds no ruleset may create one.
+  const lookup = findRuleset(io, BRANCH_RULESET.name);
+  if (!lookup.ok) {
+    return [
+      {
+        label: 'Branch ruleset',
+        status: 'failed',
+        detail: `could not read the rulesets, so nothing was changed — ${lookup.error.slice(0, 120)}`,
+      },
+    ];
+  }
   // The full body every time. A PUT is a partial update at the top level,
   // so omitting a key preserves whatever is there — which for `rules`
   // means stale rules survive an update that looks like it replaced them.
-  const existing = findRuleset(io, BRANCH_RULESET.name);
+  const existing = lookup.ruleset;
   const result = existing
     ? ghApi(io, `--method PUT repos/:owner/:repo/rulesets/${existing.id}`, BRANCH_RULESET)
     : ghApi(io, '--method POST repos/:owner/:repo/rulesets', BRANCH_RULESET);
