@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.11.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.10.1...v0.11.0) (2026-09-24)
+
+
+### Features
+
+* **dx:** guide the Web Analytics tokens production needs ([6df5bfd](https://github.com/LasVegasForTransit/transit-mapper/commit/6df5bfd377f2fee04dab3eb1c2e761271e05e746))
+
+
+### Bug Fixes
+
+* **dx:** adopt an existing D1 database by name ([85373b7](https://github.com/LasVegasForTransit/transit-mapper/commit/85373b75c0bbf37eed17af3ca884b931b3d48559))
+* **dx:** apply pending D1 migrations on every bootstrap run ([7db5fe4](https://github.com/LasVegasForTransit/transit-mapper/commit/7db5fe4daf24c102376729b92a96a4e0aa6b837f))
+* **dx:** hold the governance standard to rebase-only merges ([828329e](https://github.com/LasVegasForTransit/transit-mapper/commit/828329ec7bbe8645c2bf220f884ce5acc5177cf9))
+* **dx:** install dependencies only when node_modules is stale ([90cd808](https://github.com/LasVegasForTransit/transit-mapper/commit/90cd80856e2117e01899be676d1159b264bc0b6a))
+* **dx:** keep CI on the declared Cloudflare account ([1c3cbf0](https://github.com/LasVegasForTransit/transit-mapper/commit/1c3cbf04c6fc6d2de1e3b65a2fc6aa22a0311129))
+* **dx:** make the deploy token an account-owned token ([46882f7](https://github.com/LasVegasForTransit/transit-mapper/commit/46882f74f09add9ea64fcf22a5d2c6eb6fb430a9))
+* **dx:** never create a second ruleset after a failed read ([13e982b](https://github.com/LasVegasForTransit/transit-mapper/commit/13e982b5a04d02eb438fcc6f5a6d13921f12a13c))
+* **dx:** pass the Cloudflare token to gh on standard input ([056fb12](https://github.com/LasVegasForTransit/transit-mapper/commit/056fb128d5e7dff06bfbe40efe2405f141c09530))
+* **dx:** run the repository's own wrangler in the bootstrap ([c903370](https://github.com/LasVegasForTransit/transit-mapper/commit/c90337009968d40515f9c050ea342da89a3dc021))
+* **dx:** show every bootstrap value that is not secret ([5075f5c](https://github.com/LasVegasForTransit/transit-mapper/commit/5075f5c6ee172df5d827166fb775946a98421673))
+* **dx:** tell a first-time maintainer exactly how to make the token ([a3eda25](https://github.com/LasVegasForTransit/transit-mapper/commit/a3eda251bc0e2230f18967e0bef7a034d15f8606))
+
 ## [0.10.1](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.10.0...v0.10.1) (2026-09-23)
 
 
