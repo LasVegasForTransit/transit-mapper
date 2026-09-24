@@ -74,9 +74,11 @@ whether it was really exposed is not.
 
 1. **Rotate first, investigate second.** Create the replacement, install
    it, then revoke the old one.
-2. For `CLOUDFLARE_API_TOKEN`: create a new token in the Cloudflare
-   dashboard scoped the same way, set it on the GitHub `production`
-   environment, confirm a deploy succeeds, then delete the old token.
+2. For `CLOUDFLARE_API_TOKEN`: create a new token with
+   [the deploy token steps](../../operations/how-to/set-up-production.md#make-the-deploy-token),
+   store it on both environments with `pnpm bootstrap --rotate-token`,
+   confirm a deploy succeeds, then delete the old token. The bootstrap never
+   replaces a token that is already set without that flag.
 3. Removing the value from a file does not remove it from git history. If
    it was committed and pushed, treat it as public regardless of what you
    do to the history afterwards.

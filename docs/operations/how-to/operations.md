@@ -5,7 +5,9 @@ account. If you don't have it, the person who does is the one who can act on
 any of this.
 
 Production-only measurement setup and verification are documented in
-[Operate TransitMapper analytics](analytics.md).
+[Operate TransitMapper analytics](analytics.md). To set production up for the
+first time, or to check that an existing setup is complete, follow
+[Set up production from scratch](set-up-production.md).
 
 Production is one Cloudflare Worker (`transitmapper`) on
 `map.lasvegasfortransit.org` and
@@ -153,9 +155,12 @@ Check which step failed before anything else; they fail for unrelated reasons.
 - **Apply D1 migrations** or **Deploy** with
   `Authentication error [code: 10000]` — the `CLOUDFLARE_API_TOKEN` secret in
   the repository's `production` environment lacks a permission. It needs
-  `Account · Workers Scripts · Edit`, `Account · D1 · Edit`,
-  `Account · Workers R2 Storage · Edit`, and
-  `Zone · Workers Routes · Edit`. (That environment also needs a
+  everything the **Edit Cloudflare Workers** template grants, which includes
+  `Account · Workers Scripts · Edit`, `Account · Workers R2 Storage · Edit`,
+  and `Zone · Workers Routes · Edit`, plus `Account · D1 · Edit`, which the
+  template lacks. Make a replacement with
+  [the deploy token steps](set-up-production.md#make-the-deploy-token) and
+  store it with `pnpm bootstrap --rotate-token`. (That environment also needs a
   `CLOUDFLARE_ACCOUNT_ID` **variable** — not a secret — which is easy to miss
   when recreating it, because nothing complains until a deploy runs.) This
   exact failure kept every deploy red for four days while the site quietly
@@ -175,7 +180,8 @@ Check which step failed before anything else; they fail for unrelated reasons.
 
 Production uses the `transitmapper-data` R2 bucket. The refresh workflow checks
 for it and creates it through the Cloudflare API before it downloads a feed.
-The `production` environment token needs `Account · Workers R2 Storage · Edit`.
+The `production` environment token needs `Account · Workers R2 Storage · Edit`,
+which the **Edit Cloudflare Workers** template it is made from already grants.
 Do not put that token on a command line; dispatch the workflow instead.
 
 The daily `Refresh GTFS feeds` workflow runs at 09:17 UTC. It downloads each
@@ -396,12 +402,14 @@ holds nothing worth keeping. If an abandoned branch's migration leaves it in a
 state you no longer want, replace it:
 
 ```bash
-wrangler d1 delete transitmapper-preview
-wrangler d1 create transitmapper-preview
+pnpm --filter @transitmapper/worker exec wrangler d1 delete transitmapper-preview
+pnpm bootstrap
 ```
 
-Commit the new id into the `[env.preview]` block of
-`apps/worker/wrangler.toml`. Do not drop the tables instead: the
+The bootstrap sees that the preview database is gone, asks to create it,
+applies every migration, and writes the new id into the `[env.preview]` block
+of `apps/worker/wrangler.toml`. Commit that change through a pull request.
+Do not drop the tables instead: the
 `d1_migrations` bookkeeping table has to go with the schema, or the next
 deploy believes every migration has already been applied.
 
