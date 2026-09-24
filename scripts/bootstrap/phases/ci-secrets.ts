@@ -1,6 +1,5 @@
 import type { BootstrapIo } from '../lib/io.js';
 import type { PhaseContext, PhaseResult } from '../lib/phase.js';
-import { shellEscape } from '../lib/shell.js';
 import type { ToolRow } from '../lib/ui.js';
 import { ACCOUNT_VARIABLE, parseJsonOutput, resolveAccount } from '../lib/cloudflare-account.js';
 import { REQUIRED_ENVIRONMENTS } from '../standards.js';
@@ -167,25 +166,33 @@ function accountRow(state: CiEnvironmentState, accountId: string, plan: CiWriteP
       };
 }
 
+/** One credential to write to several GitHub environments. */
+interface EnvironmentWrite {
+  kind: 'secret' | 'variable';
+  name: string;
+  value: string;
+  environments: readonly string[];
+}
+
 /**
- * Runs one `gh ... set` per environment, stopping at the first refusal.
+ * Runs one `gh secret set` or `gh variable set` per environment, stopping at
+ * the first refusal.
  *
- * Both credentials are written the same way and fail the same way, so they
- * share the loop; only the hint after a failure differs, and that belongs at
- * the call site that knows which credential it was writing.
+ * The value goes in on standard input, which both commands read when no
+ * `--body` is given. On the command line a token would sit in the process
+ * table for as long as `gh` runs and in the transcript of any tool that
+ * logged the command, which is what docs/security/reference/secrets.md
+ * forbids.
  */
-function setOnEnvironments(
-  io: BootstrapIo,
-  environments: readonly string[],
-  command: (environment: string) => string,
-  label: string,
-): boolean {
-  for (const environment of environments) {
-    const result = io.run(command(environment));
+function setOnEnvironments(io: BootstrapIo, write: EnvironmentWrite): boolean {
+  for (const environment of write.environments) {
+    const result = io.run(`gh ${write.kind} set ${write.name} --env ${environment}`, {
+      input: write.value,
+    });
     if (!result.ok) {
       io.log(
         'error',
-        `Failed to set ${label} on "${environment}": ${result.stderr || result.stdout}`,
+        `Failed to set ${write.name} on "${environment}": ${result.stderr || result.stdout}`,
       );
       return false;
     }
@@ -205,13 +212,12 @@ async function writeToken(
   io.note(tokenPromptBody(accountId), 'Cloudflare API token');
   io.openUrl(tokenDashboardUrl(accountId));
   const token = await io.secret('Paste the Cloudflare API token:');
-  const written = setOnEnvironments(
-    io,
+  const written = setOnEnvironments(io, {
+    kind: 'secret',
+    name: TOKEN_SECRET,
+    value: token,
     environments,
-    (environment) =>
-      `gh secret set ${TOKEN_SECRET} --env ${environment} --body ${shellEscape(token)}`,
-    TOKEN_SECRET,
-  );
+  });
   if (!written) {
     io.log(
       'info',
@@ -225,9 +231,9 @@ async function writeToken(
  * Makes sure every GitHub Environment the deployment workflows use (see
  * REQUIRED_ENVIRONMENTS) holds a CLOUDFLARE_API_TOKEN secret and a
  * CLOUDFLARE_ACCOUNT_ID variable naming the declared account, and writes
- * only what is missing. The token is passed straight to `gh secret set` and
- * never touches the general subprocess environment (see the denylist in
- * lib/shell.ts) or any on-disk file.
+ * only what is missing. The token is passed straight to `gh secret set` on
+ * standard input and never touches a command line, the general subprocess
+ * environment (see the denylist in lib/shell.ts), or any on-disk file.
  *
  * The same token for every environment, because Cloudflare has no per-script
  * token scope: any token that can deploy a preview Worker can also overwrite
@@ -277,13 +283,12 @@ export async function runCiSecretsPhase({
     return { success: false };
   }
 
-  const wroteAccountId = setOnEnvironments(
-    io,
-    plan.account,
-    (environment) =>
-      `gh variable set ${ACCOUNT_VARIABLE} --env ${environment} --body ${shellEscape(accountId)}`,
-    ACCOUNT_VARIABLE,
-  );
+  const wroteAccountId = setOnEnvironments(io, {
+    kind: 'variable',
+    name: ACCOUNT_VARIABLE,
+    value: accountId,
+    environments: plan.account,
+  });
   if (!wroteAccountId) return { success: false };
 
   if (!noConflicts) {

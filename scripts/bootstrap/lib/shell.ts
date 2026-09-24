@@ -73,7 +73,7 @@ export function runInteractiveCommand(command: string, cwd?: string): boolean {
 }
 
 /** POSIX-shell single-quote a string so it survives `sh -c '<cmd>'` interpolation. */
-export function shellEscape(value: string): string {
+function shellEscape(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
