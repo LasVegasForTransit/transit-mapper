@@ -1,5 +1,5 @@
 import { accountEnv, resolveAccount, type CloudflareAccount } from '../lib/cloudflare-account.js';
-import { listDatabases, type D1Database } from '../lib/d1.js';
+import { applyMigrations, listDatabases, pendingMigrations, type D1Database } from '../lib/d1.js';
 import type { PhaseContext, PhaseResult } from '../lib/phase.js';
 import type { ToolRow } from '../lib/ui.js';
 import {
@@ -162,29 +162,89 @@ async function confirmCreate(step: DatabaseStep, name: string): Promise<boolean>
   return step.context.io.confirm(`Create the D1 database "${name}"?`, true);
 }
 
-/** Applies every migration to a database this run has just created. */
-function migrateNewDatabase({ plan, account, context, rows }: DatabaseStep): boolean {
-  // Addressed by binding rather than by name, and with the environment named:
-  // wrangler resolves a database out of the configuration for the environment
-  // it was given, and the preview database is not in the production one.
-  const scope = plan.environment === 'production' ? '' : ` --env ${plan.environment}`;
-  const migrated = context.io.run(`${WRANGLER} d1 migrations apply DB --remote${scope}`, {
-    env: accountEnv(account),
+/**
+ * Shown before applying migrations to a database this run did not create.
+ *
+ * The deploy workflows apply pending migrations before every deploy, so this
+ * matters most after an earlier run stopped partway. It asks, because the
+ * migrations come from this checkout: run from an unmerged branch, they would
+ * reach the database before anybody reviewed them.
+ */
+function pendingNote(step: DatabaseStep, name: string, names: readonly string[]): string {
+  return [
+    `"${name}" backs ${step.plan.purpose}. These migrations are in this`,
+    'checkout but have not been applied to it:',
+    '',
+    ...names.map((migration) => `  ${migration}`),
+    '',
+    'Apply them only from an up-to-date main branch. The deploy workflows',
+    'apply them anyway before the next deploy.',
+  ].join('\n');
+}
+
+/**
+ * Brings the database's schema up to this checkout's migrations.
+ *
+ * Checked on every run, not only after a create: a create whose migrations
+ * failed used to leave a database that no later run would ever migrate.
+ * Nothing is applied when nothing is pending.
+ */
+async function migrateDatabase(
+  step: DatabaseStep,
+  name: string,
+  justCreated: boolean,
+): Promise<'ready' | 'failed'> {
+  const { plan, account, rows } = step;
+  const { doctor, io } = step.context;
+  const label = `${plan.label} migrations`;
+
+  const pending = pendingMigrations(io, account, plan.environment);
+  if (!pending.ok) {
+    rows.push({ label, status: 'failed', detail: `could not list them — ${pending.problem}` });
+    return 'failed';
+  }
+  const count = pending.names.length;
+  if (count === 0) {
+    rows.push({ label, status: 'ready', detail: 'all applied' });
+    return 'ready';
+  }
+  if (doctor) {
+    rows.push({
+      label,
+      status: 'failed',
+      detail: `${count} not applied (${pending.names.join(', ')}) — run \`pnpm bootstrap\` to apply them`,
+    });
+    return 'failed';
+  }
+
+  // A database created a moment ago has nothing in it to protect, and the
+  // person already agreed to its creation, so it is migrated without asking.
+  if (!justCreated) {
+    io.note(pendingNote(step, name, pending.names), 'Pending migrations');
+    if (!(await io.confirm(`Apply ${count} migration(s) to "${name}" now?`, true))) {
+      rows.push({
+        label,
+        status: 'deferred',
+        detail: `${count} not applied — the next deploy applies them`,
+      });
+      return 'ready';
+    }
+  }
+
+  // Read back rather than trusting the exit code: wrangler exits cleanly when
+  // it decides not to apply anything.
+  const applied = applyMigrations(io, account, plan.environment);
+  const after = pendingMigrations(io, account, plan.environment);
+  if (applied && after.ok && after.names.length === 0) {
+    rows.push({ label, status: 'ready', detail: `applied ${count}` });
+    return 'ready';
+  }
+  rows.push({
+    label,
+    status: 'failed',
+    detail: 'did not all apply — re-run `pnpm bootstrap` to retry the rest',
   });
-  rows.push(
-    migrated.ok
-      ? {
-          label: `${plan.label} migrations`,
-          status: 'ready',
-          detail: 'applied to the new database',
-        }
-      : {
-          label: `${plan.label} migrations`,
-          status: 'failed',
-          detail: 'database created, but migrations did not apply — re-run `pnpm bootstrap`',
-        },
-  );
-  return migrated.ok;
+  return 'failed';
 }
 
 async function provisionDatabase(
@@ -211,7 +271,7 @@ async function provisionDatabase(
   const configured = databaseId(toml, plan.environment);
   if (configured && databases.some((database) => database.uuid === configured)) {
     rows.push({ label: plan.label, status: 'ready', detail: `${name} (${configured})` });
-    return { status: 'ready', wroteConfig: false };
+    return { status: await migrateDatabase(step, name, false), wroteConfig: false };
   }
 
   // The account already has a database with this name, and the file does not
@@ -234,7 +294,7 @@ async function provisionDatabase(
       status: 'ready',
       detail: `${name} (${existing.uuid}) — already in the account; id written to ${WRANGLER_TOML}`,
     });
-    return { status: 'ready', wroteConfig };
+    return { status: await migrateDatabase(step, name, false), wroteConfig };
   }
 
   if (doctor) {
@@ -258,5 +318,5 @@ async function provisionDatabase(
 
   const wroteConfig = writeDatabaseIdIfChanged(io, toml, plan.environment, createdId);
   rows.push({ label: plan.label, status: 'ready', detail: `${name} (${createdId}) — created` });
-  return { status: migrateNewDatabase(step) ? 'ready' : 'failed', wroteConfig };
+  return { status: await migrateDatabase(step, name, true), wroteConfig };
 }
