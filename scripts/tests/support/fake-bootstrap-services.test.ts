@@ -30,7 +30,7 @@ export const MIGRATIONS = readdirSync(path.join(REPO_ROOT, 'apps/worker/src/migr
 /** The account wrangler.toml declares, as `wrangler whoami --json` shows it. */
 export const ACCOUNT = {
   id: '2557b5c2e166292ded0f8425b73075e9',
-  name: 'Las Vegas for Better Transit',
+  name: 'Las Vegans for Better Transit',
 };
 export const FAKE_TOKEN = 'fake-cloudflare-token-for-tests';
 /** Shaped like a Web Analytics token, 32 letters and digits, and plainly

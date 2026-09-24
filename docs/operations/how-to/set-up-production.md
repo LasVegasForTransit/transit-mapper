@@ -12,16 +12,15 @@ by hand.
 
 ## Before you start
 
-Everything TransitMapper runs on belongs to Las Vegans for Better Transit, not
-to a person. The Cloudflare account is named **Las Vegas for Better Transit**
-(account ID `2557b5c2e166292ded0f8425b73075e9`), and the code lives in the
-**LasVegasForTransit** GitHub organization. Nothing in this guide should be
-created under a personal account.
+Everything TransitMapper runs on belongs to Las Vegans for Better Transit
+(LVBT), not to a person. It runs in the LVBT Cloudflare account, **Las Vegans
+for Better Transit** (account ID `2557b5c2e166292ded0f8425b73075e9`), and the
+code lives in the **LasVegasForTransit** GitHub organization. Nothing in this
+guide should be created under a personal account.
 
 You need:
 
-- a Cloudflare login that is a member of the Las Vegas for Better Transit
-  account;
+- a Cloudflare login that is a member of the LVBT account;
 - admin access to the `LasVegasForTransit/transit-mapper` repository on
   GitHub, because only admins can change its environments and rules;
 - a checkout set up as described in
@@ -104,8 +103,8 @@ writes them for you; your only job is the pull request in step 9.
 5. Add one more permission row and set it to Account · D1 · Edit. Every
    deploy and every preview applies database migrations, and the template
    does not include D1.
-6. Under Account Resources, choose Include and then **Las Vegas for Better
-   Transit**. Do not choose "All accounts".
+6. Under Account Resources, choose Include and then the LVBT account, **Las
+   Vegans for Better Transit**. Do not choose "All accounts".
 7. Under Zone Resources, choose Include, then Specific zone, then
    `lasvegasfortransit.org`.
 8. Leave TTL empty, so deploys keep working.
@@ -114,7 +113,7 @@ writes them for you; your only job is the pull request in step 9.
     terminal when the bootstrap asks; it is not shown as you type.
 
 The token is created from your own Cloudflare profile, but it can reach only
-the Las Vegas for Better Transit account. The daily GTFS refresh needs
+the LVBT account. The daily GTFS refresh needs
 Account · Workers R2 Storage · Edit, which the template already grants, so
 there is nothing to add for it.
 

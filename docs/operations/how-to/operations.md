@@ -1,7 +1,7 @@
 # Run TransitMapper in production
 
-Everything here needs access to the Las Vegas for Better Transit Cloudflare
-account. If you don't have it, the person who does is the one who can act on
+Everything here needs access to the LVBT (Las Vegans for Better Transit)
+Cloudflare account. If you don't have it, the person who does is the one who can act on
 any of this.
 
 Production-only measurement setup and verification are documented in
