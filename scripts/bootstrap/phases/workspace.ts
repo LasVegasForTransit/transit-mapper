@@ -12,6 +12,42 @@ function requiredNodeMajor(io: BootstrapIo): number | null {
 }
 
 /**
+ * Whether node_modules matches the lockfile, installing only when it does not.
+ *
+ * Checked first, so a run on a working checkout installs nothing. The install
+ * stamp `check:env` compares is written by `postinstall`, so a tree that
+ * passes is a tree `pnpm install --frozen-lockfile` would leave as it is.
+ * In doctor mode nothing is installed; the point is to report.
+ */
+function installedTree(io: BootstrapIo, doctor: boolean): ToolRow {
+  const label = 'Installed tree';
+  if (io.run('pnpm run check:env').ok) {
+    return { label, status: 'ready', detail: 'matches the lockfile' };
+  }
+  if (doctor) {
+    return {
+      label,
+      status: 'failed',
+      detail: 'disagrees with the lockfile — run `pnpm install --frozen-lockfile`',
+    };
+  }
+  if (!io.run('pnpm install --frozen-lockfile').ok) {
+    return {
+      label,
+      status: 'failed',
+      detail: 'pnpm install --frozen-lockfile failed — is the lockfile out of date?',
+    };
+  }
+  return io.run('pnpm run check:env').ok
+    ? { label, status: 'ready', detail: 'installed from the lockfile' }
+    : {
+        label,
+        status: 'failed',
+        detail: 'still disagrees with the lockfile after installing',
+      };
+}
+
+/**
  * Confirms the toolchain can build this repository before anything is
  * provisioned in someone's Cloudflare account.
  *
@@ -48,33 +84,9 @@ export function runWorkspacePhase({ doctor, io }: PhaseContext): Promise<PhaseRe
   );
   if (!pnpm.ok) ok = false;
 
-  // In doctor mode nothing is installed or written; the point is to report
-  // what is wrong, not to change anything while doing so.
-  if (!doctor) {
-    const install = io.run('pnpm install --frozen-lockfile');
-    rows.push(
-      install.ok
-        ? { label: 'Dependencies', status: 'ready', detail: 'installed from the lockfile' }
-        : {
-            label: 'Dependencies',
-            status: 'failed',
-            detail: 'pnpm install --frozen-lockfile failed — is the lockfile out of date?',
-          },
-    );
-    if (!install.ok) ok = false;
-  }
-
-  const drift = io.run('pnpm run check:env');
-  rows.push(
-    drift.ok
-      ? { label: 'Installed tree', status: 'ready', detail: 'matches the lockfile' }
-      : {
-          label: 'Installed tree',
-          status: 'failed',
-          detail: 'disagrees with the lockfile — run `pnpm install --frozen-lockfile`',
-        },
-  );
-  if (!drift.ok) ok = false;
+  const tree = installedTree(io, doctor);
+  rows.push(tree);
+  if (tree.status !== 'ready') ok = false;
 
   // The whole bar, not a subset. If this passes, the checkout is one anyone
   // can open a pull request from.
