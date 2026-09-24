@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 /**
  * The root suite is `scripts/tests`, and those cases are unlike ordinary unit
@@ -12,5 +12,8 @@ export default defineConfig({
   test: {
     testTimeout: 60_000,
     hookTimeout: 60_000,
+    // Test-only support modules end in .test.ts like everything under tests/,
+    // but hold no cases. The shared LVBT config excludes them the same way.
+    exclude: [...configDefaults.exclude, 'scripts/tests/support/**'],
   },
 });
