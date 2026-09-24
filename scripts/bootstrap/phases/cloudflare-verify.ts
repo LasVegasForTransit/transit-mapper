@@ -5,7 +5,7 @@ import {
   databaseId,
   databaseName,
   readWranglerToml,
-  WORKER_DIR,
+  WRANGLER,
 } from '../lib/wrangler-config.js';
 
 /**
@@ -20,7 +20,7 @@ export function runCloudflareVerifyPhase({ io }: PhaseContext): Promise<PhaseRes
   let allReady = true;
 
   const toml = readWranglerToml(io);
-  const list = io.run(`cd ${WORKER_DIR} && wrangler d1 list`);
+  const list = io.run(`${WRANGLER} d1 list`);
 
   // Reported once, as itself. Without this every database below is described
   // as "not found in this account", which sends the reader looking for

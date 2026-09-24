@@ -1,5 +1,6 @@
 import type { PhaseContext, PhaseResult } from '../lib/phase.js';
 import type { ToolRow } from '../lib/ui.js';
+import { WRANGLER } from '../lib/wrangler-config.js';
 
 interface AuthTool {
   label: string;
@@ -15,8 +16,11 @@ const AUTH_TOOLS: AuthTool[] = [
   },
   {
     label: 'Cloudflare Wrangler',
-    checkCommand: "wrangler whoami 2>/dev/null | grep -q '@'",
-    loginCommand: 'wrangler login',
+    // `--json` because it exits non-zero when nobody is logged in. The plain
+    // form exits zero and prints a sentence, and the email address the old
+    // check looked for is absent when an account API token is in use.
+    checkCommand: `${WRANGLER} whoami --json`,
+    loginCommand: `${WRANGLER} login`,
   },
 ];
 
