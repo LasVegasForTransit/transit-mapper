@@ -56,6 +56,7 @@ interface WranglerScope {
 }
 
 interface WranglerConfig extends WranglerScope {
+  account_id?: string;
   env?: Record<string, WranglerScope | undefined>;
 }
 
@@ -72,6 +73,13 @@ function d1Binding(toml: string, environment: WranglerEnvironment): D1Binding | 
   const config = parse(toml) as WranglerConfig;
   const scope = environment === 'production' ? config : config.env?.[environment];
   return scope?.d1_databases?.[0];
+}
+
+/** The Cloudflare account wrangler.toml declares, or null when it names none. */
+export function declaredAccountId(toml: string): string | null {
+  const id = (parse(toml) as WranglerConfig).account_id?.trim();
+  if (!id) return null;
+  return id;
 }
 
 export function readWranglerToml(io: BootstrapIo): string {

@@ -1,4 +1,4 @@
-import type { BootstrapIo } from '../lib/io.js';
+import { accountEnv, resolveAccount, type CloudflareAccount } from '../lib/cloudflare-account.js';
 import type { PhaseContext, PhaseResult } from '../lib/phase.js';
 import type { ToolRow } from '../lib/ui.js';
 import {
@@ -30,9 +30,19 @@ import {
  */
 export async function runProvisionPhase(context: PhaseContext): Promise<PhaseResult> {
   const { io } = context;
-  const rows: ToolRow[] = [];
+  const resolved = resolveAccount(io);
+  if (!resolved.ok) {
+    io.table('Cloudflare resources', [
+      { label: 'Cloudflare account', status: 'failed', detail: resolved.problem },
+    ]);
+    return { success: false };
+  }
+  const { account } = resolved;
+  const rows: ToolRow[] = [
+    { label: 'Cloudflare account', status: 'ready', detail: `${account.id} (${account.source})` },
+  ];
 
-  const list = io.run(`${WRANGLER} d1 list`);
+  const list = io.run(`${WRANGLER} d1 list`, { env: accountEnv(account) });
   if (!list.ok) {
     io.table('Cloudflare resources', [
       {
@@ -47,7 +57,7 @@ export async function runProvisionPhase(context: PhaseContext): Promise<PhaseRes
   let success = true;
   for (const plan of DATABASES) {
     // Read fresh each time: provisioning the previous database rewrote the file.
-    const outcome = await provisionDatabase(plan, list.stdout, context, rows);
+    const outcome = await provisionDatabase({ plan, account, context, rows }, list.stdout);
     if (outcome !== 'ready') success = false;
     // Somebody who declines to create a database in this account is answering
     // about the account, not about one database. Asking again for the next one
@@ -59,17 +69,23 @@ export async function runProvisionPhase(context: PhaseContext): Promise<PhaseRes
   return { success };
 }
 
+/** One database's provisioning: what it is, where, and where to report. */
+interface DatabaseStep {
+  plan: DatabasePlan;
+  account: CloudflareAccount;
+  context: PhaseContext;
+  rows: ToolRow[];
+}
+
 /** Creates the database and reads its id back, reporting either failure. */
 function createDatabase(
-  io: BootstrapIo,
+  { plan, account, context, rows }: DatabaseStep,
   name: string,
-  label: string,
-  rows: ToolRow[],
 ): string | null {
-  const created = io.run(`${WRANGLER} d1 create ${name}`);
+  const created = context.io.run(`${WRANGLER} d1 create ${name}`, { env: accountEnv(account) });
   if (!created.ok) {
     rows.push({
-      label,
+      label: plan.label,
       status: 'failed',
       // First non-blank line, not first line: wrangler sometimes leads with an
       // empty one, and `??` would happily report that as the reason.
@@ -83,7 +99,7 @@ function createDatabase(
   const newId = extractCreatedId(`${created.stdout}\n${created.stderr}`);
   if (!newId) {
     rows.push({
-      label,
+      label: plan.label,
       status: 'failed',
       detail: 'created, but no database_id could be read back from wrangler output',
     });
@@ -95,11 +111,11 @@ function createDatabase(
 type ProvisionOutcome = 'ready' | 'failed' | 'declined';
 
 async function provisionDatabase(
-  plan: DatabasePlan,
+  step: DatabaseStep,
   existingDatabases: string,
-  { doctor, io }: PhaseContext,
-  rows: ToolRow[],
 ): Promise<ProvisionOutcome> {
+  const { plan, account, rows } = step;
+  const { doctor, io } = step.context;
   const toml = readWranglerToml(io);
   const name = databaseName(toml, plan.environment);
 
@@ -136,7 +152,7 @@ async function provisionDatabase(
   io.note(
     [
       `This will create a D1 database called "${name}" in the Cloudflare`,
-      'account you are currently logged into, and write its id into',
+      `account ${account.id}, and write its id into`,
       `${WRANGLER_TOML}. It backs ${plan.purpose}.`,
       '',
       'D1 is free at this scale. The id is not a secret — it is committed,',
@@ -152,7 +168,7 @@ async function provisionDatabase(
     return 'declined';
   }
 
-  const newId = createDatabase(io, name, plan.label, rows);
+  const newId = createDatabase(step, name);
   if (!newId) return 'failed';
 
   writeDatabaseId(io, toml, plan.environment, newId);
@@ -162,7 +178,9 @@ async function provisionDatabase(
   // wrangler resolves a database out of the configuration for the environment
   // it was given, and the preview database is not in the production one.
   const scope = plan.environment === 'production' ? '' : ` --env ${plan.environment}`;
-  const migrated = io.run(`${WRANGLER} d1 migrations apply DB --remote${scope}`);
+  const migrated = io.run(`${WRANGLER} d1 migrations apply DB --remote${scope}`, {
+    env: accountEnv(account),
+  });
   rows.push(
     migrated.ok
       ? {

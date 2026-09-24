@@ -103,6 +103,8 @@ describe('the preview environment', () => {
     // Anything that is neither a known inheritable key nor a family we check
     // has to be classified here before it can ship.
     const INHERITABLE = [
+      // Inherited on purpose: a preview deploys to the same account.
+      'account_id',
       'name',
       'main',
       'compatibility_date',

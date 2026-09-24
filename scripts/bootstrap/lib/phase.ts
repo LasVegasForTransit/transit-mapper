@@ -8,5 +8,9 @@ export interface PhaseResult {
 export interface PhaseContext {
   /** Report problems, create and write nothing. */
   doctor: boolean;
+  /** Replace the CLOUDFLARE_API_TOKEN secret even where it is already set. */
+  rotateToken: boolean;
+  /** Overwrite a CLOUDFLARE_ACCOUNT_ID variable that names another account. */
+  replaceAccountId: boolean;
   io: BootstrapIo;
 }

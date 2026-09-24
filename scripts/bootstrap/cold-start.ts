@@ -6,6 +6,11 @@
  *   pnpm bootstrap    — set the project up, creating what does not exist
  *   pnpm preflight    — report what is wrong, change nothing
  *
+ *   pnpm bootstrap --rotate-token
+ *       also replace the CLOUDFLARE_API_TOKEN secret that is already set
+ *   pnpm bootstrap --replace-account-id
+ *       also overwrite a CLOUDFLARE_ACCOUNT_ID variable naming another account
+ *
  * Phases run in order, and the order is deliberate: everything local and
  * reversible happens before anything is created in someone's Cloudflare
  * account, so a broken toolchain cannot leave a half-built account behind.
@@ -55,9 +60,35 @@ const PHASES: readonly Phase[] = [
   { id: 'ci-secrets', title: 'CI secrets', run: runCiSecretsPhase },
 ];
 
-export interface BootstrapOptions {
-  /** Report problems, create and write nothing. */
-  doctor: boolean;
+export type BootstrapOptions = Omit<PhaseContext, 'io'>;
+
+/**
+ * Every flag the CLI accepts. Replacing a value that is already set is never
+ * a default: it happens only when the person names it here.
+ */
+const FLAGS: Readonly<Record<string, keyof BootstrapOptions>> = {
+  '--doctor': 'doctor',
+  '--rotate-token': 'rotateToken',
+  '--replace-account-id': 'replaceAccountId',
+};
+
+/**
+ * Reads the flags, or says which one it did not recognise.
+ *
+ * An unknown flag is an error rather than ignored: a misspelt
+ * `--rotate-tokn` that quietly did nothing would leave somebody believing a
+ * leaked token had been replaced.
+ */
+export function parseArguments(argv: readonly string[]): BootstrapOptions | { unknown: string } {
+  const options: BootstrapOptions = { doctor: false, rotateToken: false, replaceAccountId: false };
+  for (const argument of argv) {
+    // pnpm forwards a bare `--` separator when one is typed; it is not a flag.
+    if (argument === '--') continue;
+    const key = FLAGS[argument];
+    if (!key) return { unknown: argument };
+    options[key] = true;
+  }
+  return options;
 }
 
 export interface BootstrapOutcome {
@@ -94,7 +125,12 @@ export async function runBootstrap(
 }
 
 async function main(): Promise<void> {
-  const doctor = process.argv.includes('--doctor');
+  const options = parseArguments(process.argv.slice(2));
+  if ('unknown' in options) {
+    console.error(`Unknown option ${options.unknown}. Accepted: ${Object.keys(FLAGS).join(', ')}.`);
+    process.exit(2);
+  }
+  const { doctor } = options;
 
   intro(doctor ? 'TransitMapper preflight' : 'TransitMapper bootstrap');
 
@@ -108,7 +144,7 @@ async function main(): Promise<void> {
     );
   }
 
-  const outcome = await runBootstrap({ doctor }, nodeIo());
+  const outcome = await runBootstrap(options, nodeIo());
 
   if (outcome.success) {
     outro(doctor ? 'Everything checks out.' : 'Bootstrap complete.');
