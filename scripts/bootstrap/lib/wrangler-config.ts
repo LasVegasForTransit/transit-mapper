@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'smol-toml';
+import type { BootstrapIo } from './io.js';
 
 export const WORKER_DIR = path.join('apps', 'worker');
 export const WRANGLER_TOML = path.join(WORKER_DIR, 'wrangler.toml');
@@ -64,8 +64,8 @@ function d1Binding(toml: string, environment: WranglerEnvironment): D1Binding | 
   return scope?.d1_databases?.[0];
 }
 
-export function readWranglerToml(): string {
-  return readFileSync(WRANGLER_TOML, 'utf8');
+export function readWranglerToml(io: BootstrapIo): string {
+  return io.readFile(WRANGLER_TOML);
 }
 
 /** The database name in wrangler.toml. Read rather than assumed, so renaming
@@ -123,6 +123,11 @@ export function withDatabaseId(toml: string, environment: WranglerEnvironment, i
   return `${toml.slice(0, start)}${table}${toml.slice(end)}`;
 }
 
-export function writeDatabaseId(toml: string, environment: WranglerEnvironment, id: string): void {
-  writeFileSync(WRANGLER_TOML, withDatabaseId(toml, environment, id), 'utf8');
+export function writeDatabaseId(
+  io: BootstrapIo,
+  toml: string,
+  environment: WranglerEnvironment,
+  id: string,
+): void {
+  io.writeFile(WRANGLER_TOML, withDatabaseId(toml, environment, id));
 }

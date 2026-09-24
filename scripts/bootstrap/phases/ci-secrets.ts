@@ -1,8 +1,8 @@
-import { log, note } from '@clack/prompts';
-import { runCommand, shellEscape, tryOpenInBrowser } from '../lib/shell.js';
-import { printToolTable, promptConfirm, promptSecret } from '../lib/ui.js';
+import type { BootstrapIo } from '../lib/io.js';
+import type { PhaseContext, PhaseResult } from '../lib/phase.js';
+import { shellEscape } from '../lib/shell.js';
+import type { ToolRow } from '../lib/ui.js';
 import { REQUIRED_ENVIRONMENTS } from '../standards.js';
-import type { PhaseResult } from './auth.js';
 
 /**
  * Account-scoped API token page: tokens created here are bound to a single
@@ -87,9 +87,13 @@ export function ciEnvironmentState(
   };
 }
 
-function readCiEnvironment(accountId: string, environment: string): CiEnvironmentState | null {
-  const secrets = runCommand(`gh secret list --env ${environment} --json name`);
-  const variables = runCommand(`gh variable list --env ${environment} --json name,value`);
+function readCiEnvironment(
+  io: BootstrapIo,
+  accountId: string,
+  environment: string,
+): CiEnvironmentState | null {
+  const secrets = io.run(`gh secret list --env ${environment} --json name`);
+  const variables = io.run(`gh variable list --env ${environment} --json name,value`);
   if (!secrets.ok || !variables.ok) return null;
   try {
     const secretRows = JSON.parse(secrets.stdout) as { name: string }[];
@@ -104,10 +108,7 @@ function readCiEnvironment(accountId: string, environment: string): CiEnvironmen
   }
 }
 
-function ciEnvironmentRows(
-  state: CiEnvironmentState,
-  environment: string,
-): Parameters<typeof printToolTable>[1] {
+function ciEnvironmentRows(state: CiEnvironmentState, environment: string): ToolRow[] {
   return [
     state.tokenReady
       ? { label: 'CLOUDFLARE_API_TOKEN', status: 'ready', detail: environment }
@@ -131,12 +132,12 @@ interface CiEnvironment {
   state: CiEnvironmentState;
 }
 
-function readCiEnvironments(accountId: string): CiEnvironment[] | null {
+function readCiEnvironments(io: BootstrapIo, accountId: string): CiEnvironment[] | null {
   const environments: CiEnvironment[] = [];
   for (const environment of REQUIRED_ENVIRONMENTS) {
-    const state = readCiEnvironment(accountId, environment);
+    const state = readCiEnvironment(io, accountId, environment);
     if (!state) {
-      log.error(`Could not read the "${environment}" GitHub Environment credentials.`);
+      io.log('error', `Could not read the "${environment}" GitHub Environment credentials.`);
       return null;
     }
     environments.push({ environment, state });
@@ -152,14 +153,18 @@ function readCiEnvironments(accountId: string): CiEnvironment[] | null {
  * the call site that knows which credential it was writing.
  */
 function setOnEnvironments(
+  io: BootstrapIo,
   environments: readonly string[],
   command: (environment: string) => string,
   label: string,
 ): boolean {
   for (const environment of environments) {
-    const result = runCommand(command(environment));
+    const result = io.run(command(environment));
     if (!result.ok) {
-      log.error(`Failed to set ${label} on "${environment}": ${result.stderr || result.stdout}`);
+      io.log(
+        'error',
+        `Failed to set ${label} on "${environment}": ${result.stderr || result.stdout}`,
+      );
       return false;
     }
   }
@@ -179,43 +184,41 @@ function setOnEnvironments(
  * the production one. Separate environments buy separate deployment records
  * and somewhere to put a narrower token the day one exists — not isolation.
  */
-export async function runCiSecretsPhase(
-  options: { doctor: boolean } = { doctor: false },
-): Promise<PhaseResult> {
-  const whoami = runCommand('wrangler whoami');
+export async function runCiSecretsPhase({ doctor, io }: PhaseContext): Promise<PhaseResult> {
+  const whoami = io.run('wrangler whoami');
   if (!whoami.ok) {
-    log.error('`wrangler whoami` failed — make sure the auth phase succeeded first.');
+    io.log('error', '`wrangler whoami` failed — make sure the auth phase succeeded first.');
     return { success: false };
   }
 
   const accountIds = parseAccountIds(whoami.stdout);
   const accountId = accountIds[0];
   if (accountId === undefined) {
-    log.error('Could not parse an account id out of `wrangler whoami` output.');
+    io.log('error', 'Could not parse an account id out of `wrangler whoami` output.');
     return { success: false };
   }
-  log.info(`Using Cloudflare account id ${accountId} (from \`wrangler whoami\`).`);
+  io.log('info', `Using Cloudflare account id ${accountId} (from \`wrangler whoami\`).`);
 
-  const environments = readCiEnvironments(accountId);
+  const environments = readCiEnvironments(io, accountId);
   if (!environments) return { success: false };
 
   const names = environments.map((entry) => entry.environment);
   const rows = environments.flatMap((entry) => ciEnvironmentRows(entry.state, entry.environment));
 
   if (environments.every((entry) => entry.state.tokenReady && entry.state.accountIdReady)) {
-    printToolTable('CI secrets', rows);
+    io.table('CI secrets', rows);
     return { success: true };
   }
 
   // Doctor mode reports and returns. Prompting would make `pnpm preflight`
   // interactive, which defeats running it in a script or a fresh shell to
   // find out what is wrong.
-  if (options.doctor) {
-    printToolTable('CI secrets', rows);
+  if (doctor) {
+    io.table('CI secrets', rows);
     return { success: false };
   }
 
-  const proceed = await promptConfirm(
+  const proceed = await io.confirm(
     `Set missing CI credentials on the ${names.map((name) => `"${name}"`).join(' and ')} GitHub Environments now?`,
     true,
   );
@@ -226,17 +229,19 @@ export async function runCiSecretsPhase(
   // with credentials nobody knows about.
   const needsToken = environments.filter((entry) => !entry.state.tokenReady);
   if (needsToken.length > 0) {
-    note(tokenPromptBody(accountId), 'Cloudflare API token');
-    tryOpenInBrowser(tokenDashboardUrl(accountId));
-    const token = await promptSecret('Paste the Cloudflare API token:');
+    io.note(tokenPromptBody(accountId), 'Cloudflare API token');
+    io.openUrl(tokenDashboardUrl(accountId));
+    const token = await io.secret('Paste the Cloudflare API token:');
     const written = setOnEnvironments(
+      io,
       needsToken.map((entry) => entry.environment),
       (environment) =>
         `gh secret set CLOUDFLARE_API_TOKEN --env ${environment} --body ${shellEscape(token)}`,
       'CLOUDFLARE_API_TOKEN',
     );
     if (!written) {
-      log.info(
+      io.log(
+        'info',
         'If an environment does not exist yet, run `pnpm bootstrap` — the repository governance phase creates it.',
       );
       return { success: false };
@@ -244,6 +249,7 @@ export async function runCiSecretsPhase(
   }
 
   const wroteAccountId = setOnEnvironments(
+    io,
     environments.filter((entry) => !entry.state.accountIdReady).map((entry) => entry.environment),
     (environment) =>
       `gh variable set CLOUDFLARE_ACCOUNT_ID --env ${environment} --body ${shellEscape(accountId)}`,
@@ -251,7 +257,8 @@ export async function runCiSecretsPhase(
   );
   if (!wroteAccountId) return { success: false };
 
-  log.success(
+  io.log(
+    'success',
     `CLOUDFLARE_API_TOKEN (secret) and CLOUDFLARE_ACCOUNT_ID (variable) are set on ${names.join(' and ')}. CI deploys should work on the next push to main.`,
   );
   return { success: true };

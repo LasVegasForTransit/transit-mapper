@@ -1,14 +1,12 @@
-import { readFileSync } from 'node:fs';
-import { runCommand } from '../lib/shell.js';
-import { printToolTable, type ToolRow } from '../lib/ui.js';
-import type { PhaseResult } from './auth.js';
+import type { BootstrapIo } from '../lib/io.js';
+import type { PhaseContext, PhaseResult } from '../lib/phase.js';
+import type { ToolRow } from '../lib/ui.js';
 
 /** Reads the floor from package.json rather than restating it here, so the
  *  two cannot disagree about what this project requires. */
-function requiredNodeMajor(): number | null {
-  const engines = (
-    JSON.parse(readFileSync('package.json', 'utf8')) as { engines?: { node?: string } }
-  ).engines;
+function requiredNodeMajor(io: BootstrapIo): number | null {
+  const engines = (JSON.parse(io.readFile('package.json')) as { engines?: { node?: string } })
+    .engines;
   const match = /(\d+)/.exec(engines?.node ?? '');
   return match ? Number(match[1]) : null;
 }
@@ -21,11 +19,11 @@ function requiredNodeMajor(): number | null {
  * cloud resources leaves a half-built account behind. Everything here is
  * local and reversible.
  */
-export async function runWorkspacePhase(options: { doctor: boolean }): Promise<PhaseResult> {
+export function runWorkspacePhase({ doctor, io }: PhaseContext): Promise<PhaseResult> {
   const rows: ToolRow[] = [];
   let ok = true;
 
-  const required = requiredNodeMajor();
+  const required = requiredNodeMajor(io);
   const actual = Number(process.versions.node.split('.')[0]);
   if (required !== null && actual < required) {
     rows.push({
@@ -38,7 +36,7 @@ export async function runWorkspacePhase(options: { doctor: boolean }): Promise<P
     rows.push({ label: 'Node', status: 'ready', detail: process.versions.node });
   }
 
-  const pnpm = runCommand('pnpm --version');
+  const pnpm = io.run('pnpm --version');
   rows.push(
     pnpm.ok
       ? { label: 'pnpm', status: 'ready', detail: pnpm.stdout.trim() }
@@ -52,8 +50,8 @@ export async function runWorkspacePhase(options: { doctor: boolean }): Promise<P
 
   // In doctor mode nothing is installed or written; the point is to report
   // what is wrong, not to change anything while doing so.
-  if (!options.doctor) {
-    const install = runCommand('pnpm install --frozen-lockfile');
+  if (!doctor) {
+    const install = io.run('pnpm install --frozen-lockfile');
     rows.push(
       install.ok
         ? { label: 'Dependencies', status: 'ready', detail: 'installed from the lockfile' }
@@ -66,7 +64,7 @@ export async function runWorkspacePhase(options: { doctor: boolean }): Promise<P
     if (!install.ok) ok = false;
   }
 
-  const drift = runCommand('pnpm run check:env');
+  const drift = io.run('pnpm run check:env');
   rows.push(
     drift.ok
       ? { label: 'Installed tree', status: 'ready', detail: 'matches the lockfile' }
@@ -80,7 +78,7 @@ export async function runWorkspacePhase(options: { doctor: boolean }): Promise<P
 
   // The whole bar, not a subset. If this passes, the checkout is one anyone
   // can open a pull request from.
-  const check = runCommand('pnpm check');
+  const check = io.run('pnpm check');
   rows.push(
     check.ok
       ? { label: 'pnpm check', status: 'ready', detail: 'the repository is in a valid state' }
@@ -92,6 +90,8 @@ export async function runWorkspacePhase(options: { doctor: boolean }): Promise<P
   );
   if (!check.ok) ok = false;
 
-  printToolTable('Workspace', rows);
-  return { success: ok };
+  io.table('Workspace', rows);
+  // Nothing here awaits: the phase interface is async because other phases
+  // prompt, and this one only runs commands.
+  return Promise.resolve({ success: ok });
 }

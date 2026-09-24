@@ -1,5 +1,5 @@
-import { runCommand } from '../lib/shell.js';
-import { printToolTable, type ToolRow } from '../lib/ui.js';
+import type { PhaseContext, PhaseResult } from '../lib/phase.js';
+import type { ToolRow } from '../lib/ui.js';
 import {
   DATABASES,
   databaseId,
@@ -7,7 +7,6 @@ import {
   readWranglerToml,
   WORKER_DIR,
 } from '../lib/wrangler-config.js';
-import type { PhaseResult } from './auth.js';
 
 /**
  * Read-only checks against what Task 5 of the deploy plan provisions by
@@ -16,19 +15,19 @@ import type { PhaseResult } from './auth.js';
  * after someone forgets whether setup finished) gives a clear yes/no instead
  * of silently doing nothing.
  */
-export function runCloudflareVerifyPhase(): Promise<PhaseResult> {
+export function runCloudflareVerifyPhase({ io }: PhaseContext): Promise<PhaseResult> {
   const rows: ToolRow[] = [];
   let allReady = true;
 
-  const toml = readWranglerToml();
-  const list = runCommand(`cd ${WORKER_DIR} && wrangler d1 list`);
+  const toml = readWranglerToml(io);
+  const list = io.run(`cd ${WORKER_DIR} && wrangler d1 list`);
 
   // Reported once, as itself. Without this every database below is described
   // as "not found in this account", which sends the reader looking for
   // databases that exist while the actual problem is that the command asking
   // about them could not run.
   if (!list.ok) {
-    printToolTable('Cloudflare deployment config', [
+    io.table('Cloudflare deployment config', [
       {
         label: 'D1',
         status: 'failed',
@@ -79,7 +78,7 @@ export function runCloudflareVerifyPhase(): Promise<PhaseResult> {
     allReady = false;
   }
 
-  printToolTable('Cloudflare deployment config', rows);
+  io.table('Cloudflare deployment config', rows);
   // Nothing here awaits: the phase interface is async because other phases
   // prompt, and this one only reads.
   return Promise.resolve({ success: allReady });
