@@ -1,7 +1,4 @@
-import { writeFileSync, unlinkSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { runCommand } from './shell.js';
+import type { BootstrapIo } from './io.js';
 
 /**
  * The REST API version this tooling was written against.
@@ -20,17 +17,18 @@ export interface GhResult {
   error: string;
 }
 
-/** Calls `gh api` with the pinned version header, optionally with a body. */
-export function ghApi(args: string, body?: unknown): GhResult {
-  let file: string | undefined;
-  let command = `gh api -H "X-GitHub-Api-Version: ${API_VERSION}" ${args}`;
-  if (body !== undefined) {
-    file = path.join(tmpdir(), `gh-body.${process.pid}.${Date.now()}.json`);
-    writeFileSync(file, JSON.stringify(body), 'utf8');
-    command += ` --input ${file}`;
-  }
-  const result = runCommand(command);
-  if (file) unlinkSync(file);
+/**
+ * Calls `gh api` with the pinned version header, optionally with a body.
+ *
+ * The body goes in on standard input (`--input -`) rather than through a
+ * temporary file, so there is nothing on disk to clean up after a failure.
+ */
+export function ghApi(io: BootstrapIo, args: string, body?: unknown): GhResult {
+  const command = `gh api -H "X-GitHub-Api-Version: ${API_VERSION}" ${args}`;
+  const result =
+    body === undefined
+      ? io.run(command)
+      : io.run(`${command} --input -`, { input: JSON.stringify(body) });
   if (!result.ok) return { ok: false, data: null, error: result.stderr };
   try {
     return { ok: true, data: JSON.parse(result.stdout) as unknown, error: '' };
@@ -47,14 +45,14 @@ export function ghApi(args: string, body?: unknown): GhResult {
  * settings you cannot administer, so the errors read as "no such repository"
  * and send the reader somewhere useless.
  */
-export function canAdminister(): boolean {
-  const result = runCommand('gh repo view --json viewerCanAdminister --jq .viewerCanAdminister');
+export function canAdminister(io: BootstrapIo): boolean {
+  const result = io.run('gh repo view --json viewerCanAdminister --jq .viewerCanAdminister');
   return result.ok && result.stdout.trim() === 'true';
 }
 
 /** Whether the repository belongs to an organization rather than a user. */
-export function isOrganizationOwned(): boolean {
-  const result = ghApi('repos/:owner/:repo --jq .owner.type');
+export function isOrganizationOwned(io: BootstrapIo): boolean {
+  const result = ghApi(io, 'repos/:owner/:repo --jq .owner.type');
   return result.data === 'Organization';
 }
 
@@ -72,8 +70,8 @@ interface Ruleset {
  * so a match against one produces an update that fails, or worse, a second
  * repository-level ruleset shadowing it.
  */
-export function findRuleset(name: string): Ruleset | null {
-  const listed = ghApi('"repos/:owner/:repo/rulesets?includes_parents=false&per_page=100"');
+export function findRuleset(io: BootstrapIo, name: string): Ruleset | null {
+  const listed = ghApi(io, '"repos/:owner/:repo/rulesets?includes_parents=false&per_page=100"');
   if (!listed.ok || !Array.isArray(listed.data)) return null;
   return (listed.data as Ruleset[]).find((r) => r.name === name) ?? null;
 }
@@ -135,8 +133,8 @@ export interface RulesetDrift {
  * is the difference between reporting a setting as configured and reporting
  * it as correct.
  */
-export function rulesetDrift(id: number, desired: RulesetBody): RulesetDrift {
-  const actual = ghApi(`"repos/:owner/:repo/rulesets/${id}?includes_parents=false"`);
+export function rulesetDrift(io: BootstrapIo, id: number, desired: RulesetBody): RulesetDrift {
+  const actual = ghApi(io, `"repos/:owner/:repo/rulesets/${id}?includes_parents=false"`);
   if (!actual.ok || typeof actual.data !== 'object' || actual.data === null) {
     return { differences: ['could not read the existing ruleset to compare against'] };
   }

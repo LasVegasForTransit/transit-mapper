@@ -29,7 +29,10 @@
  * cheap to re-run, so resuming means running it again; a state file would be
  * one more thing that can be wrong.
  */
+import { resolve } from 'node:path';
 import { intro, outro, note } from '@clack/prompts';
+import { nodeIo, type BootstrapIo } from './lib/io.js';
+import type { PhaseContext, PhaseResult } from './lib/phase.js';
 import { runAuthPhase } from './phases/auth.js';
 import { runCloudflareVerifyPhase } from './phases/cloudflare-verify.js';
 import { runCiSecretsPhase } from './phases/ci-secrets.js';
@@ -37,29 +40,58 @@ import { runProvisionPhase } from './phases/provision.js';
 import { runWorkspacePhase } from './phases/workspace.js';
 import { runRepoConfigPhase } from './phases/repo-config.js';
 
-interface PhaseContext {
-  /** Report problems, create and write nothing. */
-  doctor: boolean;
-}
-
 interface Phase {
   id: string;
   title: string;
-  run: (context: PhaseContext) => Promise<{ success: boolean }>;
+  run: (context: PhaseContext) => Promise<PhaseResult>;
 }
 
 const PHASES: readonly Phase[] = [
   { id: 'workspace', title: 'Workspace', run: runWorkspacePhase },
   { id: 'auth', title: 'CLI authentication', run: runAuthPhase },
   { id: 'provision', title: 'Cloudflare resources', run: runProvisionPhase },
-  {
-    id: 'cloudflare-verify',
-    title: 'Deployment configuration',
-    run: () => runCloudflareVerifyPhase(),
-  },
+  { id: 'cloudflare-verify', title: 'Deployment configuration', run: runCloudflareVerifyPhase },
   { id: 'repo-config', title: 'Repository governance', run: runRepoConfigPhase },
   { id: 'ci-secrets', title: 'CI secrets', run: runCiSecretsPhase },
 ];
+
+export interface BootstrapOptions {
+  /** Report problems, create and write nothing. */
+  doctor: boolean;
+}
+
+export interface BootstrapOutcome {
+  success: boolean;
+  /** Titles of the phases that did not succeed, in the order they ran. */
+  failed: string[];
+}
+
+/**
+ * Runs every phase in order against `io`.
+ *
+ * Separate from `main` so a test can drive the whole flow against fakes and
+ * read the outcome, instead of watching the process exit.
+ */
+export async function runBootstrap(
+  options: BootstrapOptions,
+  io: BootstrapIo,
+): Promise<BootstrapOutcome> {
+  const context: PhaseContext = { ...options, io };
+  const failed: string[] = [];
+
+  for (const phase of PHASES) {
+    // In doctor mode every phase runs, because a report that stops at the
+    // first problem hides the other three. A real run stops, because later
+    // phases assume the earlier ones succeeded.
+    const result = await phase.run(context);
+    if (result.success) continue;
+
+    failed.push(phase.title);
+    if (!options.doctor) break;
+  }
+
+  return { success: failed.length === 0, failed };
+}
 
 async function main(): Promise<void> {
   const doctor = process.argv.includes('--doctor');
@@ -76,31 +108,25 @@ async function main(): Promise<void> {
     );
   }
 
-  const failed: string[] = [];
+  const outcome = await runBootstrap({ doctor }, nodeIo());
 
-  for (const phase of PHASES) {
-    // In doctor mode every phase runs, because a report that stops at the
-    // first problem hides the other three. A real run stops, because later
-    // phases assume the earlier ones succeeded.
-    const result = await phase.run({ doctor });
-    if (result.success) continue;
-
-    failed.push(phase.title);
-    if (!doctor) {
-      outro(`Stopped at "${phase.title}" — fix the issue above and re-run \`pnpm bootstrap\`.`);
-      process.exit(1);
-    }
+  if (outcome.success) {
+    outro(doctor ? 'Everything checks out.' : 'Bootstrap complete.');
+    return;
   }
 
-  if (failed.length > 0) {
-    outro(`${failed.length} problem(s): ${failed.join(', ')}. Run \`pnpm bootstrap\` to fix.`);
-    process.exit(1);
-  }
-
-  outro(doctor ? 'Everything checks out.' : 'Bootstrap complete.');
+  outro(
+    doctor
+      ? `${outcome.failed.length} problem(s): ${outcome.failed.join(', ')}. Run \`pnpm bootstrap\` to fix.`
+      : `Stopped at "${outcome.failed[0] ?? ''}" — fix the issue above and re-run \`pnpm bootstrap\`.`,
+  );
+  process.exit(1);
 }
 
-main().catch((err: unknown) => {
-  console.error(err);
-  process.exit(1);
-});
+// Only run when invoked directly, so a test can import `runBootstrap`.
+if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
+  main().catch((err: unknown) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

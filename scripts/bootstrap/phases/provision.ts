@@ -1,6 +1,6 @@
-import { note } from '@clack/prompts';
-import { runCommand } from '../lib/shell.js';
-import { printToolTable, promptConfirm, type ToolRow } from '../lib/ui.js';
+import type { BootstrapIo } from '../lib/io.js';
+import type { PhaseContext, PhaseResult } from '../lib/phase.js';
+import type { ToolRow } from '../lib/ui.js';
 import {
   DATABASES,
   databaseId,
@@ -12,7 +12,6 @@ import {
   writeDatabaseId,
   type DatabasePlan,
 } from '../lib/wrangler-config.js';
-import type { PhaseResult } from './auth.js';
 
 /**
  * Creates what the deployment needs and writes the result back into
@@ -29,12 +28,13 @@ import type { PhaseResult } from './auth.js';
  * a person should be told is about to happen to their account. It does not
  * ask before reading.
  */
-export async function runProvisionPhase(options: { doctor: boolean }): Promise<PhaseResult> {
+export async function runProvisionPhase(context: PhaseContext): Promise<PhaseResult> {
+  const { io } = context;
   const rows: ToolRow[] = [];
 
-  const list = runCommand(`cd ${WORKER_DIR} && wrangler d1 list`);
+  const list = io.run(`cd ${WORKER_DIR} && wrangler d1 list`);
   if (!list.ok) {
-    printToolTable('Cloudflare resources', [
+    io.table('Cloudflare resources', [
       {
         label: 'D1',
         status: 'failed',
@@ -47,7 +47,7 @@ export async function runProvisionPhase(options: { doctor: boolean }): Promise<P
   let success = true;
   for (const plan of DATABASES) {
     // Read fresh each time: provisioning the previous database rewrote the file.
-    const outcome = await provisionDatabase(plan, list.stdout, options, rows);
+    const outcome = await provisionDatabase(plan, list.stdout, context, rows);
     if (outcome !== 'ready') success = false;
     // Somebody who declines to create a database in this account is answering
     // about the account, not about one database. Asking again for the next one
@@ -55,13 +55,18 @@ export async function runProvisionPhase(options: { doctor: boolean }): Promise<P
     if (outcome === 'declined') break;
   }
 
-  printToolTable('Cloudflare resources', rows);
+  io.table('Cloudflare resources', rows);
   return { success };
 }
 
 /** Creates the database and reads its id back, reporting either failure. */
-function createDatabase(name: string, label: string, rows: ToolRow[]): string | null {
-  const created = runCommand(`cd ${WORKER_DIR} && wrangler d1 create ${name}`);
+function createDatabase(
+  io: BootstrapIo,
+  name: string,
+  label: string,
+  rows: ToolRow[],
+): string | null {
+  const created = io.run(`cd ${WORKER_DIR} && wrangler d1 create ${name}`);
   if (!created.ok) {
     rows.push({
       label,
@@ -92,10 +97,10 @@ type ProvisionOutcome = 'ready' | 'failed' | 'declined';
 async function provisionDatabase(
   plan: DatabasePlan,
   existingDatabases: string,
-  options: { doctor: boolean },
+  { doctor, io }: PhaseContext,
   rows: ToolRow[],
 ): Promise<ProvisionOutcome> {
-  const toml = readWranglerToml();
+  const toml = readWranglerToml(io);
   const name = databaseName(toml, plan.environment);
 
   if (!name) {
@@ -117,7 +122,7 @@ async function provisionDatabase(
     return 'ready';
   }
 
-  if (options.doctor) {
+  if (doctor) {
     rows.push({
       label: plan.label,
       status: 'failed',
@@ -128,7 +133,7 @@ async function provisionDatabase(
     return 'failed';
   }
 
-  note(
+  io.note(
     [
       `This will create a D1 database called "${name}" in the Cloudflare`,
       'account you are currently logged into, and write its id into',
@@ -141,25 +146,23 @@ async function provisionDatabase(
     'About to create a database',
   );
 
-  const confirmed = await promptConfirm(`Create the D1 database "${name}"?`, true);
+  const confirmed = await io.confirm(`Create the D1 database "${name}"?`, true);
   if (!confirmed) {
     rows.push({ label: plan.label, status: 'skipped', detail: 'declined — nothing was created' });
     return 'declined';
   }
 
-  const newId = createDatabase(name, plan.label, rows);
+  const newId = createDatabase(io, name, plan.label, rows);
   if (!newId) return 'failed';
 
-  writeDatabaseId(toml, plan.environment, newId);
+  writeDatabaseId(io, toml, plan.environment, newId);
   rows.push({ label: plan.label, status: 'ready', detail: `${name} (${newId}) — created` });
 
   // Addressed by binding rather than by name, and with the environment named:
   // wrangler resolves a database out of the configuration for the environment
   // it was given, and the preview database is not in the production one.
   const scope = plan.environment === 'production' ? '' : ` --env ${plan.environment}`;
-  const migrated = runCommand(
-    `cd ${WORKER_DIR} && wrangler d1 migrations apply DB --remote${scope}`,
-  );
+  const migrated = io.run(`cd ${WORKER_DIR} && wrangler d1 migrations apply DB --remote${scope}`);
   rows.push(
     migrated.ok
       ? {

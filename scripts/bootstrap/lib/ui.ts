@@ -1,4 +1,4 @@
-import { cancel, confirm, isCancel, note, password } from '@clack/prompts';
+import { cancel, confirm, isCancel, password } from '@clack/prompts';
 
 export type ToolRowStatus = 'ready' | 'failed' | 'deferred' | 'skipped';
 
@@ -15,14 +15,12 @@ const STATUS_GLYPH: Record<ToolRowStatus, string> = {
   skipped: '·',
 };
 
-export function printToolTable(title: string, rows: ToolRow[]): void {
-  if (rows.length === 0) return;
+/** One aligned line per row, glyph first, for a `note()` body. */
+export function formatToolTable(rows: readonly ToolRow[]): string {
   const labelWidth = Math.max(...rows.map((r) => r.label.length));
-  const lines = rows.map((r) => {
-    const detail = r.detail ?? '';
-    return `${STATUS_GLYPH[r.status]}  ${r.label.padEnd(labelWidth)}  ${detail}`;
-  });
-  note(lines.join('\n'), title);
+  return rows
+    .map((r) => `${STATUS_GLYPH[r.status]}  ${r.label.padEnd(labelWidth)}  ${r.detail ?? ''}`)
+    .join('\n');
 }
 
 export async function promptOrExit<T>(
