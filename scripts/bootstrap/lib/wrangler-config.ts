@@ -2,8 +2,18 @@ import path from 'node:path';
 import { parse } from 'smol-toml';
 import type { BootstrapIo } from './io.js';
 
-export const WORKER_DIR = path.join('apps', 'worker');
+const WORKER_DIR = path.join('apps', 'worker');
 export const WRANGLER_TOML = path.join(WORKER_DIR, 'wrangler.toml');
+
+/**
+ * The wrangler this repository pins, run from the Worker's own directory.
+ *
+ * Not a bare `wrangler`: only apps/worker installs it, so a bare name reaches
+ * whatever happens to be installed globally, at whatever version, or nothing
+ * at all. `pnpm exec` runs in the package directory, which is also where
+ * wrangler finds wrangler.toml.
+ */
+export const WRANGLER = 'pnpm --filter @transitmapper/worker exec wrangler';
 
 /** What `wrangler d1 create` has not yet replaced. */
 export const PLACEHOLDER_DB_ID = '00000000-0000-0000-0000-000000000000';

@@ -2,6 +2,7 @@ import type { BootstrapIo } from '../lib/io.js';
 import type { PhaseContext, PhaseResult } from '../lib/phase.js';
 import { shellEscape } from '../lib/shell.js';
 import type { ToolRow } from '../lib/ui.js';
+import { WRANGLER } from '../lib/wrangler-config.js';
 import { REQUIRED_ENVIRONMENTS } from '../standards.js';
 
 /**
@@ -185,7 +186,7 @@ function setOnEnvironments(
  * and somewhere to put a narrower token the day one exists — not isolation.
  */
 export async function runCiSecretsPhase({ doctor, io }: PhaseContext): Promise<PhaseResult> {
-  const whoami = io.run('wrangler whoami');
+  const whoami = io.run(`${WRANGLER} whoami`);
   if (!whoami.ok) {
     io.log('error', '`wrangler whoami` failed — make sure the auth phase succeeded first.');
     return { success: false };

@@ -7,7 +7,7 @@ import {
   databaseName,
   extractCreatedId,
   readWranglerToml,
-  WORKER_DIR,
+  WRANGLER,
   WRANGLER_TOML,
   writeDatabaseId,
   type DatabasePlan,
@@ -32,7 +32,7 @@ export async function runProvisionPhase(context: PhaseContext): Promise<PhaseRes
   const { io } = context;
   const rows: ToolRow[] = [];
 
-  const list = io.run(`cd ${WORKER_DIR} && wrangler d1 list`);
+  const list = io.run(`${WRANGLER} d1 list`);
   if (!list.ok) {
     io.table('Cloudflare resources', [
       {
@@ -66,7 +66,7 @@ function createDatabase(
   label: string,
   rows: ToolRow[],
 ): string | null {
-  const created = io.run(`cd ${WORKER_DIR} && wrangler d1 create ${name}`);
+  const created = io.run(`${WRANGLER} d1 create ${name}`);
   if (!created.ok) {
     rows.push({
       label,
@@ -162,7 +162,7 @@ async function provisionDatabase(
   // wrangler resolves a database out of the configuration for the environment
   // it was given, and the preview database is not in the production one.
   const scope = plan.environment === 'production' ? '' : ` --env ${plan.environment}`;
-  const migrated = io.run(`cd ${WORKER_DIR} && wrangler d1 migrations apply DB --remote${scope}`);
+  const migrated = io.run(`${WRANGLER} d1 migrations apply DB --remote${scope}`);
   rows.push(
     migrated.ok
       ? {
