@@ -1,45 +1,80 @@
 import type { BootstrapIo } from '../lib/io.js';
 import type { PhaseContext, PhaseResult } from '../lib/phase.js';
 import type { ToolRow } from '../lib/ui.js';
-import { ACCOUNT_VARIABLE, parseJsonOutput, resolveAccount } from '../lib/cloudflare-account.js';
+import {
+  ACCOUNT_VARIABLE,
+  parseJsonOutput,
+  resolveAccount,
+  type CloudflareAccount,
+} from '../lib/cloudflare-account.js';
+import { deployTarget, readWranglerToml, type DeployTarget } from '../lib/wrangler-config.js';
 import { REQUIRED_ENVIRONMENTS } from '../standards.js';
 
 /**
- * Account-scoped API token page: tokens created here are bound to a single
- * Cloudflare account from the start, unlike the user-scoped
- * `/profile/api-tokens` page which can roam across every account the user
- * is a member of.
+ * Where API tokens are created. The token is still limited to one account:
+ * step 5 below includes only that account under Account Resources.
  */
-function tokenDashboardUrl(accountId: string): string {
-  return `https://dash.cloudflare.com/${accountId}/api-tokens`;
-}
+const TOKEN_DASHBOARD_URL = 'https://dash.cloudflare.com/profile/api-tokens';
 
 /**
- * Step-by-step instructions shown before the token prompt. This is the part
- * that makes the prompt usable by someone who has never created a Cloudflare
- * API token before — a bare "paste your token" prompt with no context is not
- * "standardized bootstrap tooling," it's a trap for anyone who isn't already
- * a Cloudflare/Workers expert.
+ * What the "Edit Cloudflare Workers" template grants, in the order and words
+ * the dashboard uses. Listed so the reader can check the screen matches
+ * before adding anything, instead of wondering whether a row is missing.
  */
-function tokenPromptBody(accountId: string): string {
+const TEMPLATE_PERMISSIONS = [
+  'Account · Workers Scripts · Edit',
+  'Account · Workers KV Storage · Edit',
+  'Account · Workers R2 Storage · Edit   (the daily GTFS refresh needs it)',
+  'Account · Workers Tail · Read',
+  'Account · Account Settings · Read',
+  'Zone · Workers Routes · Edit',
+  'User · User Details · Read',
+  'User · Memberships · Read',
+];
+
+/**
+ * Step-by-step instructions shown before the token prompt, for somebody who
+ * has never made a Cloudflare API token: every name to type, every row to
+ * add, and every option to pick, so nothing has to be guessed or looked up.
+ *
+ * The one permission the template lacks is D1: the production and preview
+ * workflows both apply D1 migrations before they deploy. R2 is already in
+ * the template, which is why it is listed rather than added.
+ */
+function tokenPromptBody(account: CloudflareAccount, target: DeployTarget): string {
+  const site = target.host ?? 'TransitMapper';
+  const zones = target.zones.length > 0 ? target.zones.join(', ') : 'the zone of your routes';
   return [
-    'This lets GitHub Actions deploy the Worker on every push to main.',
+    'This token lets GitHub Actions deploy TransitMapper. You make it once;',
+    'the bootstrap stores it and does not ask for it again.',
     '',
-    `  1. Open ${tokenDashboardUrl(accountId)} (opening it for you now)`,
-    '  2. Find "Edit Cloudflare Workers" and click "Use template"',
-    '     This creates TWO permission blocks — one scoped to "Account"',
-    '     (Workers Scripts, KV, R2), one scoped to "Specified Domains"',
-    '     (Workers Routes). Leave both as they are.',
-    '  3. Click "+ Add policy" to add a THIRD block (D1 is account-scoped,',
-    "     so it can't go in either existing block):",
-    '       - Change its left dropdown from "Specified Domains" to "Account"',
-    '       - Search "database" and check Edit next to "D1 Database"',
-    '       - Set the account selector to this account',
-    '  4. On each Account-scoped block, confirm the account selected is',
-    '     this one (not "All accounts")',
-    '  5. Click "Continue to summary", then "Create Token"',
-    '  6. Copy the token from the success screen',
-    '  7. Paste it below (it will not be shown on screen as you type)',
+    `  1. Open ${TOKEN_DASHBOARD_URL} (opening it for you now)`,
+    '     and click "Create Token".',
+    '  2. Next to "Edit Cloudflare Workers", click "Use template".',
+    `  3. Token name: ${site} deploy (GitHub Actions)`,
+    '  4. Under Permissions the template already has these rows. Keep them:',
+    ...TEMPLATE_PERMISSIONS.map((permission) => `       ${permission}`),
+    '     Add one more row, because every deploy applies D1 migrations:',
+    '       Account · D1 · Edit',
+    `  5. Account Resources: Include → ${account.name}`,
+    '     (not "All accounts").',
+    `  6. Zone Resources: Include → Specific zone → ${zones}`,
+    '  7. Leave TTL empty, so deploys keep working.',
+    '  8. Click "Continue to summary", then "Create Token".',
+    '  9. Copy the token. Cloudflare shows it only once.',
+    ' 10. Paste it below. It is not shown on screen as you type.',
+    '',
+    'The token is a secret. The bootstrap stores it only as the',
+    `${TOKEN_SECRET} environment secret on the ${REQUIRED_ENVIRONMENTS.join(' and ')}`,
+    'GitHub environments.',
+    '',
+    `${ACCOUNT_VARIABLE} is set for you to ${account.id},`,
+    `from ${account.source}.`,
+    'It is not a secret, and there is nothing to copy for it.',
+    '',
+    'If this token is ever rolled or deleted in Cloudflare, the stored copy',
+    'stops working. Make a new one the same way and store it with',
+    '`pnpm bootstrap --rotate-token`.',
   ].join('\n');
 }
 
@@ -203,14 +238,14 @@ function setOnEnvironments(io: BootstrapIo, write: EnvironmentWrite): boolean {
 /** Prompts once for the token and writes it to every environment in the plan. */
 async function writeToken(
   io: BootstrapIo,
-  accountId: string,
+  account: CloudflareAccount,
   environments: string[],
 ): Promise<boolean> {
   // Prompted once even when several environments need it. Asking twice for
   // the same token invites two different tokens, and then one environment
   // deploys with credentials nobody knows about.
-  io.note(tokenPromptBody(accountId), 'Cloudflare API token');
-  io.openUrl(tokenDashboardUrl(accountId));
+  io.note(tokenPromptBody(account, deployTarget(readWranglerToml(io))), 'Cloudflare API token');
+  io.openUrl(TOKEN_DASHBOARD_URL);
   const token = await io.secret('Paste the Cloudflare API token:');
   const written = setOnEnvironments(io, {
     kind: 'secret',
@@ -279,7 +314,7 @@ export async function runCiSecretsPhase({
   );
   if (!proceed) return { success: false };
 
-  if (plan.token.length > 0 && !(await writeToken(io, accountId, plan.token))) {
+  if (plan.token.length > 0 && !(await writeToken(io, resolved.account, plan.token))) {
     return { success: false };
   }
 

@@ -55,8 +55,15 @@ interface WranglerScope {
   d1_databases?: D1Binding[];
 }
 
+interface WranglerRoute {
+  pattern?: string;
+  zone_name?: string;
+  custom_domain?: boolean;
+}
+
 interface WranglerConfig extends WranglerScope {
   account_id?: string;
+  routes?: WranglerRoute[];
   env?: Record<string, WranglerScope | undefined>;
 }
 
@@ -80,6 +87,28 @@ export function declaredAccountId(toml: string): string | null {
   const id = (parse(toml) as WranglerConfig).account_id?.trim();
   if (!id) return null;
   return id;
+}
+
+/** Where production is served, as the deploy token has to be scoped. */
+export interface DeployTarget {
+  /** The custom domain the Worker answers on, or null when it has none. */
+  host: string | null;
+  /** Zones the Worker's routes live in, for the token's Zone Resources. */
+  zones: string[];
+}
+
+/**
+ * The production host and zones, read from the routes rather than restated,
+ * so the token steps name the zone the deploy actually writes routes into.
+ * A custom domain without a `zone_name` counts its last two labels as the
+ * zone, which is right for every host this project has.
+ */
+export function deployTarget(toml: string): DeployTarget {
+  const routes = (parse(toml) as WranglerConfig).routes ?? [];
+  const host = routes.find((route) => route.custom_domain === true)?.pattern ?? null;
+  const zones = new Set(routes.flatMap((route) => (route.zone_name ? [route.zone_name] : [])));
+  if (zones.size === 0 && host) zones.add(host.split('.').slice(-2).join('.'));
+  return { host, zones: [...zones] };
 }
 
 export function readWranglerToml(io: BootstrapIo): string {
