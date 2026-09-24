@@ -2,7 +2,7 @@ name = "transitmapper"
 main = "src/entry.ts"
 compatibility_date = "2025-07-01"
 
-# The Las Vegas for Better Transit Cloudflare account. Declared so that every
+# The LVBT (Las Vegans for Better Transit) Cloudflare account. Declared so every
 # wrangler command acts on it even for a login that can see several accounts,
 # and so `pnpm bootstrap` knows which account the CLOUDFLARE_ACCOUNT_ID
 # variable in the GitHub environments must hold instead of guessing from the
