@@ -10,12 +10,12 @@ function repositorySource(path: string): string {
 }
 
 describe('release performance gates', () => {
-  it('keeps the required RTC check name aligned with its terminal pull-request job', () => {
+  it('reports the RTC check on every pull request', () => {
+    // Not a required check: it never runs in the merge queue, which waits for
+    // every required check. scripts/tests/governance-standard.test.ts holds
+    // the required list to the jobs that do.
     const workflow = repositorySource('.github/workflows/performance.yml');
-    const standards = repositorySource('scripts/bootstrap/standards.ts');
-    const checks = [...standards.matchAll(/context: '([^']+)'/g)].map((match) => match[1]);
 
-    expect(checks).toEqual(['Validate', 'RTC responsiveness (desktop)']);
     expect(workflow).toContain('name: RTC responsiveness (desktop)');
     expect(workflow).toContain('pull_request:');
     expect(workflow).not.toMatch(/pull_request:\n(?:.|\n)*?paths:/);

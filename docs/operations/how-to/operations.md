@@ -40,8 +40,11 @@ onboarding dialog in headless Chrome. Because GitHub suppresses pull-request eve
 created by a workflow token, the release job explicitly dispatches `Validate`
 and the `release` scope of the Performance workflow on the generated branch.
 
-The required pull-request context is `RTC responsiveness (desktop)`. The
-Performance workflow always reports it. It runs Chrome when `apps/web`,
+The only required check is `Validate`. A pull request lands through the merge
+queue by rebase, and the queue waits for a check on its merge group, so a
+required check must also run there; `Validate` does. The Performance workflow
+reports `RTC responsiveness (desktop)` on every pull request, but it does not
+run in the merge queue, so it is not required. It runs Chrome when `apps/web`,
 `packages/core`, the root package or workspace manifests, the lockfile, the
 Node setup action, or the performance workflow changed. Documentation and
 worker-only pull requests still report the terminal check without opening
