@@ -23,7 +23,8 @@
  *                 GitHub repository: branch rules, dependency and secret
  *                 scanning, and Actions permissions
  *   ci-secrets  — CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID on the
- *                 "production" GitHub Environment
+ *                 "production" and "preview" GitHub Environments
+ *   analytics   — the Web Analytics tokens the production build requires
  *
  * The same phase-array pattern — a plain array of { id, title, run }, with
  * `note()`-driven UX via @clack/prompts — is used by the org's other
@@ -38,6 +39,7 @@ import { resolve } from 'node:path';
 import { intro, outro, note } from '@clack/prompts';
 import { nodeIo, type BootstrapIo } from './lib/io.js';
 import type { PhaseContext, PhaseResult } from './lib/phase.js';
+import { runAnalyticsPhase } from './phases/analytics.js';
 import { runAuthPhase } from './phases/auth.js';
 import { runCloudflareVerifyPhase } from './phases/cloudflare-verify.js';
 import { runCiSecretsPhase } from './phases/ci-secrets.js';
@@ -58,6 +60,7 @@ const PHASES: readonly Phase[] = [
   { id: 'cloudflare-verify', title: 'Deployment configuration', run: runCloudflareVerifyPhase },
   { id: 'repo-config', title: 'Repository governance', run: runRepoConfigPhase },
   { id: 'ci-secrets', title: 'CI secrets', run: runCiSecretsPhase },
+  { id: 'analytics', title: 'Analytics variables', run: runAnalyticsPhase },
 ];
 
 export type BootstrapOptions = Omit<PhaseContext, 'io'>;
