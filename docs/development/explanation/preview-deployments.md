@@ -86,11 +86,12 @@ token, so the workflow cannot write a comment even to say why there is no
 preview. Somebody has to open the run to read it.
 
 That guard is the actual security boundary, and it is worth being blunt about
-what it does and does not buy. Cloudflare has no per-script API token scope:
-any token that can deploy a preview Worker can also overwrite the production
-one. The separate `preview` GitHub Environment gives previews their own
-deployment records and somewhere to put a narrower token the day Cloudflare
-offers one. It is not isolation. What keeps the token away from unreviewed
+what it does and does not buy. Both GitHub environments currently hold the
+same account-scoped token, so a preview with that credential can also alter the
+production Worker. Cloudflare supports per-Worker roles, but each new preview
+Worker needs account-level create rights. The separate `preview` GitHub
+Environment records preview deployments; it does not isolate the credential.
+What keeps the token away from unreviewed
 code is that previews run only for branches pushed to this repository, and
 pushing here already requires write access.
 

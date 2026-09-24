@@ -14,11 +14,12 @@ is accurate as of today either way.
 | `CLOUDFLARE_API_TOKEN`  | GitHub `production` and `preview` environments | Deploy Worker code, alter D1 data, and replace managed R2 archives |
 | `CLOUDFLARE_ACCOUNT_ID` | The same two environments, as a variable       | Not a secret. An identifier, useless without a token               |
 
-The same token in both environments, and this is not an oversight. Cloudflare
-has no per-script API token scope: any token that can deploy a pull request
-preview Worker can also overwrite the production one. The `preview`
-environment gives previews their own deployment records and somewhere to put a
-narrower token the day Cloudflare offers one. It is not an isolation boundary.
+The same account-scoped token is currently in both environments, so code with
+the preview credential can also change the production Worker. The `preview`
+environment gives previews their own deployment records; it does not isolate
+Cloudflare permissions. Cloudflare now supports per-Worker roles, but these
+previews create new Workers dynamically, which requires account-level create
+rights. A narrower credential design needs to account for that creation step.
 What keeps the token away from unreviewed code is that previews run only for
 branches pushed to this repository, which already requires write access — see
 [pull request previews](../../development/explanation/preview-deployments.md).

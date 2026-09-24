@@ -7,7 +7,9 @@ initializes it in `apps/web/src/analytics-entry.ts` before React renders.
 
 Only the production deployment provides `PUBLIC_LVBT_CWA_TOKEN` and
 `PUBLIC_LVBT_LABS_CWA_TOKEN`, as GitHub Actions variables on the `production`
-environment. The hostname selects the map or Labs property. That workflow also
+environment. Both variables hold the same token from the shared
+`lasvegasfortransit.org` Web Analytics property. Cloudflare accepts that token
+on both hostnames because they share the apex domain. That workflow also
 sets `LVBT_REQUIRE_ANALYTICS=1`, so a missing or blank token fails the build
 instead of deploying an unmeasured production release. Local, pull request
 preview, and retired archive builds omit the tokens and initialize no analytics.

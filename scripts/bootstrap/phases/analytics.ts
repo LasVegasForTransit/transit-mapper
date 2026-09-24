@@ -18,8 +18,7 @@ interface AnalyticsVariable {
 }
 
 /**
- * One Web Analytics site per hostname TransitMapper is served on, as
- * docs/operations/how-to/analytics.md describes. The production workflow sets
+ * One apex-domain Web Analytics property covers both hostnames. The production workflow sets
  * LVBT_REQUIRE_ANALYTICS=1, so a missing token fails the release build: a
  * setup that stops before these is a setup whose first deploy fails.
  */
@@ -42,16 +41,17 @@ function webAnalyticsUrl(account: CloudflareAccount): string {
  */
 function analyticsSteps(account: CloudflareAccount, variable: AnalyticsVariable): string {
   return [
-    `This is the Web Analytics token for ${variable.host}. The production`,
-    'build refuses to deploy without it.',
+    `This is the Web Analytics token used on ${variable.host}. The production`,
+    'build refuses to deploy without it. Both map and labs use the existing',
+    'lasvegasfortransit.org property; do not create a second subdomain property.',
     '',
     `  1. Open ${webAnalyticsUrl(account)}`,
     '     (opening it for you now).',
-    `  2. If ${variable.host} is already listed, click "Manage site" on it`,
+    '  2. If lasvegasfortransit.org is already listed, click "Manage site" on it',
     '     and go to step 5.',
-    `  3. Click "Add a site" and type ${variable.host}`,
-    '  4. Choose "Enable with JS Snippet installation", not the automatic',
-    '     "Enable" option: the site loads the beacon itself.',
+    '  3. Click "Add a site", choose lasvegasfortransit.org, and click "Done".',
+    '  4. Open "Manage site" and choose "Enable with JS Snippet installation"',
+    '     instead of automatic setup: the site loads the beacon itself.',
     '  5. In the JS snippet, copy only the token inside',
     `     data-cf-beacon='{"token": "..."}' (32 letters and digits).`,
     '  6. Paste it below.',
