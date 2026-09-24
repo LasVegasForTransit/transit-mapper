@@ -351,7 +351,7 @@ export async function runCiSecretsPhase({
 
   io.log(
     'success',
-    `${TOKEN_SECRET} (secret) and ${ACCOUNT_VARIABLE} (variable) are set on ${states.map((state) => state.environment).join(' and ')}. CI deploys should work on the next push to main.`,
+    `${TOKEN_SECRET} (secret) and ${ACCOUNT_VARIABLE} (variable, ${accountId}) are set on ${states.map((state) => state.environment).join(' and ')}. CI deploys should work on the next push to main.`,
   );
   return { success: true };
 }

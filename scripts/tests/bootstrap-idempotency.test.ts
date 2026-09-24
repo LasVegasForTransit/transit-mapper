@@ -11,6 +11,7 @@ import {
 } from '../bootstrap/lib/wrangler-config.js';
 import {
   ACCOUNT,
+  FAKE_ANALYTICS_TOKEN,
   FAKE_TOKEN,
   FakeServices,
   isMutation,
@@ -349,6 +350,32 @@ describe('credentials that are already set', () => {
     expect(next.success).toBe(true);
     expect(commandsMatching(next, /gh secret set CLOUDFLARE_API_TOKEN/u)).toHaveLength(2);
     expect(mutations(next).every((command) => command.startsWith('gh secret set'))).toBe(true);
+  });
+});
+
+describe('what the bootstrap shows', () => {
+  it('masks the token and nothing else', async () => {
+    const first = await run(services);
+
+    expect(first.maskedPrompts).toHaveLength(1);
+    expect(first.prompts.length).toBeGreaterThan(first.maskedPrompts.length);
+  });
+
+  it('never prints the token, and shows every value that is not secret', async () => {
+    const first = await run(services);
+    const second = await run(services);
+    const report = await run(services, { doctor: true });
+
+    for (const record of [first, second, report]) {
+      expect(record.output.join('\n')).not.toContain(FAKE_TOKEN);
+      expect(record.calls.some((call) => call.command.includes(FAKE_TOKEN))).toBe(false);
+    }
+    for (const record of [second, report]) {
+      const printed = record.output.join('\n');
+      expect(printed).toContain(ACCOUNT.id);
+      expect(printed).toContain(FAKE_ANALYTICS_TOKEN);
+      for (const database of services.databases) expect(printed).toContain(database.uuid);
+    }
   });
 });
 

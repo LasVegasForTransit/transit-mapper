@@ -30,7 +30,12 @@ export interface BootstrapIo {
   /** Writes a file by its path relative to the repository root. */
   writeFile: (relativePath: string, content: string) => void;
   confirm: (message: string, initialValue: boolean) => Promise<boolean>;
-  /** Masked prompt. The answer is never echoed or logged. */
+  /**
+   * Masked prompt, for real credentials only: API keys, tokens, client and
+   * signing secrets, private keys. The answer is never echoed or logged.
+   * Anything else is asked with `text` and shown in every report, because
+   * hiding a value that is not secret only stops people checking it.
+   */
   secret: (message: string) => Promise<string>;
   /** Plain prompt for a value that is not secret, checked by `check`. */
   text: (message: string, check: (value: string) => string | undefined) => Promise<string>;
