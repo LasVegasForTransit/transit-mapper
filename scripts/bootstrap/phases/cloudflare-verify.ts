@@ -1,13 +1,8 @@
-import { accountEnv, resolveAccount } from '../lib/cloudflare-account.js';
+import { resolveAccount } from '../lib/cloudflare-account.js';
+import { listDatabases } from '../lib/d1.js';
 import type { PhaseContext, PhaseResult } from '../lib/phase.js';
 import type { ToolRow } from '../lib/ui.js';
-import {
-  DATABASES,
-  databaseId,
-  databaseName,
-  readWranglerToml,
-  WRANGLER,
-} from '../lib/wrangler-config.js';
+import { DATABASES, databaseId, readWranglerToml } from '../lib/wrangler-config.js';
 
 /**
  * Read-only checks against what Task 5 of the deploy plan provisions by
@@ -28,13 +23,13 @@ export function runCloudflareVerifyPhase({ io }: PhaseContext): Promise<PhaseRes
     ]);
     return Promise.resolve({ success: false });
   }
-  const list = io.run(`${WRANGLER} d1 list`, { env: accountEnv(resolved.account) });
+  const databases = listDatabases(io, resolved.account);
 
   // Reported once, as itself. Without this every database below is described
   // as "not found in this account", which sends the reader looking for
   // databases that exist while the actual problem is that the command asking
   // about them could not run.
-  if (!list.ok) {
+  if (!databases) {
     io.table('Cloudflare deployment config', [
       {
         label: 'D1',
@@ -47,17 +42,16 @@ export function runCloudflareVerifyPhase({ io }: PhaseContext): Promise<PhaseRes
 
   for (const { environment, label } of DATABASES) {
     const dbId = databaseId(toml, environment);
-    const name = databaseName(toml, environment) ?? environment;
     if (!dbId) {
       rows.push({
         label: `${label} id`,
         status: 'failed',
-        detail: `wrangler.toml still has the placeholder id — run \`wrangler d1 create ${name}\` first`,
+        detail: 'wrangler.toml still has the placeholder id — run `pnpm bootstrap` to provision it',
       });
       allReady = false;
       continue;
     }
-    if (list.stdout.includes(dbId)) {
+    if (databases.some((database) => database.uuid === dbId)) {
       rows.push({ label, status: 'ready', detail: dbId });
     } else {
       rows.push({
