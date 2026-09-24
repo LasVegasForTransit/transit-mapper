@@ -1,4 +1,5 @@
 import { accountEnv, resolveAccount, type CloudflareAccount } from '../lib/cloudflare-account.js';
+import { listDatabases, type D1Database } from '../lib/d1.js';
 import type { PhaseContext, PhaseResult } from '../lib/phase.js';
 import type { ToolRow } from '../lib/ui.js';
 import {
@@ -9,7 +10,7 @@ import {
   readWranglerToml,
   WRANGLER,
   WRANGLER_TOML,
-  writeDatabaseId,
+  writeDatabaseIdIfChanged,
   type DatabasePlan,
 } from '../lib/wrangler-config.js';
 
@@ -23,6 +24,11 @@ import {
  * account: cloning the repository and running the deploy produced an error
  * about a database that was never going to exist, and the only record of how
  * to create it lived inside a design document.
+ *
+ * Each database is checked before anything is done to it: one the file
+ * already points at is left alone, one the account already has under the
+ * right name is adopted, and only one that exists nowhere is created. That
+ * order is what makes a second run, or a run after an interrupted one, safe.
  *
  * It asks before creating, because creating a database is the sort of thing
  * a person should be told is about to happen to their account. It does not
@@ -38,12 +44,9 @@ export async function runProvisionPhase(context: PhaseContext): Promise<PhaseRes
     return { success: false };
   }
   const { account } = resolved;
-  const rows: ToolRow[] = [
-    { label: 'Cloudflare account', status: 'ready', detail: `${account.id} (${account.source})` },
-  ];
 
-  const list = io.run(`${WRANGLER} d1 list`, { env: accountEnv(account) });
-  if (!list.ok) {
+  const databases = listDatabases(io, account);
+  if (!databases) {
     io.table('Cloudflare resources', [
       {
         label: 'D1',
@@ -54,20 +57,41 @@ export async function runProvisionPhase(context: PhaseContext): Promise<PhaseRes
     return { success: false };
   }
 
+  const rows: ToolRow[] = [
+    { label: 'Cloudflare account', status: 'ready', detail: `${account.id} (${account.source})` },
+  ];
   let success = true;
+  let wroteConfig = false;
   for (const plan of DATABASES) {
-    // Read fresh each time: provisioning the previous database rewrote the file.
-    const outcome = await provisionDatabase({ plan, account, context, rows }, list.stdout);
-    if (outcome !== 'ready') success = false;
+    // The file is read fresh inside: provisioning the previous database may
+    // have rewritten it.
+    const outcome = await provisionDatabase({ plan, account, context, rows }, databases);
+    if (outcome.wroteConfig) wroteConfig = true;
+    if (outcome.status !== 'ready') success = false;
     // Somebody who declines to create a database in this account is answering
     // about the account, not about one database. Asking again for the next one
     // is how a "no" turns into a resource in the wrong place.
-    if (outcome === 'declined') break;
+    if (outcome.status === 'declined') break;
   }
 
   io.table('Cloudflare resources', rows);
+  if (wroteConfig) io.note(COMMIT_REMINDER, 'Commit the database id');
   return { success };
 }
+
+/**
+ * Shown whenever this run changed wrangler.toml.
+ *
+ * The bootstrap deliberately stops at the working tree. Deploys build from
+ * the default branch, which only accepts pull requests, so an id that is not
+ * merged is an id the deploy workflows never see.
+ */
+const COMMIT_REMINDER = [
+  `This run wrote a database id into ${WRANGLER_TOML}, in this checkout only.`,
+  'The deploy workflows read that file from the main branch, so the change',
+  'does nothing until it is merged. Commit it on a new branch and open a pull',
+  'request. The bootstrap never commits or pushes for you.',
+].join('\n');
 
 /** One database's provisioning: what it is, where, and where to report. */
 interface DatabaseStep {
@@ -77,7 +101,24 @@ interface DatabaseStep {
   rows: ToolRow[];
 }
 
-/** Creates the database and reads its id back, reporting either failure. */
+interface ProvisionOutcome {
+  status: 'ready' | 'failed' | 'declined';
+  /** Whether this database's id was written into wrangler.toml. */
+  wroteConfig: boolean;
+}
+
+/** The first non-blank line, which is where wrangler puts its reason. */
+function firstLine(text: string, fallback: string): string {
+  return text.split('\n').find((line) => line.trim().length > 0) ?? fallback;
+}
+
+/**
+ * Creates the database and returns its id, reporting any failure.
+ *
+ * The id is read from wrangler's output and, when it is not there, from the
+ * account by name. Either way the database exists now, so a run that cannot
+ * find its id must not end in a state where the next run creates it again.
+ */
 function createDatabase(
   { plan, account, context, rows }: DatabaseStep,
   name: string,
@@ -87,73 +128,30 @@ function createDatabase(
     rows.push({
       label: plan.label,
       status: 'failed',
-      // First non-blank line, not first line: wrangler sometimes leads with an
-      // empty one, and `??` would happily report that as the reason.
-      detail:
-        created.stderr.split('\n').find((line) => line.trim().length > 0) ??
-        'wrangler d1 create failed',
+      detail: firstLine(created.stderr, 'wrangler d1 create failed'),
     });
     return null;
   }
 
-  const newId = extractCreatedId(`${created.stdout}\n${created.stderr}`);
-  if (!newId) {
-    rows.push({
-      label: plan.label,
-      status: 'failed',
-      detail: 'created, but no database_id could be read back from wrangler output',
-    });
-    return null;
-  }
-  return newId;
+  const id =
+    extractCreatedId(`${created.stdout}\n${created.stderr}`) ??
+    listDatabases(context.io, account)?.find((database) => database.name === name)?.uuid;
+  if (id) return id;
+
+  rows.push({
+    label: plan.label,
+    status: 'failed',
+    detail: `created, but its id could not be read back — re-run \`pnpm bootstrap\`, which finds "${name}" by name`,
+  });
+  return null;
 }
 
-type ProvisionOutcome = 'ready' | 'failed' | 'declined';
-
-async function provisionDatabase(
-  step: DatabaseStep,
-  existingDatabases: string,
-): Promise<ProvisionOutcome> {
-  const { plan, account, rows } = step;
-  const { doctor, io } = step.context;
-  const toml = readWranglerToml(io);
-  const name = databaseName(toml, plan.environment);
-
-  if (!name) {
-    rows.push({
-      label: plan.label,
-      status: 'failed',
-      detail: `no database_name found — the ${plan.environment} [[d1_databases]] block is missing or malformed`,
-    });
-    return 'failed';
-  }
-
-  const existingId = databaseId(toml, plan.environment);
-
-  // The id in the file is authoritative only if the account can actually see
-  // it. An id belonging to someone else's account reads as configured and
-  // fails at deploy.
-  if (existingId && existingDatabases.includes(existingId)) {
-    rows.push({ label: plan.label, status: 'ready', detail: `${name} (${existingId})` });
-    return 'ready';
-  }
-
-  if (doctor) {
-    rows.push({
-      label: plan.label,
-      status: 'failed',
-      detail: existingId
-        ? 'id in wrangler.toml is not visible to this account — run `pnpm bootstrap` to provision'
-        : `"${name}" does not exist yet — run \`pnpm bootstrap\` to create it`,
-    });
-    return 'failed';
-  }
-
-  io.note(
+async function confirmCreate(step: DatabaseStep, name: string): Promise<boolean> {
+  step.context.io.note(
     [
       `This will create a D1 database called "${name}" in the Cloudflare`,
-      `account ${account.id}, and write its id into`,
-      `${WRANGLER_TOML}. It backs ${plan.purpose}.`,
+      `account ${step.account.id}, and write its id into`,
+      `${WRANGLER_TOML}. It backs ${step.plan.purpose}.`,
       '',
       'D1 is free at this scale. The id is not a secret — it is committed,',
       'because a deployment that cannot be reproduced from the repository',
@@ -161,24 +159,16 @@ async function provisionDatabase(
     ].join('\n'),
     'About to create a database',
   );
+  return step.context.io.confirm(`Create the D1 database "${name}"?`, true);
+}
 
-  const confirmed = await io.confirm(`Create the D1 database "${name}"?`, true);
-  if (!confirmed) {
-    rows.push({ label: plan.label, status: 'skipped', detail: 'declined — nothing was created' });
-    return 'declined';
-  }
-
-  const newId = createDatabase(step, name);
-  if (!newId) return 'failed';
-
-  writeDatabaseId(io, toml, plan.environment, newId);
-  rows.push({ label: plan.label, status: 'ready', detail: `${name} (${newId}) — created` });
-
+/** Applies every migration to a database this run has just created. */
+function migrateNewDatabase({ plan, account, context, rows }: DatabaseStep): boolean {
   // Addressed by binding rather than by name, and with the environment named:
   // wrangler resolves a database out of the configuration for the environment
   // it was given, and the preview database is not in the production one.
   const scope = plan.environment === 'production' ? '' : ` --env ${plan.environment}`;
-  const migrated = io.run(`${WRANGLER} d1 migrations apply DB --remote${scope}`, {
+  const migrated = context.io.run(`${WRANGLER} d1 migrations apply DB --remote${scope}`, {
     env: accountEnv(account),
   });
   rows.push(
@@ -194,6 +184,79 @@ async function provisionDatabase(
           detail: 'database created, but migrations did not apply — re-run `pnpm bootstrap`',
         },
   );
+  return migrated.ok;
+}
 
-  return migrated.ok ? 'ready' : 'failed';
+async function provisionDatabase(
+  step: DatabaseStep,
+  databases: readonly D1Database[],
+): Promise<ProvisionOutcome> {
+  const { plan, rows } = step;
+  const { doctor, io } = step.context;
+  const toml = readWranglerToml(io);
+  const name = databaseName(toml, plan.environment);
+
+  if (!name) {
+    rows.push({
+      label: plan.label,
+      status: 'failed',
+      detail: `no database_name found — the ${plan.environment} [[d1_databases]] block is missing or malformed`,
+    });
+    return { status: 'failed', wroteConfig: false };
+  }
+
+  // The id in the file is authoritative only if the account can actually see
+  // it. An id belonging to someone else's account reads as configured and
+  // fails at deploy.
+  const configured = databaseId(toml, plan.environment);
+  if (configured && databases.some((database) => database.uuid === configured)) {
+    rows.push({ label: plan.label, status: 'ready', detail: `${name} (${configured})` });
+    return { status: 'ready', wroteConfig: false };
+  }
+
+  // The account already has a database with this name, and the file does not
+  // point at it: an earlier run created it and stopped before the id was
+  // written, or the file came from another account. Names are unique within
+  // an account, so creating it again can only fail. Adopting it is the resume.
+  const existing = databases.find((database) => database.name === name);
+  if (existing) {
+    if (doctor) {
+      rows.push({
+        label: plan.label,
+        status: 'failed',
+        detail: `"${name}" exists (${existing.uuid}), but ${WRANGLER_TOML} does not point at it — run \`pnpm bootstrap\` to write its id`,
+      });
+      return { status: 'failed', wroteConfig: false };
+    }
+    const wroteConfig = writeDatabaseIdIfChanged(io, toml, plan.environment, existing.uuid);
+    rows.push({
+      label: plan.label,
+      status: 'ready',
+      detail: `${name} (${existing.uuid}) — already in the account; id written to ${WRANGLER_TOML}`,
+    });
+    return { status: 'ready', wroteConfig };
+  }
+
+  if (doctor) {
+    rows.push({
+      label: plan.label,
+      status: 'failed',
+      detail: configured
+        ? `id in ${WRANGLER_TOML} is not visible to this account, and no database is named "${name}" — run \`pnpm bootstrap\` to create it`
+        : `"${name}" does not exist yet — run \`pnpm bootstrap\` to create it`,
+    });
+    return { status: 'failed', wroteConfig: false };
+  }
+
+  if (!(await confirmCreate(step, name))) {
+    rows.push({ label: plan.label, status: 'skipped', detail: 'declined — nothing was created' });
+    return { status: 'declined', wroteConfig: false };
+  }
+
+  const createdId = createDatabase(step, name);
+  if (!createdId) return { status: 'failed', wroteConfig: false };
+
+  const wroteConfig = writeDatabaseIdIfChanged(io, toml, plan.environment, createdId);
+  rows.push({ label: plan.label, status: 'ready', detail: `${name} (${createdId}) — created` });
+  return { status: migrateNewDatabase(step) ? 'ready' : 'failed', wroteConfig };
 }

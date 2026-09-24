@@ -97,9 +97,16 @@ export function databaseId(toml: string, environment: WranglerEnvironment): stri
   return !id || id === PLACEHOLDER_DB_ID ? null : id;
 }
 
-/** `wrangler d1 create` prints the new binding block; the id is in it. */
+/**
+ * `wrangler d1 create` prints the new binding block; the id is in it.
+ *
+ * Wrangler prints the block in the configuration file's own format, so the
+ * id arrives as `database_id = "…"` for TOML and `"database_id": "…"` for
+ * JSON. Either is accepted, because a miss here used to leave a created
+ * database that the next run then tried, and failed, to create again.
+ */
 export function extractCreatedId(output: string): string | null {
-  return /database_id\s*=\s*"?([0-9a-f-]{36})"?/i.exec(output)?.[1] ?? null;
+  return /"?database_id"?\s*[=:]\s*"?([0-9a-f-]{36})"?/i.exec(output)?.[1] ?? null;
 }
 
 /** The table a line belongs to, as the offsets of its `[header]` and its end. */
@@ -141,11 +148,22 @@ export function withDatabaseId(toml: string, environment: WranglerEnvironment, i
   return `${toml.slice(0, start)}${table}${toml.slice(end)}`;
 }
 
-export function writeDatabaseId(
+/**
+ * Writes one environment's database id to wrangler.toml, and only when that
+ * changes the file. Returns whether it wrote.
+ *
+ * An unchanged file is left untouched rather than rewritten with the same
+ * bytes, so a run that changes nothing leaves no modification time, editor
+ * reload, or formatter pass behind.
+ */
+export function writeDatabaseIdIfChanged(
   io: BootstrapIo,
   toml: string,
   environment: WranglerEnvironment,
   id: string,
-): void {
-  io.writeFile(WRANGLER_TOML, withDatabaseId(toml, environment, id));
+): boolean {
+  const next = withDatabaseId(toml, environment, id);
+  if (next === toml) return false;
+  io.writeFile(WRANGLER_TOML, next);
+  return true;
 }

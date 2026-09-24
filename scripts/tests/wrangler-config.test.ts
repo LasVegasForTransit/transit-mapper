@@ -55,6 +55,10 @@ describe('reading wrangler.toml', () => {
   it('reads the id wrangler prints when it creates a database', () => {
     expect(extractCreatedId(`database_id = "${CREATED}"`)).toBe(CREATED);
   });
+
+  it('reads the id when wrangler prints the new binding as JSON', () => {
+    expect(extractCreatedId(`{ "database_id": "${CREATED}" }`)).toBe(CREATED);
+  });
 });
 
 describe('writing a database id', () => {
