@@ -4,7 +4,7 @@ import {
   aLineSpanCandidate as aCandidate,
   deriveExactCarrierLineSpanAtoms,
   readyLineSpanAtoms as readyAtoms,
-} from '../support/line-span-atoms.test';
+} from '../support/line-span-atoms';
 
 describe('Line span atom validation', () => {
   it('rejects candidates outside the requested Line in canonical order', () => {

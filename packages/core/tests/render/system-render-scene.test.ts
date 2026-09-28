@@ -10,11 +10,11 @@ import {
 import { namedWayLabelDependencyId } from '../../src/render/dependency-index';
 import { renderDomainIdentity, systemFeatureSourceId } from '../../src/render/render-identity';
 import { createSystemRenderScene } from '../../src/render/system-render-scene';
-import { aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aRoad, aService, aSystem } from '../support/fixtures';
 import {
   OVERVIEW_TEST_PRESENTATION,
   STREET_TEST_PRESENTATION,
-} from '../support/render-presentation.test';
+} from '../support/render-presentation';
 
 const NETWORK_VIEW: RenderViewOptions = {
   viewMode: 'network',

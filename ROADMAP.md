@@ -5,7 +5,8 @@ change before a stable release as the project moves through this roadmap.
 
 TransitMapper lets anyone design a regional transit system on a real map. Sketch lines the way you'd
 sketch them on a napkin, then build out the physical network underneath. It started as a tool for
-[Las Vegans for Better Transit](https://lasvegasfortransit.org), but nothing in it is specific to one city.
+[Las Vegans for Better Transit](https://lasvegasfortransit.org), but nothing in it is specific to
+one city.
 
 This roadmap covers where the project is headed, in three phases. Phases run in order, and later
 work doesn't get pulled forward ahead of earlier work without a deliberate reason to reorder.

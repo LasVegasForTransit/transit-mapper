@@ -3,7 +3,7 @@ import {
   aLineSpanProjection,
   aResolvedCarrier,
   aResolvedPatternLeg,
-} from './line-spans.test';
+} from './line-spans';
 
 export function sharedCarrierProjection() {
   const source = aLineSpanChunk();

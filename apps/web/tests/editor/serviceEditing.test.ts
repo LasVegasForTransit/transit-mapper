@@ -3,7 +3,7 @@ import { MODE_ORDER } from '@transitmapper/core/model/catalog';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import { patternWayIds, primaryAnchor, serviceWayIds } from '@transitmapper/core/model/geo';
 import { createEditorStore } from '../../src/editor/store';
-import { buildFeatures } from '../support/testRenderPresentation.test';
+import { buildFeatures } from '../support/testRenderPresentation';
 
 // beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
 // service using the store's default draftModeId ('lightRail', which is

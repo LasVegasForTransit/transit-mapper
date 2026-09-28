@@ -5,7 +5,7 @@ import {
   MAX_PREPARED_VIEWPORT_SEGMENTS_PER_CATEGORY,
   type RenderPreparationPlan,
 } from '../../src/render/render-preparation';
-import { aRoad, aSystem } from '../support/fixtures.test';
+import { aRoad, aSystem } from '../support/fixtures';
 
 const PRESENTATION: RenderPresentation = {
   bounds: { southwest: [-116, 35], northeast: [-114, 37] },

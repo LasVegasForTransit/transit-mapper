@@ -9,7 +9,7 @@ import {
   createRuntimeHarness,
   deferred,
   mountSurface,
-} from './support/map-surface-harness.test';
+} from './support/map-surface-harness';
 
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);

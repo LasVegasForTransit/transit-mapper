@@ -5,7 +5,7 @@ import {
   withRoutedService,
 } from '../../src/model/routing-edits';
 import type { Line, TransitSystem } from '../../src/model/system';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures';
 import { describe, expect, it } from 'vitest';
 
 describe('routed Service edits', () => {

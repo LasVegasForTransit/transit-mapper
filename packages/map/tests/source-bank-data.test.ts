@@ -5,7 +5,7 @@ import { diffRenderScenes } from '@transitmapper/core/render/render-scene-diff';
 import { createSourceBankDataStore } from '../src/sources/source-bank-data';
 import { createSourceBankController } from '../src/sources/source-bank';
 import type { GeoJsonSourceTarget, GeoJsonSourceUpdate } from '@transitmapper/renderer/runtime';
-import { renderPointFeature, renderScene } from './support/render-scene.test';
+import { renderPointFeature, renderScene } from './support/render-scene';
 
 class MaterializedSource implements GeoJsonSourceTarget {
   readonly features = new Map<string | number, FeatureCollection['features'][number]>();

@@ -10,7 +10,7 @@ import {
   type PlanRenderProjectionScopeOptions,
   type RenderProjectionScope,
 } from '../../src/render/render-projection-scope';
-import { aPattern, aRoad, aService, aStation, aStop, aSystem } from './fixtures.test';
+import { aPattern, aRoad, aService, aStation, aStop, aSystem } from './fixtures';
 
 export function projectionFixture(): TransitSystem {
   const west = aRoad('west', [

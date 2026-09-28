@@ -9,29 +9,24 @@ the repository's own invariants. It needs no browser and no network, and it
 is exactly what CI runs — so a green run locally means a green run there.
 
 ```bash
-pnpm check --fix
+pnpm check:fix
 ```
 
-repairs everything a machine can, then re-runs the rest.
+repairs everything a machine can: formatting, Markdown, and lint fixes.
 
 ## What each part is for
 
-| Command             | Fails when                                                                                                           |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `format:check`      | a file is not Prettier-formatted                                                                                     |
-| `lint`              | a lint rule is violated, including the repository's own                                                              |
-| `typecheck:scripts` | a script under `scripts/` does not compile                                                                           |
-| `standards:check`   | the vendored LVBT standard differs from its recorded release, commit, or content hash                                |
-| `check:contract`    | a package is missing a required task, uses an unrecorded dependency source, or keeps tests outside its `tests/` tree |
-| `check:docs`        | a relative link in `docs/` does not resolve                                                                          |
-| `check:migrations`  | a migration that already exists was edited, renamed or deleted                                                       |
-| `check:structure`   | a source directory is undescribed, or a described one is gone                                                        |
-| `check:types`       | `worker-configuration.d.ts` no longer matches `wrangler.toml`                                                        |
-| `check:icons`       | generated app icons no longer match their source and provenance                                                      |
-| `verify`            | a test fails                                                                                                         |
+`pnpm check` has two halves. The first is the organization's, identical in
+every LVBT repository: Prettier, markdownlint (which also resolves every
+relative link and anchor), `lvbt check` (filenames, the workspace contract,
+lint debt, and platform manifests), then lint, type checking, and tests in
+every package. The second is this repository's own: the `validate` task in
+`turbo.json`, which runs the checks only TransitMapper needs, such as
+migrations staying append-only and the project map staying accurate.
 
-Every failure names the command that fixes it. If one does not, that is a
-bug in the check worth reporting.
+[The checks reference](../reference/checks.md) lists every check, what makes
+it fail, and what fixes it. Every failure names the command that fixes it.
+If one does not, that is a bug in the check worth reporting.
 
 ## When it fails and you disagree
 
@@ -44,9 +39,9 @@ the shape.
 ## Running less than everything
 
 ```bash
-pnpm --filter @transitmapper/core verify     # one package's tests
-pnpm --filter @transitmapper/web typecheck   # one package's types
-pnpm lint                                     # lint alone, whole repo
+pnpm --filter @transitmapper/core test          # one package's tests
+pnpm --filter @transitmapper/web check-types    # one package's types
+pnpm lint                                        # lint alone, every package
 ```
 
 Turborepo caches by content, so a repeat run with nothing changed replays in

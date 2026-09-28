@@ -2,7 +2,7 @@ import { laneRefKey } from '../../src/model/components';
 import { patternLegs, patternWayIds, wholeLeg } from '../../src/model/geo';
 import { deleteSelection } from '../../src/model/selection-deletion';
 import { validateSystem } from '../../src/model/validate';
-import { aPattern, aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures';
 import { describe, expect, it } from 'vitest';
 
 describe('multi-selection deletion', () => {

@@ -4,7 +4,7 @@ import { defaultProfileFor } from '../../src/model/profile';
 import { patternPositionAt } from '../../src/model/serviceEdits';
 import { planTerminusGesture } from '../../src/model/serviceGestures';
 import { servicePattern } from '../../src/model/line-service';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures';
 import type { Way } from '../../src/model/system';
 const A: [number, number] = [-115.2, 36.1];
 const B: [number, number] = [-115.19, 36.1];

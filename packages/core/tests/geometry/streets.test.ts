@@ -6,7 +6,7 @@ import {
 } from '../../src/geometry/streets';
 import { defaultProfileFor } from '../../src/model/profile';
 import { haversineMeters } from '../../src/model/geo';
-import { aRoad } from '../support/fixtures.test';
+import { aRoad } from '../support/fixtures';
 
 describe('physical lane surfaces', () => {
   it('builds a closed corridor footprint from one metric centerline', () => {

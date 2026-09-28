@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createEditorStore } from '../../src/editor/store';
 import type { Way } from '@transitmapper/core/model/system';
-import { required } from '../support/required.test';
+import { required } from '../support/required';
 
 // beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
 // service using the store's default draftModeId ('lightRail', which is

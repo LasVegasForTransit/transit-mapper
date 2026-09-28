@@ -11,7 +11,7 @@ import {
   createAttachOptions,
   createProjectionWorker,
   projectedWayFeatures,
-} from './support/document-map-driver.test';
+} from './support/document-map-driver';
 
 const definition = {
   id: 'snapshot',

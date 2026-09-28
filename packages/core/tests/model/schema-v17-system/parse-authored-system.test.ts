@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { TransitSystem } from '../../../src/transit/authored-system';
 import { parseAuthoredSystem } from '../../../src/model/schema-v17-system/parse-authored-system';
 import { migrateSchemaV16System } from '../../../src/model/schema-v17-system/migrate-v16';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures';
 
 const DIGEST = 'a'.repeat(64);
 

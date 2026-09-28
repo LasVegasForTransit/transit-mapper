@@ -7,7 +7,7 @@ import {
   setPatternStopSkipped,
   withPatternSections,
 } from '../../src/model/service-path-edits';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 const SOUTH: [number, number] = [-115.2, 36.1];
 const NORTH: [number, number] = [-115.2, 36.2];

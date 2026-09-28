@@ -10,7 +10,7 @@ import {
   withWayGrade,
   withWayProfile,
 } from '../../src/model/way-property-edits';
-import { aRoad, aStop, aSystem } from '../support/fixtures.test';
+import { aRoad, aStop, aSystem } from '../support/fixtures';
 
 describe('way property transform identity', () => {
   it('preserves the input for missing ways and named-way identities', () => {

@@ -4,8 +4,8 @@ import { MODES } from '@transitmapper/core/model/catalog';
 import { squareFootprint } from '@transitmapper/core/model/geo';
 import { createEditorStore } from '../../src/editor/store';
 import { buildPhysicalHandles } from '@transitmapper/core/render/buildFeatures';
-import { mustFind, required } from '../support/required.test';
-import { buildFeatures } from '../support/testRenderPresentation.test';
+import { mustFind, required } from '../support/required';
+import { buildFeatures } from '../support/testRenderPresentation';
 
 describe('stop and facility names flow into their map feature properties', () => {
   let store: ReturnType<typeof createEditorStore>;

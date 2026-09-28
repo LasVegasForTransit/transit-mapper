@@ -6,7 +6,7 @@ import {
   RECOVERY_HIT_SOURCE as HIT_SOURCE,
   RECOVERY_WAYS_SOURCE as WAYS_SOURCE,
   recoveryHarness,
-} from './support/render-source-error-recovery.test';
+} from './support/render-source-error-recovery';
 
 describe('render source error recovery coordinator', () => {
   it('settles only after a scheduled renderer-source heal completes', async () => {

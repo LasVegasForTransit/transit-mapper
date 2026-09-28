@@ -2,7 +2,7 @@
 
 ## The layout condition
 
-```
+```text
 (max-width: 767px), (max-height: 500px)
 ```
 
@@ -50,7 +50,7 @@ workbench sit flush against the screen's edges, full width, separated from
 the map by a hairline border rather than a shadow. The map owns the band
 between them, and nothing overlaps anything else.
 
-```
+```text
 ┌───────────────────────────────────────┐
 │ ▤  Untitled system   Network ⌄   ◈  ⋯ │  .compact-top-bar — 48px, flush, no radius
 ├───────────────────────────────────────┤
@@ -103,7 +103,7 @@ never rise above the top bar.
 The map is full-bleed behind the chrome, so it has no idea any of it is there.
 Four custom properties in `packages/workspace/src/workbench.css` say what it covers:
 
-```
+```text
 --map-pad-top  --map-pad-bottom  --map-pad-left  --map-pad-right
 ```
 

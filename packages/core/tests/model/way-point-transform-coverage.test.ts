@@ -7,7 +7,7 @@ import {
   moveWayPoint,
   straightenWay,
 } from '../../src/model/way-point-edits';
-import { aRoad, aStop, aSystem } from '../support/fixtures.test';
+import { aRoad, aStop, aSystem } from '../support/fixtures';
 
 describe('way point transform identity', () => {
   it('preserves the input for missing, invalid, equal, and protected point edits', () => {

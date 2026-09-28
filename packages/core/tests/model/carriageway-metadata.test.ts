@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { combineCarriageways } from '../../src/model/carriageway-edits';
 import { armRefKey, laneRefKey } from '../../src/model/components';
 import { defaultProfileFor, makeOneWay } from '../../src/model/profile';
-import { aRoad, aSystem } from '../support/fixtures.test';
+import { aRoad, aSystem } from '../support/fixtures';
 
 describe('carriageway metadata', () => {
   it('refuses one-way pairs that run in the same physical direction', () => {

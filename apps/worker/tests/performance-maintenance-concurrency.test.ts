@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runScheduledMaintenance } from '../src/performance-maintenance';
-import { sampleRow, TestPerformanceDatabase } from './support/performance-maintenance-d1.test';
+import { sampleRow, TestPerformanceDatabase } from './support/performance-maintenance-d1';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AUGUST_10 = Date.UTC(2026, 7, 10);

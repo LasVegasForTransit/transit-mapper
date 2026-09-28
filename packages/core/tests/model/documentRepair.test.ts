@@ -11,7 +11,7 @@ import { findMismatchedTypeJunctions, validateSystem } from '../../src/model/val
 import type { Node } from '../../src/model/system';
 import { patternLegs } from '../../src/model/geo';
 import { servicePattern } from '../../src/model/line-service';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures';
 
 /** A road running east-west and a rail line running north-south, both with a
  *  control point at the same coordinate. */

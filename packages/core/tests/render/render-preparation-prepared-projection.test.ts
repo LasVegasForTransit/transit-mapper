@@ -18,7 +18,7 @@ import {
   resetViewportIndexCacheDiagnostics,
   snapshotViewportIndexCacheDiagnostics,
 } from '../../src/render/viewport-index';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 const PRESENTATION: RenderPresentation = {
   bounds: { southwest: [-116, 35], northeast: [-114, 37] },

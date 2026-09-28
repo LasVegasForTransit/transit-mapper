@@ -5,7 +5,7 @@ import {
   viewportIndexFor,
   viewportIndexStats,
 } from '../../src/render/viewport-index';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures';
 
 describe('renderer viewport index', () => {
   it('returns a corridor whose segment crosses the viewport with both endpoints outside', () => {

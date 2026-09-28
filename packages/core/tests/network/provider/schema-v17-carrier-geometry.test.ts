@@ -7,7 +7,7 @@ import {
   alignmentPath,
   wayGeometrySource,
 } from '../../../src/network/schema-v17-system/carrier-geometry';
-import { aRoad, aSystem } from '../../support/fixtures.test';
+import { aRoad, aSystem } from '../../support/fixtures';
 
 function v17System(): TransitSystem {
   const way = aRoad('geo-way', [

@@ -11,7 +11,7 @@ import {
   RENDERER_LOD_ACCEPTANCE_SOURCE as SOURCE,
   validRendererLodAcceptanceManifest,
   writeRendererLodAcceptanceManifest,
-} from '../support/renderer-lod-acceptance.test';
+} from '../support/renderer-lod-acceptance';
 
 async function preparedManifest() {
   const directory = await mkdtemp(join(tmpdir(), 'renderer-lod-acceptance-'));

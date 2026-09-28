@@ -10,7 +10,7 @@ import type {
 } from '../../../src/network/entity-details-provider';
 import type { ResolvedContentRef } from '../../../src/network/resolved-content-reference';
 import type { ResolvedNetworkChunk } from '../../../src/network/resolved-network-chunk';
-import { waitForProviderAbort } from '../../support/provider-abort.test';
+import { waitForProviderAbort } from '../../support/provider-abort';
 
 const content: ResolvedContentRef = {
   kind: 'transit-dataset',

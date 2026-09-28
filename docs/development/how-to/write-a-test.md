@@ -47,11 +47,12 @@ Test support belongs in `tests/support/`. Test imports cross explicitly into
 test in `tests/share/claim.test.ts` imports its subject from
 `../../src/share/claim`.
 
-Every file under `tests/` uses exactly `<name>.test.ts` or
-`<name>.test.tsx`, including sequential verifiers and support modules.
-End-to-end files under `tests/e2e/` instead use exactly `<name>.spec.ts` or
-`<name>.spec.tsx`. A filename cannot contain another dot, and no other file
-type belongs under `tests/`.
+Every suite under `tests/` uses exactly `<name>.test.ts` or
+`<name>.test.tsx`, including sequential verifiers. Support modules under
+`tests/support/` are not suites, so they take an ordinary name such as
+`fixtures.ts`. End-to-end files under `tests/e2e/` instead use exactly
+`<name>.spec.ts` or `<name>.spec.tsx`. A filename cannot contain another dot,
+and `lvbt check filenames` rejects anything else under `tests/`.
 
 Write the case as ordinary isolated Vitest:
 

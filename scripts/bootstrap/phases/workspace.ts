@@ -97,7 +97,7 @@ export function runWorkspacePhase({ doctor, io }: PhaseContext): Promise<PhaseRe
       : {
           label: 'pnpm check',
           status: 'failed',
-          detail: 'run `pnpm check` to see what, then `pnpm check --fix`',
+          detail: 'run `pnpm check` to see what, then `pnpm check:fix`',
         },
   );
   if (!check.ok) ok = false;

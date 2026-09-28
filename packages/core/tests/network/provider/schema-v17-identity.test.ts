@@ -8,7 +8,7 @@ import {
   validateResolvedReference,
   validateSystem,
 } from '../../../src/network/schema-v17-system/identity';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures';
 
 /** These cases serve a document under its own ID, which is what a host does
  * when storage has no separate identity for it. */

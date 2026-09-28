@@ -9,7 +9,7 @@ import {
   setTurnRestriction,
 } from '../../src/model/network-node-edits';
 import type { LaneConnector } from '../../src/model/system';
-import { aRoad, aStop, aSystem } from '../support/fixtures.test';
+import { aRoad, aStop, aSystem } from '../support/fixtures';
 import { describe, expect, it } from 'vitest';
 
 describe('pure network node edits', () => {

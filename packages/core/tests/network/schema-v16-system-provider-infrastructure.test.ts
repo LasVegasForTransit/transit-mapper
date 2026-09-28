@@ -4,7 +4,7 @@ import type { LngLat, TransitSystem } from '../../src/model/system';
 import type { NetworkQuery } from '../../src/network/query';
 import { createSchemaV16SystemProvider } from '../../src/network/schema-v16-system-provider';
 import { boundedPhysicalWayIds } from '../../src/network/schema-v16-system/infrastructure';
-import { aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures.test';
+import { aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures';
 
 const worldQuery: NetworkQuery = {
   serviceTime: { kind: 'live' },

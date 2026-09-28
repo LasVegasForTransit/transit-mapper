@@ -8,7 +8,7 @@ import {
 import { migrateSchemaV16System } from '../../src/model/schema-v17-system/migrate-v16';
 import type { ContentDigest } from '../../src/source/value-types';
 import type { TransitSystem } from '../../src/transit/authored-system';
-import { aSystem } from '../support/fixtures.test';
+import { aSystem } from '../support/fixtures';
 
 function authoredSystem(): TransitSystem {
   const result = migrateSchemaV16System(

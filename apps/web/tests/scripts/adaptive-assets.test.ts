@@ -4,7 +4,7 @@ import {
   discoverReferencedBuildAssets,
   filterEssentialPrecacheEntries,
 } from '../../scripts/adaptive-assets';
-import { buildManifestFixture, createBuildManifestFixture } from '../support/build-manifest.test';
+import { buildManifestFixture, createBuildManifestFixture } from '../support/build-manifest';
 
 const manifest = createBuildManifestFixture();
 const { files, offlineRuntimeFiles } = buildManifestFixture;

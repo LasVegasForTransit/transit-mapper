@@ -10,8 +10,8 @@ import {
 import type { LngLat, Way } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
 import { LAYER_SPECS } from '../../src/map/layers';
-import { mustFind, required } from '../support/required.test';
-import { buildFeatures } from '../support/testRenderPresentation.test';
+import { mustFind, required } from '../support/required';
+import { buildFeatures } from '../support/testRenderPresentation';
 
 describe('placing a facility: a single click drops a point, and a complex boundary is opt-in', () => {
   it('facility tool starts in PLACE mode, not complex mode', () => {

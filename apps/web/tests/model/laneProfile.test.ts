@@ -24,7 +24,7 @@ import {
 } from '@transitmapper/core/model/components';
 import { offsetPolyline } from '@transitmapper/core/model/geo';
 import type { CrossSection, LngLat } from '@transitmapper/core/model/system';
-import { mustFind } from '../support/required.test';
+import { mustFind } from '../support/required';
 
 describe("a profile's lanes stay consistent through resizing, flipping, and one-way conversion", () => {
   const road = defaultProfileFor('road', 4);

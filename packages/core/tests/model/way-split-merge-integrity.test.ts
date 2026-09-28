@@ -3,7 +3,7 @@ import { flipProfile } from '../../src/model/profile';
 import type { LaneDirection, LngLat, Way } from '../../src/model/system';
 import { mergeWaysEndToEnd } from '../../src/model/way-merge-edits';
 import { splitWayAtIndex } from '../../src/model/way-split-edits';
-import { aRoad, aSystem } from '../support/fixtures.test';
+import { aRoad, aSystem } from '../support/fixtures';
 import { describe, expect, it, vi } from 'vitest';
 
 function laneId(way: Way, direction: LaneDirection): string {

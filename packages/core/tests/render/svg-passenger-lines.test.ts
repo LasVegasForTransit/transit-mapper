@@ -4,7 +4,7 @@ import { MODE_ORDER, WAY_TYPE_ORDER } from '../../src/model/catalog';
 import type { LngLat } from '../../src/model/system';
 import type { RenderViewOptions } from '../../src/render/buildFeatures';
 import { systemSvg } from '../../src/render/svg';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures';
 
 const CORRIDOR: LngLat[] = [
   [-115.22, 36.14],

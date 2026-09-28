@@ -68,7 +68,8 @@ identity. Defaults are enabled, 100 ordinary basis points (1%), and 500 release
 basis points (5%) until 24 hours after the build. A deployment can set
 `TRANSITMAPPER_PERFORMANCE_SAMPLING_ENABLED=0` as a build-time kill switch or
 set `TRANSITMAPPER_PERFORMANCE_ORDINARY_BASIS_POINTS` and
-`TRANSITMAPPER_PERFORMANCE_RELEASE_BASIS_POINTS` to integers from 0 through 10000. These are build inputs, not live Worker switches: changing one requires
+`TRANSITMAPPER_PERFORMANCE_RELEASE_BASIS_POINTS` to integers from 0 through 10000. These are build
+inputs, not live Worker switches: changing one requires
 a new web build and deployment. The client still refuses local, untagged, or
 wrong-origin builds and honors GPC/DNT regardless of these values.
 
@@ -383,7 +384,7 @@ and [Overpass commons guidance](https://dev.overpass-api.de/overpass-doc/en/pref
 Every push to an open pull request deploys the branch to its own URL and
 comments the link on the pull request:
 
-```
+```text
 https://transitmapper-pr-<number>.<subdomain>.workers.dev
 ```
 

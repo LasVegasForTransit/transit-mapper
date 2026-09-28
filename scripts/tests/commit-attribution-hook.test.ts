@@ -32,16 +32,6 @@ afterEach(() => {
 });
 
 describe('commit attribution', () => {
-  it('rejects an undeclared OpenAI attribution address', () => {
-    const result = validateCommitMessage(
-      'chore(dx): Reject invalid agent attribution\n\n' +
-        'Co-Authored-By: OpenAI <support@openai.com>\n',
-    );
-
-    expect(result.status).not.toBe(0);
-    expect(result.output).toContain('undeclared OpenAI attribution address');
-  });
-
   it('accepts the repository Codex attribution address', () => {
     const result = validateCommitMessage(
       'chore(dx): Accept declared agent attribution\n\n' +

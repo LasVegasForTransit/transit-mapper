@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Pattern, TransitSystem, Trip } from '../../../src/transit/authored-system';
 import { migrateSchemaV16System } from '../../../src/model/schema-v17-system/migrate-v16';
 import { projectPatternStopCalls } from '../../../src/network/schema-v17-system/stop-calls';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures';
 
 function v17System(): TransitSystem {
   const way = aRoad('call-way', [

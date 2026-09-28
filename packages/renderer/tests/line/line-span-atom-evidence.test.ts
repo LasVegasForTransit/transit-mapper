@@ -5,7 +5,7 @@ import {
   deriveExactCarrierLineSpanAtoms,
   readyLineSpanAtoms as readyAtoms,
   readyLineSpanDerivation as readyDerivation,
-} from '../support/line-span-atoms.test';
+} from '../support/line-span-atoms';
 
 describe('Line span atom contributor evidence', () => {
   it('coalesces active duplicate contributors and unions their evidence', () => {

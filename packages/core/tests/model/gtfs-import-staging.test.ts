@@ -6,7 +6,7 @@ import {
   gtfsImportServiceIds,
   materializeGtfsImportDraft,
 } from '../../src/model/gtfs-import-staging';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 function importedPieces(): GtfsImportResult {
   const way = aRoad('imported-way', [

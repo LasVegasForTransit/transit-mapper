@@ -74,7 +74,7 @@ editor documents, `SnapshotMapDriver` for reader systems.
 controller that flips between them, along with layer visibility, style
 recovery, and the document map definition every host shares.
 
-### Workspace
+### Map workspace
 
 `packages/workspace` owns React composition around one map surface.
 Hosts inject slots, state, and actions into `MapWorkspace` and Workbench.

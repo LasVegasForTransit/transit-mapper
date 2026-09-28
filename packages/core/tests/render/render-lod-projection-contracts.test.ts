@@ -12,7 +12,7 @@ import {
 import { widthPxAtZ14 } from '../../src/render/constants';
 import type { RenderPresentation } from '../../src/render/render-presentation';
 import { renderViewportTransitionMarginDegrees } from '../../src/render/render-viewport-margin';
-import { aPattern, aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures';
 
 const BOUNDS = {
   southwest: [-115.3, 36] as LngLat,

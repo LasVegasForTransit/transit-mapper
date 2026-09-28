@@ -9,7 +9,7 @@ import { findMismatchedTypeJunctions } from '@transitmapper/core/model/validate'
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
-import { mustFind, required } from '../support/required.test';
+import { mustFind, required } from '../support/required';
 
 function wayOf(id: string, typeId: string, points: [number, number][]) {
   return {

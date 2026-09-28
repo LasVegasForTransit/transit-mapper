@@ -6,7 +6,7 @@ import {
   indexServicePatternsByWay,
   laneServiceAssignmentKey,
 } from '../../src/render/service-lane-assignments';
-import { aPattern, aRoad, aService } from '../support/fixtures.test';
+import { aPattern, aRoad, aService } from '../support/fixtures';
 
 describe('service lane assignments', () => {
   it('keeps each directional run with the lane it actually rides', () => {

@@ -3,7 +3,7 @@ import { renderPresentationForViewport } from '@transitmapper/core/render/render
 import { aRoad, aSystem } from '@transitmapper/core/testing/fixtures';
 import { createCooperativeRenderJobScheduler } from '../src/projection/cooperative-render-job-scheduler';
 import { SRC_WAYS } from '../src/layers/constants';
-import { submitSynchronousCommittedFeatureProjection } from './support/committed-feature-projection.test';
+import { submitSynchronousCommittedFeatureProjection } from './support/committed-feature-projection';
 
 describe('committed feature projection', () => {
   it('waits for the Diagram Worker before publishing a schematic scene', async () => {

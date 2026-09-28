@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { LngLat } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
-import { mustFind, required } from '../support/required.test';
+import { mustFind, required } from '../support/required';
 
 describe('facility complexes: drawing a boundary first, then filling it with members', () => {
   let store: ReturnType<typeof createEditorStore>;

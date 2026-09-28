@@ -8,7 +8,7 @@ import {
   emptySystemFeatures,
   lineFeature,
   runUnits,
-} from './support/scene-draft.test';
+} from './support/scene-draft';
 
 describe('scene draft', () => {
   it('does not enumerate projected features until a private work unit runs', () => {

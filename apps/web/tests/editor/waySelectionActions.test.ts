@@ -4,7 +4,7 @@ import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
 import type { SelectionAction } from '@transitmapper/core/model/selectionActions';
 import { createEditorStore } from '../../src/editor/store';
 import { createSelectionActions } from '../../src/editor/actions';
-import { required } from '../support/required.test';
+import { required } from '../support/required';
 
 type Store = ReturnType<typeof createEditorStore>;
 

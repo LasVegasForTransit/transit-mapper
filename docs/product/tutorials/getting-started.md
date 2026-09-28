@@ -65,7 +65,8 @@ instead.
 1. Click the **Station** tool (or press `S`).
 2. Drag a rectangle over the track. The rectangle becomes the Station's
    boundary, with corner handles to reshape.
-3. With the Station selected, add platforms, or pick Building or Bus bay from the **Facility** tool's menu
+3. With the Station selected, add platforms, or pick Building or Bus bay from the **Facility**
+   tool's menu
    and drag structures directly onto the station's land. Anything drawn on
    the land belongs to the station automatically.
 

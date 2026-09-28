@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aPattern, aRoad, aService, aSystem } from '../../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../../support/fixtures';
 import { legacyDerivedId } from '../../../src/model/schema-v16-system/legacy-id';
 import { migrateSchemaV16System } from '../../../src/model/schema-v17-system/migrate-v16';
 

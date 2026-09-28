@@ -8,7 +8,7 @@ import {
   renderPointFeature as pointFeature,
   renderScene as scene,
   renderSourceFixture as sourceFixture,
-} from './support/render-scene-source-updater.test';
+} from './support/render-scene-source-updater';
 
 function acceptedScene(updater: { currentScene(): RenderScene | null }): RenderScene {
   const current = updater.currentScene();

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createEditorStore } from '../../src/editor/store';
 import { FINE_POINTER_TUNING } from '../../src/editor/input-tuning';
 import { KEY_BINDINGS, matchesKey, resolveBinding, type KeyContext } from '../../src/editor/keymap';
-import { required } from '../support/required.test';
+import { required } from '../support/required';
 
 function evt(o: Partial<KeyboardEvent>): KeyboardEvent {
   return o as KeyboardEvent;

@@ -10,11 +10,11 @@ import { SYSTEM_FEATURE_SOURCE_BY_NAME } from '../../src/system-feature-sources'
 
 export { emptySystemFeatures } from '../../src/system-feature-sources';
 
-export type SourceCall =
+type SourceCall =
   | { method: 'setData'; data: FeatureCollection }
   | { method: 'updateData'; data: GeoJsonSourceUpdate };
 
-export class RecordingSource implements GeoJsonSourceTarget {
+class RecordingSource implements GeoJsonSourceTarget {
   readonly calls: SourceCall[] = [];
   failNext = false;
 

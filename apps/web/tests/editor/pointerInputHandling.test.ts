@@ -7,7 +7,7 @@ import {
 } from '../../src/editor/input-tuning';
 import { resolvePointerIntent } from '../../src/editor/pointerIntent';
 import type { NamedWay } from '@transitmapper/core/model/system';
-import { required } from '../support/required.test';
+import { required } from '../support/required';
 
 // A fingertip contact patch is 9-11mm, ~24 CSS px on a phone. Every tolerance
 // the map hit-tests with has to grow with it, or a finger is asked to land

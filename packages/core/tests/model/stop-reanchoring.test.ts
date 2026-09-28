@@ -5,7 +5,7 @@ import {
   reanchorStopsToReplacementWays,
   replacedStopAnchors,
 } from '../../src/model/stop-reanchoring';
-import { aRoad, aStop, aSystem } from '../support/fixtures.test';
+import { aRoad, aStop, aSystem } from '../support/fixtures';
 
 describe('stop reanchoring', () => {
   it('replaces one way attachment without duplicating the destination way', () => {

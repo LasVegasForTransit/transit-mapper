@@ -14,7 +14,7 @@ import {
   pathPrefix,
   vehicleFeaturesAt,
 } from '../../../src/ui/onboarding/scene-geometry';
-import { ONBOARDING_TEST_PRESENTATION } from '../../support/onboarding-presentation.test';
+import { ONBOARDING_TEST_PRESENTATION } from '../../support/onboarding-presentation';
 
 describe('onboarding scene geometry', () => {
   it('reveals a route along its real path and settles on the exact geometry', () => {

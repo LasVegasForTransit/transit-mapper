@@ -11,7 +11,7 @@ import { defaultProfileFor, makeOneWay } from '../../src/model/profile';
 import { mergeWaysEndToEnd } from '../../src/model/way-merge-edits';
 import { removeWayFromSystem } from '../../src/model/way-removal';
 import { deleteWayStretch } from '../../src/model/way-stretch-edits';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures';
 
 describe('pure network edits', () => {
   it('merges end-to-end ways and reconciles every dependent entity', () => {

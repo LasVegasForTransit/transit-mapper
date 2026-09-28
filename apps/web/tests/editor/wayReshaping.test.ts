@@ -21,7 +21,7 @@ import type { LngLat, PatternLeg, Way } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
 import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
-import { mustFind } from '../support/required.test';
+import { mustFind } from '../support/required';
 
 /** A leg's covered stretch, as [from, to] fractions along its way. */
 const legFrom = (l: PatternLeg): number => legRange(l)[0];

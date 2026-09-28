@@ -8,7 +8,7 @@ import {
 } from '../../src/model/way-point-edits';
 import { nameWay, withWayProfile } from '../../src/model/way-property-edits';
 import { splitWayAtIndex, splitWayAtPosition } from '../../src/model/way-split-edits';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures';
 
 describe('pure way edits', () => {
   it('forms a real junction and keeps refs aligned through later point edits', () => {

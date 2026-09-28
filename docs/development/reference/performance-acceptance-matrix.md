@@ -31,7 +31,8 @@ capability is disabled.
 Chrome Stable runs headed at 1440 × 900, device-pixel ratio 1, four-times CPU
 slowdown, and Fast 4G for cold loads. Mobile uses 390 × 844 at device-pixel
 ratio 3. Synthetic touch events pass where real fingers do not, so the touch
-row below is a hardware row and no automated result substitutes for it. The exact budgets and repetition policy are in
+row below is a hardware row and no automated result substitutes for it. The exact budgets and
+repetition policy are in
 [Measure browser performance](../how-to/measure-performance.md).
 
 Web- and core-affecting pull requests run the repeated desktop RTC audit. The

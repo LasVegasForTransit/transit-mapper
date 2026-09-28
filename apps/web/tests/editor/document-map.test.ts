@@ -8,7 +8,7 @@ import {
   createProjectionWorker,
   DocumentDriverClock,
   TestDocumentMap,
-} from '../../../../packages/map/tests/support/document-map-driver.test';
+} from '../../../../packages/map/tests/support/document-map-driver';
 import {
   createEditorDocumentMap,
   DOCUMENT_MAP_DEFINITION,

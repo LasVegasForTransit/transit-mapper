@@ -7,7 +7,7 @@ import {
   renderScenePatchEntryCount,
   renderScenePatchSourceCount,
 } from '../src/render-scene-patch-journal';
-import { renderPointFeature, renderScene } from './support/render-scene-source-updater.test';
+import { renderPointFeature, renderScene } from './support/render-scene-source-updater';
 
 describe('render scene patch journal', () => {
   it('composes every disjoint transition after one bank resident revision', () => {

@@ -9,7 +9,7 @@ import {
   patternWayIds,
 } from '@transitmapper/core/model/geo';
 import type { LngLat, Service, TransitSystem, Way } from '@transitmapper/core/model/system';
-import { required } from '../support/required.test';
+import { required } from '../support/required';
 
 /** Narrows an optional lookup result without a non-null assertion: every call
  * site here knows from the fixture it just built that the value exists. */

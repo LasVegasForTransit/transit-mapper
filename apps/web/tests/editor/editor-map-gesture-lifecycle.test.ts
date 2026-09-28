@@ -6,7 +6,7 @@ import { createDocumentMapSource } from '../../src/editor/document-map-source';
 import { createEditorMapGesture } from '../../src/editor/editor-map-gesture';
 import { createEditorStore } from '../../src/editor/store';
 import { createProjectionOperationCounts } from '../../src/map/gestureProjection';
-import { required } from '../support/required.test';
+import { required } from '../support/required';
 
 describe('the editor map gesture lifecycle', () => {
   it.each([

@@ -22,9 +22,13 @@ So the work is converting rules into commands that fail.
 pnpm check
 ```
 
-Formatting, lint, typecheck, tests, the workspace contract, and the
-generated-types staleness check. That is the entire bar. `pnpm check --fix`
-repairs everything a machine can.
+Formatting, Markdown, the organization's repository rules, lint, typecheck,
+and tests, then this repository's own invariants through the `validate` task.
+That is the entire bar. `pnpm check:fix` repairs everything a machine can.
+
+The `check` script is the organization's, identical in every LVBT repository.
+Rules only TransitMapper needs are root scripts wired into `validate` in
+`turbo.json`, so they run inside the same command without changing it.
 
 One command means a red CI run maps to one local command. The output names
 the tool that failed and the command that resolves it.
@@ -135,12 +139,14 @@ portable contribution rule remains declared in `AGENTS.md`.
 
 ### file-names
 
-`check:filenames` gives module source and test trees one exact grammar. A file
-under `<module>/src/` has one stem and one extension, such as `store.ts`,
-`App.tsx`, or `0001_init.sql`. A file under `<module>/tests/` has exactly the
-form `<name>.test.ts` or `<name>.test.tsx`. End-to-end files under
-`tests/e2e/` use `<name>.spec.ts` or `<name>.spec.tsx`; `spec` is rejected
-outside that tree, and `test` is rejected inside it.
+`lvbt check filenames` gives module source and test trees one exact grammar. A
+file under `<module>/src/` has one stem and one extension, such as `store.ts`,
+`App.tsx`, or `0001_init.sql`. A suite under `<module>/tests/` has exactly the
+form `<name>.test.ts` or `<name>.test.tsx`, and test support under
+`tests/support/` takes an ordinary `<name>.<ext>` name, so a helper never
+reads as a suite. End-to-end files under `tests/e2e/` use `<name>.spec.ts` or
+`<name>.spec.tsx`; `spec` is rejected outside that tree, and `test` is
+rejected inside it.
 
 The normal command reads tracked and non-ignored untracked files from Git so
 new files fail before they are added. Pre-commit runs the same validator with
@@ -203,7 +209,7 @@ Reading the ledger from the working directory is also why ESLint does not run
 at layer 1. `lint-staged` runs from the repository root, where it would see
 none of them and report every frozen finding as a fresh failure.
 
-`check:debt` enforces the other half, against the Git merge base. The ledger
+`lvbt check debt` enforces the other half, against the Git merge base. The ledger
 may not grow — no file gains an entry, no count rises, and a ledger that
 existed on the base branch may not disappear. And a changed file that carries
 entries has to come out strictly better: fewer suppressed findings, or fewer
@@ -225,21 +231,19 @@ that carries debt, take some of it with you.
 ### test-layout
 
 Vitest globs alone cannot enforce the test boundary: a test placed elsewhere
-is silently skipped. `check:contract` already knows each workspace package
-and its `verify` script, so it also checks the paths those scripts and test
-runners use.
+is silently skipped. `lvbt check contract` already walks each workspace
+package, so it also checks where test material sits.
 
-It rejects test and spec filenames, conventional test directories named
-`test`, `tests`, `testing`, or `__tests__`, and direct `tsx` verifier entries
-outside the owning package's `tests/` tree. A generic `support/` directory
-does not identify its contents as test-only, so contributors keep semantic
-test support under `tests/support/` as a human rule.
+It rejects test and spec filenames, and conventional test directories named
+`test`, `tests`, `testing`, or `__tests__`, outside the owning package's
+`tests/` tree.
 
 **If it fires:** move the path under `<package>/tests/`, mirroring the source
 area it covers, and update imports to cross explicitly into `src/`.
 
-`check:filenames` independently validates every filename in the module trees
-before `check:contract` validates test placement and package ownership.
+`lvbt check filenames` independently validates every filename in the module
+trees, which is what keeps test support under `tests/support/`: anywhere else
+in `tests/`, a module has to be named as a suite.
 
 ### core-runtime-purity
 

@@ -5,7 +5,7 @@ import {
   createMapViewStore,
   createSelectionController,
 } from '@transitmapper/map';
-import { createFixtureMapDriver } from '../../support/fixture-map-driver.test';
+import { createFixtureMapDriver } from '../../support/fixture-map-driver';
 
 function createMapHarness() {
   const sources = new Set<string>();

@@ -6,7 +6,7 @@ import {
   preparedSceneDraft as prepared,
   scenePublicationInput as input,
   ScenePublicationFrameClock,
-} from './support/scene-publication.test';
+} from './support/scene-publication';
 
 /**
  * Source preparation calls into the renderer's own source machinery, so the

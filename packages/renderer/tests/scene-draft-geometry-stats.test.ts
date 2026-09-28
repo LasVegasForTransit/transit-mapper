@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { renderDomainIdentity, renderFeatureId } from '@transitmapper/core/render/render-identity';
 import { SRC_WAYS } from '../src/layers/constants';
 import { SYSTEM_FEATURE_SOURCE_BY_NAME } from '../src/system-feature-sources';
-import { controllerFixture, emptySystemFeatures } from './support/scene-draft.test';
+import { controllerFixture, emptySystemFeatures } from './support/scene-draft';
 
 describe('scene draft geometry stats', () => {
   it.each([

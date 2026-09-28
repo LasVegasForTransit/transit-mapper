@@ -14,7 +14,7 @@ import {
   buildManifestFixture,
   createBuildManifestFixture,
   createOfflineEditorManifestFixture,
-} from '../support/build-manifest.test';
+} from '../support/build-manifest';
 
 const manifest = createBuildManifestFixture();
 const { files, keys, offlineRuntimeFiles } = buildManifestFixture;

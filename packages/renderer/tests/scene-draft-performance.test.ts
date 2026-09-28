@@ -27,7 +27,7 @@ import {
   lineFeature,
   ManualFrameQueue,
   runUnits,
-} from './support/scene-draft.test';
+} from './support/scene-draft';
 
 // Scheduler timing is covered with a fake clock. These production-sized cases
 // instead constrain bounded work shape independently of machine contention.

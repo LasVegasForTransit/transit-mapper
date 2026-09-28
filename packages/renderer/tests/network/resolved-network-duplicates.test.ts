@@ -6,7 +6,7 @@ import {
   aLineSpanResult,
   anEmptyResolvedChunk,
   lineSpanPresentation,
-} from '../support/line-spans.test';
+} from '../support/line-spans';
 
 const duplicateKinds = [
   'Advisory',

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { preparePatternLegIndex } from '../../src/line/pattern-leg-index';
 import { prepareLineSpanInput } from '../../src/line/line-spans';
-import { aLineSpanChunk, aLineSpanProjection, aResolvedCarrier } from '../support/line-spans.test';
+import { aLineSpanChunk, aLineSpanProjection, aResolvedCarrier } from '../support/line-spans';
 
 function preparedInput(projection: ReturnType<typeof aLineSpanProjection>) {
   const result = prepareLineSpanInput(projection.result.chunks);

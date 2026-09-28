@@ -11,7 +11,7 @@ import {
   recomputeSourceBindingBaseline,
   validateAuthoredProvenanceRelationships,
 } from '../../../src/model/schema-v17-system/validate-provenance-relationships';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures';
 
 const DIGEST = 'a'.repeat(64);
 

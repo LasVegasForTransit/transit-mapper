@@ -6,7 +6,7 @@ import {
   aResolvedCarrier,
   aResolvedPatternLeg,
   anEmptyResolvedChunk,
-} from '../support/line-spans.test';
+} from '../support/line-spans';
 
 function geometryChunk(
   id: string,

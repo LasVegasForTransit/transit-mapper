@@ -24,8 +24,8 @@ import {
   mouseEvent,
   press,
   type FakePoint,
-} from '../support/fakeMap.test';
-import { required } from '../support/required.test';
+} from '../support/fakeMap';
+import { required } from '../support/required';
 
 function angleSnapErrorRad(
   p1: [number, number] | number[],

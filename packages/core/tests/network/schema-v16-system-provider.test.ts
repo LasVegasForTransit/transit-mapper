@@ -7,7 +7,7 @@ import {
   createSchemaV16SystemProvider,
   legacyDerivedId,
 } from '../../src/network/schema-v16-system-provider';
-import { aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aRoad, aService, aStop, aSystem } from '../support/fixtures';
 
 const allModesQuery: NetworkQuery = {
   serviceTime: { kind: 'live' },

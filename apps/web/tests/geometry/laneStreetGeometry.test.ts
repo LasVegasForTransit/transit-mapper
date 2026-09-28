@@ -23,7 +23,7 @@ import {
 import { wayLaneGeometry } from '@transitmapper/core/geometry/streets';
 import { patternLanePath } from '@transitmapper/core/geometry/vehicleLane';
 import type { LngLat, Way } from '@transitmapper/core/model/system';
-import { required } from '../support/required.test';
+import { required } from '../support/required';
 
 // beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
 // service using the store's default draftModeId ('lightRail', which is

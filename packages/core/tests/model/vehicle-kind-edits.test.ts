@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { setVehicleKinds } from '../../src/model/system';
 import type { VehicleKind } from '../../src/model/system';
-import { aService, aSystem } from '../support/fixtures.test';
+import { aService, aSystem } from '../support/fixtures';
 
 describe('vehicle kind record edits', () => {
   it('preserves the document when the vehicle-kind collection is unchanged', () => {

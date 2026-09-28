@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createSystemContentProvider } from '../../../src/network/system-content-provider';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures';
 
 function migratableSystem() {
   const way = aRoad('fallback-way', [

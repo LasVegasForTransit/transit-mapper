@@ -13,7 +13,7 @@ import {
   patternStats,
   serviceStats,
 } from '@transitmapper/core/sim/serviceStats';
-import { mustFind } from '../support/required.test';
+import { mustFind } from '../support/required';
 
 /** Whole-way legs in stored point order. */
 const legsOf = (...wayIds: string[]) => wayIds.map((wayId) => wholeLeg(wayId));

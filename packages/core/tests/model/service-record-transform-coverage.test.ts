@@ -12,7 +12,7 @@ import {
   setServiceVehicleKind,
 } from '../../src/model/system';
 import type { SchedulePeriod } from '../../src/model/system';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 describe('service record transform identity', () => {
   const way = aRoad('way', [

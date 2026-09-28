@@ -20,7 +20,7 @@ import {
   mountSurface,
   takeNext,
   type TestTheme,
-} from './support/map-surface-harness.test';
+} from './support/map-surface-harness';
 
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);

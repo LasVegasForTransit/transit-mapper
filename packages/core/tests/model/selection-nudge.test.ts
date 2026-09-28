@@ -1,5 +1,5 @@
 import { nudgeSelection } from '../../src/model/selection-nudge';
-import { aRoad, aStop, aSystem } from '../support/fixtures.test';
+import { aRoad, aStop, aSystem } from '../support/fixtures';
 import { describe, expect, it } from 'vitest';
 
 describe('multi-selection nudging', () => {

@@ -9,7 +9,7 @@ import {
   preparedSceneDraft as prepared,
   scenePublicationInput as input,
   ScenePublicationFrameClock as FrameClock,
-} from './support/scene-publication.test';
+} from './support/scene-publication';
 
 describe('scene publication', () => {
   it('keeps planning, lazy work, and source commit behind one settlement barrier', async () => {

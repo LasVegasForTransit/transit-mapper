@@ -1,29 +1,10 @@
 {
-  "scripts/check-docs-links.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 1
-    }
-  },
   "scripts/check-document-standards.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     },
     "sonarjs/cognitive-complexity": {
       "count": 1
-    }
-  },
-  "scripts/check-workspace-contract.ts": {
-    "complexity": {
-      "count": 2
-    },
-    "max-lines-per-function": {
-      "count": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 2
     }
   }
 }

@@ -5,7 +5,7 @@ import {
   aLineSpanProjection,
   aResolvedCarrier,
   aResolvedPatternLeg,
-} from '../support/line-spans.test';
+} from '../support/line-spans';
 
 describe('Line span candidate validation', () => {
   it.each([

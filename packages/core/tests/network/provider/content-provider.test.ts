@@ -3,7 +3,7 @@ import type { ContentRef } from '../../../src/network/content-reference';
 import type { ContentProvider } from '../../../src/network/content-provider';
 import type { NetworkQuery } from '../../../src/network/query';
 import type { ResolvedContentRef } from '../../../src/network/resolved-content-reference';
-import { waitForProviderAbort } from '../../support/provider-abort.test';
+import { waitForProviderAbort } from '../../support/provider-abort';
 
 const reference: ContentRef = {
   kind: 'transit-system',

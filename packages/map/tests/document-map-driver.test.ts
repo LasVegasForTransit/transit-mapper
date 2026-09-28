@@ -29,7 +29,7 @@ import {
   drainDocumentDriver,
   projectedWayFeatures,
   readySnapshot,
-} from './support/document-map-driver.test';
+} from './support/document-map-driver';
 
 const definition: MapDefinition = {
   id: 'document',

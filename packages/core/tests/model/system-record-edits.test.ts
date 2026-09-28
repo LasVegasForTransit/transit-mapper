@@ -15,7 +15,7 @@ import {
   setStopName,
 } from '../../src/model/system';
 import type { Facility, Group } from '../../src/model/system';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures';
 
 describe('stop record edits', () => {
   it('preserves the document when stop metadata already matches', () => {

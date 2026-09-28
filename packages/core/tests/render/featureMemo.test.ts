@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aRoad, aStop } from '../support/fixtures.test';
+import { aRoad, aStop } from '../support/fixtures';
 import { nearWaysForStops } from '../../src/render/featureMemo';
 
 function horizontalRoad(id: string, latitude: number) {

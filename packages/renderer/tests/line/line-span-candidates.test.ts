@@ -8,7 +8,7 @@ import {
   aLineSpanProjection,
   aResolvedCarrier,
   aResolvedPatternLeg,
-} from '../support/line-spans.test';
+} from '../support/line-spans';
 
 describe('Line span candidate preparation', () => {
   it('creates one Line-owned candidate for one logical Pattern leg across visible shards', () => {

@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Email **security@lasvegasfortransit.org** with what you found and how to
+Email **<security@lasvegasfortransit.org>** with what you found and how to
 reproduce it. Please do not open a public issue for anything exploitable.
 
 You should get an acknowledgement within a few days. This is a small

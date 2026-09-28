@@ -4,7 +4,7 @@ import { mergeWaysIntoCorridor } from '../../src/model/corridor-merge-edits';
 import { formCrossingJunctions } from '../../src/model/crossing-edits';
 import { offsetMeters, patternWayIds } from '../../src/model/geo';
 import type { LngLat } from '../../src/model/system';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 describe('related network transform coverage', () => {
   it('does not mint carriageway ids when separation is impossible', () => {

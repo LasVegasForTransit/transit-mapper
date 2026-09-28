@@ -5,13 +5,13 @@ import {
   aLineSpanProjection,
   aResolvedCarrier,
   aResolvedPatternLeg,
-} from '../support/line-spans.test';
+} from '../support/line-spans';
 import {
   aLineSpanCandidate as aCandidate,
   deriveExactCarrierLineSpanAtoms,
   readyLineSpanAtoms as readyAtoms,
   readyLineSpanDerivation as readyDerivation,
-} from '../support/line-span-atoms.test';
+} from '../support/line-span-atoms';
 
 describe('exact-carrier Line span atoms', () => {
   it('uses a shared Alignment as the passenger carrier across authored and physical paths', () => {

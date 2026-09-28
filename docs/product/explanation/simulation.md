@@ -96,7 +96,7 @@ not approximately, exactly. That comes from building the cycle **from** the
 headway rather than the other way round, which is also how an agency sizes a
 Service:
 
-```
+```text
 fleet   = ⌈(round trip + minimum layover) ÷ headway⌉
 cycle   = fleet × headway          ← a whole number of headways
 layover = (cycle − round trip) ÷ 2 ← the slack, spent at each terminal

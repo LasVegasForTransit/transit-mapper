@@ -17,7 +17,7 @@ import {
 import {
   createEditorMapAttachmentHarness as createHarness,
   stopDragEvent,
-} from '../support/editor-map-attachment-harness.test';
+} from '../support/editor-map-attachment-harness';
 
 describe('the editor map attachment', () => {
   it('installs its gesture layers before it accepts editor input', () => {

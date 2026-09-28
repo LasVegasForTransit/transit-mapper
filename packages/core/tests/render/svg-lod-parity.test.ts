@@ -10,7 +10,7 @@ import {
 } from '../../src/render/static-visual-scene';
 import { MODE_RENDER } from '../../src/style/catalogStyle';
 import { systemSvg } from '../../src/render/svg';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 const BOUNDS = {
   southwest: [-115.3, 36] as LngLat,
