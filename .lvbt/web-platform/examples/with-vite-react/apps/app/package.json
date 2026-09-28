@@ -17,10 +17,10 @@
     "react-dom": "catalog:"
   },
   "devDependencies": {
-    "@lasvegasfortransit/eslint-config": "0.3.3",
-    "@lasvegasfortransit/playwright-config": "0.3.3",
-    "@lasvegasfortransit/typescript-config": "0.3.3",
-    "@lasvegasfortransit/vitest-config": "0.3.3",
+    "@lasvegasfortransit/eslint-config": "0.4.5",
+    "@lasvegasfortransit/playwright-config": "0.4.5",
+    "@lasvegasfortransit/typescript-config": "0.4.5",
+    "@lasvegasfortransit/vitest-config": "0.4.5",
     "@playwright/test": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",

@@ -3,6 +3,13 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { syncAstroTypesBeforeLint } from './astro-sync.ts';
+import {
+  AGENT_WORKTREES,
+  consumerIgnoreWarnings,
+  syncConsumerIgnores,
+} from './consumer-ignores.ts';
+
 export interface WebPreset {
   formatVersion: number;
   preset: string;
@@ -145,12 +152,34 @@ export async function applyPreset(root: string, bundle: WebPreset, dryRun = fals
       .sort()
       .filter((name) => !(name in bundle.files)),
   };
-  const consumerChanged = await migrateLegacyPackageScope(root, dryRun);
-  if (!dryRun) await install(root, bundle);
+  const migrate = async (dry: boolean) =>
+    [
+      ...new Set([
+        ...(await migrateLegacyPackageScope(root, dry)),
+        ...(await syncConsumerIgnores(root, dry)),
+        ...(await syncAstroTypesBeforeLint(root, dry)),
+      ]),
+    ].sort();
+  // Planning first means a consumer file a migration can't read stops the update before any write.
+  const consumerChanged = await migrate(true);
+  for (const warning of await consumerIgnoreWarnings(root))
+    process.stderr.write(`warning: ${warning}\n`);
+  if (!dryRun) {
+    await migrate(false);
+    await install(root, bundle);
+  }
   return { ...plan, consumerChanged };
 }
 
-const SKIPPED_DIRECTORIES = new Set(['.git', 'node_modules', 'dist', '.turbo', 'test-results']);
+const SKIPPED_DIRECTORIES = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  '.turbo',
+  'test-results',
+  'playwright-report',
+  'blob-report',
+]);
 const LEGACY_PLATFORM_PACKAGES = [
   'cli',
   'eslint-config',
@@ -167,8 +196,14 @@ async function consumerFiles(root: string, relative = ''): Promise<string[]> {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (entry.name === '.lvbt' && relative === '') continue;
     if (entry.isDirectory()) {
-      if (!SKIPPED_DIRECTORIES.has(entry.name))
-        files.push(...(await consumerFiles(root, path.join(relative, entry.name))));
+      const directory = path.join(relative, entry.name);
+      // A nested checkout, such as an agent worktree under .claude/worktrees/, is another branch's,
+      // and so is a worktree folder whose .git is already gone.
+      const nested =
+        directory === path.join(...AGENT_WORKTREES.split('/')) ||
+        existsSync(path.join(root, directory, '.git'));
+      if (!SKIPPED_DIRECTORIES.has(entry.name) && !nested)
+        files.push(...(await consumerFiles(root, directory)));
       continue;
     }
     if (entry.isFile()) files.push(path.join(relative, entry.name));

@@ -14,7 +14,11 @@ runs:
       with:
         node-version-file: package.json
         cache: pnpm
+        registry-url: https://npm.pkg.github.com
+        scope: '@lasvegasfortransit'
 
     - name: Install dependencies
       shell: bash
       run: pnpm install --frozen-lockfile
+      env:
+        NODE_AUTH_TOKEN: ${{ github.token }}

@@ -8,6 +8,7 @@
     "dev": "astro dev --host 127.0.0.1 --port 4321",
     "preview": "astro preview --host 127.0.0.1 --port 4321",
     "lint": "eslint . --max-warnings 0",
+    "sync": "astro sync",
     "check-types": "astro check",
     "test": "vitest run",
     "test:e2e": "playwright test"
@@ -20,10 +21,10 @@
   },
   "devDependencies": {
     "@astrojs/check": "catalog:",
-    "@lasvegasfortransit/eslint-config": "0.3.3",
-    "@lasvegasfortransit/playwright-config": "0.3.3",
-    "@lasvegasfortransit/typescript-config": "0.3.3",
-    "@lasvegasfortransit/vitest-config": "0.3.3",
+    "@lasvegasfortransit/eslint-config": "0.4.5",
+    "@lasvegasfortransit/playwright-config": "0.4.5",
+    "@lasvegasfortransit/typescript-config": "0.4.5",
+    "@lasvegasfortransit/vitest-config": "0.4.5",
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",
     "eslint": "catalog:",

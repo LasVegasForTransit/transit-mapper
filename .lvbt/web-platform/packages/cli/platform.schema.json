@@ -1,0 +1,353 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LasVegasForTransit/repository-tooling/blob/main/packages/cli/platform.schema.json",
+  "title": "LVBT production platform manifest",
+  "description": "Everything one app needs in production on Cloudflare and GitHub. `pnpm preflight --production` checks it; `pnpm bootstrap --production` sets up what is missing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "name", "cloudflare"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path to this schema, for editor completion."
+    },
+    "version": {
+      "const": 1,
+      "description": "The manifest format. Always 1."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What people call the production site, such as lvwwd.org. Reports and token names use it."
+    },
+    "cloudflare": { "$ref": "#/$defs/cloudflare" },
+    "d1": {
+      "type": "array",
+      "description": "D1 databases the production Worker binds.",
+      "items": { "$ref": "#/$defs/d1" }
+    },
+    "r2": {
+      "type": "array",
+      "description": "R2 buckets the production Worker binds.",
+      "items": { "$ref": "#/$defs/r2" }
+    },
+    "turnstile": {
+      "type": "array",
+      "description": "Turnstile widgets, each feeding a site-key var and a secret on the Worker.",
+      "items": { "$ref": "#/$defs/turnstile" }
+    },
+    "access": {
+      "type": "array",
+      "description": "Cloudflare Access applications that put paths behind a sign-in, each feeding the team-domain and audience secrets the Worker checks.",
+      "items": { "$ref": "#/$defs/access" }
+    },
+    "email": {
+      "type": "array",
+      "description": "Domains the Worker sends email from, with the DNS records their provider needs.",
+      "items": { "$ref": "#/$defs/email" }
+    },
+    "secrets": {
+      "type": "array",
+      "description": "Secret values, on the Worker or in a GitHub environment. Values never appear in this file.",
+      "items": { "$ref": "#/$defs/secret" }
+    },
+    "vars": {
+      "type": "array",
+      "description": "Plain-text Worker vars that must be in the wrangler config's vars.",
+      "items": { "$ref": "#/$defs/var" }
+    },
+    "github": { "$ref": "#/$defs/github" },
+    "forbidden": {
+      "type": "array",
+      "description": "Names that must never be set in production, as a secret or a var.",
+      "items": { "$ref": "#/$defs/forbidden" }
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$",
+      "description": "An environment name in capitals, such as RESEND_API_KEY."
+    },
+    "use": {
+      "enum": ["live", "future"],
+      "description": "live: a feature people use today needs it, so production is not ready without it. future: only a feature that is not built yet needs it, so it can wait."
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Numbered, click-by-click steps to find or create the value. Write each as one complete sentence. Never ask for a second copy before the first is pasted; the last step copies this value for the prompt.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "cloudflare": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accountId", "zone", "worker"],
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$",
+          "description": "The Cloudflare account that owns the Worker and the zone."
+        },
+        "zone": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "id"],
+          "properties": {
+            "name": { "type": "string", "pattern": "^[a-z0-9.-]+\\.[a-z]+$" },
+            "id": { "type": "string", "pattern": "^[0-9a-f]{32}$" }
+          }
+        },
+        "worker": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "The production Worker's name. It must match the wrangler config's name."
+        },
+        "wranglerConfig": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The production wrangler config, relative to this file. Defaults to wrangler.jsonc."
+        }
+      }
+    },
+    "d1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "name"],
+      "properties": {
+        "binding": { "$ref": "#/$defs/name" },
+        "name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "migrations": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The migrations directory, relative to this file. Every .sql file in it must be applied."
+        }
+      }
+    },
+    "r2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "name"],
+      "properties": {
+        "binding": { "$ref": "#/$defs/name" },
+        "name": { "type": "string", "pattern": "^[a-z0-9-]+$" }
+      }
+    },
+    "turnstile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "domains", "siteKeyVar", "secret"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The widget's name in the Cloudflare dashboard."
+        },
+        "domains": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^[a-z0-9.-]+\\.[a-z]+$" }
+        },
+        "mode": {
+          "enum": ["managed", "non-interactive", "invisible"],
+          "description": "Defaults to managed."
+        },
+        "siteKeyVar": {
+          "$ref": "#/$defs/name",
+          "description": "The var that carries the public site key. It must be listed in vars."
+        },
+        "secret": {
+          "$ref": "#/$defs/name",
+          "description": "The Worker secret that carries the widget's secret key. It must be listed in secrets."
+        }
+      }
+    },
+    "access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "destinations",
+        "identityProvider",
+        "allow",
+        "teamDomainSecret",
+        "audienceSecret"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The application's name in Zero Trust."
+        },
+        "destinations": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Host and path pairs such as example.org/admin and example.org/admin/*. A path does not cover the paths under it, and a wildcard does not cover its parent, so list both.",
+          "items": { "type": "string", "pattern": "^[a-z0-9.-]+\\.[a-z]+(/\\S*)?$" }
+        },
+        "sessionDuration": {
+          "type": "string",
+          "pattern": "^[0-9]+(m|h)$",
+          "description": "How long a sign-in lasts, such as 24h. Defaults to 24h."
+        },
+        "identityProvider": {
+          "enum": ["google-apps", "onetimepin"],
+          "description": "google-apps is Google Workspace; onetimepin emails a code."
+        },
+        "allow": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Who may sign in. Give exactly one.",
+          "properties": {
+            "googleGroup": {
+              "type": "string",
+              "pattern": "^[^@\\s]+@[a-z0-9.-]+\\.[a-z]+$",
+              "description": "A Google Workspace group address. Needs identityProvider google-apps."
+            },
+            "emailDomain": {
+              "type": "string",
+              "pattern": "^[a-z0-9.-]+\\.[a-z]+$",
+              "description": "Everyone with an address at this domain."
+            },
+            "emails": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "pattern": "^[^@\\s]+@[a-z0-9.-]+\\.[a-z]+$" }
+            }
+          }
+        },
+        "teamDomainSecret": {
+          "$ref": "#/$defs/name",
+          "description": "The Worker secret that carries the Zero Trust team domain. It must be listed in secrets."
+        },
+        "audienceSecret": {
+          "$ref": "#/$defs/name",
+          "description": "The Worker secret that carries the application's audience (AUD) tag. It must be listed in secrets."
+        }
+      }
+    },
+    "email": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain", "provider"],
+      "properties": {
+        "domain": {
+          "type": "string",
+          "pattern": "^[a-z0-9.-]+\\.[a-z]+$",
+          "description": "The domain in the From address."
+        },
+        "provider": {
+          "enum": ["resend"],
+          "description": "The sending service. It decides which DNS records are checked."
+        },
+        "region": {
+          "type": "string",
+          "pattern": "^[a-z]{2}-[a-z]+-[0-9]$",
+          "description": "The provider's sending region. Defaults to us-east-1."
+        },
+        "apiKeySecret": {
+          "$ref": "#/$defs/name",
+          "description": "The Worker secret that carries the provider's API key. It must be listed in secrets."
+        }
+      }
+    },
+    "secret": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "purpose"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What production uses it for, in one sentence."
+        },
+        "use": { "$ref": "#/$defs/use" },
+        "neededFor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The feature that stays broken without it, so the report can say so."
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Where the value is stored: worker, or github:<environment>. Defaults to worker.",
+          "items": { "type": "string", "pattern": "^(worker|github:[A-Za-z0-9_-]+)$" }
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://",
+          "description": "The page to open first. Setup offers to open it."
+        },
+        "steps": { "$ref": "#/$defs/steps" },
+        "generate": {
+          "type": "boolean",
+          "description": "Setup mints a random value instead of asking for one."
+        },
+        "sensitive": {
+          "type": "boolean",
+          "description": "false for a value that is not a credential, such as an account ID, a team domain, or an Access audience tag. Setup then asks for it with visible input and shows its value in the report and its output. Defaults to true: the value is typed hidden and never shown."
+        },
+        "from": {
+          "enum": ["cloudflare.accountId"],
+          "description": "Setup copies a value the manifest already knows."
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A regular expression a pasted value must match."
+        },
+        "patternHint": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What a valid value looks like, shown when a pasted value does not match."
+        }
+      }
+    },
+    "var": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "purpose"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "purpose": { "type": "string", "minLength": 1 },
+        "use": { "$ref": "#/$defs/use" },
+        "neededFor": { "type": "string", "minLength": 1 }
+      }
+    },
+    "github": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+          "description": "owner/name of the repository whose environments hold github: secrets."
+        }
+      }
+    },
+    "forbidden": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "reason"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why it must not be set, in one sentence the report prints."
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^(worker|github:[A-Za-z0-9_-]+)$" }
+        },
+        "severity": {
+          "enum": ["error", "warning"],
+          "description": "error fails the check; warning only reports it. Defaults to error."
+        }
+      }
+    }
+  }
+}

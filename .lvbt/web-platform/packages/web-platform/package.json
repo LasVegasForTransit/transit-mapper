@@ -1,6 +1,6 @@
 {
   "name": "@lasvegasfortransit/web-platform",
-  "version": "0.3.3",
+  "version": "0.4.5",
   "description": "Provider-neutral deployment, provisioning, and validation primitives for LVBT web repositories.",
   "license": "MIT",
   "type": "module",

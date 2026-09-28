@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -129,6 +129,51 @@ function packageFailures(root, directory) {
   return failures;
 }
 
+// Astro loads its configuration from the first of these it finds in the project's root.
+const ASTRO_CONFIGS = ['mjs', 'js', 'ts', 'mts', 'cjs', 'cts'].map((ext) => `astro.config.${ext}`);
+
+/**
+ * An Astro project depends on astro and has its own configuration. A library that only imports
+ * Astro's types, such as an integration or components, has nothing for `astro sync` to generate.
+ */
+function isAstroProject(root, directory, manifest) {
+  if (!manifest.dependencies?.astro && !manifest.devDependencies?.astro) return false;
+  return ASTRO_CONFIGS.some((name) => existsSync(path.join(root, directory, name)));
+}
+
+/**
+ * An Astro package generates its `astro:content` and environment types with `astro sync`. On a
+ * clean checkout, as in CI, those types don't exist until it runs, and type-aware lint rules fail
+ * on every module that imports them. So each Astro package declares a `sync` script, and the root
+ * turbo.json runs it before `lint`.
+ */
+function astroFailures(root, directories) {
+  const failures = [];
+  let astro = false;
+  for (const directory of directories) {
+    const manifest = JSON.parse(readFileSync(path.join(root, directory, 'package.json'), 'utf8'));
+    if (!isAstroProject(root, directory, manifest)) continue;
+    astro = true;
+    if (!manifest.scripts?.sync) {
+      failures.push(
+        `${directory}/package.json has no "sync" script to generate Astro's types before lint`,
+      );
+    }
+  }
+  if (!astro) return [];
+  let turbo;
+  try {
+    turbo = JSON.parse(readFileSync(path.join(root, 'turbo.json'), 'utf8'));
+  } catch {
+    return [...failures, 'turbo.json is missing or not plain JSON, so lint cannot run after sync'];
+  }
+  if (!turbo.tasks?.sync) failures.push('turbo.json has no "sync" task');
+  if (!turbo.tasks?.lint?.dependsOn?.includes('sync')) {
+    failures.push('turbo.json does not run "sync" before "lint"');
+  }
+  return failures;
+}
+
 function dependencyFailures(root, directory) {
   const manifest = JSON.parse(readFileSync(path.join(root, directory, 'package.json'), 'utf8'));
   const failures = [];
@@ -146,14 +191,16 @@ function dependencyFailures(root, directory) {
 
 export function checkContract({ cwd }) {
   const lines = [];
-  for (const directory of ['.', ...packageDirectories(cwd)]) {
+  const directories = packageDirectories(cwd);
+  for (const directory of ['.', ...directories]) {
     if (directory !== '.') lines.push(...packageFailures(cwd, directory));
     lines.push(...dependencyFailures(cwd, directory));
   }
+  lines.push(...astroFailures(cwd, directories));
   return {
     name: 'contract',
     ok: lines.length === 0,
     lines,
-    fix: 'add the missing script, move test material under tests/, or set the range to "catalog:" and add the version to pnpm-workspace.yaml',
+    fix: 'add the missing script, move test material under tests/, set the range to "catalog:" and add the version to pnpm-workspace.yaml, or run `pnpm standards:update` to wire an Astro package\'s "sync" task before lint',
   };
 }

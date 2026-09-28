@@ -19,3 +19,7 @@ apps/web/.perf-harness-dist/
 # so a new contributor had no protection at all.
 .claude/settings.local.json
 .claude/worktrees/
+test-results/
+playwright-report/
+blob-report/
+**/playwright/.cache/

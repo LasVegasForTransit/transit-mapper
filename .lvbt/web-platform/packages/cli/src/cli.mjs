@@ -2,8 +2,10 @@
 /**
  * The commands every LVBT repository runs the same way.
  *
- *   lvbt bootstrap  install, wire git hooks, run preflight
- *   lvbt preflight  confirm this machine can build and deploy the repository
+ *   lvbt bootstrap  install, wire git hooks, run preflight; with --production,
+ *                   also set up everything the platform manifest declares
+ *   lvbt preflight  confirm this machine can build and deploy the repository;
+ *                   with --production, also report production's readiness
  *   lvbt check      the shared repository-shape rules (filenames, contract, debt)
  *   lvbt deploy     build, then `wrangler deploy` for every app that has a config
  *
@@ -17,15 +19,19 @@ import { check } from './lib/check/index.mjs';
 import { bootstrap, deploy, preflight } from './lib/operate.mjs';
 
 const usage = `Usage:
-  lvbt bootstrap
-  lvbt preflight
-  lvbt check [filenames|contract|debt ...] [--staged]
+  lvbt bootstrap [--production [--filter <app>] [--rotate <SECRET>[,<SECRET>...]]]
+  lvbt preflight [--production [--filter <app>]]
+  lvbt check [filenames|contract|debt|platform ...] [--staged]
   lvbt deploy [--filter <app>] [--dry-run]
 
 Options:
-  --staged    For check filenames: check the staged tree instead of the working tree
-  --filter    For deploy: only the app directory named (for example apps/worker)
-  --dry-run   For deploy: build, then run wrangler deploy --dry-run
+  --production  For bootstrap: set up what platform.json declares. For preflight:
+                report whether production has it, without changing anything
+  --staged      For check filenames: check the staged tree instead of the working tree
+  --filter      For deploy and --production: only the app directory named (apps/site)
+  --rotate      For bootstrap --production: replace the named secrets' stored values
+                on every target. Without it, a value that is already set is kept
+  --dry-run     For deploy: build, then run wrangler deploy --dry-run
 `;
 
 const commands = { bootstrap, preflight, check, deploy };
