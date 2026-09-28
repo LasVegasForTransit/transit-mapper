@@ -1,6 +1,6 @@
 {
   "name": "@lasvegasfortransit/cli",
-  "version": "0.5.0",
+  "version": "0.5.2",
   "description": "The lvbt command every LVBT repository runs for bootstrap, preflight, and deploy, plus the production platform setup, the shared git hooks, and the lvbt-contributions agent plugin.",
   "license": "MIT",
   "type": "module",

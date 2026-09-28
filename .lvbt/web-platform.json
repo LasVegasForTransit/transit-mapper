@@ -1,9 +1,9 @@
 {
   "formatVersion": 1,
   "preset": "lvbt-web",
-  "release": "v0.5.0",
-  "commit": "cc7458f97c1699ea48633810298e4982d308f0ad",
-  "contentHash": "13d5ae98e03b50cb5419af95a197efc540d4af3daa0eefed0856806068273895",
+  "release": "v0.5.2",
+  "commit": "878cea0fd76851186e802eb36dede1d7a93d4776",
+  "contentHash": "2f05abb3a7998eb15c8fe816f7510bfbbb01c9bcfda07d706ef37c864e4d7bf9",
   "executables": [
     "examples/with-astro/.githooks/commit-msg",
     "examples/with-astro/.githooks/pre-commit",

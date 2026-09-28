@@ -276,6 +276,10 @@ export async function applyRelease(options: {
         'user.name=lvbt-bot',
         '-c',
         'user.email=noreply@lasvegasfortransit.org',
+        // The repository's own hooks are for people; installing dependencies can switch them on,
+        // and prepare-commit-msg runs even with --no-verify.
+        '-c',
+        'core.hooksPath=/dev/null',
         'commit',
         '--quiet',
         '--no-verify',
