@@ -4,7 +4,7 @@ import { aStop, aSystem } from '@transitmapper/core/testing/fixtures';
 import { decodeMapViewState } from '@transitmapper/views';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SHELL_MOUNTED_MARK } from '../../src/perf/startup-marks';
 import { ViewerApplication, type ViewerSessionResolver } from '../../src/viewer/viewer-application';
 
@@ -36,6 +36,14 @@ afterEach(() => {
   Reflect.deleteProperty(document, 'execCommand');
   performance.clearMarks();
   vi.unstubAllGlobals();
+});
+
+// Importing ViewerApplication starts loading its map surface in the
+// background. These tests render their own map, so nothing waits for that
+// import, and the file can finish while it is still loading. Waiting for the
+// same module keeps it from outliving the test environment.
+afterAll(async () => {
+  await import('../../src/viewer/viewer-map-surface');
 });
 
 describe('ViewerApplication', () => {

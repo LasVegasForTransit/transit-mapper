@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type SubmitEvent } from 'react';
 import type { LocalViewRecord } from '../views/local-view-library';
 import { copyViewLink } from '../views/view-link';
 import { publicUrl } from '../app/public-path';
@@ -31,7 +31,7 @@ interface RenameFormProps {
 function RenameForm({ view, onRename, onCancel }: RenameFormProps) {
   const [draft, setDraft] = useState(view.title);
   useEffect(() => setDraft(view.title), [view.title]);
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent) => {
     event.preventDefault();
     if (draft.trim()) onRename(draft);
   };

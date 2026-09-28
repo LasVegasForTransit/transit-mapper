@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
   type Dispatch,
-  type FormEvent,
+  type SubmitEvent,
   type SetStateAction,
 } from 'react';
 import type { LocalViewRecord } from '../views/local-view-library';
@@ -56,7 +56,7 @@ function useSavedViewCollection(options: CollectionOptions) {
     setCreateDraft(nextSavedViewTitle(views));
     setCreating(true);
   };
-  const create = async (event: FormEvent) => {
+  const create = async (event: SubmitEvent) => {
     event.preventDefault();
     if (!createDraft.trim()) return;
     try {

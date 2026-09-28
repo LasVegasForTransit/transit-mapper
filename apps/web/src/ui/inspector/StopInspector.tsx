@@ -85,7 +85,7 @@ interface StopHeaderProps {
   system: TransitSystem;
   served: Service[];
   stationName: string;
-  inputRef: RefObject<HTMLInputElement>;
+  inputRef: RefObject<HTMLInputElement | null>;
   setName: (id: string, name: string) => void;
   suggestName: (id: string) => void;
 }

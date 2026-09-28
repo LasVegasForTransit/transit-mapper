@@ -13,6 +13,7 @@ import {
 import {
   evaluateChunkSizes,
   isMapEngineChunkName,
+  isMapEngineWorkerChunkName,
   performanceChunkKind,
   type PerformanceChunkSize,
 } from '../../src/perf/chunkPolicy';
@@ -226,7 +227,7 @@ async function reportChunks(): Promise<PerformanceChunkSize[]> {
   return Promise.all(
     files.map(async (file) => {
       let moduleIds: string[] = [];
-      if (isMapEngineChunkName(file)) {
+      if (isMapEngineChunkName(file) || isMapEngineWorkerChunkName(file)) {
         try {
           const sourceMap = JSON.parse(
             await readFile(resolve(DIST_DIRECTORY, `${file}.map`), 'utf8'),

@@ -8,10 +8,5 @@
     "@typescript-eslint/no-deprecated": {
       "count": 5
     }
-  },
-  "tests/verify.test.ts": {
-    "@typescript-eslint/no-misused-spread": {
-      "count": 2
-    }
   }
 }
