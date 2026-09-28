@@ -25,10 +25,5 @@
     "sonarjs/cognitive-complexity": {
       "count": 2
     }
-  },
-  "turbo/generators/config.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
   }
 }

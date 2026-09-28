@@ -8,5 +8,11 @@
 // production scope is narrowed.
 {
   "extends": "./tsconfig.build.json",
-  "include": ["src", "tests", "vitest.config.ts"]
+  "compilerOptions": {
+    // eslint.config.ts registers @transitmapper/eslint-plugin's rules, and
+    // that package's `exports` point at TypeScript source whose modules import
+    // each other with a `.ts` suffix. Nothing here emits, which makes it legal.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src", "tests", "eslint.config.ts", "vitest.config.ts"]
 }

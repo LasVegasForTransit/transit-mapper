@@ -4,12 +4,18 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./configs": "./src/configs.ts"
   },
   "scripts": {
     "check-types": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@lasvegasfortransit/eslint-config": "file:../../.lvbt/web-platform/packages/eslint-config",
+    "eslint-plugin-react-hooks": "catalog:",
+    "globals": "catalog:"
   },
   "devDependencies": {
     "@lasvegasfortransit/typescript-config": "file:../../.lvbt/web-platform/packages/typescript-config",

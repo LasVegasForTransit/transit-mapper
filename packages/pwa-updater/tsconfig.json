@@ -3,5 +3,5 @@
 // no types in an editor and is rejected by type-aware lint.
 {
   "extends": "./tsconfig.build.json",
-  "include": ["src", "tests", "vitest.config.ts"]
+  "include": ["src", "tests", "eslint.config.ts", "vitest.config.ts"]
 }

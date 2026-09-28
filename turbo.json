@@ -45,7 +45,7 @@
     "lint": {
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/eslint.config.ts",
+        "$TURBO_ROOT$/lvbt-eslint-config.d.ts",
         "$TURBO_ROOT$/packages/eslint-plugin/src/**"
       ],
       "outputs": []

@@ -55,16 +55,7 @@ function documentPackage(answers: unknown, _config: unknown, plop: PlopTypes.Nod
   return `docs/development/reference/project-structure.md — added ${path}`;
 }
 
-/**
- * Generators exist so the checks have less to catch.
- *
- * Every template here emits something that already passes `pnpm check`:
- * required scripts present, catalog-referenced dependencies, a tsconfig
- * leaf, a lint config scope, and a documentation entry where the checks
- * demand one. Scaffolding by hand means discovering each of those from a
- * failure message instead.
- */
-export default function generator(plop: PlopTypes.NodePlopAPI): void {
+function addPackageGenerator(plop: PlopTypes.NodePlopAPI): void {
   plop.setGenerator('package', {
     description: 'A workspace package that already satisfies the workspace contract',
     prompts: [
@@ -100,6 +91,11 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
       },
       {
         type: 'add',
+        path: 'packages/{{name}}/eslint.config.ts',
+        templateFile: 'templates/package/eslint.config.ts.hbs',
+      },
+      {
+        type: 'add',
         path: 'packages/{{name}}/vitest.config.ts',
         templateFile: 'templates/package/vitest.config.ts.hbs',
       },
@@ -117,7 +113,9 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
       () => 'Package created. Run `pnpm install` so the workspace link exists, then `pnpm check`.',
     ],
   });
+}
 
+function addMigrationGenerator(plop: PlopTypes.NodePlopAPI): void {
   plop.setGenerator('migration', {
     description: 'The next D1 migration, numbered correctly',
     prompts: [
@@ -140,6 +138,19 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
     ],
   });
 
+  /** Numbers a new migration from the ones already present. */
+  plop.setHelper('nextMigrationNumber', () => {
+    const dir = 'apps/worker/src/migrations';
+    const numbers = readdirSync(dir)
+      .map((f) => /^(\d+)_/.exec(f)?.[1])
+      .filter((n): n is string => Boolean(n))
+      .map(Number);
+    const next = (numbers.length > 0 ? Math.max(...numbers) : 0) + 1;
+    return String(next).padStart(4, '0');
+  });
+}
+
+function addLintRuleGenerator(plop: PlopTypes.NodePlopAPI): void {
   plop.setGenerator('lint-rule', {
     description: 'A repository lint rule, its tests, and its documentation anchor',
     prompts: [
@@ -169,18 +180,22 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
         templateFile: 'templates/lint-rule/rule.test.ts.hbs',
       },
       () =>
-        'Rule created. Register it in packages/eslint-plugin/src/index.ts, scope it in eslint.config.js, and add the matching section to docs/development/explanation/enforcement-model.md — the meta.docs.url anchor points there.',
+        'Rule created. Register it in packages/eslint-plugin/src/index.ts, scope it in the eslint.config.ts of the package it is about, and add the matching section to docs/development/explanation/enforcement-model.md — the meta.docs.url anchor points there.',
     ],
   });
+}
 
-  /** Numbers a new migration from the ones already present. */
-  plop.setHelper('nextMigrationNumber', () => {
-    const dir = 'apps/worker/src/migrations';
-    const numbers = readdirSync(dir)
-      .map((f) => /^(\d+)_/.exec(f)?.[1])
-      .filter((n): n is string => Boolean(n))
-      .map(Number);
-    const next = (numbers.length > 0 ? Math.max(...numbers) : 0) + 1;
-    return String(next).padStart(4, '0');
-  });
+/**
+ * Generators exist so the checks have less to catch.
+ *
+ * Every template here emits something that already passes `pnpm check`:
+ * required scripts present, catalog-referenced dependencies, a tsconfig
+ * leaf, a lint config, and a documentation entry where the checks
+ * demand one. Scaffolding by hand means discovering each of those from a
+ * failure message instead.
+ */
+export default function generator(plop: PlopTypes.NodePlopAPI): void {
+  addPackageGenerator(plop);
+  addMigrationGenerator(plop);
+  addLintRuleGenerator(plop);
 }
