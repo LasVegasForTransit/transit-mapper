@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { systemBounds } from '../../src/model/geo/bounds';
-import { aStation, aStop, aSystem } from '../support/fixtures.test';
+import { aStation, aStop, aSystem } from '../support/fixtures';
 
 describe('system bounds', () => {
   it('includes Stops and Station footprints and platforms', () => {

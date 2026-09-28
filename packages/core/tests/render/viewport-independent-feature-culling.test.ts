@@ -6,7 +6,7 @@ import {
   type RenderViewOptions,
 } from '../../src/render/buildFeatures';
 import { renderPresentationForViewport } from '../../src/render/render-presentation';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures';
 
 const VISIBLE_CENTER = [-122.446, 37.758] as const;
 const REMOTE_CENTER = [-122.419, 37.78] as const;

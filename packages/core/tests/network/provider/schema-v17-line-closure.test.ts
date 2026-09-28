@@ -3,7 +3,7 @@ import type { GeographicBounds } from '../../../src/geography/bounds';
 import type { TransitSystem } from '../../../src/transit/authored-system';
 import { migrateSchemaV16System } from '../../../src/model/schema-v17-system/migrate-v16';
 import { sameLineCarrierClosure } from '../../../src/network/schema-v17-system/line-closure';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures';
 
 const WIDE: GeographicBounds = {
   kind: 'ordinary',

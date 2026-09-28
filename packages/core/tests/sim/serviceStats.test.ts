@@ -12,7 +12,7 @@ import {
   patternLegs,
   wholeLeg,
 } from '../../src/model/geo';
-import { aPattern, aRoad, aStop } from '../support/fixtures.test';
+import { aPattern, aRoad, aStop } from '../support/fixtures';
 import {
   dwellStopsForPattern,
   effectiveVehicleKind,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { junctionGeometry } from '../../src/geometry/junctions';
 import { metersFromOrigin } from '../../src/model/geo';
 import type { LngLat, Node } from '../../src/model/system';
-import { aRoad } from '../support/fixtures.test';
+import { aRoad } from '../support/fixtures';
 
 function fourWayJunction() {
   const coord: LngLat = [-115.16, 36.14];

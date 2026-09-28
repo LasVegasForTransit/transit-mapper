@@ -6,7 +6,7 @@ import { getComponent, laneRefKey } from '@transitmapper/core/model/components';
 import { directionalLanes, isOneWay } from '@transitmapper/core/model/profile';
 import { primaryAnchor } from '@transitmapper/core/model/geo';
 import { osmElementsToNetwork, type OsmWayElement } from '@transitmapper/core/model/import';
-import { mustFind, required } from '../support/required.test';
+import { mustFind, required } from '../support/required';
 
 // beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
 // service using the store's default draftModeId ('lightRail', which is

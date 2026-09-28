@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { pointAtT, resolveWayPath } from '@transitmapper/core/model/geo';
 import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
-import { required } from '../support/required.test';
+import { required } from '../support/required';
 
 type Store = ReturnType<typeof createEditorStore>;
 

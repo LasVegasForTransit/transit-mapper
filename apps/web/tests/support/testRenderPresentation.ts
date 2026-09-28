@@ -14,9 +14,8 @@ import {
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 
 export { renderPresentationForViewport };
-export type { RenderViewOptions, ViewOptions };
 
-export const DEFAULT_TEST_RENDER_PRESENTATION = renderPresentationForViewport({
+const DEFAULT_TEST_RENDER_PRESENTATION = renderPresentationForViewport({
   center: [0, 0],
   zoom: 0,
   width: 1_440,

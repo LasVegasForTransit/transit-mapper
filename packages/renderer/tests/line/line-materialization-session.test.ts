@@ -4,7 +4,7 @@ import {
   createLineMaterializationSession,
 } from '../../src/line/line-materialization-session';
 import { prepareLineSpanCandidateContext } from '../../src/line/line-span-candidates';
-import { aLineSpanProjection } from '../support/line-spans.test';
+import { aLineSpanProjection } from '../support/line-spans';
 
 describe('Line materialization session', () => {
   it('materializes one ranked Line partition per advancement', async () => {

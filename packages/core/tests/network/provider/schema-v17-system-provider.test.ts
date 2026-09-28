@@ -6,7 +6,7 @@ import {
   createSchemaV17SystemProvider,
   SchemaV17SystemProviderError,
 } from '../../../src/network/schema-v17-system-provider';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures';
 
 function v17System(): TransitSystem {
   const way = aRoad('provider-way', [

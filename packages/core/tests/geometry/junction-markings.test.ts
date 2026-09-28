@@ -6,7 +6,7 @@ import {
   junctionStopBars,
 } from '../../src/geometry/junction-markings';
 import type { LngLat, Node } from '../../src/model/system';
-import { aRoad } from '../support/fixtures.test';
+import { aRoad } from '../support/fixtures';
 
 function controlledJunction(): {
   readonly node: Node;

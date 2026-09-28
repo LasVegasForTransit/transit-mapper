@@ -9,7 +9,7 @@ import {
   renderPointFeature,
   renderScene,
   renderSourceFixture,
-} from './support/render-scene-source-updater.test';
+} from './support/render-scene-source-updater';
 
 describe('render scene source transactions', () => {
   it('materializes a persistent full-upload collection in bounded CPU units before MapLibre', () => {

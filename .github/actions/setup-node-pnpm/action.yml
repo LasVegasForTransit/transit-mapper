@@ -1,7 +1,5 @@
 name: Setup Node + pnpm
-description: >
-  Install the repository's pinned pnpm, cache its store, and install from the
-  lockfile. Caller must `actions/checkout` first.
+description: Install the repository's pinned pnpm, cache its store, and install from the lockfile.
 
 runs:
   using: composite
@@ -21,6 +19,6 @@ runs:
 
     - name: Install dependencies
       shell: bash
+      run: pnpm install --frozen-lockfile
       env:
         NODE_AUTH_TOKEN: ${{ github.token }}
-      run: pnpm install --frozen-lockfile

@@ -4,7 +4,7 @@ import type { TransitSystem, Way } from '../../src/model/system';
 import type { DetailBand, NetworkQuery } from '../../src/network/query';
 import type { ResolvedNetworkChunk } from '../../src/network/resolved-network-chunk';
 import { createSchemaV16SystemProvider } from '../../src/network/schema-v16-system-provider';
-import { aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures.test';
+import { aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures';
 
 const regionQuery: NetworkQuery = {
   serviceTime: { kind: 'live' },

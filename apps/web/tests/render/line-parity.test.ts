@@ -58,7 +58,7 @@ import {
   createAttachOptions,
   DocumentDriverClock,
   TestDocumentMap,
-} from '../../../../packages/map/tests/support/document-map-driver.test';
+} from '../../../../packages/map/tests/support/document-map-driver';
 import { createEditorDocumentMap } from '../../src/editor/document-map';
 import { createEditorStore } from '../../src/editor/store';
 

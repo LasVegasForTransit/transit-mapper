@@ -22,7 +22,7 @@ import {
   projectionFixture,
   scopedProjection,
   STREET_VIEW,
-} from '../support/render-projection-scope-fixture.test';
+} from '../support/render-projection-scope-fixture';
 
 const DIAGNOSTIC_FEATURES: readonly SystemFeatureName[] = [
   'ways',

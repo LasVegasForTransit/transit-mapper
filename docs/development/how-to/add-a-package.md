@@ -7,15 +7,15 @@ pnpm check
 ```
 
 The generator asks for a name and a one-line purpose, and emits a package
-that already passes every check: the three required scripts, a Vitest
-project, a tsconfig leaf, and a placeholder test so `verify` has something
-to run. The generated test lives under `tests/`, beside the production
+that already passes every check: the three required scripts, a lint config,
+a Vitest project, a tsconfig leaf, and a placeholder test so `test` has
+something to run. The generated test lives under `tests/`, beside the production
 `src/` tree rather than inside it.
 
 ## What the generator is saving you from
 
-`check:contract` requires every package to declare `lint`, `typecheck` and
-`verify`. That is not bureaucracy — a package missing one is skipped by
+`lvbt check contract` requires every package to declare `lint`,
+`check-types`, and `test`. That is not bureaucracy — a package missing one is skipped by
 Turborepo **without an error**, so CI passes while the package goes
 unchecked. That is how `apps/worker` reached production with no tests at
 all and nothing reporting it.
@@ -26,8 +26,10 @@ without that showing up as a change to `pnpm-workspace.yaml`.
 
 ## Adding a dependency
 
-Add the version to the `catalog:` block in `pnpm-workspace.yaml`, then
-reference it:
+If the organization's catalog already has it, reference it as it is. The
+standard's entries come first in `pnpm-workspace.yaml` and are never re-pinned
+here. Otherwise add the version after them, with this repository's own
+entries, then reference it:
 
 ```json
 "dependencies": { "some-library": "catalog:" }

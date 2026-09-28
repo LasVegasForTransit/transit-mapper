@@ -5,8 +5,8 @@ import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { resolveWayPath } from '@transitmapper/core/model/geo';
 import { FEATURE_INPUT_ROLE } from '@transitmapper/core/render/featureInputs';
 import { createEditorStore } from '../../src/editor/store';
-import { required } from '../support/required.test';
-import { buildFeatures } from '../support/testRenderPresentation.test';
+import { required } from '../support/required';
+import { buildFeatures } from '../support/testRenderPresentation';
 
 describe('map rendering skips recomputation when nothing rendering-relevant changed', () => {
   describe('resolveWayPath caches its computed path per way object, which is what keeps dragging smooth', () => {

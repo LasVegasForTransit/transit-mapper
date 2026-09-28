@@ -9,7 +9,7 @@ Everything else here is convention, held up by review.
 
 ## Subject
 
-```
+```text
 type(optional-scope): description
 ```
 
@@ -63,7 +63,7 @@ Worth including when it applies:
 
 A `fix` whose body carries the reasoning:
 
-```
+```text
 fix: typecheck the test suite, which never had been
 
 apps/web/tsconfig.json includes only "src", so the 3,202-line verify.ts
@@ -76,7 +76,7 @@ include reports 28, but 18 are artefacts of the config itself.
 
 A `feat` that records a rejected alternative:
 
-```
+```text
 feat: add pnpm preflight, which catches a stale node_modules
 
 Named preflight, not doctor. `doctor` is a built-in pnpm subcommand and a
@@ -88,7 +88,7 @@ looked like it passed because pnpm's own diagnostics ran instead.
 
 A commit written with help from a coding agent ends with a trailer naming it:
 
-```
+```text
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ```
 

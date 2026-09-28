@@ -6,13 +6,13 @@ import { describe, expect, it } from 'vitest';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '../../src/model/catalog';
 import { wholeLeg, wholeLegs, oneSection } from '../../src/model/geo';
 import { wayById } from '../../src/model/geo/wayPath';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures';
 import type { Pattern, Service } from '../../src/model/system';
 import { buildFeatures, type RenderViewOptions } from '../../src/render/buildFeatures';
 import {
   OVERVIEW_TEST_PRESENTATION,
   STREET_TEST_PRESENTATION,
-} from '../support/render-presentation.test';
+} from '../support/render-presentation';
 
 const NETWORK_VIEW: RenderViewOptions = {
   viewMode: 'network',

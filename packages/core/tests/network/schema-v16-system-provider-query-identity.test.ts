@@ -8,7 +8,7 @@ import {
   legacyDerivedId,
 } from '../../src/network/schema-v16-system-provider';
 import { networkQueryDigest } from '../../src/network/schema-v16-system/identity';
-import { aSystem } from '../support/fixtures.test';
+import { aSystem } from '../support/fixtures';
 
 const allModesQuery: NetworkQuery = {
   serviceTime: { kind: 'live' },

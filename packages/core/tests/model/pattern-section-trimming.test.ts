@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { oneSection, stretchLeg, wholeLeg } from '../../src/model/geo';
 import { trimPatternSectionsTo } from '../../src/model/pattern-section-trimming';
-import { aRoad } from '../support/fixtures.test';
+import { aRoad } from '../support/fixtures';
 
 const SOUTH_WEST: [number, number] = [-115.2, 36.1];
 const NORTH_WEST: [number, number] = [-115.2, 36.2];

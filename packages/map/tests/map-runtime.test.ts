@@ -1,12 +1,7 @@
 /* eslint-disable max-lines -- Style lifecycle cases share one asynchronous MapLibre fake. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { StyleSpecification } from 'maplibre-gl';
-import {
-  createHarness,
-  deferred,
-  localStyle,
-  remoteStyle,
-} from './support/map-runtime-harness.test';
+import { createHarness, deferred, localStyle, remoteStyle } from './support/map-runtime-harness';
 
 afterEach(() => {
   vi.useRealTimers();

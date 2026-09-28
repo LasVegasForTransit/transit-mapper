@@ -3,7 +3,7 @@ import {
   splitWayAtIndexWithResult,
   splitWayAtPositionWithResult,
 } from '../../src/model/way-split-results';
-import { aRoad, aSystem } from '../support/fixtures.test';
+import { aRoad, aSystem } from '../support/fixtures';
 
 describe('way split results', () => {
   it('returns null without minting ids when a requested split is invalid', () => {

@@ -18,7 +18,7 @@ import {
 } from '@transitmapper/core/model/profile';
 import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
 import { createEditorStore } from '../../src/editor/store';
-import { mustFind, required } from '../support/required.test';
+import { mustFind, required } from '../support/required';
 
 describe('drawing a way creates that way and a service to run on it', () => {
   let store: ReturnType<typeof createEditorStore>;

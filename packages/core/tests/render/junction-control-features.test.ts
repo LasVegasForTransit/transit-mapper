@@ -7,7 +7,7 @@ import type { LngLat, Way } from '../../src/model/system';
 import { buildFeatures, type RenderViewOptions } from '../../src/render/buildFeatures';
 import { widthPxAtZ14 } from '../../src/render/constants';
 import { resolveStaticVisualScene } from '../../src/render/static-visual-scene';
-import { aRoad, aSystem } from '../support/fixtures.test';
+import { aRoad, aSystem } from '../support/fixtures';
 
 const BOUNDS = {
   southwest: [-115.3, 36] as LngLat,

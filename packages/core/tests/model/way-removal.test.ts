@@ -1,5 +1,5 @@
 import { removeWayFromSystem } from '../../src/model/way-removal';
-import { aRoad, aSystem } from '../support/fixtures.test';
+import { aRoad, aSystem } from '../support/fixtures';
 import { describe, expect, it } from 'vitest';
 
 describe('way removal', () => {

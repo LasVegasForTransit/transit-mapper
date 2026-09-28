@@ -4,11 +4,8 @@ import { modesForWayType, MODES, wayType } from '@transitmapper/core/model/catal
 import { serviceWayIds, squareFootprint } from '@transitmapper/core/model/geo';
 import { wayCapacity } from '@transitmapper/core/model/profile';
 import { createEditorStore } from '../../src/editor/store';
-import {
-  buildFeatures,
-  renderPresentationForViewport,
-} from '../support/testRenderPresentation.test';
-import { mustFind } from '../support/required.test';
+import { buildFeatures, renderPresentationForViewport } from '../support/testRenderPresentation';
+import { mustFind } from '../support/required';
 
 describe('grade tracks how a way sits relative to the ground, and defaults sensibly when absent', () => {
   let store: ReturnType<typeof createEditorStore>;

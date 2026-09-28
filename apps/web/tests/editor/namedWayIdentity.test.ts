@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createEditorStore } from '../../src/editor/store';
 import { patternLegs } from '@transitmapper/core/model/geo';
-import { mustFind, required } from '../support/required.test';
+import { mustFind, required } from '../support/required';
 
 /**
  * Draws a straight two-point way and applies a cross-section preset to it,

@@ -6,7 +6,7 @@ import {
   aLineSpanProjection,
   aResolvedCarrier,
   aResolvedPatternLeg,
-} from '../support/line-spans.test';
+} from '../support/line-spans';
 
 async function materializeLine(projection: ReturnType<typeof aLineSpanProjection>) {
   const prepared = prepareLineSpanCandidates(projection);

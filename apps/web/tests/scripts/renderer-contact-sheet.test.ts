@@ -5,7 +5,7 @@ import {
   rendererCaptureDescription,
   rendererLodAcceptanceContactSheetAppendix,
 } from '../../scripts/renderer-capture/capture-contact-sheet';
-import { rendererLodAcceptanceManifest } from '../support/renderer-contact-sheet.test';
+import { rendererLodAcceptanceManifest } from '../support/renderer-contact-sheet';
 
 describe('renderer contact sheet layout', () => {
   it('keeps the stable base regression corpus at exactly 116 captures', () => {

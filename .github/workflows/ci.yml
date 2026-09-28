@@ -57,6 +57,10 @@ jobs:
 
       - name: Check
         run: pnpm check
+        env:
+          # A pull request's checkout is a detached HEAD with no local `main`,
+          # and the lint-debt check skips itself when it cannot find its base.
+          DEBT_BASE_REF: origin/main
 
       # A generator exists so scaffolding is right by construction. This runs
       # them and checks the output still passes, so one cannot rot into

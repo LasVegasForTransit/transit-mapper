@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as workspace from '../src/index';
-import { matchMediaFor } from './support/media-environment.test';
+import { matchMediaFor } from './support/media-environment';
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react');

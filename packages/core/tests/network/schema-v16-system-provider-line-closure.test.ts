@@ -3,7 +3,7 @@ import { stretchLeg, wholeLeg } from '../../src/model/geo/servicePaths';
 import type { NetworkQuery } from '../../src/network/query';
 import type { ResolvedNetworkChunk } from '../../src/network/resolved-network-chunk';
 import { createSchemaV16SystemProvider } from '../../src/network/schema-v16-system-provider';
-import { aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aRoad, aService, aSystem } from '../support/fixtures';
 
 const worldQuery: NetworkQuery = {
   serviceTime: { kind: 'live' },

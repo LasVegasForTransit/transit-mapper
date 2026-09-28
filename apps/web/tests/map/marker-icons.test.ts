@@ -4,8 +4,8 @@ import { wayById } from '@transitmapper/core/model/geo';
 import { createEditorStore } from '../../src/editor/store';
 import { HANDLE_ICON } from '@transitmapper/renderer/layers';
 import { buildHandles } from '@transitmapper/core/render/buildFeatures';
-import { required } from '../support/required.test';
-import { buildFeatures } from '../support/testRenderPresentation.test';
+import { required } from '../support/required';
+import { buildFeatures } from '../support/testRenderPresentation';
 
 // beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
 // service using the store's default draftModeId ('lightRail', which is

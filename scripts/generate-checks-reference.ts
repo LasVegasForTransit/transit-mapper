@@ -23,19 +23,74 @@ interface Check {
 }
 
 /**
- * The registry. Adding a check to `pnpm check` without adding it here fails
- * the staleness check, which is the point.
+ * The registry, in the order `pnpm check` reaches each check. The first rows
+ * are the organization's standard `check` script; everything from
+ * `standards:check` on is this repository's own, wired as dependencies of the
+ * `validate` task in turbo.json. Adding one there without adding it here
+ * fails the staleness check, which is the point.
+ *
+ * A `fix` is written as it should render: commands carry their own backticks.
  */
 const CHECKS: Check[] = [
   {
     command: 'format:check',
     fails: 'a file is not Prettier-formatted',
-    fix: 'pnpm format',
+    fix: '`pnpm format`',
+  },
+  {
+    command: 'markdownlint-cli2',
+    fails:
+      'a Markdown file breaks a markdownlint rule, or a relative link or anchor does not resolve',
+    fix: '`pnpm check:fix` repairs what it can; correct the link, or write the page it points at',
+  },
+  {
+    command: 'lvbt check filenames',
+    fails:
+      'a file under a module src/ or tests/ tree does not follow its filename contract, including test support under tests/support/, which takes ordinary source names',
+    fix: 'rename the file and update its imports',
+  },
+  {
+    command: 'lvbt check contract',
+    fails:
+      'a package is missing a required task, pins a version outside the catalog, or keeps test material outside its tests/ directory',
+    fix: 'add the script, use the catalog, or move the test under the owning package tests/ tree',
+  },
+  {
+    command: 'lvbt check debt',
+    fails:
+      'a suppression ledger gained an entry, or a suppressed file was changed without shrinking',
+    fix: 'fix the finding rather than recording it, then `eslint --prune-suppressions`',
+  },
+  {
+    command: 'lvbt check platform',
+    fails: 'a platform.json does not match the schema the CLI ships',
+    fix: 'correct the fields it names',
   },
   {
     command: 'lint',
     fails: 'a lint rule is violated, including the repository-specific ones',
-    fix: 'pnpm lint:fix',
+    fix: '`pnpm check:fix`',
+  },
+  {
+    command: 'check-types',
+    fails: 'TypeScript rejects the code in any package',
+    fix: 'fix the type error',
+  },
+  {
+    command: 'test',
+    fails: 'a test fails, or packages/core drops below its coverage floor',
+    fix: 'fix the code, or the test if the test was wrong; add a test if coverage fell',
+  },
+  {
+    command: 'standards:check',
+    fails:
+      'the vendored standard under .lvbt/ was edited, or no longer matches its recorded release',
+    fix: '`pnpm standards:update`',
+  },
+  {
+    command: 'lint:root',
+    fails: 'repository tooling under scripts/ or turbo/ breaks a lint rule',
+    fix: '`pnpm lint:root --fix`',
   },
   {
     command: 'typecheck:root',
@@ -47,22 +102,6 @@ const CHECKS: Check[] = [
     fails:
       'a guard over repository configuration — the Turbo task graph, package boundaries, the commit hook — is violated',
     fix: 'restore the configuration the guard names; its failure message says what was dropped',
-  },
-  {
-    command: 'check:filenames',
-    fails: 'a file under a module src/ or tests/ tree does not follow its filename contract',
-    fix: 'rename the file and update its imports',
-  },
-  {
-    command: 'check:contract',
-    fails:
-      'a package is missing a required task, pins a version outside the catalog, or keeps test material outside its tests/ directory',
-    fix: 'add the script, use the catalog, or move the test under the owning package tests/ tree',
-  },
-  {
-    command: 'check:docs',
-    fails: 'a relative link or anchor in docs/ does not resolve',
-    fix: 'correct the link, or write the page it points at',
   },
   {
     command: 'check:migrations',
@@ -78,18 +117,12 @@ const CHECKS: Check[] = [
   {
     command: 'check:breakpoint',
     fails: 'the layout breakpoint in the stylesheet and the capability module disagree',
-    fix: "set --breakpoint-md to one more than COMPACT_LAYOUT_QUERY's max-width",
+    fix: "set `--breakpoint-md` to one more than `COMPACT_LAYOUT_QUERY`'s max-width",
   },
   {
     command: 'check:config',
     fails: 'a tool is configured under a name other than `<tool>.config.<ext>`',
     fix: 'rename the file, or record the tool in scripts/check-config.ts',
-  },
-  {
-    command: 'check:debt',
-    fails:
-      'a suppression ledger gained an entry, or a suppressed file was changed without shrinking',
-    fix: 'fix the finding rather than recording it, then `eslint --prune-suppressions`',
   },
   {
     command: 'check:deadcode',
@@ -115,27 +148,17 @@ const CHECKS: Check[] = [
   {
     command: 'check:reference',
     fails: 'this page no longer matches the registry it is generated from',
-    fix: 'pnpm gen:checks',
+    fix: '`pnpm gen:checks`',
   },
   {
     command: 'check:types',
     fails: 'worker-configuration.d.ts no longer matches wrangler.toml',
-    fix: 'pnpm --filter @transitmapper/worker types',
+    fix: '`pnpm --filter @transitmapper/worker types`',
   },
   {
     command: 'check:icons',
     fails: 'generated app icons no longer match their source and provenance',
-    fix: 'pnpm --filter @transitmapper/web generate:icons',
-  },
-  {
-    command: 'typecheck',
-    fails: 'TypeScript rejects the code in any package',
-    fix: 'fix the type error',
-  },
-  {
-    command: 'verify',
-    fails: 'a test fails, or packages/core drops below its coverage floor',
-    fix: 'fix the code, or the test if the test was wrong; add a test if coverage fell',
+    fix: '`pnpm --filter @transitmapper/web generate:icons`',
   },
 ];
 
@@ -147,9 +170,9 @@ const ELSEWHERE: Check[] = [
     fix: 'run the generator by hand and repair the template',
   },
   {
-    command: 'check:env (pre-push)',
+    command: 'check:env (bootstrap)',
     fails: 'node_modules disagrees with the lockfile',
-    fix: 'pnpm install --frozen-lockfile',
+    fix: '`pnpm install --frozen-lockfile`',
   },
   {
     command: 'gitleaks (pre-commit, CI)',
@@ -159,7 +182,7 @@ const ELSEWHERE: Check[] = [
   {
     command: 'pnpm preflight',
     fails: 'the toolchain, Cloudflare resources, or GitHub governance differ from the standard',
-    fix: 'pnpm bootstrap',
+    fix: '`pnpm bootstrap`',
   },
   {
     command: 'commit-msg hook',
@@ -169,7 +192,7 @@ const ELSEWHERE: Check[] = [
   {
     command: 'commit-msg hook',
     fails: 'a Co-Authored-By footer sits outside the footer block, or has no address',
-    fix: 'move it to the end of the message, as Name <email>',
+    fix: 'move it to the end of the message, as `Name <email>`',
   },
   {
     command: 'commit-msg hook',
@@ -179,7 +202,7 @@ const ELSEWHERE: Check[] = [
 ];
 
 function table(checks: Check[]): string {
-  const rows = checks.map((c) => `| \`${c.command}\` | ${c.fails} | \`${c.fix}\` |`);
+  const rows = checks.map((c) => `| \`${c.command}\` | ${c.fails} | ${c.fix} |`);
   return ['| Check | Fails when | Fix |', '| --- | --- | --- |', ...rows].join('\n');
 }
 
@@ -192,8 +215,8 @@ function render(): string {
 Everything \`pnpm check\` runs, what makes each one fail, and what fixes it.
 
 \`\`\`bash
-pnpm check        # all of it
-pnpm check --fix  # everything a machine can repair
+pnpm check      # all of it
+pnpm check:fix  # everything a machine can repair
 \`\`\`
 
 ${table(CHECKS)}
@@ -207,7 +230,9 @@ ${table(ELSEWHERE)}
 
 ## Adding a check
 
-Add it to \`pnpm check\` in \`package.json\`, then to the registry in
+The \`check\` script is the organization's and stays identical in every
+repository, so a check of this repository's own is a root script wired into
+the \`validate\` task in \`turbo.json\`. Add it there, then to the registry in
 \`scripts/generate-checks-reference.ts\`, then run \`pnpm gen:checks\`. The
 staleness check fails until this page matches, so the documentation cannot
 be the step that gets skipped.

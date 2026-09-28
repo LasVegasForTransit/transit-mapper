@@ -29,7 +29,7 @@ import {
   typicalWaitMinutes,
   vehiclesPerHour,
 } from '@transitmapper/core/sim/frequency';
-import { mustFind } from '../support/required.test';
+import { mustFind } from '../support/required';
 
 /** Whole-way legs in stored point order. */
 const legsOf = (...wayIds: string[]) => wayIds.map((wayId) => wholeLeg(wayId));

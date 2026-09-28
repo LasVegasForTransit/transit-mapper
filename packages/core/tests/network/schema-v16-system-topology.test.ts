@@ -5,7 +5,7 @@ import type {
   DerivedLegFragment,
   DerivedPattern,
 } from '../../src/network/schema-v16-system/patterns';
-import { aRoad, aService } from '../support/fixtures.test';
+import { aRoad, aService } from '../support/fixtures';
 
 function aCall(id: string, sequence: number, pathOrder: number): DerivedCall {
   return {

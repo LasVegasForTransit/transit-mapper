@@ -4,7 +4,7 @@ import { patternLegs } from '@transitmapper/core/model/geo';
 import { wayCrossings } from '@transitmapper/core/model/validate';
 import { effectiveConnectors } from '@transitmapper/core/geometry/junctions';
 import { parseSystem } from '@transitmapper/core/model/serialize';
-import { mustFind, required } from '../support/required.test';
+import { mustFind, required } from '../support/required';
 
 // beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
 // service using the store's default draftModeId ('lightRail', which is

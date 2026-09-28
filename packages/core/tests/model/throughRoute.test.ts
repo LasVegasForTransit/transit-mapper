@@ -9,7 +9,7 @@ import { servicePattern } from '../../src/model/line-service';
 import { throughRouteServices, throughRouteServicesAt } from '../../src/model/throughRoute';
 import type { TransitSystem } from '../../src/model/system';
 import { validateSystemQuick } from '../../src/model/validate';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 const west = aRoad('west', [
   [-115.21, 36.15],

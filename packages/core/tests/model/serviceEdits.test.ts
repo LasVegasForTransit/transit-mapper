@@ -7,7 +7,7 @@ import {
   patternPositionAt,
 } from '../../src/model/serviceEdits';
 import { oneSection, stretchLeg, wholeLeg } from '../../src/model/geo/servicePaths';
-import { aRoad } from '../support/fixtures.test';
+import { aRoad } from '../support/fixtures';
 import type { LngLat, Pattern, Way } from '../../src/model/system';
 
 describe('pattern positions', () => {

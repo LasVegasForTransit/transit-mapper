@@ -15,7 +15,7 @@ import {
   setGroupColor,
 } from '../../src/model/system';
 import type { Facility, Group } from '../../src/model/system';
-import { aSystem } from '../support/fixtures.test';
+import { aSystem } from '../support/fixtures';
 
 describe('facility record transform identity', () => {
   it('creates a typed facility without copying its geometry', () => {

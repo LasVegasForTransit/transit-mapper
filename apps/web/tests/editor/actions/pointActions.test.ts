@@ -8,7 +8,7 @@ import {
 } from '../../../src/editor/actions/pointActions';
 import { createEditorStore } from '../../../src/editor/store';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
-import { required } from '../../support/required.test';
+import { required } from '../../support/required';
 
 describe('service point actions', () => {
   it('requires the interaction-resolved occurrence position', () => {

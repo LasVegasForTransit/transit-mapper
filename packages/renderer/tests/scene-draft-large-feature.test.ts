@@ -20,7 +20,7 @@ import {
   emptySystemFeatures,
   flushFrameQueueUntilSettled,
   ManualFrameQueue,
-} from './support/scene-draft.test';
+} from './support/scene-draft';
 
 function hugeCoordinates(): [number, number][] {
   return Array.from(

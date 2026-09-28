@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { TransitSystem } from '../../src/model/system';
 import type { NetworkQuery } from '../../src/network/query';
 import { createSchemaV16SystemProvider } from '../../src/network/schema-v16-system-provider';
-import { aRoad, aSystem } from '../support/fixtures.test';
+import { aRoad, aSystem } from '../support/fixtures';
 
 const query: NetworkQuery = {
   serviceTime: { kind: 'live' },

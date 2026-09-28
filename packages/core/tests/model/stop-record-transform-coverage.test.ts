@@ -6,7 +6,7 @@ import {
   setStopName,
   withSuggestedStopName,
 } from '../../src/model/system';
-import { aStop, aSystem } from '../support/fixtures.test';
+import { aStop, aSystem } from '../support/fixtures';
 
 describe('stop record transform identity', () => {
   it('creates an anchored stop with the complete plural anchor shape', () => {

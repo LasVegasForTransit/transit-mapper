@@ -12,7 +12,7 @@ import {
 } from '@transitmapper/core/render/render-scene';
 
 // The renderer's own suite has an identical pair in
-// tests/support/render-scene-source-updater.test.ts. Sharing one copy would
+// tests/support/render-scene-source-updater.ts. Sharing one copy would
 // mean importing across a package boundary that only production code crosses.
 
 export function renderPointFeature(id: RenderFeatureId, x: number): RenderFeature<Point> {

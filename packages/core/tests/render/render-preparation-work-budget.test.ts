@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RenderPresentation } from '../../src/render/render-presentation';
 import { createRenderPreparationCoordinator } from '../../src/render/render-preparation';
 import { corridorViewportEntry } from '../../src/render/viewport-index-entries';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 const PRESENTATION: RenderPresentation = {
   bounds: { southwest: [-116, 35], northeast: [-114, 37] },

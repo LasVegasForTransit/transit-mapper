@@ -7,7 +7,7 @@ import {
   serviceSpanDependencyId,
 } from '../../src/render/dependency-index';
 import { dependencyInvalidationBetween } from '../../src/render/dependency-invalidation';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures';
 
 // A Service owns one path with the same durable identity. Lines carry public
 // naming and colour; they do not introduce a second path identifier.

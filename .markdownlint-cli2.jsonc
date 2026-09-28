@@ -1,0 +1,27 @@
+{
+  // Documentation is checked like code: every relative link and anchor must
+  // resolve, and prose wraps at the same 100 columns Prettier uses.
+  "customRules": ["markdownlint-rule-relative-links"],
+  "config": {
+    "default": true,
+    "MD013": { "line_length": 100, "code_blocks": false, "tables": false, "headings": false },
+    "MD033": false,
+    "relative-links": true,
+  },
+  "globs": ["**/*.md"],
+  "ignores": [
+    // Playwright output.
+    "**/test-results",
+    "**/playwright-report",
+    // Agent worktrees are other checkouts of this repository.
+    ".claude/worktrees",
+    "node_modules",
+    "**/node_modules",
+    "dist",
+    "**/dist",
+    ".turbo",
+    ".lvbt/web-platform",
+    "docs/superpowers",
+    "CHANGELOG.md",
+  ],
+}

@@ -5,7 +5,7 @@ import {
 } from '../../src/model/corridor-edits';
 import { offsetMeters, patternWayIds } from '../../src/model/geo';
 import type { LngLat } from '../../src/model/system';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures';
 
 describe('imported corridor reconciliation', () => {
   it('preserves the input system when a pattern has no compatible corridor to share', () => {

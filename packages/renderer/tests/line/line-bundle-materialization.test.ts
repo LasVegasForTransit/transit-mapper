@@ -5,8 +5,8 @@ import {
   aLineSpanProjection,
   aResolvedCarrier,
   aResolvedPatternLeg,
-} from '../support/line-spans.test';
-import { sharedCarrierProjection } from '../support/line-bundle-projections.test';
+} from '../support/line-spans';
+import { sharedCarrierProjection } from '../support/line-bundle-projections';
 interface TopologyProjectionOptions {
   readonly expressMode?: string;
   readonly expressGrade?: 'atGrade' | 'elevated';

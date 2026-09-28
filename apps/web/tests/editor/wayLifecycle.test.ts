@@ -7,7 +7,7 @@ import {
 } from '@transitmapper/core/model/geo';
 import type { LngLat } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
-import { mustFind } from '../support/required.test';
+import { mustFind } from '../support/required';
 
 // beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
 // service using the store's default draftModeId ('lightRail', which is

@@ -5,7 +5,7 @@ import type {
   ContentSearchResult,
 } from '../../../src/network/content-search-provider';
 import type { ResolvedContentRef } from '../../../src/network/resolved-content-reference';
-import { waitForProviderAbort } from '../../support/provider-abort.test';
+import { waitForProviderAbort } from '../../support/provider-abort';
 
 const content: ResolvedContentRef = {
   kind: 'transit-dataset',

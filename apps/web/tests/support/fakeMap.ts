@@ -13,7 +13,7 @@ export interface FakePoint {
 
 // MapLibre's default; the exact value doesn't matter here, only that a press
 // past it produces no `click` at all.
-export const CLICK_TOLERANCE_PX = 3;
+const CLICK_TOLERANCE_PX = 3;
 
 const CENTER_LNG = -115.17;
 const CENTER_LAT = 36.1;

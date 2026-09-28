@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NetworkQuery } from '../../src/network/query';
 import { createSchemaV16SystemProvider } from '../../src/network/schema-v16-system-provider';
-import { aSystem } from '../support/fixtures.test';
+import { aSystem } from '../support/fixtures';
 
 const query: NetworkQuery = {
   serviceTime: { kind: 'live' },

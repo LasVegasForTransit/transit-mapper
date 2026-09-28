@@ -9,7 +9,7 @@ import {
   type RenderViewOptions,
 } from '../../src/render/buildFeatures';
 import { renderPresentationForViewport } from '../../src/render/render-presentation';
-import { aService } from '../support/fixtures.test';
+import { aService } from '../support/fixtures';
 
 const view = (
   zoom: number,

@@ -11,7 +11,7 @@ import {
   aResolvedCarrier,
   aResolvedPatternLeg,
   lineSpanPresentation,
-} from '../support/line-spans.test';
+} from '../support/line-spans';
 
 const scenePresentation = renderPresentationForViewport({
   center: [0, 0],

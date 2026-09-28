@@ -54,7 +54,7 @@ locally-fetched tags to show `http://localhost:8787` instead of the
 production domain while running `pnpm worker:dev`, create a gitignored
 `apps/worker/.dev.vars`:
 
-```
+```dotenv
 SITE_URL=http://localhost:8787
 ```
 

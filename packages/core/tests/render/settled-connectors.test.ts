@@ -1,7 +1,7 @@
 import type { Feature } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import { buildFeatures } from '../../src/render/buildFeatures';
-import { aRoad, aSystem } from '../support/fixtures.test';
+import { aRoad, aSystem } from '../support/fixtures';
 
 function featureProperty(feature: Feature, name: string): unknown {
   return feature.properties?.[name];

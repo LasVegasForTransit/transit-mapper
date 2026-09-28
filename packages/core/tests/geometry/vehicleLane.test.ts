@@ -20,7 +20,7 @@ import {
 import { serviceLaneOnWay } from '../../src/model/geo/serviceLane';
 import { planService, runStateAt } from '../../src/sim/fleet';
 import { buildTimetable, roundTripMs, type VehicleMotionProfile } from '../../src/sim/timetable';
-import { aPattern, aRoad } from '../support/fixtures.test';
+import { aPattern, aRoad } from '../support/fixtures';
 import { wayLaneGeometry } from '../../src/geometry/streets';
 import { patternLanePath } from '../../src/geometry/vehicleLane';
 

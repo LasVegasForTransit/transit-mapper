@@ -15,7 +15,7 @@ import type {
   FeatureProjectionClient,
 } from '../src/workers/feature-projection-worker';
 import { emptySystemFeatures } from '../src/system-feature-sources';
-import { renderScene } from './support/render-scene-source-updater.test';
+import { renderScene } from './support/render-scene-source-updater';
 
 class ProjectionClock {
   private nextFrame = 1;

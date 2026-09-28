@@ -5,7 +5,7 @@ import {
   type RenderPreparationPlan,
   type RenderPreparationUnitMeasurement,
 } from '../../src/render/render-preparation';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 const WIDE_PRESENTATION: RenderPresentation = {
   bounds: { southwest: [-116, 35], northeast: [-114, 37] },

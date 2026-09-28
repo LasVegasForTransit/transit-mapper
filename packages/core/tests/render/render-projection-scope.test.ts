@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildFeatures, createFeatureBuildOperationCounts } from '../../src/render/buildFeatures';
 import { namedWayLabelDependencyId } from '../../src/render/dependency-index';
 import { planRenderProjectionScope } from '../../src/render/render-projection-scope';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 import {
   DISTRICT_VIEW,
   featureProperty,
@@ -10,7 +10,7 @@ import {
   scopedProjection,
   SCOPED_FEATURES,
   STREET_VIEW,
-} from '../support/render-projection-scope-fixture.test';
+} from '../support/render-projection-scope-fixture';
 
 describe('render projection scope planning', () => {
   it('maps a corridor edit to exact physical, service, junction, stop, and label candidates', () => {

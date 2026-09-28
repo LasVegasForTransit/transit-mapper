@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PatternLeg, TransitSystem } from '../../../src/transit/authored-system';
 import { migrateSchemaV16System } from '../../../src/model/schema-v17-system/migrate-v16';
 import { validateAuthoredInfrastructureRelationships } from '../../../src/model/schema-v17-system/validate-infrastructure-relationships';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../../support/fixtures';
 
 function infrastructureSystem(): TransitSystem {
   const way = aRoad('route-way', [

@@ -6,7 +6,7 @@ import {
   preparedSceneDraft as prepared,
   scenePublicationInput as input,
   ScenePublicationFrameClock,
-} from './support/scene-publication.test';
+} from './support/scene-publication';
 
 describe('scene publication continuity', () => {
   it('keeps one draft plan after a completed singleton overrun', async () => {

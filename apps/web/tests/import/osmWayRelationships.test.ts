@@ -8,7 +8,7 @@ import { getComponent, laneRefKey } from '@transitmapper/core/model/components';
 import { createEditorStore } from '../../src/editor/store';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type { NamedWay } from '@transitmapper/core/model/system';
-import { mustFind } from '../support/required.test';
+import { mustFind } from '../support/required';
 
 // Two primary-road ways meeting at a shared node, id 500. This is the base
 // crossroads fixture reused (and extended) across several import specs below.

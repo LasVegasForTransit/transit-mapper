@@ -11,7 +11,7 @@ import {
   lineFeature,
   pointFeature,
   runUnits,
-} from './support/scene-draft.test';
+} from './support/scene-draft';
 
 /** Publication tests stay separate from scene construction so the two failure
  * boundaries are reviewable: a draft can be valid yet stale, and a valid draft

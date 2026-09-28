@@ -9,7 +9,7 @@ import {
   mergePreparedRenderInvalidations,
   planPreparedRenderProjectionScope,
 } from '../../src/render/render-preparation-scope';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 const PRESENTATION: RenderPresentation = {
   bounds: { southwest: [-1, -1], northeast: [2, 2] },

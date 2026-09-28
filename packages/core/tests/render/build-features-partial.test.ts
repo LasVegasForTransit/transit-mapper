@@ -6,7 +6,7 @@ import {
   type RenderViewOptions,
   type SystemFeatures,
 } from '../../src/render/buildFeatures';
-import { STREET_TEST_PRESENTATION } from '../support/render-presentation.test';
+import { STREET_TEST_PRESENTATION } from '../support/render-presentation';
 
 const view: RenderViewOptions = {
   viewMode: 'infrastructure' as const,

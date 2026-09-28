@@ -2,8 +2,8 @@ import type { Feature } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import { wholeLeg } from '../../src/model/geo';
 import { buildFeatures, type SystemFeatures } from '../../src/render/buildFeatures';
-import { aRoad, aService, aSystem } from '../support/fixtures.test';
-import { OVERVIEW_TEST_PRESENTATION } from '../support/render-presentation.test';
+import { aRoad, aService, aSystem } from '../support/fixtures';
+import { OVERVIEW_TEST_PRESENTATION } from '../support/render-presentation';
 
 function featureProperty(feature: Feature, name: string): unknown {
   return feature.properties?.[name];

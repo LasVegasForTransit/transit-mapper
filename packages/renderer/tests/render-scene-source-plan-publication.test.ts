@@ -6,7 +6,7 @@ import {
   renderPointFeature,
   renderScene,
   renderSourceFixture,
-} from './support/render-scene-source-updater.test';
+} from './support/render-scene-source-updater';
 
 describe('render scene source plan publication', () => {
   it('retains the accepted CPU scene after source submission until publication', () => {

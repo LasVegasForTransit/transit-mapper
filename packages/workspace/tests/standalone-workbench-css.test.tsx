@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MapWorkspace } from '../src/map-workspace';
 import type { WorkspaceSlots } from '../src/workspace-slots';
-import { matchMediaFor } from './support/media-environment.test';
+import { matchMediaFor } from './support/media-environment';
 
 const WORKBENCH_CSS = readFileSync(resolve(process.cwd(), 'src/workbench.css'), 'utf8');
 const THEME_TOKENS = `

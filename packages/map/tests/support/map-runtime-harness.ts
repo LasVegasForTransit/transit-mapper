@@ -193,7 +193,7 @@ export class FakeMap {
   }
 }
 
-export class FakeResizeObserver implements MapRuntimeResizeObserver {
+class FakeResizeObserver implements MapRuntimeResizeObserver {
   observed: Element | undefined;
   disconnected = false;
 

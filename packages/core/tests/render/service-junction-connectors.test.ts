@@ -9,7 +9,7 @@ import { renderDomainIdentity } from '../../src/render/render-identity';
 import { resolveStaticVisualScene } from '../../src/render/static-visual-scene';
 import { renderFeatureDomainIdentities } from '../../src/render/system-render-scene';
 import type { LngLat, Node } from '../../src/model/system';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 function propertiesOf(feature: {
   readonly properties: Record<string, unknown> | null;

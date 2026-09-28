@@ -12,7 +12,7 @@ import {
   CURRENT_RENDERER_CAPTURE_SOURCE as CURRENT_SOURCE,
   LEGACY_RENDERER_CAPTURE_SOURCE as LEGACY_SOURCE,
   writeRendererLodAcceptance,
-} from '../support/renderer-contact-sheet.test';
+} from '../support/renderer-contact-sheet';
 
 async function writeCompletePhase(
   root: string,

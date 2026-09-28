@@ -14,7 +14,7 @@ import {
   SRC_SERVICES,
   SRC_VEHICLES,
 } from '@transitmapper/renderer/layers';
-import { ONBOARDING_TEST_PRESENTATION } from '../../support/onboarding-presentation.test';
+import { ONBOARDING_TEST_PRESENTATION } from '../../support/onboarding-presentation';
 
 interface MapOptions {
   style: unknown;

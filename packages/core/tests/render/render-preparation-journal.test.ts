@@ -7,7 +7,7 @@ import {
   createRenderPreparationCoordinator,
   planJournaledRenderPreparation,
 } from '../../src/render/render-preparation-update';
-import { aRoad, aSystem } from '../support/fixtures.test';
+import { aRoad, aSystem } from '../support/fixtures';
 
 describe('renderer preparation mutation journal', () => {
   it('returns the exact immutable entity delta recorded by a production mutation', () => {

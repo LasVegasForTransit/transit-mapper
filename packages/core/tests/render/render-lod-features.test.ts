@@ -13,7 +13,7 @@ import { widthPxAtZ14 } from '../../src/render/constants';
 import { featureCollectionStats } from '../../src/render/feature-stats';
 import type { RenderPresentation } from '../../src/render/render-presentation';
 import { createRenderTierStateResolver } from '../../src/render/render-presentation';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 const BOUNDS = {
   southwest: [-115.3, 36] as LngLat,

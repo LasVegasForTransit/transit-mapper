@@ -16,8 +16,8 @@ import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
 import { MODES } from '@transitmapper/core/model/catalog';
 import type { LngLat, PatternLeg, Way } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
-import { mustFind, required } from '../support/required.test';
-import { buildFeatures } from '../support/testRenderPresentation.test';
+import { mustFind, required } from '../support/required';
+import { buildFeatures } from '../support/testRenderPresentation';
 
 /** A leg's covered stretch, for assertions that used to read fromT/toT. */
 const legFrom = (l: PatternLeg): number => legRange(l)[0];

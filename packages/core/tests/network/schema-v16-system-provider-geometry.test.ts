@@ -3,7 +3,7 @@ import { wholeLeg } from '../../src/model/geo/servicePaths';
 import type { TransitSystem } from '../../src/model/system';
 import type { NetworkQuery } from '../../src/network/query';
 import { createSchemaV16SystemProvider } from '../../src/network/schema-v16-system-provider';
-import { aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures.test';
+import { aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures';
 
 const worldQuery: NetworkQuery = {
   serviceTime: { kind: 'live' },

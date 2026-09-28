@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Map as MapLibreMap, MapOptions, StyleSpecification } from 'maplibre-gl';
 import { createBaseStyleController } from '../src/index';
-import { FakeMap, localStyle, remoteStyle } from './support/map-runtime-harness.test';
+import { FakeMap, localStyle, remoteStyle } from './support/map-runtime-harness';
 
 describe('createBaseStyleController', () => {
   it('contains a rebuilt theme callback failure before later style listeners run', async () => {

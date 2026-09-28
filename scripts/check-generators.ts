@@ -83,13 +83,18 @@ function restoreTree(created: string[], originals: Map<string, string>): void {
   }
 }
 
-interface ContractResult {
+interface CheckResult {
   status: number | null;
   output: string;
 }
 
-function checkContract(): ContractResult {
-  const result = spawnSync('pnpm', ['check:contract'], {
+/**
+ * One rule of the organization's `lvbt check`. The rules are the standard's
+ * and tested there; these guards prove they still reach a package generated
+ * here, so a layout the generator could produce is one the check rejects.
+ */
+function lvbtCheck(rule: 'contract' | 'filenames'): CheckResult {
+  const result = spawnSync('pnpm', ['exec', 'lvbt', 'check', rule], {
     cwd: ROOT,
     encoding: 'utf8',
   });
@@ -97,41 +102,24 @@ function checkContract(): ContractResult {
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
-function assertContractRejects(expected: string): string {
-  const result = checkContract();
+function assertContractRejects(expected: string): void {
+  const result = lvbtCheck('contract');
   if (result.status === 0 || !result.output.includes(expected)) {
-    throw new Error(`check:contract did not reject ${expected}`);
+    throw new Error(`lvbt check contract did not reject ${expected}\n${result.output}`);
   }
-  return result.output;
-}
-
-function assertContractAccepts(description: string): void {
-  const result = checkContract();
-  if (result.status !== 0) {
-    throw new Error(`check:contract rejected ${description}\n${result.output}`);
-  }
-}
-
-function checkFilenames(): ContractResult {
-  const result = spawnSync('pnpm', ['check:filenames'], {
-    cwd: ROOT,
-    encoding: 'utf8',
-  });
-  if (result.error) throw result.error;
-  return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
 function assertFilenamesReject(expected: string): void {
-  const result = checkFilenames();
+  const result = lvbtCheck('filenames');
   if (result.status === 0 || !result.output.includes(expected)) {
-    throw new Error(`check:filenames did not reject ${expected}\n${result.output}`);
+    throw new Error(`lvbt check filenames did not reject ${expected}\n${result.output}`);
   }
 }
 
 function assertFilenamesAccept(description: string): void {
-  const result = checkFilenames();
+  const result = lvbtCheck('filenames');
   if (result.status !== 0) {
-    throw new Error(`check:filenames rejected ${description}\n${result.output}`);
+    throw new Error(`lvbt check filenames rejected ${description}\n${result.output}`);
   }
 }
 
@@ -141,7 +129,9 @@ function assertTestLayoutGuard(): void {
 
   renameSync(allowed, misplaced);
   try {
-    assertContractRejects('packages/gencheck/src/index.test.ts');
+    assertContractRejects(
+      'packages/gencheck keeps test material outside tests/: src/index.test.ts',
+    );
   } finally {
     renameSync(misplaced, allowed);
   }
@@ -165,7 +155,9 @@ function assertNonCodePackageLayoutGuard(): void {
   );
   writeFileSync(fixture, '{}\n', 'utf8');
   try {
-    assertContractRejects('packages/gencheck-noncode/testing/gencheck-fixture.json');
+    assertContractRejects(
+      'packages/gencheck-noncode keeps test material outside tests/: testing/gencheck-fixture.json',
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -175,19 +167,20 @@ function assertTestFilenameGuard(): void {
   const source = resolve(ROOT, 'packages/gencheck/src');
   const tests = resolve(ROOT, 'packages/gencheck/tests');
   const e2e = resolve(tests, 'e2e');
-  const supportFixture = resolve(tests, 'support/fixture.test.ts');
+  const supportFixture = resolve(tests, 'support/fixture.ts');
   const allowed = [
     resolve(source, 'worker.ts'),
     resolve(tests, 'component.test.ts'),
     resolve(tests, 'component.test.tsx'),
     resolve(tests, 'verify.test.ts'),
     supportFixture,
+    resolve(tests, 'README.md'),
     resolve(e2e, 'journey.spec.ts'),
     resolve(e2e, 'journey.spec.tsx'),
   ];
   const rejected = [
     resolve(source, 'worker.thread.ts'),
-    resolve(tests, 'README.md'),
+    resolve(tests, 'support/fixture.test.ts'),
     resolve(tests, 'component.test.js'),
     resolve(tests, 'verify.ts'),
     resolve(tests, 'component.partial.test.ts'),
@@ -210,7 +203,7 @@ function assertTestFilenameGuard(): void {
         : 'export {};\n';
       writeFileSync(path, contents, 'utf8');
     }
-    assertFilenamesAccept('two-part source and three-part test filenames');
+    assertFilenamesAccept('two-part source and support names, three-part test names');
     run('pnpm', ['--filter', '@transitmapper/gencheck', 'test']);
 
     for (const path of rejected) {
@@ -227,64 +220,6 @@ function assertTestFilenameGuard(): void {
     rmSync(e2e, { recursive: true, force: true });
     rmSync(resolve(tests, 'support'), { recursive: true, force: true });
     rmSync(resolve(tests, 'artifacts'), { recursive: true, force: true });
-  }
-}
-
-function setGeneratedTestScript(manifest: string, command: string): void {
-  const parsed = JSON.parse(readFileSync(manifest, 'utf8')) as {
-    scripts: Record<string, string>;
-  };
-  parsed.scripts.test = command;
-  writeFileSync(manifest, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
-}
-
-function assertDirectVerifierLayoutGuard(): void {
-  const manifest = resolve(ROOT, 'packages/gencheck/package.json');
-  const original = readFileSync(manifest, 'utf8');
-
-  try {
-    setGeneratedTestScript(manifest, 'tsx src/index.ts && tsx tests/../src/index.ts');
-    const duplicateOutput = assertContractRejects('packages/gencheck/src/index.ts');
-    if (duplicateOutput.split('packages/gencheck/src/index.ts').length - 1 !== 1) {
-      throw new Error('check:contract did not de-duplicate canonical direct verifier paths');
-    }
-
-    setGeneratedTestScript(manifest, 'tsx ././tests/index.test.ts');
-    assertContractAccepts('the canonical tests/ verifier path');
-
-    setGeneratedTestScript(manifest, 'tsx --tsconfig "tsconfig.json" "src/index.ts"');
-    assertContractRejects('packages/gencheck/src/index.ts');
-
-    setGeneratedTestScript(manifest, 'tsx --watch src/index.ts');
-    assertContractRejects('unverifiable direct tsx command');
-
-    const bypasses = [
-      {
-        description: 'a grouped direct verifier',
-        command: '(tsx scripts/verify.ts)',
-        expected: 'packages/gencheck/scripts/verify.ts',
-      },
-      {
-        description: 'a direct verifier after a newline',
-        command: 'tsx tests/verify.ts\ntsx scripts/second-verifier.ts',
-        expected: 'packages/gencheck/scripts/second-verifier.ts',
-      },
-      {
-        description: 'an expansion-bearing direct verifier',
-        command: 'tsx tests/$ENTRY.ts',
-        expected: 'unverifiable direct tsx command',
-      },
-    ];
-    const missed = bypasses.flatMap(({ description, command, expected }) => {
-      setGeneratedTestScript(manifest, command);
-      const result = checkContract();
-      return result.status !== 0 && result.output.includes(expected) ? [] : [description];
-    });
-    if (missed.length > 0) {
-      throw new Error(`check:contract did not reject ${missed.join(', ')}`);
-    }
-  } finally {
-    writeFileSync(manifest, original, 'utf8');
   }
 }
 
@@ -313,7 +248,6 @@ function main(): void {
     assertTestLayoutGuard();
     assertNonCodePackageLayoutGuard();
     assertTestFilenameGuard();
-    assertDirectVerifierLayoutGuard();
 
     console.log(`generators: ${SCENARIOS.length} scenarios, output passes pnpm check unmodified.`);
   } catch (err) {

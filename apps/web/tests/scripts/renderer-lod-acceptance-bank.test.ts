@@ -8,7 +8,7 @@ import {
   rendererLodAcceptanceBankIdentity,
   validRendererLodAcceptanceManifest,
   writeRendererLodAcceptanceManifest,
-} from '../support/renderer-lod-acceptance.test';
+} from '../support/renderer-lod-acceptance';
 
 describe('renderer LOD acceptance bank validation', () => {
   it('rejects mixed bank identity and mismatched source provenance', async () => {

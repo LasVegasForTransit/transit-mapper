@@ -1,5 +1,6 @@
 {
   "$schema": "https://turborepo.com/schema.json",
+  "concurrency": "4",
   "globalEnv": [
     "CI",
     "DEV",
@@ -72,39 +73,24 @@
       ],
       "outputs": []
     },
-    "lint:workspace": {
-      "dependsOn": ["lint", "//#lint:root"],
-      "outputs": []
-    },
     "validate": {
       "dependsOn": [
-        "lint",
-        "check-types",
-        "test",
         "check:types",
         "check:icons",
-        "//#format:check",
+        "//#standards:check",
         "//#lint:root",
         "//#typecheck:root",
         "//#verify:root",
-        "//#check:filenames",
-        "//#check:contract",
-        "//#check:docs",
         "//#check:migrations",
         "//#check:structure",
         "//#check:breakpoint",
         "//#check:config",
-        "//#check:debt",
         "//#check:deadcode",
         "//#check:duplication",
         "//#check:boundaries",
         "//#check:documents",
         "//#check:reference"
       ],
-      "outputs": []
-    },
-    "//#format:check": {
-      "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },
     "//#lint:root": {
@@ -124,18 +110,6 @@
         "$TURBO_ROOT$/tsconfig.json",
         "$TURBO_ROOT$/package.json"
       ],
-      "outputs": []
-    },
-    "//#check:filenames": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#check:contract": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#check:docs": {
-      "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },
     "//#check:migrations": {
@@ -160,11 +134,6 @@
       "outputs": []
     },
     "//#check:config": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": []
-    },
-    "//#check:debt": {
-      "cache": false,
       "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },
@@ -199,6 +168,10 @@
     },
     "//#verify:root": {
       "cache": false,
+      "outputs": []
+    },
+    "//#standards:check": {
+      "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     }
   }

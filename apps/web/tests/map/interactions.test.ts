@@ -38,7 +38,7 @@ import {
 } from '../../src/editor/input-tuning';
 import type { PointerIntent } from '../../src/editor/pointerIntent';
 import type { EditGestureTargets } from '../../src/map/gestureProjection';
-import { required } from '../support/required.test';
+import { required } from '../support/required';
 
 interface Point {
   x: number;
