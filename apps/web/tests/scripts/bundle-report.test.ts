@@ -450,6 +450,17 @@ describe('bundle report delivery graphs', () => {
     expect(paths(graphs.workers)).toEqual(['assets/dialog-worker.js', 'assets/storage-worker.js']);
   });
 
+  it('recognises the string-concatenated base that Vite 8 emits for a Worker URL', () => {
+    const files = fixtureFiles();
+    files['assets/main.js'] = encoded(
+      'new Worker(new URL(""+new URL("storage-worker.js",import.meta.url).href,""+import.meta.url));',
+    );
+
+    const graphs = deliveryGraphs(files);
+
+    expect(paths(graphs.workers)).toEqual(['assets/dialog-worker.js', 'assets/storage-worker.js']);
+  });
+
   it('adds deterministic sizes and a content digest to every sorted file', () => {
     const graphs = deliveryGraphs();
     const firstEntry = required(graphs.entries.at(0), 'first entry');

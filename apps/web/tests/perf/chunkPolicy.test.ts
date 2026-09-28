@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_CHUNK_MAXIMUM_RAW_BYTES,
   MAP_ENGINE_MAXIMUM_RAW_BYTES,
+  MAP_ENGINE_WORKER_MAXIMUM_RAW_BYTES,
   evaluateChunkSizes,
   isMapEngineChunkName,
+  isMapEngineWorkerChunkName,
   maximumRawBytesForChunk,
   performanceChunkFileName,
   performanceChunkKind,
@@ -90,6 +92,9 @@ describe('performance chunk policy', () => {
         String.raw`C:\repo\packages\renderer\dist\projection\cooperative-render-job-scheduler.js`,
       ),
     ).toBe('renderer');
+    expect(performanceChunkName('/repo/packages/core/src/render/render-identity.ts')).toBe(
+      'render-identity',
+    );
     expect(
       performanceChunkName('/repo/packages/core/src/render/render-preparation-update-plan.ts'),
     ).toBeUndefined();
@@ -123,6 +128,31 @@ describe('performance chunk policy', () => {
     expect(isMapEngineChunkName('assets/map-engine-helper-AbCd1234.js')).toBe(false);
     expect(maximumRawBytesForChunk({ kind: 'map-engine' })).toBe(MAP_ENGINE_MAXIMUM_RAW_BYTES);
     expect(maximumRawBytesForChunk({ kind: 'standard' })).toBe(DEFAULT_CHUNK_MAXIMUM_RAW_BYTES);
+  });
+
+  it("grants MapLibre's Worker its own exception only when it holds nothing else", () => {
+    const mapLibreWorkerModules = [
+      '../../node_modules/.pnpm/maplibre-gl@6.9.0/node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs',
+      '../../node_modules/.pnpm/maplibre-gl@6.9.0/node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs',
+    ];
+    expect(
+      performanceChunkKind('assets/maplibre-gl-worker-AbCd1234.js', mapLibreWorkerModules),
+    ).toBe('map-engine-worker');
+    expect(
+      performanceChunkKind('assets/maplibre-gl-worker-AbCd1234.js', [
+        ...mapLibreWorkerModules,
+        '../../apps/web/src/map/maplibre-worker.ts',
+      ]),
+    ).toBe('standard');
+    expect(performanceChunkKind('assets/maplibre-gl-worker-AbCd1234.js', [])).toBe('standard');
+    expect(performanceChunkKind('assets/svgWorkerEntry-AbCd1234.js', mapLibreWorkerModules)).toBe(
+      'standard',
+    );
+    expect(isMapEngineWorkerChunkName('assets/maplibre-gl-worker-helper-AbCd1234.js')).toBe(false);
+    expect(maximumRawBytesForChunk({ kind: 'map-engine-worker' })).toBe(
+      MAP_ENGINE_WORKER_MAXIMUM_RAW_BYTES,
+    );
+    expect(MAP_ENGINE_WORKER_MAXIMUM_RAW_BYTES).toBeLessThan(MAP_ENGINE_MAXIMUM_RAW_BYTES);
   });
 
   it('names the shared TransitMapper rendering graph for what it contains', () => {

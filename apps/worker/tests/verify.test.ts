@@ -117,7 +117,7 @@ const SITE = 'https://map.lasvegasfortransit.org';
   const u32 = (n: number) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
   const chunk = (type: string, data: number[]) => [
     ...u32(data.length),
-    ...[...type].map((c) => c.charCodeAt(0)),
+    ...new TextEncoder().encode(type),
     ...data,
     ...u32(0), // CRC placeholder — not checked
   ];
@@ -135,7 +135,9 @@ const SITE = 'https://map.lasvegasfortransit.org';
       ...chunk('IEND', []),
       ...trailing,
     ]);
-  const toBase64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64');
+  // `btoa` rather than Node's Buffer: @cloudflare/workers-types declares the
+  // global `Buffer` as `any`, which would switch type checking off here.
+  const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 
   const card = png(PREVIEW_WIDTH, PREVIEW_HEIGHT);
   check(
@@ -165,11 +167,9 @@ const SITE = 'https://map.lasvegasfortransit.org';
 
   // The polyglot case: a valid PNG with markup appended. Response headers
   // already defang these, but storing one at all is worse than not.
-  const polyglot = png(
-    PREVIEW_WIDTH,
-    PREVIEW_HEIGHT,
-    [...'<script>alert(1)</script>'].map((c) => c.charCodeAt(0)),
-  );
+  const polyglot = png(PREVIEW_WIDTH, PREVIEW_HEIGHT, [
+    ...new TextEncoder().encode('<script>alert(1)</script>'),
+  ]);
   check(
     'a PNG with content appended after IEND is dropped',
     acceptedPreview(toBase64(polyglot)) === null,

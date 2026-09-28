@@ -12,7 +12,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "react": "^18.3.1"
+    "react": "catalog:"
   },
   "devDependencies": {
     "@lasvegasfortransit/typescript-config": "file:../../.lvbt/web-platform/packages/typescript-config",

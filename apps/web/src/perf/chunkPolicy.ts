@@ -14,8 +14,9 @@ export type PerformanceChunkName =
   | 'renderer-display'
   | 'renderer-projection'
   | 'feature-details'
+  | 'render-identity'
   | 'editor-interactions';
-export type PerformanceChunkKind = 'map-engine' | 'standard';
+export type PerformanceChunkKind = 'map-engine' | 'map-engine-worker' | 'standard';
 
 export const DEFAULT_CHUNK_MAXIMUM_RAW_BYTES = 500_000;
 // Sized to MapLibre itself plus a little headroom, so the number moves only
@@ -24,6 +25,12 @@ export const DEFAULT_CHUNK_MAXIMUM_RAW_BYTES = 500_000;
 // fixed in 6.4.1 and nowhere on the 4.x line. Raise this only for another
 // MapLibre release, never to let our own code grow into the slack.
 export const MAP_ENGINE_MAXIMUM_RAW_BYTES = 1_060_000;
+// MapLibre's Worker is prebundled too, so it cannot be divided either. It
+// built to 499 kB under Vite 6, 827 bytes inside the ordinary chunk budget.
+// Vite 8's bundler prints MapLibre's already-minified code a little
+// differently before terser sees it, and the same Worker lands at 501 kB. The
+// map engine's rule applies: raise this only for another MapLibre release.
+export const MAP_ENGINE_WORKER_MAXIMUM_RAW_BYTES = 510_000;
 
 export interface PerformanceChunkSize {
   file: string;
@@ -140,6 +147,17 @@ const STABLE_PACKAGE_CARVE_OUTS: readonly StablePackageCarveOut[] = [
     file: /^(?:src|dist)\/(?:render-presentation|layers|layers\/constants|system-feature-sources)\.[^.]+$/,
     chunk: 'renderer-display',
   },
+  // Every light host and MapLibre's theme both reach render identities.
+  // Rollup gave the module a shared chunk of its own; Rolldown instead folds a
+  // module whose importers are all in groups into one of its other importers'
+  // chunks. It chose the theme's, so `renderer-display` imported the theme and
+  // MapLibre along with it, and the reader and embed started downloading the
+  // map engine before first paint.
+  {
+    packageName: 'core',
+    file: /^src\/render\/render-identity\.[^.]+$/,
+    chunk: 'render-identity',
+  },
 ];
 
 function isReactRuntimeModule(moduleId: string): boolean {
@@ -168,16 +186,21 @@ export function isMapEngineChunkName(file: string): boolean {
   return /(?:^|\/)map-engine-[A-Za-z0-9_-]{8}\.js$/.test(file);
 }
 
+export function isMapEngineWorkerChunkName(file: string): boolean {
+  return /(?:^|\/)maplibre-gl-worker-[A-Za-z0-9_-]{8}\.js$/.test(file);
+}
+
 export function performanceChunkKind(file: string, moduleIds: string[]): PerformanceChunkKind {
-  return isMapEngineChunkName(file) && moduleIds.length > 0 && moduleIds.every(isMapEngineModule)
-    ? 'map-engine'
-    : 'standard';
+  const onlyMapLibre = moduleIds.length > 0 && moduleIds.every(isMapEngineModule);
+  if (onlyMapLibre && isMapEngineChunkName(file)) return 'map-engine';
+  if (onlyMapLibre && isMapEngineWorkerChunkName(file)) return 'map-engine-worker';
+  return 'standard';
 }
 
 export function maximumRawBytesForChunk(chunk: Pick<PerformanceChunkSize, 'kind'>): number {
-  return chunk.kind === 'map-engine'
-    ? MAP_ENGINE_MAXIMUM_RAW_BYTES
-    : DEFAULT_CHUNK_MAXIMUM_RAW_BYTES;
+  if (chunk.kind === 'map-engine') return MAP_ENGINE_MAXIMUM_RAW_BYTES;
+  if (chunk.kind === 'map-engine-worker') return MAP_ENGINE_WORKER_MAXIMUM_RAW_BYTES;
+  return DEFAULT_CHUNK_MAXIMUM_RAW_BYTES;
 }
 
 export function performanceChunkFileName(moduleIds: string[]): string {

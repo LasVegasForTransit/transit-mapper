@@ -105,14 +105,14 @@ function focusInitialControl(surface: HTMLElement, initialFocus: InitialFocus): 
 }
 
 interface SurfaceLifecycleInput extends Omit<PlacementInput, 'surface' | 'trigger'> {
-  triggerRef: RefObject<HTMLElement>;
+  triggerRef: RefObject<HTMLElement | null>;
   onOpenChange: (open: boolean) => void;
   focusOnOpen: boolean;
   initialFocus: InitialFocus;
 }
 
 function useSurfaceLifecycle(
-  surfaceRef: RefObject<HTMLDivElement>,
+  surfaceRef: RefObject<HTMLDivElement | null>,
   input: SurfaceLifecycleInput,
 ): void {
   const { align, focusOnOpen, gap, initialFocus, side, triggerRef } = input;
@@ -163,7 +163,7 @@ interface NativeSurfaceProps extends Omit<NativePopoverProps, 'children' | 'open
   children: ReactNode;
   initialFocus: InitialFocus;
   surfaceId: string;
-  triggerRef: RefObject<HTMLElement>;
+  triggerRef: RefObject<HTMLElement | null>;
 }
 
 function NativeSurface(props: NativeSurfaceProps) {

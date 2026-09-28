@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import {
-  generateToken,
-  hashToken,
-  sha256Base64Url,
-  toBase64Url,
-} from '@transitmapper/core/auth/tokens';
-import { parseCookies, serializeCookie } from '@transitmapper/core/auth/cookies';
-import { safeReturnTo } from '@transitmapper/core/auth/returnTo';
-import { buildAuthorizeUrl } from '@transitmapper/core/auth/google';
+import { generateToken, hashToken, sha256Base64Url, toBase64Url } from '../../src/auth/tokens';
+import { parseCookies, serializeCookie } from '../../src/auth/cookies';
+import { safeReturnTo } from '../../src/auth/returnTo';
+import { buildAuthorizeUrl } from '../../src/auth/google';
 
 describe('generating and hashing session tokens', () => {
   it('a generated token is different every time', () => {

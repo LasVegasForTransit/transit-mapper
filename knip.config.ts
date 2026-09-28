@@ -15,9 +15,10 @@
  * by `turbo gen`, and `apps/worker/tests/verify.test.ts` is run directly by
  * `tsx` rather than by Vitest.
  *
- * It also reports catalog entries no workspace references, which extends the
- * dependency invariant `check:contract` already holds from "versions come from
- * the catalog" to "the catalog has nothing spare in it".
+ * Its catalog report is off. Every LVBT repository carries the organization's
+ * whole catalog, so this one lists Astro, Playwright, and other tools it never
+ * installs, and knip cannot tell those shared entries from this repository's
+ * own.
  */
 import type { KnipConfig } from 'knip';
 
@@ -53,6 +54,7 @@ const config: KnipConfig = {
     // case is a rule somebody switches off in a hurry, so it is off here with
     // the reason attached.
     duplicates: 'off',
+    catalog: 'off',
   },
   ignoreDependencies: [
     // `cloudflare:test` is a virtual module @cloudflare/vitest-pool-workers

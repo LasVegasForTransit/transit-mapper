@@ -30,9 +30,11 @@ function supportedDedicatedWorkerConstructors(source: string): WorkerConstructor
       /new\s+Worker\s*\(\s*new\s+URL\s*\(\s*(["'`])([^"'`]+\.m?js(?:[?#][^"'`]*)?)\1\s*,\s*import\.meta\.url\s*\)/g,
     ),
   ].map((match) => ({ index: match.index, reference: match[2] }));
+  // Vite 6 emitted `import.meta.url` as the outer base; Vite 8 emits
+  // `""+import.meta.url`. Both resolve to the same URL.
   const relative = [
     ...source.matchAll(
-      /new\s+Worker\s*\(\s*new\s+URL\s*\(\s*(["'`])\1\s*\+\s*new\s+URL\s*\(\s*(["'`])([^"'`]+\.m?js(?:[?#][^"'`]*)?)\2\s*,\s*import\.meta\.url\s*\)\.href\s*,\s*import\.meta\.url\s*\)/g,
+      /new\s+Worker\s*\(\s*new\s+URL\s*\(\s*(["'`])\1\s*\+\s*new\s+URL\s*\(\s*(["'`])([^"'`]+\.m?js(?:[?#][^"'`]*)?)\2\s*,\s*import\.meta\.url\s*\)\.href\s*,\s*(?:(["'`])\4\s*\+\s*)?import\.meta\.url\s*\)/g,
     ),
   ].map((match) => ({ index: match.index, reference: match[3] }));
   return [...direct, ...relative];

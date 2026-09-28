@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type SubmitEvent } from 'react';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type { PlaceResult } from '@transitmapper/core/model/geocode';
 import type { DrivingSide, LngLat } from '@transitmapper/core/model/system';
@@ -69,7 +69,7 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
   );
   const areaTooLarge = areaKm2 > MAX_IMPORT_AREA_KM2;
 
-  const runSearch = async (event: FormEvent) => {
+  const runSearch = async (event: SubmitEvent) => {
     event.preventDefault();
     searchAbort.current?.abort(new DOMException('Superseded by a newer search.', 'AbortError'));
     if (query.trim().length === 0) return;
@@ -90,10 +90,7 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
   };
 
   const choosePlace = (place: PlaceResult) => {
-    setPicked({
-      center: place.center,
-      drivingSide: drivingSideForCountry(place.countryCode),
-    });
+    setPicked({ center: place.center, drivingSide: drivingSideForCountry(place.countryCode) });
     setResults([]);
     setQuery(place.label);
     settled.current = place.boundingBox

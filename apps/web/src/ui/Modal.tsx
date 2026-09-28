@@ -22,7 +22,7 @@ interface ModalProps {
 
 interface DialogLifecycle {
   closing: boolean;
-  dialogRef: RefObject<HTMLDialogElement>;
+  dialogRef: RefObject<HTMLDialogElement | null>;
   finishClose: () => void;
   requestClose: () => void;
 }

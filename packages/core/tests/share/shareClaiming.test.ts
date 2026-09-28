@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ANONYMOUS_SHARE_TTL_MS, newShareOwnership } from '@transitmapper/core/share/ownership';
-import { claimOutcome, retainedShares } from '@transitmapper/core/share/claim';
+import { ANONYMOUS_SHARE_TTL_MS, newShareOwnership } from '../../src/share/ownership';
+import { claimOutcome, retainedShares } from '../../src/share/claim';
 
 describe('claiming a share', () => {
   const now = 1_700_000_000_000;

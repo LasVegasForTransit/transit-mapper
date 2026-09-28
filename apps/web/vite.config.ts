@@ -16,6 +16,11 @@ import {
   performanceChunkName,
 } from './src/perf/chunkPolicy';
 import { OFFLINE_EDITOR_ENTRY_NAME, OFFLINE_GLYPH_RANGE_FILES } from './src/perf/pwaPrecache';
+import { terserWorkerBundles } from './scripts/worker-minify';
+
+// Additional compression passes recover size exposed by the stable vendor
+// boundaries below. It is deterministic and avoids unsafe transforms.
+const TERSER_OPTIONS = { compress: { passes: 4 } };
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const distDirectory = resolveBuildOutputDirectory(
@@ -116,6 +121,14 @@ export default defineConfig({
       distDirectory,
     }),
   ],
+  worker: {
+    // Vite 8 runs terser on the page bundles only. Each Worker is its own
+    // Rolldown build, so it gets the same pass here; see worker-minify.ts.
+    plugins: () => [terserWorkerBundles(TERSER_OPTIONS)],
+    // Rolldown's default `'dce-only'` pass runs after renderChunk and prints
+    // the code again with whitespace, undoing a third of terser's savings.
+    rolldownOptions: { output: { minify: false } },
+  },
   server: {
     // Honour PORT so a second checkout of this repo can run its own dev
     // server alongside the first instead of losing the race for 5173. Unset
@@ -137,18 +150,16 @@ export default defineConfig({
     // minifier, but keeps the complete editor graph within its transfer
     // budget without hiding lazy features from the entrypoint report.
     minify: 'terser',
-    // Additional compression passes recover size exposed by the stable vendor
-    // boundaries below. It is deterministic and avoids unsafe transforms.
-    terserOptions: { compress: { passes: 4 } },
+    terserOptions: TERSER_OPTIONS,
     // The post-build performance reporter walks each entry's full import
     // closure from this manifest. Console chunk warnings cannot tell whether
     // a byte is paid by the editor, the embed, or both.
     manifest: true,
-    // MapLibre 4 is one prebundled module and cannot be divided by Rollup.
+    // MapLibre is one prebundled module and cannot be divided by the bundler.
     // report-bundle.ts gives it a narrow 810 kB exception while failing every
     // other emitted JavaScript chunk above 500 kB.
     chunkSizeWarningLimit: MAP_ENGINE_MAXIMUM_RAW_BYTES / 1_000,
-    rollupOptions: {
+    rolldownOptions: {
       // Four entries, not one. embed.html is the read-only map that gets
       // iframed into other people's pages (/e/:id) — it deliberately shares
       // no bundle with the editor, so an embed downloads MapLibre and the
@@ -163,13 +174,17 @@ export default defineConfig({
         [OFFLINE_EDITOR_ENTRY_NAME]: resolve(import.meta.dirname, 'src/pwa/offline-editor.ts'),
       },
       output: {
-        // Assign only modules owned by each stable package to that package's
-        // cache boundary. Shared dependencies keep Rollup's normal ownership,
-        // so a package chunk cannot drag editor-only code into the embed.
-        onlyExplicitManualChunks: true,
-        // Keep slow-changing runtimes cacheable across frequent editor
-        // releases. Vite module-preloads these static imports in parallel.
-        manualChunks: performanceChunkName,
+        codeSplitting: {
+          // Assign only modules owned by each stable package to that
+          // package's cache boundary. Shared dependencies keep the bundler's
+          // normal ownership, so a package chunk cannot drag editor-only code
+          // into the embed. This is what Rollup called
+          // `onlyExplicitManualChunks`.
+          includeDependenciesRecursively: false,
+          // Keep slow-changing runtimes cacheable across frequent editor
+          // releases. Vite module-preloads these static imports in parallel.
+          groups: [{ name: performanceChunkName }],
+        },
         chunkFileNames: (chunk) => performanceChunkFileName(chunk.moduleIds),
       },
     },
