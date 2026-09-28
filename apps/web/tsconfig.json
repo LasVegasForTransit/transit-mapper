@@ -16,5 +16,13 @@
   "compilerOptions": {
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "tests", "scripts", "vite.config.ts", "vitest.config.ts", "perf.config.ts"]
+  "include": [
+    "src",
+    "tests",
+    "eslint.config.ts",
+    "scripts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "perf.config.ts"
+  ]
 }

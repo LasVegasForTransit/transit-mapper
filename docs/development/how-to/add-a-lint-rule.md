@@ -10,8 +10,9 @@ Emits the rule, its test file under `packages/eslint-plugin/tests/`, and a
 Then three things, in this order:
 
 1. Register it in `packages/eslint-plugin/src/index.ts`.
-2. Scope it in `eslint.config.js` to the package it is about — most rules
-   are not repository-wide.
+2. Turn it on in the `eslint.config.ts` of the package it is about — most
+   rules are not repository-wide. A rule every package needs goes in
+   `packages/eslint-plugin/src/configs.ts` instead.
 3. Add the matching section to
    [the enforcement model](../explanation/enforcement-model.md), because
    that is where `meta.docs.url` sends anyone who trips it.

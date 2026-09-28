@@ -16,5 +16,12 @@
   "compilerOptions": {
     "types": ["node", "@cloudflare/workers-types", "@cloudflare/vitest-pool-workers/types"]
   },
-  "include": ["src", "tests", "scripts", "vitest.config.ts", "worker-configuration.d.ts"]
+  "include": [
+    "src",
+    "tests",
+    "eslint.config.ts",
+    "scripts",
+    "vitest.config.ts",
+    "worker-configuration.d.ts"
+  ]
 }

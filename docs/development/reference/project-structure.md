@@ -22,7 +22,7 @@ apps/worker ──────┬──> packages/views ────> packages/c
                   └──> packages/core
 
 all TypeScript packages ──> @lasvegasfortransit/typescript-config
-repository linting ───────> @lasvegasfortransit/eslint-config ──> packages/eslint-plugin
+each package's lint ────> packages/eslint-plugin ──> @lasvegasfortransit/eslint-config
 repository contribution tooling ──> pinned LVBT standard release
 ```
 

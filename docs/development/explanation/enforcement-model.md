@@ -271,5 +271,5 @@ A rule needs three things, and the check enforces the third:
    to reach for `eslint-disable`.
 3. A `meta.docs.url` pointing at a real section of this page.
 
-Register it in `packages/eslint-plugin/src/index.ts` and scope it in
-`eslint.config.js` to the package it is about.
+Register it in `packages/eslint-plugin/src/index.ts` and turn it on in the
+`eslint.config.ts` of the package it is about.
