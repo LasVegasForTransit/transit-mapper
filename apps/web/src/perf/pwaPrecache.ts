@@ -133,20 +133,33 @@ function entryGraph(
 /** The offline entry may cross one deferred boundary to the map driver so the
  * normal editor can keep MapLibre out of its shell bundle. That declared
  * runtime and its static imports are required offline. Feature-level dynamic
- * imports below the driver remain adaptive. */
+ * imports below the driver remain adaptive.
+ *
+ * The boundary is any dynamic import made from the entry's static closure.
+ * Rollup kept the module that makes it in the entry chunk itself; Rolldown
+ * moves it into a chunk the entry imports, and reading only the entry's own
+ * dynamic imports then left the driver out of the offline install. */
 function offlineEditorGraph(manifest: BuildManifest): Set<string> {
   const key = entryKey(manifest, OFFLINE_EDITOR_ENTRY_NAME);
-  const entry = manifest[key];
-  if (!entry) throw new Error(`Vite manifest import "${key}" does not exist.`);
-  const files = entryGraph(manifest, OFFLINE_EDITOR_ENTRY_NAME, false);
+  const files = new Set<string>();
+  const staticKeys = new Set<string>();
+  collectManifestGraph(key, {
+    manifest,
+    files,
+    visited: staticKeys,
+    includeDynamicImports: false,
+  });
+  const deferredKeys = [...staticKeys].flatMap(
+    (staticKey) => manifest[staticKey]?.dynamicImports ?? [],
+  );
   const context = {
     manifest,
     files,
-    visited: new Set([key]),
+    visited: new Set(staticKeys),
     includeDynamicImports: false,
   };
-  for (const importedKey of entry.dynamicImports ?? []) {
-    collectManifestGraph(importedKey, context);
+  for (const deferredKey of deferredKeys) {
+    collectManifestGraph(deferredKey, context);
   }
   return files;
 }

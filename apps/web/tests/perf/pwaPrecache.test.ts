@@ -103,6 +103,33 @@ describe('PWA precache output', () => {
     expect(precached.has(files.optionalOfflineFeatureScript)).toBe(false);
   });
 
+  it('follows the deferred boundary when the bundler moves it into an imported chunk', () => {
+    const surfaceKey = 'fixture:offline-surface';
+    const surfaceScript = 'build/offline-surface.js';
+    const rolldownShaped = {
+      ...offlineEditorManifest,
+      [keys.offlineEditor]: {
+        file: files.offlineEditorScript,
+        isEntry: true,
+        name: 'offline-editor',
+        imports: [surfaceKey],
+      },
+      [surfaceKey]: {
+        file: surfaceScript,
+        dynamicImports: [keys.offlineRuntime],
+      },
+    };
+
+    const precached = new Set(
+      editorOfflinePrecacheFiles(rolldownShaped, installIcons, offlineRuntimeFiles),
+    );
+
+    expect(precached.has(surfaceScript)).toBe(true);
+    expect(precached.has(files.offlineRuntimeScript)).toBe(true);
+    expect(precached.has(files.nestedOfflineRuntimeScript)).toBe(true);
+    expect(precached.has(files.optionalOfflineFeatureScript)).toBe(false);
+  });
+
   it('retains the lazy editor host required by the cached application shell', () => {
     const precached = editorOfflinePrecacheFiles(
       offlineEditorManifest,
