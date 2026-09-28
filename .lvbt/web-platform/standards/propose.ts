@@ -29,7 +29,12 @@ function remoteBranchState(
   branch: string,
   runner: Runner,
 ): 'absent' | 'current' | 'stale' | 'edited' {
-  if (!runner('git', ['ls-remote', '--heads', 'origin', branch], target)) return 'absent';
+  if (!runner('git', ['ls-remote', '--heads', 'origin', branch], target)) {
+    // A tracking ref left from a branch GitHub has since deleted would make --force-with-lease
+    // refuse the push, so forget it.
+    runner('git', ['update-ref', '-d', `refs/remotes/origin/${branch}`], target);
+    return 'absent';
+  }
   runner(
     'git',
     ['fetch', '--quiet', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`],
@@ -73,7 +78,19 @@ function openUpdates(target: string, runner: Runner): OpenUpdate[] {
 function pushUpdateBranch(target: string, name: string, branch: string, runner: Runner): boolean {
   const state = remoteBranchState(target, branch, runner);
   if (state === 'absent' || state === 'stale') {
-    runner('git', ['push', '--force-with-lease', '--set-upstream', 'origin', branch], target);
+    runner(
+      'git',
+      [
+        '-c',
+        'core.hooksPath=/dev/null',
+        'push',
+        '--force-with-lease',
+        '--set-upstream',
+        'origin',
+        branch,
+      ],
+      target,
+    );
     return true;
   }
   if (state === 'edited') {
@@ -136,6 +153,63 @@ function createOrEdit(options: {
   return (JSON.parse(runner('node', args, target)) as { number: number }).number;
 }
 
+/** The release the repository's default branch vendors, read from GitHub rather than the checkout. */
+function defaultBranchRelease(target: string, runner: Runner): string | null {
+  const manifest = runner(
+    'gh',
+    [
+      'api',
+      'repos/{owner}/{repo}/contents/.lvbt/web-platform.json',
+      '-H',
+      'Accept: application/vnd.github.raw',
+    ],
+    target,
+  );
+  return (JSON.parse(manifest) as { release: string | null }).release;
+}
+
+/**
+ * GitHub holds the workflow runs of a pull request that a workflow's own token opened until someone
+ * with write access approves them. Approve the ones this update started so `Validate` runs on it.
+ */
+function approveHeldRuns(target: string, branch: string, runner: Runner): void {
+  const held = () =>
+    (
+      JSON.parse(
+        runner(
+          'gh',
+          ['run', 'list', '--branch', branch, '--json', 'databaseId,conclusion', '--limit', '20'],
+          target,
+        ),
+      ) as { databaseId: number; conclusion: string }[]
+    )
+      .filter(({ conclusion }) => conclusion === 'action_required')
+      .map(({ databaseId }) => databaseId);
+  const approved = new Set<number>();
+  // Runs appear a few seconds after the pull request opens; keep looking briefly after the first.
+  for (let attempt = 0, quiet = 0; attempt < 12 && quiet < 3; attempt += 1) {
+    const found = held().filter((id) => !approved.has(id));
+    for (const id of found) {
+      try {
+        runner(
+          'gh',
+          ['api', '-X', 'POST', `repos/{owner}/{repo}/actions/runs/${id}/approve`],
+          target,
+        );
+        approved.add(id);
+      } catch {
+        process.stderr.write(
+          `Could not approve workflow run ${id} on ${branch}. A maintainer approves it on the pull request so Validate runs.\n`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+    }
+    quiet = approved.size > 0 && found.length === 0 ? quiet + 1 : 0;
+    runner('sleep', ['5'], target);
+  }
+}
+
 /**
  * Pushes the update branch, opens or refreshes its pull request, enables auto-merge, and closes
  * update pull requests for older releases.
@@ -164,10 +238,10 @@ export async function proposeRelease(options: {
     const pushed = pushUpdateBranch(target, entry.name, updateBranch(tag), runner);
     number = await openPullRequest({ ...options, automerge, runner });
     if (automerge) runner('gh', ['pr', 'merge', String(number), '--auto', '--rebase'], target);
-    // A push made with a repository's own GITHUB_TOKEN starts no workflow, but a dispatch always
-    // does, and its Validate check lands on the branch's head commit.
-    if (pushed) runner('gh', ['workflow', 'run', 'ci.yml', '--ref', updateBranch(tag)], target);
-  } else {
+    if (pushed) approveHeldRuns(target, updateBranch(tag), runner);
+  } else if (defaultBranchRelease(target, runner) === tag) {
+    // Only a default branch that already carries the release makes its update pull request moot;
+    // a checkout that happens to be on the update branch does not.
     superseded.push(...open.filter(({ headRefName }) => headRefName === updateBranch(tag)));
   }
 

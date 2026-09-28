@@ -22,7 +22,7 @@ export interface RepositoryState {
   name: string;
   release: string | null;
   pluginRef: string | null;
-  /** The repository runs `Standard update`, and `ci.yml` accepts the dispatch it sends. */
+  /** The repository runs `Standard update`. */
   selfUpdating: boolean;
   rulesets: string[];
   updates: { number: number; headRefName: string; failing: boolean }[];
@@ -76,7 +76,7 @@ export function findings(state: RepositoryState, releases: Release[], now: numbe
   if (!state.selfUpdating)
     add(
       'self-update',
-      'it cannot update itself: copy .github/workflows/standard-update.yml from the example and give ci.yml a workflow_dispatch trigger.',
+      'it cannot update itself: copy .github/workflows/standard-update.yml from the example.',
     );
   if (!state.rulesets.includes('org-standard'))
     add('ruleset', 'the org-standard ruleset is missing.');
@@ -186,9 +186,7 @@ function readState(entry: RegistryEntry): RepositoryState {
     name: entry.name,
     release,
     pluginRef: pluginRef(readRaw(entry.name, '.claude/settings.json')),
-    selfUpdating:
-      readRaw(entry.name, '.github/workflows/standard-update.yml') !== null &&
-      /^\s{2}workflow_dispatch:/m.test(readRaw(entry.name, '.github/workflows/ci.yml') ?? ''),
+    selfUpdating: readRaw(entry.name, '.github/workflows/standard-update.yml') !== null,
     rulesets,
     updates,
   };

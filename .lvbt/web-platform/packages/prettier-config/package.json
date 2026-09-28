@@ -1,6 +1,6 @@
 {
   "name": "@lasvegasfortransit/prettier-config",
-  "version": "0.5.0",
+  "version": "0.5.2",
   "description": "The Prettier configuration every LVBT repository uses.",
   "license": "MIT",
   "type": "module",
