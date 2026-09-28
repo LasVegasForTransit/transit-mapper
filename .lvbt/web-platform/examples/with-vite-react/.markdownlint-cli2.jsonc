@@ -13,6 +13,7 @@
     // Playwright output.
     "**/test-results",
     "**/playwright-report",
+    // Agent worktrees are other checkouts of this repository.
     ".claude/worktrees",
     "node_modules",
     "**/node_modules",

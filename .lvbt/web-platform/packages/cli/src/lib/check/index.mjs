@@ -2,11 +2,13 @@ import { CliError } from '../arguments.mjs';
 import { checkContract } from './contract.mjs';
 import { checkDebt } from './debt.mjs';
 import { checkFilenames } from './filenames.mjs';
+import { checkPlatform } from './platform.mjs';
 
 const checks = {
   filenames: checkFilenames,
   contract: checkContract,
   debt: checkDebt,
+  platform: checkPlatform,
 };
 
 /**

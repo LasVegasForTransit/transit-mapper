@@ -3,6 +3,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { CliError } from './arguments.mjs';
 import { exists, readJson } from './files.mjs';
+import { findManifests } from './platform/manifest.mjs';
+import { platformBootstrap, platformPreflight } from './platform/index.mjs';
 
 function output(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8' });
@@ -160,9 +162,10 @@ async function cloudflareFindings(cwd, report) {
 
 /**
  * Confirm the machine can work on this repository. Every finding names the
- * command that fixes it; the exit code is 1 when anything failed.
+ * command that fixes it. Returns the failures instead of throwing, so
+ * `--production` can still report on production.
  */
-export async function preflight({ cwd }) {
+async function machineFindings(cwd) {
   const packageJson = await readJson(path.join(cwd, 'package.json'));
   const findings = [];
   const report = {
@@ -181,18 +184,60 @@ export async function preflight({ cwd }) {
     if (!finding.ok) process.stdout.write(`        fix: ${finding.fix}\n`);
   }
   const failed = findings.filter((finding) => !finding.ok);
-  if (failed.length > 0)
-    throw new CliError(`preflight: ${failed.length} of ${findings.length} checks failed`, 1);
-  process.stdout.write(`preflight: all ${findings.length} checks passed\n`);
+  if (failed.length === 0)
+    process.stdout.write(`preflight: all ${findings.length} checks passed\n`);
+  return failed.length > 0
+    ? `preflight: ${failed.length} of ${findings.length} checks failed`
+    : undefined;
 }
 
-/** Install, wire hooks, and confirm the machine is ready. */
-export async function bootstrap({ cwd }) {
+/**
+ * `lvbt preflight`: the machine checks. With `--production`, also the
+ * read-only readiness report for every platform manifest.
+ */
+export async function preflight({ cwd, options = {} }) {
+  if (options.rotate !== undefined)
+    throw new CliError(
+      'preflight never changes anything; use --rotate with pnpm bootstrap --production.',
+      2,
+    );
+  const machine = await machineFindings(cwd);
+  if (options.production) {
+    try {
+      await platformPreflight({ cwd, options });
+    } catch (error) {
+      if (machine && error instanceof CliError)
+        throw new CliError(`${machine}\n${error.message}`, 1);
+      throw error;
+    }
+  }
+  if (machine) throw new CliError(machine, 1);
+}
+
+/**
+ * Install, wire hooks, and confirm the machine is ready. With `--production`,
+ * then set up everything the platform manifests declare.
+ */
+export async function bootstrap({ cwd, options = {} }) {
+  if (options.rotate !== undefined && !options.production)
+    throw new CliError('--rotate replaces production secrets, so it needs --production.', 2);
   process.stdout.write('pnpm install\n');
   const install = spawnSync('pnpm', ['install'], { cwd, stdio: 'inherit' });
   if (install.status !== 0)
     throw new CliError('bootstrap: pnpm install failed', install.status ?? 1);
-  await preflight({ cwd });
+  const machine = await machineFindings(cwd);
+  if (machine) throw new CliError(machine, 1);
+  if (options.production) {
+    await platformBootstrap({ cwd, options });
+    return;
+  }
+  const manifests = findManifests(cwd);
+  if (manifests.length > 0)
+    process.stdout.write(
+      `\nThis repository declares its production platform in ${manifests.join(', ')}.\n` +
+        'Maintainers: `pnpm preflight --production` checks it without changing anything, and\n' +
+        '`pnpm bootstrap --production` sets up whatever is missing.\n',
+    );
 }
 
 /**
