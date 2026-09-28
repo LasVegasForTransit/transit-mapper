@@ -2,5 +2,4 @@
 # boundaries of your repository; omit a scope when a change crosses them.
 site
 docs
-ci
 dx

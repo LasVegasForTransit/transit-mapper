@@ -1,11 +1,13 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
-import { applyPreset, verifyPreset } from './web-platform.ts';
+import { ownedFileDrift } from './owned-files.ts';
+import { applyPreset, verifyPreset, type WebPreset } from './web-platform.ts';
 import { readCommit, readRelease } from './web-platform-source.ts';
 
 const upstream = 'https://github.com/LasVegasForTransit/repository-tooling.git';
@@ -27,13 +29,35 @@ function readSource(repository: string, identity: SourceIdentity) {
     : readCommit(repository, identity.commit ?? '');
 }
 
+/**
+ * Applies a preset with the updater it carries, so a release's own consumer migrations run in the
+ * update that installs it rather than in the next one. A preset without an updater uses this one.
+ */
+async function applyIncoming(root: string, bundle: WebPreset, dryRun: boolean) {
+  const names = Object.keys(bundle.files).filter((name) => name.startsWith('standards/'));
+  if (!names.includes('standards/web-platform.ts')) return applyPreset(root, bundle, dryRun);
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'lvbt-updater-'));
+  try {
+    for (const name of names) {
+      await mkdir(path.dirname(path.join(directory, name)), { recursive: true });
+      await writeFile(path.join(directory, name), bundle.files[name] ?? '');
+    }
+    const incoming = (await import(
+      pathToFileURL(path.join(directory, 'standards/web-platform.ts')).href
+    )) as { applyPreset: typeof applyPreset };
+    return await incoming.applyPreset(root, bundle, dryRun);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
 async function update(
   root: string,
   identity: SourceIdentity,
   source: string | undefined,
   dryRun: boolean,
 ) {
-  if (source) return applyPreset(root, readSource(source, identity), dryRun);
+  if (source) return applyIncoming(root, readSource(source, identity), dryRun);
   const directory = await mkdtemp(path.join(os.tmpdir(), 'lvbt-standards-'));
   try {
     if (identity.release) {
@@ -63,10 +87,21 @@ async function update(
         { stdio: 'pipe' },
       );
     }
-    return await applyPreset(root, readSource(directory, identity), dryRun);
+    return await applyIncoming(root, readSource(directory, identity), dryRun);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+/** Verifies the vendored preset and the files the standard owns in the repository. */
+async function check(root: string, json: boolean | undefined) {
+  const metadata = await verifyPreset(root);
+  // Warnings until v0.6.0, when these fail and the update restores the standard's copies.
+  for (const problem of await ownedFileDrift(root, metadata.release))
+    process.stderr.write(
+      `warning: ${problem} This file belongs to the standard; from v0.6.0 \`pnpm standards:check\` fails on it. Make the change in repository-tooling instead.\n`,
+    );
+  process.stdout.write(`${JSON.stringify({ ok: true, metadata }, null, json ? 0 : 2)}\n`);
 }
 
 export async function main(args: string[]): Promise<void> {
@@ -89,10 +124,7 @@ export async function main(args: string[]): Promise<void> {
     if (positionals.length !== 1 || (values.apply && values['dry-run']))
       throw new Error('Choose one command and either --apply or --dry-run.');
     if (command === 'check') {
-      const metadata = await verifyPreset(root);
-      process.stdout.write(
-        `${JSON.stringify({ ok: true, metadata }, null, values.json ? 0 : 2)}\n`,
-      );
+      await check(root, values.json);
       return;
     }
     if (command !== 'update') throw new Error('Choose check or update.');
@@ -110,6 +142,6 @@ export async function main(args: string[]): Promise<void> {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   await main(process.argv.slice(2));
 }

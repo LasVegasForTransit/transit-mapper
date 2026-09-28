@@ -20,6 +20,28 @@ export const commitTypes = Object.freeze(
 
 const subjectPattern = /^(?<type>[a-z]+)(?:\((?<scope>[a-z0-9-]+)\))?: \S.*$/;
 
+/**
+ * Names on their way out: neither a kind of change nor a boundary of a repository. `ci` behaved
+ * exactly like `chore` in every changelog and release tool, so it only added a choice to argue about.
+ * They still pass, with a warning, until the release that retires them.
+ */
+export const deprecatedNames = Object.freeze({
+  ci: 'Use `chore` for workflow and CI configuration changes; from standard v0.6.0 the commit hook rejects `ci`.',
+});
+
+/** A warning for a subject that uses a deprecated type or scope, or undefined. */
+export function commitSubjectWarning(subject) {
+  const { type, scope } = subjectPattern.exec(subject)?.groups ?? {};
+  for (const [kind, name] of [
+    ['Type', type],
+    ['Scope', scope],
+  ]) {
+    if (name && Object.hasOwn(deprecatedNames, name))
+      return `${kind} \`${name}\` is deprecated. ${deprecatedNames[name]}`;
+  }
+  return undefined;
+}
+
 function choices(values) {
   return values.map((value) => `\`${value}\``).join(', ');
 }
@@ -98,6 +120,8 @@ function isDirectInvocation() {
 
 if (isDirectInvocation()) {
   const error = commitSubjectError(process.argv[2] ?? '');
+  const warning = commitSubjectWarning(process.argv[2] ?? '');
+  if (warning) process.stderr.write(`warning: ${warning}\n`);
   if (error) {
     process.stderr.write(`Commit blocked: ${error}\n`);
     process.exitCode = 1;

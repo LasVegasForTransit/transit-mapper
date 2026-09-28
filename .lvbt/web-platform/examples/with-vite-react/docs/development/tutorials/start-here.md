@@ -61,10 +61,10 @@ git commit
 ```
 
 The commit hook checks the message. Subjects look like `type(scope): description` where `type` is
-one of `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `ci`, `build`, `style`, `revert`,
-and the optional `scope` is one of the boundaries listed in `.lvbt/commit-scopes.txt`. A `feat` or
-`fix` commit also needs a body that says what changed for a person using the product and why. The
-hook tells you exactly what to change when it rejects a message.
+one of `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `build`, `style`, `revert`, and
+the optional `scope` is one of the boundaries listed in `.lvbt/commit-scopes.txt`. A `feat` or `fix`
+commit also needs a body that says what changed for a person using the product and why. The hook
+tells you exactly what to change when it rejects a message.
 
 ## 4. Open a pull request
 

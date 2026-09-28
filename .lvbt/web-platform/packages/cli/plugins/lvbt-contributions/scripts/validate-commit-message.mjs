@@ -1,7 +1,7 @@
 import { readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { commitSubjectError } from './validate-commit-subject.mjs';
+import { commitSubjectError, commitSubjectWarning } from './validate-commit-subject.mjs';
 
 /**
  * The whole-message rules, applied by the commit-msg hook after the subject
@@ -132,7 +132,10 @@ if (isDirectInvocation()) {
     process.stderr.write('Usage: validate-commit-message.mjs <commit-message-file>\n');
     process.exitCode = 2;
   } else {
-    const errors = commitMessageErrors(readFileSync(file, 'utf8'));
+    const message = readFileSync(file, 'utf8');
+    const warning = commitSubjectWarning(message.split(/\r?\n/)[0] ?? '');
+    if (warning) process.stderr.write(`warning: ${warning}\n`);
+    const errors = commitMessageErrors(message);
     if (errors.length > 0) {
       process.stderr.write(`Commit blocked:\n${errors.map((error) => `  ${error}`).join('\n')}\n`);
       process.exitCode = 1;

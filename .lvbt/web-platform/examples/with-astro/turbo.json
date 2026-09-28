@@ -8,8 +8,11 @@
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**"]
     },
+    "sync": {
+      "outputs": [".astro/**"]
+    },
     "lint": {
-      "dependsOn": ["^lint"]
+      "dependsOn": ["^lint", "sync"]
     },
     "check-types": {
       "dependsOn": ["^check-types"]

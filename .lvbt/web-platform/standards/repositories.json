@@ -3,43 +3,56 @@
   "repositories": [
     {
       "name": ".github",
-      "requiredStatus": "Validate"
+      "requiredStatus": "Validate",
+      "kind": "consumer"
     },
     {
       "name": "analytics",
-      "requiredStatus": "Validate"
+      "requiredStatus": "Validate",
+      "kind": "consumer"
     },
     {
       "name": "labs",
-      "requiredStatus": "Validate"
+      "requiredStatus": "Validate",
+      "kind": "consumer"
     },
     {
       "name": "repository-tooling",
-      "requiredStatus": "Validate"
+      "requiredStatus": "Validate",
+      "kind": "source"
     },
     {
       "name": "template-basic",
-      "requiredStatus": "Validate"
+      "requiredStatus": "Validate",
+      "kind": "template",
+      "example": "basic"
     },
     {
       "name": "template-with-astro",
-      "requiredStatus": "Validate"
+      "requiredStatus": "Validate",
+      "kind": "template",
+      "example": "with-astro"
     },
     {
       "name": "template-with-vite-react",
-      "requiredStatus": "Validate"
+      "requiredStatus": "Validate",
+      "kind": "template",
+      "example": "with-vite-react"
     },
     {
       "name": "transit-mapper",
-      "requiredStatus": "Validate"
+      "requiredStatus": "Validate",
+      "kind": "consumer"
     },
     {
       "name": "website",
-      "requiredStatus": "Validate"
+      "requiredStatus": "Validate",
+      "kind": "consumer"
     },
     {
       "name": "week-without-driving",
-      "requiredStatus": "Validate"
+      "requiredStatus": "Validate",
+      "kind": "consumer"
     }
   ],
   "exceptions": []
