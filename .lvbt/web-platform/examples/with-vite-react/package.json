@@ -23,8 +23,8 @@
     "*": "prettier --write --ignore-unknown"
   },
   "devDependencies": {
-    "@lasvegasfortransit/cli": "0.5.2",
-    "@lasvegasfortransit/prettier-config": "0.5.2",
+    "@lasvegasfortransit/cli": "0.5.4",
+    "@lasvegasfortransit/prettier-config": "0.5.4",
     "lint-staged": "catalog:",
     "markdownlint-cli2": "catalog:",
     "markdownlint-rule-relative-links": "catalog:",
