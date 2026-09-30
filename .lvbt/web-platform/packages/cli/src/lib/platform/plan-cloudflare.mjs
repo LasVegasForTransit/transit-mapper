@@ -51,6 +51,7 @@ function databaseItem({ state, configPath }, database) {
       next: `${SETUP} creates it`,
       action: { type: 'd1.create', name: database.name },
     });
+  if (!state.config.ok) return unknownItem(fields, state.config);
   const bound = state.config.ok
     ? state.config.value.d1.find((entry) => entry.binding === database.binding)
     : undefined;
@@ -60,10 +61,10 @@ function databaseItem({ state, configPath }, database) {
       status: 'mismatch',
       detail: `${configPath} does not bind ${database.binding} to ${database.name}`,
       next: configPath.endsWith('.ts')
-        ? `set worker.env.${database.binding} to bindings.d1({ name: "${database.name}", id: "${real.id}" }) in ${configPath}`
-        : `add it to d1_databases in ${configPath} with database_id ${real.id}`,
+        ? `set worker.env.${database.binding} to bindings.d1({ name: "${database.name}" }) in ${configPath}`
+        : `bind ${database.binding} to database_name ${database.name} in d1_databases in ${configPath}`,
     });
-  if (bound && bound.id !== real.id)
+  if (bound?.id !== undefined && bound.id !== real.id)
     return item({
       ...fields,
       status: 'mismatch',
@@ -90,13 +91,13 @@ function migrationsItem({ state, configPath }, database) {
   const action = { type: 'd1.migrate', name: database.name };
   const real = state.d1.ok ? state.d1.value[database.name] : undefined;
   if (state.d1.ok && !real)
-    // Wrangler applies migrations to the database_id in the config, so setup
-    // applies them after creating the database only if the config names it.
+    // Setup applies migrations after creating the database only if the config
+    // names it and any explicit ID agrees with the account inventory.
     return item({
       ...fields,
       status: 'missing',
       detail: `${files.value.length} to apply once the database exists and ${configPath} names it`,
-      next: `${SETUP} applies them once ${configPath} has the new database's database_id`,
+      next: `${SETUP} applies them once ${configPath} binds ${database.binding} to ${database.name}`,
       action: { ...action, binding: database.binding, afterCreate: true },
     });
   if (!real?.applied?.ok) return unknownItem(fields, real?.applied ?? state.d1);
@@ -108,10 +109,18 @@ function pendingItem({ state, configPath }, database, { fields, files, real, act
   const pending = files.filter((file) => !real.applied.value.includes(file));
   if (pending.length === 0)
     return item({ ...fields, status: 'ok', detail: `all ${files.length} applied` });
+  if (!state.config.ok) return unknownItem(fields, state.config);
   const bound = state.config.ok
     ? state.config.value.d1.find((entry) => entry.binding === database.binding)
     : undefined;
-  if (state.config.ok && bound?.id !== real.id)
+  if (state.config.ok && bound?.name !== database.name)
+    return item({
+      ...fields,
+      status: 'missing',
+      detail: `${pending.length} of ${files.length} not applied; they wait until ${configPath} binds ${database.binding} to ${database.name}`,
+      next: `bind ${database.binding} to ${database.name} in ${configPath}, then run ${SETUP} again`,
+    });
+  if (bound?.id !== undefined && bound.id !== real.id)
     return item({
       ...fields,
       status: 'missing',

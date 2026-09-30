@@ -187,7 +187,7 @@ async function repositoryFindings(cwd, report) {
     );
 }
 
-async function cloudflareFindings(cwd, report) {
+async function cloudflareFindings(cwd, report, { productionBootstrap = false } = {}) {
   const targets = await deployables(cwd);
   if (targets.length === 0) {
     report.pass('Cloudflare', 'no Cloudflare project config; nothing to deploy from here');
@@ -203,7 +203,8 @@ async function cloudflareFindings(cwd, report) {
     );
     let authenticated = false;
     try {
-      authenticated = JSON.parse(whoami).authenticated === true;
+      const identity = JSON.parse(whoami);
+      authenticated = identity.authenticated === true && identity.tokenValid !== false;
     } catch {
       // An absent CLI or malformed response is not authentication.
     }
@@ -212,7 +213,18 @@ async function cloudflareFindings(cwd, report) {
         'Cloudflare cf',
         `ready for: ${cfTargets.map((target) => target.directory).join(', ')}`,
       );
-    else report.fail('Cloudflare cf', 'cf is not signed in', 'pnpm exec cf auth login');
+    else if (productionBootstrap)
+      report.warn(
+        'Cloudflare cf',
+        'cf is not signed in; setup can continue, but cf resource commands need authentication',
+        'provide CLOUDFLARE_API_TOKEN for this session or run pnpm exec cf auth login',
+      );
+    else
+      report.fail(
+        'Cloudflare cf',
+        'cf is not signed in',
+        'provide CLOUDFLARE_API_TOKEN for this session or run pnpm exec cf auth login',
+      );
   }
   if (wranglerTargets.length > 0) {
     const whoami = output('pnpm', ['exec', 'wrangler', 'whoami'], cwd);
@@ -231,23 +243,24 @@ async function cloudflareFindings(cwd, report) {
  * command that fixes it. Returns the failures instead of throwing, so
  * `--production` can still report on production.
  */
-async function machineFindings(cwd) {
+async function machineFindings(cwd, { productionBootstrap = false } = {}) {
   const packageJson = await readJson(path.join(cwd, 'package.json'));
   const findings = [];
   const report = {
     pass: (label, detail) => findings.push({ ok: true, label, detail }),
+    warn: (label, detail, fix) => findings.push({ ok: true, warning: true, label, detail, fix }),
     fail: (label, detail, fix) => findings.push({ ok: false, label, detail, fix }),
   };
 
   await toolchainFindings(cwd, packageJson, report);
   await repositoryFindings(cwd, report);
-  await cloudflareFindings(cwd, report);
+  await cloudflareFindings(cwd, report, { productionBootstrap });
 
   for (const finding of findings) {
     process.stdout.write(
-      `  ${finding.ok ? 'ok  ' : 'FAIL'}  ${finding.label.padEnd(14)} ${finding.detail}\n`,
+      `  ${finding.warning ? 'WARN' : finding.ok ? 'ok  ' : 'FAIL'}  ${finding.label.padEnd(14)} ${finding.detail}\n`,
     );
-    if (!finding.ok) process.stdout.write(`        fix: ${finding.fix}\n`);
+    if (finding.fix) process.stdout.write(`        fix: ${finding.fix}\n`);
   }
   const failed = findings.filter((finding) => !finding.ok);
   if (failed.length === 0)
@@ -291,7 +304,7 @@ export async function bootstrap({ cwd, options = {} }) {
   const install = spawnSync('pnpm', ['install'], { cwd, stdio: 'inherit' });
   if (install.status !== 0)
     throw new CliError('bootstrap: pnpm install failed', install.status ?? 1);
-  const machine = await machineFindings(cwd);
+  const machine = await machineFindings(cwd, { productionBootstrap: options.production });
   if (machine) throw new CliError(machine, 1);
   if (options.production) {
     await platformBootstrap({ cwd, options });

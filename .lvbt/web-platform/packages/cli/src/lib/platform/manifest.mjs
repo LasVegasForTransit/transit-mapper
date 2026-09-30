@@ -199,9 +199,17 @@ function forbiddenErrors(manifest) {
   return errors;
 }
 
+function accountErrors(manifest) {
+  const { accountId, accountIdEnv } = manifest.cloudflare;
+  return (accountId === undefined) === (accountIdEnv === undefined)
+    ? ['cloudflare needs exactly one of accountId or accountIdEnv.']
+    : [];
+}
+
 /** The rules a JSON schema cannot express: names that refer to each other, and contradictions. */
 function semanticErrors(manifest) {
   return [
+    ...accountErrors(manifest),
     ...duplicateErrors(manifest),
     ...referenceErrors(manifest),
     ...accessErrors(manifest),

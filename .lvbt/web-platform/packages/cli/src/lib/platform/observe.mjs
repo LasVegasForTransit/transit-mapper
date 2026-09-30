@@ -60,7 +60,12 @@ async function observeD1(api, account, manifest, config) {
     const databases = await api.client.list(`${account}/d1/database`);
     const found = {};
     for (const database of manifest.d1) {
-      const match = databases.find((candidate) => candidate.name === database.name);
+      const matches = databases.filter((candidate) => candidate.name === database.name);
+      if (matches.length > 1)
+        throw new Error(
+          `multiple D1 databases named ${database.name} exist in this Cloudflare account`,
+        );
+      const [match] = matches;
       if (!match) continue;
       const entry = { id: match.uuid };
       if (database.migrations) {

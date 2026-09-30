@@ -7,6 +7,7 @@ blob-report/
 **/playwright/.cache/
 .turbo/
 .wrangler/
+.cloudflare/
 .env
 .env.*
 !.env.example

@@ -173,9 +173,8 @@ export async function deleteSecret(context, action) {
 }
 
 /**
- * Whether the config names the database this run created. Wrangler applies
- * migrations to the config's database_id, so until a pull request puts the
- * new id there, applying them would reach the wrong database or none.
+ * Whether the config names the database this run created. The account
+ * inventory supplies its ID; any explicit ID in the config must agree.
  */
 export async function namedInConfig(context, action) {
   const state = context.observe ? await context.observe() : context.state;
@@ -183,9 +182,10 @@ export async function namedInConfig(context, action) {
   const bound = state.config.ok
     ? state.config.value.d1.find((entry) => entry.binding === action.binding)
     : undefined;
-  if (real && bound?.id === real.id) return true;
+  if (real && bound?.name === action.name && (bound.id === undefined || bound.id === real.id))
+    return true;
   context.io.write(
-    `The migrations for ${action.name} wait until ${context.configPath} has ${context.manifest.cloudflare.cloudflareConfig ? 'the D1 binding id' : 'database_id'} ${real?.id ?? 'of the new database'}. Run ${SETUP} again after that pull request merges.\n`,
+    `The migrations for ${action.name} wait until ${context.configPath} binds ${action.binding} to ${action.name}${bound?.id && real ? ` with ID ${real.id}` : ''}. Run ${SETUP} again after that pull request merges.\n`,
   );
   return false;
 }
