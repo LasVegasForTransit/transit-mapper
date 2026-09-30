@@ -1,6 +1,6 @@
 # Files that must exist in dist/ but must never be served.
 #
-# `wrangler deploy --assets` uploads this directory as the public asset store,
+# `cf build` packages this directory as the public asset store,
 # which is every file in it, including ones written by the build for the
 # build's own use. Same format as .gitignore; the files stay on disk for the
 # scripts that read them and for the deployment artifact.
