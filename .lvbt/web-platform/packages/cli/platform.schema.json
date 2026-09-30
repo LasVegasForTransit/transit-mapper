@@ -82,12 +82,16 @@
     "cloudflare": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["accountId", "zone", "worker"],
+      "required": ["zone", "worker"],
       "properties": {
         "accountId": {
           "type": "string",
           "pattern": "^[0-9a-f]{32}$",
           "description": "The Cloudflare account that owns the Worker and the zone."
+        },
+        "accountIdEnv": {
+          "const": "CLOUDFLARE_ACCOUNT_ID",
+          "description": "Read the account ID from CLOUDFLARE_ACCOUNT_ID at production check or setup time."
         },
         "zone": {
           "type": "object",

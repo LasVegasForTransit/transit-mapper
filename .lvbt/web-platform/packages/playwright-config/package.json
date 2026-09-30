@@ -1,6 +1,6 @@
 {
   "name": "@lasvegasfortransit/playwright-config",
-  "version": "0.6.0",
+  "version": "0.6.3",
   "description": "The Playwright configuration every LVBT repository spreads into its own: end-to-end tests under tests/e2e, desktop and mobile projects, traces on failure.",
   "license": "MIT",
   "type": "module",

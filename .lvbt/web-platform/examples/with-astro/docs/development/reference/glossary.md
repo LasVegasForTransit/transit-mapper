@@ -51,7 +51,7 @@ request. The required status is named `Validate`.
 deploy this repository, with a fix printed for anything missing.
 
 <a id="platform-manifest"></a>**Platform manifest**: `platform.json`, next to an app's production
-`wrangler.jsonc`, which lists everything the app needs in production: its database, bucket, bot
-check, admin sign-in, email domain, secrets, and the values that must never be set there.
+configuration, which lists everything the app needs in production: its database, bucket, bot check,
+admin sign-in, email domain, secrets, and the values that must never be set there.
 `pnpm preflight --production` checks production against it, and `pnpm bootstrap --production` sets
 up what is missing.

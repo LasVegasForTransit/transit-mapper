@@ -1,0 +1,21 @@
+{
+  "name": "@lasvegasfortransit/deploy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc --noEmit",
+    "test": "node --test",
+    "validate": "cf deploy --dry-run"
+  },
+  "devDependencies": {
+    "@lasvegasfortransit/eslint-config": "0.6.3",
+    "@lasvegasfortransit/app": "workspace:*",
+    "@lasvegasfortransit/typescript-config": "0.6.3",
+    "cf": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

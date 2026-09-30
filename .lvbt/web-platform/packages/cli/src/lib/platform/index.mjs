@@ -33,6 +33,16 @@ export function defaultServices() {
   };
 }
 
+/** Resolve a manifest's account selector before any production API call. */
+export function resolveManifestAccount(manifest, env) {
+  if (!manifest.cloudflare.accountIdEnv) return manifest;
+  const name = manifest.cloudflare.accountIdEnv;
+  const accountId = env[name]?.trim();
+  if (!/^[0-9a-f]{32}$/.test(accountId ?? ''))
+    throw new CliError(`${name} must be set to the Cloudflare account's 32-character ID.`, 2);
+  return { ...manifest, cloudflare: { ...manifest.cloudflare, accountId } };
+}
+
 /** The manifests `--filter` selects: `apps/site`, `site`, or `.` for the root. */
 export function selectManifests(cwd, filter) {
   const all = findManifests(cwd);
@@ -94,7 +104,7 @@ function setupApiProvider({ manifest, services, io, interactive }) {
 }
 
 async function inspect({ cwd, file, services, io, interactive, askForToken }) {
-  const manifest = loadManifest(path.join(cwd, file));
+  const manifest = resolveManifestAccount(loadManifest(path.join(cwd, file)), services.env);
   const directory = path.join(cwd, path.dirname(file));
   const configPath = path.join(
     path.dirname(file),

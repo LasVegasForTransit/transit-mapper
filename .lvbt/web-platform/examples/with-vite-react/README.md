@@ -15,17 +15,17 @@ pnpm check       # the same check CI runs
 pnpm dev         # the site at http://127.0.0.1:4321
 ```
 
-Then rename the root package and the Worker in `apps/site/wrangler.jsonc`, set `site` in
-`apps/site/astro.config.ts`, and replace the scopes in `.lvbt/commit-scopes.txt` with this
-repository's boundaries.
+Then rename the root package and the Worker in `apps/deploy/cloudflare.config.ts`, and replace the
+scopes in `.lvbt/commit-scopes.txt` with this repository's boundaries.
 
 ## Layout
 
-- `apps/site` is the Astro site: pages under `src/pages`, layouts under `src/layouts`, Tailwind in
-  `src/styles/global.css`, unit tests under `tests/`, end-to-end tests under `tests/e2e/`
+- `apps/app` is the Vite app: source under `src/`, unit tests under `tests/`, and end-to-end tests
+  under `tests/e2e/`
+- `apps/deploy` holds the `cf` Worker configuration and reads `apps/app/dist` after the app build
 - `packages/` for libraries the site shares with other apps
 
-`pnpm run deploy` builds and deploys every app with a `cloudflare.config.ts` or Wrangler config;
+`pnpm run deploy` builds the app and deploys the canonical `cf` project in `apps/deploy`;
 `.github/workflows/deploy.yml` does the same on every push to `main`.
 
 Lint, format, TypeScript, and test settings extend the `@lasvegasfortransit/*` packages from
