@@ -14,6 +14,7 @@ import tseslint from 'typescript-eslint';
 const ignores = {
   ignores: [
     '**/.astro/**',
+    '**/.cloudflare/**',
     '**/.turbo/**',
     '**/.wrangler/**',
     '**/coverage/**',

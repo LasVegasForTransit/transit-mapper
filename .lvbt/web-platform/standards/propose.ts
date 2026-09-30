@@ -169,6 +169,18 @@ function defaultBranchRelease(target: string, runner: Runner): string | null {
 }
 
 /**
+ * Turns on auto-merge. A repository with a merge queue picks the merge method itself, and naming one
+ * there records an auto-merge request that never enters the queue.
+ */
+function enableAutoMerge(target: string, number: number, runner: Runner): void {
+  const rules = JSON.parse(
+    runner('gh', ['api', 'repos/{owner}/{repo}/rules/branches/main'], target),
+  ) as { type: string }[];
+  const queued = rules.some(({ type }) => type === 'merge_queue');
+  runner('gh', ['pr', 'merge', String(number), '--auto', ...(queued ? [] : ['--rebase'])], target);
+}
+
+/**
  * GitHub holds the workflow runs of a pull request that a workflow's own token opened until someone
  * with write access approves them. Approve the ones this update started so `Validate` runs on it.
  */
@@ -237,7 +249,7 @@ export async function proposeRelease(options: {
   if (changed) {
     const pushed = pushUpdateBranch(target, entry.name, updateBranch(tag), runner);
     number = await openPullRequest({ ...options, automerge, runner });
-    if (automerge) runner('gh', ['pr', 'merge', String(number), '--auto', '--rebase'], target);
+    if (automerge) enableAutoMerge(target, number, runner);
     if (pushed) approveHeldRuns(target, updateBranch(tag), runner);
   } else if (defaultBranchRelease(target, runner) === tag) {
     // Only a default branch that already carries the release makes its update pull request moot;

@@ -17,7 +17,7 @@ Every LVBT repository answers to the same commands:
 | `pnpm check:fix`              | Apply formatting and lint fixes                                |
 | `pnpm build`                  | Build every package                                            |
 | `pnpm test`                   | Run every package's tests                                      |
-| `pnpm run deploy`             | Build, then `wrangler deploy` every app (deployable repos)     |
+| `pnpm run deploy`             | Build, then deploy every configured Cloudflare app             |
 | `turbo gen workspace`         | Scaffold a new package or app                                  |
 
 ## Create GitHub issues and pull requests

@@ -26,6 +26,7 @@ function satisfies(version, range) {
 }
 
 const WRANGLER_FILES = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml'];
+const CF_FILE = 'cloudflare.config.ts';
 
 export function wranglerDeployArguments(commit, dryRun) {
   if (!/^[a-f0-9]{40}$/.test(commit))
@@ -35,6 +36,19 @@ export function wranglerDeployArguments(commit, dryRun) {
     'wrangler',
     'deploy',
     '--strict',
+    '--message',
+    `Commit ${commit}`,
+    ...(dryRun ? ['--dry-run'] : []),
+  ];
+}
+
+export function cfDeployArguments(commit, dryRun) {
+  if (!/^[a-f0-9]{40}$/.test(commit))
+    throw new CliError('deploy: provenance requires a full Git commit.', 2);
+  return [
+    'exec',
+    'cf',
+    'deploy',
     '--message',
     `Commit ${commit}`,
     ...(dryRun ? ['--dry-run'] : []),
@@ -61,17 +75,42 @@ async function wranglerConfig(directory) {
   return undefined;
 }
 
-/** Every directory with a wrangler config: the root, then each apps/*. */
-async function deployables(cwd) {
-  const found = [];
-  if (await wranglerConfig(cwd)) found.push('.');
-  const apps = await readdir(path.join(cwd, 'apps'), { withFileTypes: true }).catch(() => []);
-  for (const entry of apps) {
-    if (entry.isDirectory() && (await wranglerConfig(path.join(cwd, 'apps', entry.name)))) {
-      found.push(`apps/${entry.name}`);
+async function deployable(cwd, directory) {
+  const manifestPath = path.join(directory, 'platform.json');
+  if (await exists(manifestPath)) {
+    const manifest = await readJson(manifestPath);
+    const canonical = manifest.cloudflare?.cloudflareConfig;
+    if (canonical) {
+      const configFile = path.resolve(directory, canonical);
+      if (path.basename(configFile) !== CF_FILE)
+        throw new CliError(`deploy: canonical cf config must be named ${CF_FILE}.`, 2);
+      if (!(await exists(configFile)))
+        throw new CliError(`deploy: canonical cf config ${configFile} is missing.`, 2);
+      const target = path.relative(cwd, path.dirname(configFile)) || '.';
+      if (target.startsWith('..') || path.isAbsolute(target))
+        throw new CliError('deploy: canonical cf config must be inside this repository.', 2);
+      return { directory: target, tool: 'cf', source: path.relative(cwd, directory) || '.' };
     }
   }
-  return found;
+  const relative = path.relative(cwd, directory) || '.';
+  if (await exists(path.join(directory, CF_FILE))) return { directory: relative, tool: 'cf' };
+  if (await wranglerConfig(directory)) return { directory: relative, tool: 'wrangler' };
+  return undefined;
+}
+
+/** Every configured project: the root, then each apps/*. Cf wins when both configs remain. */
+export async function deployables(cwd) {
+  const found = new Map();
+  const rootTarget = await deployable(cwd, cwd);
+  if (rootTarget) found.set(rootTarget.directory, rootTarget);
+  const apps = await readdir(path.join(cwd, 'apps'), { withFileTypes: true }).catch(() => []);
+  for (const entry of apps) {
+    if (!entry.isDirectory()) continue;
+    const target = await deployable(cwd, path.join(cwd, 'apps', entry.name));
+    if (target && (!found.has(target.directory) || target.source))
+      found.set(target.directory, target);
+  }
+  return [...found.values()];
 }
 
 async function toolchainFindings(cwd, packageJson, report) {
@@ -151,13 +190,40 @@ async function repositoryFindings(cwd, report) {
 async function cloudflareFindings(cwd, report) {
   const targets = await deployables(cwd);
   if (targets.length === 0) {
-    report.pass('Cloudflare', 'no wrangler config; nothing to deploy from here');
+    report.pass('Cloudflare', 'no Cloudflare project config; nothing to deploy from here');
     return;
   }
-  const whoami = output('pnpm', ['exec', 'wrangler', 'whoami'], cwd);
-  if (whoami && !/not authenticated/i.test(whoami))
-    report.pass('Cloudflare', `wrangler is signed in; deployables: ${targets.join(', ')}`);
-  else report.fail('Cloudflare', 'wrangler is not signed in', 'pnpm exec wrangler login');
+  const cfTargets = targets.filter((target) => target.tool === 'cf');
+  const wranglerTargets = targets.filter((target) => target.tool === 'wrangler');
+  if (cfTargets.length > 0) {
+    const whoami = output(
+      'pnpm',
+      ['exec', 'cf', 'auth', 'whoami'],
+      path.join(cwd, cfTargets[0].directory),
+    );
+    let authenticated = false;
+    try {
+      authenticated = JSON.parse(whoami).authenticated === true;
+    } catch {
+      // An absent CLI or malformed response is not authentication.
+    }
+    if (authenticated)
+      report.pass(
+        'Cloudflare cf',
+        `ready for: ${cfTargets.map((target) => target.directory).join(', ')}`,
+      );
+    else report.fail('Cloudflare cf', 'cf is not signed in', 'pnpm exec cf auth login');
+  }
+  if (wranglerTargets.length > 0) {
+    const whoami = output('pnpm', ['exec', 'wrangler', 'whoami'], cwd);
+    if (whoami && !/not authenticated/i.test(whoami))
+      report.pass(
+        'Cloudflare Wrangler',
+        `ready for: ${wranglerTargets.map((target) => target.directory).join(', ')}`,
+      );
+    else
+      report.fail('Cloudflare Wrangler', 'wrangler is not signed in', 'pnpm exec wrangler login');
+  }
 }
 
 /**
@@ -241,21 +307,23 @@ export async function bootstrap({ cwd, options = {} }) {
 }
 
 /**
- * Build, then deploy with Wrangler: the same steps every deployable repository
- * runs. Every app with a wrangler config deploys, or just the one `--filter`
+ * Build, then deploy with the CLI selected by each project's config. Every app
+ * with a Cloudflare config deploys, or just the one `--filter`
  * names.
  */
 export async function deploy({ cwd, options }) {
   let targets = await deployables(cwd);
   if (options.filter)
-    targets = targets.filter(
-      (target) => target === options.filter || target === `apps/${options.filter}`,
+    targets = targets.filter((target) =>
+      [target.directory, target.source].some(
+        (directory) => directory === options.filter || directory === `apps/${options.filter}`,
+      ),
     );
   if (targets.length === 0) {
     throw new CliError(
       options.filter
-        ? `deploy: ${options.filter} has no wrangler.jsonc, wrangler.json, or wrangler.toml.`
-        : 'deploy: no wrangler.jsonc, wrangler.json, or wrangler.toml at the root or under apps/.',
+        ? `deploy: ${options.filter} has no wrangler config or cloudflare.config.ts.`
+        : 'deploy: no wrangler config or cloudflare.config.ts at the root or under apps/.',
       2,
     );
   }
@@ -269,10 +337,19 @@ export async function deploy({ cwd, options }) {
   for (const target of targets) {
     if (deploymentCommit(cwd) !== commit)
       throw new CliError('deploy: repository changed after the production build.', 2);
-    const args = wranglerDeployArguments(commit, options.dryRun);
-    process.stdout.write(`${target}: pnpm ${args.join(' ')}\n`);
-    const result = spawnSync('pnpm', args, { cwd: path.join(cwd, target), stdio: 'inherit' });
+    const args =
+      target.tool === 'cf'
+        ? cfDeployArguments(commit, options.dryRun)
+        : wranglerDeployArguments(commit, options.dryRun);
+    process.stdout.write(`${target.directory}: pnpm ${args.join(' ')}\n`);
+    const result = spawnSync('pnpm', args, {
+      cwd: path.join(cwd, target.directory),
+      stdio: 'inherit',
+    });
     if (result.status !== 0)
-      throw new CliError(`deploy: wrangler deploy failed in ${target}`, result.status ?? 1);
+      throw new CliError(
+        `deploy: ${target.tool} deploy failed in ${target.directory}`,
+        result.status ?? 1,
+      );
   }
 }

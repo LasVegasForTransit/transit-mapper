@@ -98,9 +98,15 @@ async function inspect({ cwd, file, services, io, interactive, askForToken }) {
   const directory = path.join(cwd, path.dirname(file));
   const configPath = path.join(
     path.dirname(file),
-    manifest.cloudflare.wranglerConfig ?? 'wrangler.jsonc',
+    manifest.cloudflare.cloudflareConfig ?? manifest.cloudflare.wranglerConfig ?? 'wrangler.jsonc',
   );
-  const signedIn = wranglerToken(services.run, directory);
+  // Inventory needs Workers, D1 and R2 read scopes. The narrower deploy token
+  // is deliberately not used here. Cf beta cannot export its OAuth token.
+  const apiToken = services.env.LVBT_CLOUDFLARE_INVENTORY_TOKEN?.trim();
+  const signedIn = apiToken ? { token: apiToken } : wranglerToken(services.run, directory);
+  if (!signedIn.token && manifest.cloudflare.cloudflareConfig)
+    signedIn.reason =
+      'cf beta OAuth cannot supply the production observer; set LVBT_CLOUDFLARE_INVENTORY_TOKEN with Workers, D1 and R2 read access, or run pnpm exec wrangler login';
   const setupApi = setupApiProvider({ manifest, services, io, interactive });
   const apis = {
     wrangler: signedIn.token ? cloudflareApi(signedIn.token, services.request) : undefined,

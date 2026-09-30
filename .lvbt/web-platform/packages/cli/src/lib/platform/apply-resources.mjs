@@ -1,4 +1,5 @@
 import { SETUP } from './plan.mjs';
+import { configVarEntry, configVarLocation } from './guides.mjs';
 import { paint } from './terminal.mjs';
 import { account, manualStep, storeFed, succeeded, targetName, wrangler } from './apply-steps.mjs';
 
@@ -25,7 +26,7 @@ export async function createWidget(context, action) {
   context.created.widgets.set(widget.name, created);
   context.io.write(`${paint('green', 'Created')} the Turnstile widget ${widget.name}.\n`);
   context.io.write(
-    `Put "${widget.siteKeyVar}": "${created.sitekey}" in vars in ${context.configPath}, commit it, and deploy. The site key is public.\n`,
+    `Add ${configVarEntry(widget.siteKeyVar, created.sitekey, context.configPath)} to ${configVarLocation(context.configPath)} in ${context.configPath}, commit it, and deploy. The site key is public.\n`,
   );
   await storeFed(context, widget.secret, created.secret);
 }
@@ -184,7 +185,7 @@ export async function namedInConfig(context, action) {
     : undefined;
   if (real && bound?.id === real.id) return true;
   context.io.write(
-    `The migrations for ${action.name} wait until ${context.configPath} has database_id ${real?.id ?? 'of the new database'}. Run ${SETUP} again after that pull request merges.\n`,
+    `The migrations for ${action.name} wait until ${context.configPath} has ${context.manifest.cloudflare.cloudflareConfig ? 'the D1 binding id' : 'database_id'} ${real?.id ?? 'of the new database'}. Run ${SETUP} again after that pull request merges.\n`,
   );
   return false;
 }

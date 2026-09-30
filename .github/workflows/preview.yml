@@ -144,6 +144,20 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "url=https://$name.$subdomain.workers.dev" >> "$GITHUB_OUTPUT"
 
+      # cf migrations take a D1 ID rather than the Wrangler binding name. The
+      # shared preview database is found by its exact name before any upload.
+      - name: Resolve the preview database
+        id: database
+        run: |
+          set -euo pipefail
+          response=$(curl -sS --fail-with-body -G \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --data-urlencode 'name=transitmapper-preview' \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database")
+          id=$(jq -er '[.result[] | select(.name == "transitmapper-preview") | .uuid] |
+            if length == 1 then .[0] else error("Expected exactly one preview D1 database") end' <<< "$response")
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
       # VITE_SITE_URL reaches vite only because turbo.json lists it in the
       # @transitmapper/web#build env allowlist; Turborepo runs in strict env
       # mode, so an unlisted variable is dropped without a word. Listing it
@@ -158,36 +172,35 @@ jobs:
       # reads a column the shared preview database does not have would deploy
       # cleanly and then fail on every share.
       - name: Apply D1 migrations
+        env:
+          PREVIEW_DB_ID: ${{ steps.database.outputs.id }}
         run: |
-          pnpm --filter @transitmapper/worker exec wrangler d1 migrations apply DB \
-            --remote \
-            --env preview
+          pnpm --filter @transitmapper/worker exec cf d1 migrations apply "$PREVIEW_DB_ID" \
+            --dir src/migrations
 
       - name: Deploy preview
         id: deploy
         env:
-          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-deploy.json
           PREVIEW_NAME: ${{ steps.target.outputs.name }}
           PREVIEW_URL: ${{ steps.target.outputs.url }}
+          PREVIEW_DB_ID: ${{ steps.database.outputs.id }}
+          TRANSITMAPPER_PREVIEW_NAME: ${{ steps.target.outputs.name }}
+          TRANSITMAPPER_PREVIEW_URL: ${{ steps.target.outputs.url }}
+          TRANSITMAPPER_PREVIEW_DB_ID: ${{ steps.database.outputs.id }}
         run: |
           set -euo pipefail
-
-          # --name overrides the `-preview` suffix wrangler would otherwise
-          # append to the inherited Worker name. --var overrides the
-          # placeholder SITE_URL in [env.preview.vars], which cannot itself
-          # hold a per-pull-request value: `wrangler types` unions every
-          # environment's literal var values into the committed bindings.
-          pnpm --filter @transitmapper/worker exec wrangler deploy \
-            --env preview \
-            --name "$PREVIEW_NAME" \
-            --var "SITE_URL:$PREVIEW_URL"
-
-          # What wrangler recorded it published, against the name this job
-          # gave it. The record's shape is pinned by
-          # scripts/tests/assert-deployed-worker.test.ts, so a change to it
-          # fails there rather than here, after the Worker has gone out.
-          pnpm exec tsx scripts/assert-deployed-worker.ts \
-            "$WRANGLER_OUTPUT_FILE_PATH" "$PREVIEW_NAME"
+          pnpm --filter @transitmapper/worker exec cf build --mode preview
+          root_config='apps/worker/.cloudflare/output/v0/config.json'
+          worker_config='apps/worker/.cloudflare/output/v0/workers/default/worker.config.json'
+          jq -e '.buildContext.mode == "preview" and .buildContext.isPreview == false' "$root_config"
+          jq -e --arg name "$PREVIEW_NAME" --arg url "$PREVIEW_URL" --arg db "$PREVIEW_DB_ID" '
+            .name == $name and .workersDev == true and .previewUrls == false and
+            ((.domains // []) | length == 0) and ((.triggers // []) | length == 0) and
+            .env.SITE_URL.value == $url and .env.DB.id == $db and
+            .env.PLACE_SEARCH_GATE.worker == $name
+          ' "$worker_config"
+          pnpm --filter @transitmapper/worker exec cf deploy --prebuilt --mode preview --dry-run
+          pnpm --filter @transitmapper/worker exec cf deploy --prebuilt --mode preview
 
       # Before the checks below, not after them: the link depends only on the
       # deploy, and the verification that follows takes minutes. A preview that

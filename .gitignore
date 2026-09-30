@@ -3,6 +3,7 @@ dist/
 coverage/
 dev-dist/
 .wrangler/
+.cloudflare/
 .dev.vars
 *.local
 .DS_Store

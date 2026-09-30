@@ -7,7 +7,7 @@
  *   lvbt preflight  confirm this machine can build and deploy the repository;
  *                   with --production, also report production's readiness
  *   lvbt check      the shared repository-shape rules (filenames, contract, debt)
- *   lvbt deploy     build, then `wrangler deploy` for every app that has a config
+ *   lvbt deploy     build, then deploy every configured Cloudflare app
  *
  * A repository's package.json maps its standard scripts to these, so
  * `pnpm bootstrap`, `pnpm preflight`, `pnpm check`, and `pnpm run deploy` behave
@@ -31,7 +31,7 @@ Options:
   --filter      For deploy and --production: only the app directory named (apps/site)
   --rotate      For bootstrap --production: replace the named secrets' stored values
                 on every target. Without it, a value that is already set is kept
-  --dry-run     For deploy: build, then run wrangler deploy --dry-run
+  --dry-run     For deploy: build, then run each Cloudflare CLI with --dry-run
 `;
 
 const commands = { bootstrap, preflight, check, deploy };

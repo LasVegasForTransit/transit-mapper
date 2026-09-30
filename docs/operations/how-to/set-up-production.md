@@ -31,8 +31,9 @@ You need:
   [local development](../../development/how-to/local-development.md), with
   the GitHub CLI (`gh`) installed.
 
-Wrangler, the Cloudflare command-line tool, comes with the repository, so you
-do not install it separately.
+The Cloudflare `cf` CLI and Wrangler come with the repository, so you do not
+install them separately. `cf` builds and deploys the Worker; bootstrap uses
+Wrangler for D1 provisioning and the commands `cf` does not cover yet.
 
 ## Run the bootstrap
 
@@ -54,8 +55,8 @@ do not install it separately.
    each one.
 9. If the bootstrap says it wrote a database id into
    `apps/worker/wrangler.toml`, commit that file on a new branch and open a
-   pull request. The deploys read the file from the main branch, so the new
-   id does nothing until the pull request is merged. The bootstrap never
+   pull request. `cloudflare.config.ts` reads the D1 IDs from that file, so
+   the new ID does nothing until the pull request is merged. The bootstrap never
    commits or pushes for you.
 10. Run `pnpm bootstrap` once more. Every line should show a check mark, and
     it should ask you nothing.
@@ -91,8 +92,9 @@ the production build refuses to deploy without them. What they measure is in
 ### The D1 database ids
 
 Each database has an id like `5516498a-4473-468e-a1c9-a9dee4762960`. They are
-not secret and are committed in `apps/worker/wrangler.toml`. The bootstrap
-writes them for you; your only job is the pull request in step 9.
+not secret and are committed in `apps/worker/wrangler.toml`. The `cf`
+configuration reads them from there at build time. The bootstrap writes them
+for you; your only job is the pull request in step 9.
 
 ## Make the deploy token
 

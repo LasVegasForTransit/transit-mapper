@@ -32,25 +32,19 @@ with no second Worker to manage or delete.
 It is unavailable here. Cloudflare does not generate preview URLs for a Worker
 that implements a Durable Object, and this one implements `PLACE_SEARCH_GATE`
 to enforce Nominatim's one-request-per-second limit across every edge
-location. So each preview is a Worker of its own, deployed from the
-`[env.preview]` block of `apps/worker/wrangler.toml`.
+location. So each preview is a Worker of its own. The workflow builds with
+`cf build --mode preview` and deploys the resulting Build Output with
+`cf deploy --prebuilt --mode preview`. It passes the Worker name, URL, and
+shared D1 ID through `TRANSITMAPPER_PREVIEW_*` variables. The preview branch of
+`apps/worker/cloudflare.config.ts` keeps all bindings but declares no custom
+domain, Labs route, or scheduled trigger. Before upload, the workflow checks
+the built name, URL, database, and absence of production routes and triggers.
 
-That block restates every binding the production Worker declares, which looks
-like copy-paste and is not optional. Wrangler treats `vars`, `d1_databases`,
-`r2_buckets`, `durable_objects` and `ratelimits` as non-inheritable: an
-environment that omits one is deployed without it, behind a warning nobody
-reads. `scripts/tests/wrangler-preview-env.test.ts` compares the two blocks —
-values included, not just binding names — so forgetting one fails `pnpm verify`
-rather than producing a preview that breaks at runtime.
-
-Two keys in that block work the other way and matter more than they look:
-
-- `routes = []`. Routes _are_ inherited, and inheriting them is destructive.
-  An environment that omits `routes` inherits the production custom domain and
-  reassigns `map.lasvegasfortransit.org` to itself on every deploy. Wrangler
-  warns and then does it anyway.
-- `crons = []`. Triggers are inherited too. Without this, every open pull
-  request would run the daily maintenance job against the shared database.
+`apps/worker/wrangler.toml` remains the source for D1 IDs written by bootstrap
+and a fallback for the commands that `cf` does not cover yet. The parity test
+checks both configurations, including every preview binding. The Wrangler
+preview environment explicitly clears its routes and cron; if it were used
+without those empty lists, it could inherit the production domain or schedule.
 
 ## Why one shared database
 
@@ -174,13 +168,13 @@ after it deploys.
 
 ## What the asset store publishes
 
-`wrangler deploy --assets` uploads the whole of `dist/`, and the build writes
+`cf build` packages the web `dist/` for upload, and the build writes
 files there for its own use: Vite's manifest, which names every source module,
 and the bundle and PWA reports. Those were being served publicly on production.
 
 They cannot simply be deleted after the build, because five scripts read them
 back. `dist/.assetsignore` is the mechanism for this — same format as
-`.gitignore`, read by wrangler from the assets directory root — so the files
+`.gitignore`, read by the Wrangler asset bundler from the assets directory root — so the files
 stay on disk for the tooling and in the release artifact, and never reach the
 upload. `adaptive-assets.json` is not excluded: the service worker fetches it
 at runtime.

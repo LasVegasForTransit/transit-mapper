@@ -41,7 +41,7 @@ const config: KnipConfig = {
       ],
     },
     'apps/worker': {
-      entry: ['scripts/**/*.ts'],
+      entry: ['scripts/**/*.ts', 'cloudflare.config.ts', 'wrangler.config.ts'],
     },
   },
   rules: {
