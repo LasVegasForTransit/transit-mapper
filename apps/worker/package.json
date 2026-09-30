@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "cf dev",
+    "build:cloudflare": "cf build",
     "check-types": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
     "test": "node --conditions=development --import tsx tests/verify.test.ts && vitest run",
-    "deploy": "wrangler deploy",
+    "deploy": "cf deploy",
     "lint": "eslint .",
     "types": "wrangler types",
     "check:types": "tsx scripts/check-generated-types.ts"
@@ -23,7 +24,9 @@
     "@lasvegasfortransit/typescript-config": "file:../../.lvbt/web-platform/packages/typescript-config",
     "@lasvegasfortransit/vitest-config": "file:../../.lvbt/web-platform/packages/vitest-config",
     "@transitmapper/eslint-plugin": "workspace:*",
+    "cf": "catalog:",
     "eslint": "catalog:",
+    "smol-toml": "catalog:",
     "tsx": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"

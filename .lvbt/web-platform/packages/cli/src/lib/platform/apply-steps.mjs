@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import path from 'node:path';
 import { redact } from './services.mjs';
 import { paint } from './terminal.mjs';
 
@@ -25,6 +26,16 @@ export function wrangler(context, args, options = {}) {
       CLOUDFLARE_ACCOUNT_ID: context.manifest.cloudflare.accountId,
       WRANGLER_SEND_METRICS: 'false',
     },
+    ...options,
+  });
+}
+
+export function cf(context, args, options = {}) {
+  const config = context.manifest.cloudflare.cloudflareConfig;
+  if (!config) throw new Error('cf requires cloudflare.cloudflareConfig in platform.json');
+  return context.run('pnpm', ['exec', 'cf', ...args], {
+    cwd: path.resolve(context.directory, path.dirname(config)),
+    env: { CLOUDFLARE_ACCOUNT_ID: context.manifest.cloudflare.accountId },
     ...options,
   });
 }

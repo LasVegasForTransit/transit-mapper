@@ -166,7 +166,7 @@ export function dnsResolver(request = fetch) {
     );
     if (!response.ok) throw new Error(`DNS lookup answered ${response.status}`);
     const payload = await response.json();
-    const code = { MX: 15, TXT: 16 }[type];
+    const code = { CNAME: 5, MX: 15, TXT: 16 }[type];
     return (payload.Answer ?? [])
       .filter((answer) => code === undefined || answer.type === code)
       .map((answer) => answer.data);

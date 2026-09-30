@@ -107,6 +107,12 @@
           "type": "string",
           "minLength": 1,
           "description": "The production wrangler config, relative to this file. Defaults to wrangler.jsonc."
+        },
+        "cloudflareConfig": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "(^|/)cloudflare\\.config\\.ts$",
+          "description": "The canonical cloudflare.config.ts project config, relative to this file. When set, preflight and deploy use cf instead of Wrangler."
         }
       }
     },
@@ -239,6 +245,10 @@
         "provider": {
           "enum": ["resend"],
           "description": "The sending service. It decides which DNS records are checked."
+        },
+        "dnsProfile": {
+          "enum": ["ses", "forge"],
+          "description": "The DNS layout Resend shows for this domain. Defaults to the legacy SES MX/SPF layout; choose forge for Resend's rsend and send CNAME records."
         },
         "region": {
           "type": "string",

@@ -1,4 +1,10 @@
-import { emailRecords, resendDomainGuide, varGuide } from './guides.mjs';
+import {
+  configVarEntry,
+  configVarLocation,
+  emailRecords,
+  resendDomainGuide,
+  varGuide,
+} from './guides.mjs';
 import { findApp } from './plan-access.mjs';
 import { findWidget } from './plan-cloudflare.mjs';
 import { GH_HINT, item, SETUP, targetLabel, unknownItem } from './plan-items.mjs';
@@ -148,7 +154,7 @@ export function planVars({ manifest, state, configPath }) {
         ...fields,
         status: 'unknown',
         detail: `cannot read ${configPath}`,
-        next: 'fix the wrangler config path',
+        next: 'fix the production config path',
       });
     const widget = (manifest.turnstile ?? []).find(
       (candidate) => candidate.siteKeyVar === variable.name,
@@ -167,8 +173,8 @@ export function planVars({ manifest, state, configPath }) {
       return item({
         ...fields,
         status: 'missing',
-        detail: `is not in vars in ${configPath}`,
-        next: `add it to vars in ${configPath}${live ? ` as "${live.sitekey}"` : ''}`,
+        detail: `is not in ${configVarLocation(configPath)} in ${configPath}`,
+        next: `add ${configVarEntry(variable.name, live?.sitekey ?? '<value>', configPath)} to ${configVarLocation(configPath)} in ${configPath}`,
         action,
       });
     if (live && value !== live.sitekey)
@@ -223,8 +229,8 @@ function workerForbidden({ state, configPath }, entry, fields) {
     });
   if (state.config.ok && entry.name in state.config.value.vars)
     return found(
-      `is in vars in ${configPath}`,
-      `remove it from vars in ${configPath}, then deploy`,
+      `is in ${configVarLocation(configPath)} in ${configPath}`,
+      `remove it from ${configVarLocation(configPath)} in ${configPath}, then deploy`,
     );
   if (deployed && entry.name in deployed.vars)
     return found(

@@ -48,8 +48,9 @@ request preview build gets its own hostname. It only works because
 `turbo.json` lists the variable for `@transitmapper/web#build` — Turborepo runs
 in strict env mode and drops anything unlisted before Vite ever sees it.
 
-`apps/worker/wrangler.toml` sets `SITE_URL` the same way for the
-Worker's dynamic per-share meta tags (`/s/:id`). If you want
+`apps/worker/cloudflare.config.ts` sets the deployed `SITE_URL` for the
+Worker's dynamic per-share meta tags (`/s/:id`). The Wrangler fallback uses
+the matching value in `apps/worker/wrangler.toml`. If you want
 locally-fetched tags to show `http://localhost:8787` instead of the
 production domain while running `pnpm worker:dev`, create a gitignored
 `apps/worker/.dev.vars`:

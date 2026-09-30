@@ -99,12 +99,12 @@ gh attestation verify transitmapper-v<VERSION>-deployment.tar.gz \
   --repo LasVegasForTransit/transit-mapper
 ```
 
-The archive contains Wrangler's complete dry-run output rather than a
-source-named entry file. Wrangler generates that filename, so the workflow
-requires exactly one top-level JavaScript entry in the bundle and discovers it
-again after extraction. This keeps the attested release asset and the
-`--no-bundle` Cloudflare deployment aligned even when the Worker source entry
-is renamed.
+The archive contains Cloudflare Build Output (`.cloudflare/output/v0`), the
+built web assets, and the D1 migration files. The workflow extracts that
+archive, applies its migrations, and sends its Worker and assets with
+`cf deploy --prebuilt`. That command uses the built bytes without bundling
+them again. The workflow checks the built Worker name before packaging and
+dry-runs the prebuilt upload.
 
 The About dialog links the running build to its release, source revision, and
 repository attestations. The attestation proves the release archive's GitHub
@@ -154,7 +154,7 @@ Check which step failed before anything else; they fail for unrelated reasons.
   locks that setting off, an organization owner must enable workflow-created
   pull requests once under the organization's Actions settings before a
   repository workflow can change it.
-- **Build release**, **Bundle Worker**, **Package deployment artifact**, or
+- **Build release**, **Build Worker deployment artifact**, **Package deployment artifact**, or
   **Attest deployment artifact** — nothing has reached Cloudflare. Fix the
   reproducible build or the workflow's `id-token` and `attestations`
   permissions, then rerun the failed job.
@@ -412,7 +412,8 @@ pnpm bootstrap
 
 The bootstrap sees that the preview database is gone, asks to create it,
 applies every migration, and writes the new id into the `[env.preview]` block
-of `apps/worker/wrangler.toml`. Commit that change through a pull request.
+of `apps/worker/wrangler.toml`. `cloudflare.config.ts` reads that ID when
+building the preview Worker. Commit the changed TOML through a pull request.
 Do not drop the tables instead: the
 `d1_migrations` bookkeeping table has to go with the schema, or the next
 deploy believes every migration has already been applied.
@@ -426,14 +427,15 @@ database.
 - **Resolve the preview target** — the token cannot read the account's
   `workers.dev` subdomain, or the account has never registered one. Register
   it once in the Cloudflare dashboard under Workers & Pages → Subdomain.
+- **Resolve the preview database** — the token cannot list the shared D1
+  database, or it does not exist. Check the `preview` environment token and
+  run `pnpm bootstrap` if the database is missing.
 - **Apply D1 migrations** — usually two pull requests raced each other against
   the shared database. Re-run the job. If it fails again, look at the
   migration itself.
-- **Deploy preview**, reporting a Worker name other than the one it asked for
-  — `--name` stopped overriding the environment suffix, so the deploy landed
-  somewhere every other pull request will overwrite in turn. Do not re-run;
-  check `scripts/tests/assert-deployed-worker.test.ts` and wrangler's
-  behaviour first.
+- **Deploy preview**, failing the Build Output check — the built Worker name,
+  URL, database, routes, or triggers differ from this pull request's target.
+  Do not retry until the generated configuration and `cf` preview mode agree.
 - **Verify the deployed site** — the Worker is up but serving something other
   than the build. The URL works and the comment has already been posted, so
   read this exactly as the production smoke failure above.

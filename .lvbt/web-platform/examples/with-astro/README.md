@@ -25,7 +25,7 @@ repository's boundaries.
   `src/styles/global.css`, unit tests under `tests/`, end-to-end tests under `tests/e2e/`
 - `packages/` for libraries the site shares with other apps
 
-`pnpm run deploy` builds and runs `wrangler deploy` for every app with a wrangler config;
+`pnpm run deploy` builds and deploys every app with a `cloudflare.config.ts` or Wrangler config;
 `.github/workflows/deploy.yml` does the same on every push to `main`.
 
 Lint, format, TypeScript, and test settings extend the `@lasvegasfortransit/*` packages from

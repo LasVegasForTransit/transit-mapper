@@ -11,7 +11,7 @@ function configItem({ manifest, state, configPath }) {
       ...fields,
       status: 'mismatch',
       detail: `cannot read it: ${state.config.reason}`,
-      next: 'point cloudflare.wranglerConfig at the production wrangler config',
+      next: `point cloudflare.${manifest.cloudflare.cloudflareConfig ? 'cloudflareConfig' : 'wranglerConfig'} at the production config`,
     });
   if (state.config.value.name !== name)
     return item({
@@ -59,14 +59,16 @@ function databaseItem({ state, configPath }, database) {
       ...fields,
       status: 'mismatch',
       detail: `${configPath} does not bind ${database.binding} to ${database.name}`,
-      next: `add it to d1_databases in ${configPath} with database_id ${real.id}`,
+      next: configPath.endsWith('.ts')
+        ? `set worker.env.${database.binding} to bindings.d1({ name: "${database.name}", id: "${real.id}" }) in ${configPath}`
+        : `add it to d1_databases in ${configPath} with database_id ${real.id}`,
     });
   if (bound && bound.id !== real.id)
     return item({
       ...fields,
       status: 'mismatch',
-      detail: `${configPath} has database_id ${bound.id}, but the database is ${real.id}`,
-      next: `set database_id to ${real.id} in ${configPath}`,
+      detail: `${configPath} has D1 id ${bound.id}, but the database is ${real.id}`,
+      next: `set ${configPath.endsWith('.ts') ? `worker.env.${database.binding} bindings.d1 id` : 'database_id'} to ${real.id} in ${configPath}`,
     });
   return item({ ...fields, status: 'ok', detail: `exists and is bound as ${database.binding}` });
 }
@@ -113,8 +115,8 @@ function pendingItem({ state, configPath }, database, { fields, files, real, act
     return item({
       ...fields,
       status: 'missing',
-      detail: `${pending.length} of ${files.length} not applied; they wait until ${configPath} has database_id ${real.id}`,
-      next: `set database_id to ${real.id} in ${configPath}, then run ${SETUP} again`,
+      detail: `${pending.length} of ${files.length} not applied; they wait until ${configPath} has ${configPath.endsWith('.ts') ? 'D1 id' : 'database_id'} ${real.id}`,
+      next: `set ${configPath.endsWith('.ts') ? `worker.env.${database.binding} bindings.d1 id` : 'database_id'} to ${real.id} in ${configPath}, then run ${SETUP} again`,
     });
   return item({
     ...fields,
@@ -152,7 +154,9 @@ export function planR2({ manifest, state, configPath }) {
         ...fields,
         status: 'mismatch',
         detail: `${configPath} does not bind ${bucket.binding} to ${bucket.name}`,
-        next: `add it to r2_buckets in ${configPath}`,
+        next: configPath.endsWith('.ts')
+          ? `set worker.env.${bucket.binding} to bindings.r2({ name: "${bucket.name}" }) in ${configPath}`
+          : `add it to r2_buckets in ${configPath}`,
       });
     return item({ ...fields, status: 'ok', detail: `exists and is bound as ${bucket.binding}` });
   });

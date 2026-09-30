@@ -444,10 +444,11 @@ Vite builds the editor, embed, and no-script privacy page.
 
 ### Worker
 
-`apps/worker` owns the Cloudflare deployment that serves the web build,
-publishes shared systems and named Views, and persists their records. It
-imports portable core and View contracts but never imports browser or editor
-modules.
+`apps/worker` deploys the web build, publishes systems and Views, and stores
+their records. It imports core and View contracts, never browser modules.
+`cloudflare.config.ts` defines both `cf` deployments; `wrangler.config.ts`
+points the bundler at web assets. Bootstrap writes D1 IDs to `wrangler.toml`.
+The parity test checks routes, triggers, and bindings across both configs.
 
 #### HTTP delivery
 
@@ -472,7 +473,8 @@ preserves the first creation time for duplicates, and rejects conflicting or
 corrupt rows. One mutable head selects the current published revision; another
 table records bounded backfill results. Routes use neither yet. Views omit a
 system foreign key so cleanup remains independent. R2 keeps each last-good GTFS
-archive. Wrangler applies migrations in filename order. See
+archive. The release workflow applies migrations in filename order before
+the prebuilt Worker deploy. See
 [Operations](../../operations/how-to/operations.md).
 
 `performance-samples.ts` owns ingestion; `performance-maintenance.ts` owns

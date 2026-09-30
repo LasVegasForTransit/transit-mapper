@@ -567,9 +567,9 @@ the resulting version, revision, and provenance.
 Routing every request through the Worker would spend the daily invocation
 allowance on files needing no logic, and running out takes every path down.
 
-Each open pull request gets [a Worker of its own](preview-deployments.md), from
-the `[env.preview]` block of the same `wrangler.toml`, over a shared throwaway
-database with neither route nor cron. Cloudflare generates no per-version
+Each open pull request gets [a Worker of its own](preview-deployments.md),
+built in `cf` preview mode over a shared throwaway database with neither
+production route nor cron. Cloudflare generates no per-version
 preview URL for a Worker implementing a Durable Object.
 
 Migrations apply before the Worker deploys, and rolling back does not undo

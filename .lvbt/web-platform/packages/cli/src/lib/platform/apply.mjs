@@ -1,7 +1,8 @@
+import path from 'node:path';
 import { varGuide } from './guides.mjs';
 import { SETUP } from './plan.mjs';
 import { paint } from './terminal.mjs';
-import { manualStep, storeSecret, succeeded, wrangler } from './apply-steps.mjs';
+import { cf, manualStep, storeSecret, succeeded, wrangler } from './apply-steps.mjs';
 import {
   createOrUpdateApp,
   createWidget,
@@ -22,24 +23,55 @@ export { rotateSecrets } from './apply-values.mjs';
  */
 
 async function createDatabase(context, action) {
-  succeeded(wrangler(context, ['d1', 'create', action.name]));
+  succeeded(
+    context.manifest.cloudflare.cloudflareConfig
+      ? cf(context, ['d1', 'create', '--name', action.name])
+      : wrangler(context, ['d1', 'create', action.name]),
+  );
   context.io.write(
-    `${paint('green', 'Created')} the D1 database ${action.name}. Put its database_id in ${context.configPath} through a pull request; the final report shows the id.\n`,
+    `${paint('green', 'Created')} the D1 database ${action.name}. Put its ${context.manifest.cloudflare.cloudflareConfig ? 'D1 id' : 'database_id'} in ${context.configPath} through a pull request; the final report shows the id.\n`,
   );
 }
 
 async function migrateDatabase(context, action) {
   if (action.afterCreate && !(await namedInConfig(context, action))) return;
-  context.io.write(
-    `Applying migrations to ${action.name}. Wrangler lists them and asks you to confirm.\n`,
-  );
-  succeeded(
-    wrangler(context, ['d1', 'migrations', 'apply', action.name, '--remote'], { inherit: true }),
-  );
+  const cfConfig = context.manifest.cloudflare.cloudflareConfig;
+  if (cfConfig) {
+    const database = context.manifest.d1.find((entry) => entry.name === action.name);
+    const latest = action.afterCreate && context.observe ? await context.observe() : context.state;
+    const id = latest.d1.ok ? latest.d1.value[action.name]?.id : undefined;
+    if (!id) throw new Error(`cannot apply migrations before ${action.name} has a D1 ID`);
+    context.io.write(`Applying migrations to ${action.name} with cf.\n`);
+    succeeded(
+      cf(
+        context,
+        [
+          'd1',
+          'migrations',
+          'apply',
+          id,
+          '--dir',
+          path.resolve(context.directory, database.migrations),
+        ],
+        { inherit: true },
+      ),
+    );
+  } else {
+    context.io.write(`Applying migrations to ${action.name}. Wrangler asks you to confirm.\n`);
+    succeeded(
+      wrangler(context, ['d1', 'migrations', 'apply', action.name, '--remote'], {
+        inherit: true,
+      }),
+    );
+  }
 }
 
 async function createBucket(context, action) {
-  succeeded(wrangler(context, ['r2', 'bucket', 'create', action.name]));
+  succeeded(
+    context.manifest.cloudflare.cloudflareConfig
+      ? cf(context, ['r2', 'buckets', 'create-by-name', action.name])
+      : wrangler(context, ['r2', 'bucket', 'create', action.name]),
+  );
   context.io.write(`${paint('green', 'Created')} the R2 bucket ${action.name}.\n`);
 }
 

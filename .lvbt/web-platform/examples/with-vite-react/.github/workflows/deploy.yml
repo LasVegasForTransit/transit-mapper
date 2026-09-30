@@ -1,4 +1,4 @@
-# Deploys every app with a wrangler config on each push to main, after the
+# Deploys every configured Cloudflare app on each push to main, after the
 # same check pull requests run. Needs the CLOUDFLARE_API_TOKEN (Workers Scripts
 # edit) and CLOUDFLARE_ACCOUNT_ID repository secrets.
 name: Deploy

@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { validateAgainstSchema } from './schema.mjs';
 
 export const MANIFEST_FILE = 'platform.json';
@@ -250,6 +250,31 @@ export function readWranglerConfig(file) {
       name: bucket.bucket_name,
     })),
   };
+}
+
+/** Read a cf project's canonical config, including its typed binding builders. */
+export async function readCloudflareConfig(file) {
+  const module = await import(pathToFileURL(file).href);
+  const project =
+    typeof module.default === 'function'
+      ? await module.default({ mode: undefined, isPreview: false })
+      : module.default;
+  const worker =
+    typeof project?.worker === 'function'
+      ? await project.worker({ mode: undefined, isPreview: false })
+      : project?.worker;
+  if (!worker?.name || !worker.env)
+    throw new Error(`${file} must declare a Worker with a name and env bindings.`);
+  const vars = {};
+  const d1 = [];
+  const r2 = [];
+  for (const [binding, entry] of Object.entries(worker.env)) {
+    if (entry.type === 'text' || entry.type === 'json') vars[binding] = entry.value;
+    if (entry.type === 'd1')
+      d1.push({ binding, name: entry.name, id: entry.id, migrationsTable: 'd1_migrations' });
+    if (entry.type === 'r2') r2.push({ binding, name: entry.name });
+  }
+  return { name: worker.name, vars, d1, r2 };
 }
 
 /** The .sql files in a migrations directory, in the order Wrangler applies them. */

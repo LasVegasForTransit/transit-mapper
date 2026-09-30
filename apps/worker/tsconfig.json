@@ -19,6 +19,8 @@
   "include": [
     "src",
     "tests",
+    "cloudflare.config.ts",
+    "wrangler.config.ts",
     "eslint.config.ts",
     "scripts",
     "vitest.config.ts",
