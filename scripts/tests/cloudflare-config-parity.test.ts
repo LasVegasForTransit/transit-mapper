@@ -15,7 +15,6 @@ interface CfWorker {
 }
 
 interface CfConfig {
-  accountId: string;
   worker: CfWorker;
 }
 
@@ -109,7 +108,7 @@ describe('cf and the Wrangler fallback', () => {
   it('keep the production host, routes, cron, assets, and bindings aligned', () => {
     const config = cloudflareConfig({ mode: undefined, isPreview: false });
     const cfWorker = config.worker;
-    expect(config.accountId).toBe(wrangler.account_id);
+    expect(config).not.toHaveProperty('accountId');
     expect(cfWorker).toMatchObject({
       name: wrangler.name,
       entrypoint: wrangler.main,

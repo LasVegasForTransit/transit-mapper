@@ -58,7 +58,6 @@ export default defineConfig(({ mode }) => {
   const name = preview ? previewName : 'transitmapper';
 
   return {
-    accountId: '2557b5c2e166292ded0f8425b73075e9',
     worker: {
       name,
       compatibilityDate: '2025-07-01',
