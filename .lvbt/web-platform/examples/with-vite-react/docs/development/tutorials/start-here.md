@@ -34,7 +34,7 @@ prints one line per check:
   ok    git hooks      core.hooksPath is .githooks
   ok    commit scopes  .lvbt/commit-scopes.txt is present
   ok    GitHub CLI     gh is installed and signed in
-  ok    Cloudflare     wrangler is signed in; deployables: apps/app
+  ok    Cloudflare cf  ready for: apps/deploy
 preflight: all 7 checks passed
 ```
 
@@ -47,9 +47,9 @@ pnpm check
 ```
 
 This is the same command CI runs: formatting, documentation links, the repository-shape rules, then
-lint, typecheck, and tests for every package. On a fresh clone it passes. When it fails, the output
-names the package and file; `pnpm check:fix` repairs everything a machine can (formatting and
-auto-fixable lint findings).
+lint, typecheck, tests, an app build, and a Cloudflare deploy dry run. On a fresh clone it passes.
+When it fails, the output names the package and file; `pnpm check:fix` repairs formatting and
+auto-fixable lint findings.
 
 ## 3. Make a change and commit it
 

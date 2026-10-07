@@ -29,7 +29,7 @@ async function createDatabase(context, action) {
       : wrangler(context, ['d1', 'create', action.name]),
   );
   context.io.write(
-    `${paint('green', 'Created')} the D1 database ${action.name}. Put its ${context.manifest.cloudflare.cloudflareConfig ? 'D1 id' : 'database_id'} in ${context.configPath} through a pull request; the final report shows the id.\n`,
+    `${paint('green', 'Created')} the D1 database ${action.name}. Bind its name in ${context.configPath} through a pull request; the final report shows its ID if you choose to pin it.\n`,
   );
 }
 
