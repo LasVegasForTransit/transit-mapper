@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { ownedFileDrift } from './owned-files.ts';
-import { applyPreset, verifyPreset, type WebPreset } from './web-platform.ts';
+import { applyPreset, validateBundle, verifyPreset, type WebPreset } from './web-platform.ts';
 import { readCommit, readRelease } from './web-platform-source.ts';
 
 const upstream = 'https://github.com/LasVegasForTransit/repository-tooling.git';
@@ -33,8 +33,10 @@ function readSource(repository: string, identity: SourceIdentity) {
  * Applies a preset with the updater it carries, so a release's own consumer migrations run in the
  * update that installs it rather than in the next one. A preset without an updater uses this one.
  */
-async function applyIncoming(root: string, bundle: WebPreset, dryRun: boolean) {
-  const names = Object.keys(bundle.files).filter((name) => name.startsWith('standards/'));
+export async function applyIncoming(root: string, bundle: WebPreset, dryRun = false) {
+  validateBundle(bundle);
+  // Keep the complete reviewed tree: updater modules may import shared sibling package policies.
+  const names = Object.keys(bundle.files);
   if (!names.includes('standards/web-platform.ts')) return applyPreset(root, bundle, dryRun);
   const directory = await mkdtemp(path.join(os.tmpdir(), 'lvbt-updater-'));
   try {

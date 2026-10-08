@@ -1,0 +1,52 @@
+name: Promote TransitMapper release
+run-name: "Promote TransitMapper: ${{ inputs.request_id || inputs.run_id || 'current preview' }}"
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful staging run; omit to select the actual protected preview
+        type: string
+        required: false
+      expected_version:
+        description: Expected current production Worker version for recovery or first adoption
+        type: string
+        required: false
+      request_id:
+        description: Correlation ID supplied by lvbt promote
+        type: string
+        required: false
+permissions:
+  contents: read
+  actions: read
+  deployments: write
+  packages: read
+concurrency:
+  group: production
+  cancel-in-progress: false
+jobs:
+  source:
+    if: github.ref == 'refs/heads/main'
+    uses: LasVegasForTransit/repository-tooling/.github/workflows/release-source.yml@3567f0cb1345e8756eb5d84e0a3ea7b62695125a
+    with:
+      preview-environment: preview
+      run-id: ${{ inputs.run_id }}
+    secrets: inherit
+  promote:
+    needs: source
+    uses: LasVegasForTransit/repository-tooling/.github/workflows/release-publish.yml@3567f0cb1345e8756eb5d84e0a3ea7b62695125a
+    with:
+      target: production
+      expected-version: ${{ inputs.expected_version }}
+      publication-mode: named-staging
+      release-id: ${{ needs.source.outputs.release-id }}
+      commit: ${{ needs.source.outputs.commit }}
+      artifact-prefix: transitmapper-release
+      attestation-prefix: attestation-transitmapper-release
+      app-directory: apps/worker
+      acceptance-directory: apps/web
+      url: https://map.lasvegasfortransit.org
+      preview-environment: preview
+      production-environment: production
+      smoke-script: api
+      browser-script: release:acceptance
+    secrets: inherit

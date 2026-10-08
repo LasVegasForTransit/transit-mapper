@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "cloudflare": {
+    "worker": "transitmapper",
+    "accountIdEnv": "CLOUDFLARE_ACCOUNT_ID",
+    "cloudflareConfig": "cloudflare.config.ts",
+    "zone": {
+      "name": "lasvegasfortransit.org",
+      "id": "7f5c9050d47580145fc50b71def46aaf"
+    },
+    "domains": ["map.lasvegasfortransit.org"]
+  },
+  "d1": [
+    {
+      "binding": "DB",
+      "name": "transitmapper",
+      "migrations": "src/migrations"
+    },
+    {
+      "binding": "DB",
+      "name": "transitmapper-preview",
+      "migrations": "src/migrations",
+      "environment": "preview"
+    }
+  ],
+  "r2": [
+    {
+      "binding": "GTFS_ARCHIVES",
+      "name": "transitmapper-data"
+    }
+  ],
+  "vars": [
+    {
+      "name": "SITE_URL",
+      "purpose": "Absolute URLs in shared-system and View metadata."
+    },
+    {
+      "name": "NOMINATIM_URL",
+      "purpose": "Configured upstream geocoding endpoint."
+    }
+  ],
+  "github": {
+    "repository": "LasVegasForTransit/transit-mapper",
+    "variables": [
+      {
+        "name": "CLOUDFLARE_ACCOUNT_ID",
+        "environment": "production",
+        "from": "cloudflare.accountId",
+        "purpose": "Select the declared Cloudflare account for production deployment."
+      },
+      {
+        "name": "CLOUDFLARE_ACCOUNT_ID",
+        "environment": "preview",
+        "from": "cloudflare.accountId",
+        "purpose": "Select the declared Cloudflare account for preview deployment."
+      },
+      {
+        "name": "PUBLIC_LVBT_CWA_TOKEN",
+        "environment": "production",
+        "purpose": "Public analytics token for map.lasvegasfortransit.org."
+      },
+      {
+        "name": "PUBLIC_LVBT_LABS_CWA_TOKEN",
+        "environment": "production",
+        "purpose": "Public analytics token for labs.lasvegasfortransit.org."
+      },
+      {
+        "name": "LVBT_PREVIEW_BINDINGS",
+        "purpose": "Reviewed named-staging binding declarations as JSON: real isolated preview D1 ID, separate Durable Object Worker, distinct account-scoped limiter namespaces, canonical public vars/assets, and the shared read-only GTFS bucket. This repository-level declaration is read by build, source verification, and both publication environments."
+      }
+    ],
+    "governance": true
+  },
+  "secrets": [
+    {
+      "name": "CLOUDFLARE_API_TOKEN",
+      "purpose": "Deploy Workers, migrate production and preview databases, clean previews, and refresh GTFS archives.",
+      "targets": ["github:production", "github:preview"],
+      "url": "https://dash.cloudflare.com/",
+      "steps": [
+        "Select the Las Vegans for Better Transit account, then Manage Account \u2192 Account API Tokens. A Super Administrator creates this account-owned token.",
+        "Choose Create Token \u2192 Create Custom Token; name it TransitMapper deploy (GitHub Actions).",
+        "Grant Account Workers Scripts Edit, Workers R2 Storage Edit, D1 Edit, and Account Settings Read; grant Zone Zone Read and Workers Routes Edit. R2 access is needed for GTFS feed refresh.",
+        "Restrict Account Resources to the LVBT account and Zone Resources to lasvegasfortransit.org. Do not select all accounts or zones.",
+        "Review the expiry against the organization credential policy and ensure maintainers track renewal before deployments stop.",
+        "Create the token and paste it into the maintainer bootstrap prompt immediately. The shared setup stores it on both GitHub environments and does not print it.",
+        "The existing account-level token serves production and preview. Separate GitHub environments record deployments; they do not constrain Cloudflare token rights. Existing credentials are preserved unless explicit rotation is requested."
+      ]
+    },
+    {
+      "name": "CF_ACCESS_CLIENT_ID",
+      "purpose": "Authenticate retained release acceptance to the protected TransitMapper staging origin only. Never forwarded to production or third-party requests.",
+      "targets": ["github:preview"],
+      "url": "https://one.dash.cloudflare.com/",
+      "steps": [
+        "A maintainer configures Access for transitmapper-preview.las-vegas-for-better-transit.workers.dev with anonymous denial and a service-authentication policy.",
+        "Select the approved service token in Zero Trust, Access, Service Auth. Record its client ID and secret in the matching preview environment prompts; keep the pair in the same environment.",
+        "Do not reuse production deployment credentials or move Access credentials into a production job. Verify anonymous denial and an authenticated marker request before promotion."
+      ]
+    },
+    {
+      "name": "CF_ACCESS_CLIENT_SECRET",
+      "purpose": "Authenticate retained release acceptance to the protected TransitMapper staging origin only. Never forwarded to production or third-party requests.",
+      "targets": ["github:preview"],
+      "url": "https://one.dash.cloudflare.com/",
+      "steps": [
+        "A maintainer configures Access for transitmapper-preview.las-vegas-for-better-transit.workers.dev with anonymous denial and a service-authentication policy.",
+        "Select the approved service token in Zero Trust, Access, Service Auth. Record its client ID and secret in the matching preview environment prompts; keep the pair in the same environment.",
+        "Do not reuse production deployment credentials or move Access credentials into a production job. Verify anonymous denial and an authenticated marker request before promotion."
+      ]
+    }
+  ],
+  "name": "TransitMapper"
+}

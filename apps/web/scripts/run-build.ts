@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { assertAnalyticsBuildEnvironment } from './analytics-environment';
 import { buildEnvironment, readGitBuildState } from './build-metadata';
+import { readSourceReleaseTag } from './release-tag';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
 // Forwarded so `pnpm build -- --force` reaches Turbo. Swallowing the flags
@@ -14,9 +15,14 @@ const forwarded = process.argv.slice(2);
 // to tsc instead. Drop it so the flags stay Turbo's.
 if (forwarded[0] === '--') forwarded.shift();
 assertAnalyticsBuildEnvironment(process.env);
+const git = readGitBuildState(repositoryRoot);
+const releaseTag = readSourceReleaseTag(repositoryRoot, process.env, git);
 const result = spawnSync('pnpm', ['exec', 'turbo', 'run', 'build', ...forwarded], {
   cwd: repositoryRoot,
-  env: buildEnvironment(process.env, readGitBuildState(repositoryRoot)),
+  env: buildEnvironment(
+    { ...process.env, ...(releaseTag ? { TRANSITMAPPER_RELEASE_TAG: releaseTag } : {}) },
+    git,
+  ),
   stdio: 'inherit',
 });
 

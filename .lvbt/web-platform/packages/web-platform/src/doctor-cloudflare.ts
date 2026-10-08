@@ -91,7 +91,7 @@ function validDns(input: unknown, target: CloudflareTarget) {
   );
 }
 
-function validAnalytics(input: unknown, hostname: string) {
+export function validAnalytics(input: unknown, hostname: string) {
   const sites = z
     .array(
       z.object({

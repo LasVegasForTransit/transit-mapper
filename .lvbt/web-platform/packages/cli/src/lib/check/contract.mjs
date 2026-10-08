@@ -1,5 +1,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { catalogEntries, overrideProblems } from './workspace-policy.mjs';
+import { turboCacheRequired } from './turbo-cache.mjs';
+export { catalogEntries } from './workspace-policy.mjs';
 
 /**
  * Every workspace package declares the tasks the standard runs, every
@@ -71,23 +74,6 @@ function workspaceGlobs(root) {
   return globs;
 }
 
-/** The default `catalog:` of pnpm-workspace.yaml as name → version, without a YAML dependency. */
-export function catalogEntries(text) {
-  const entries = {};
-  let inCatalog = false;
-  for (const line of text.split(/\r?\n/)) {
-    if (/^catalog:\s*$/.test(line)) {
-      inCatalog = true;
-      continue;
-    }
-    if (!inCatalog || /^\s*(?:#.*)?$/.test(line)) continue;
-    if (/^\S/.test(line)) break;
-    const match = /^\s+(['"]?)([^'"\s:]+)\1:\s*(['"]?)([^'"\s#]+)\3/.exec(line);
-    if (match) entries[match[2]] = match[4];
-  }
-  return entries;
-}
-
 /**
  * Shared catalog versions belong to the standard; a repository adds entries but never re-pins one.
  * These are warnings until standard v0.6.0, which moves the entries and fails on any that differ.
@@ -101,6 +87,24 @@ function catalogWarnings(root) {
       ([name, version]) =>
         `warning: pnpm-workspace.yaml pins "${name}" to "${version}"; the standard's catalog has "${standard[name]}" (from v0.6.0 this fails)`,
     );
+}
+
+function overrideFindings(root) {
+  const standard = JSON.parse(readFileSync(STANDARD_CATALOG, 'utf8')).overrides ?? {};
+  const source = readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8');
+  const metadata = path.join(root, '.lvbt/web-platform.json');
+  const release = existsSync(metadata)
+    ? JSON.parse(readFileSync(metadata, 'utf8')).release
+    : `v${JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')).version}`;
+  const required = turboCacheRequired(release);
+  const problems = overrideProblems(source, standard);
+  return {
+    ok: !required || problems.length === 0,
+    lines: problems.map(
+      (problem) =>
+        `${required ? 'error' : 'warning'}: ${problem} Run pnpm standards:update (required from v0.8.0).`,
+    ),
+  };
 }
 
 function packageDirectories(root) {
@@ -232,10 +236,17 @@ export function checkContract({ cwd }) {
     lines.push(...dependencyFailures(cwd, directory));
   }
   lines.push(...astroFailures(cwd, directories));
+  let policy;
+  try {
+    const overrides = overrideFindings(cwd);
+    policy = { ok: overrides.ok, lines: [...catalogWarnings(cwd), ...overrides.lines] };
+  } catch (error) {
+    policy = { ok: false, lines: [error.message] };
+  }
   return {
     name: 'contract',
-    ok: lines.length === 0,
-    lines: [...lines, ...catalogWarnings(cwd)],
+    ok: lines.length === 0 && policy.ok,
+    lines: [...lines, ...policy.lines],
     fix: 'add the missing script, move test material under tests/, set the range to "catalog:" and add the version to pnpm-workspace.yaml, or run `pnpm standards:update` to wire an Astro package\'s "sync" task before lint',
   };
 }

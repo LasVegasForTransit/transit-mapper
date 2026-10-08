@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "release": {
+    "appDirectory": "apps/deploy",
+    "artifactSource": "cf-output",
+    "productionWorker": "lvbt-site",
+    "previewWorker": "lvbt-site-preview",
+    "productionUrlEnv": "LVBT_PRODUCTION_URL",
+    "previewUrlEnv": "LVBT_PREVIEW_URL",
+    "artifactPrefix": "app-release",
+    "stagingWorkflow": {
+      "name": "Deploy staging",
+      "path": ".github/workflows/deploy.yml",
+      "branch": "main"
+    },
+    "promotionWorkflow": {
+      "file": "promote.yml",
+      "titlePrefix": "Promote app",
+      "branch": "main"
+    },
+    "workersDevSubdomainEnv": "LVBT_WORKERS_DEV_SUBDOMAIN",
+    "attestation": {
+      "signerWorkflow": "LasVegasForTransit/repository-tooling/.github/workflows/release-attest.yml",
+      "signerCommit": "3567f0cb1345e8756eb5d84e0a3ea7b62695125a"
+    }
+  },
+  "audits": {
+    "workflow": ".github/workflows/audit-scheduled.yml",
+    "artifactName": "lvbt-audit-report",
+    "dependencies": {
+      "local": {
+        "command": ["pnpm", "audit", "--prod", "--audit-level=high", "--json"],
+        "format": "pnpm"
+      },
+      "production": {
+        "command": ["pnpm", "audit", "--prod", "--audit-level=high", "--json"],
+        "format": "pnpm"
+      }
+    }
+  }
+}

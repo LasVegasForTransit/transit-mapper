@@ -17,21 +17,28 @@
     "check": "pnpm format:check && markdownlint-cli2 && lvbt check && turbo run lint check-types test validate",
     "check:fix": "pnpm format && markdownlint-cli2 --fix && turbo run lint -- --fix",
     "prepare": "git config --local core.hooksPath .githooks 2>/dev/null || true",
-    "deploy": "lvbt deploy"
+    "deploy": "lvbt deploy",
+    "audit": "lvbt audit",
+    "promote": "lvbt promote",
+    "postinstall": "lvbt setup-record",
+    "validate": "lvbt check secrets",
+    "security:dependencies": "pnpm audit --audit-level=high"
   },
   "lint-staged": {
     "*": "prettier --write --ignore-unknown"
   },
   "devDependencies": {
-    "@lasvegasfortransit/cli": "0.6.0",
-    "@lasvegasfortransit/prettier-config": "0.6.0",
+    "@lasvegasfortransit/cli": "0.7.1",
+    "@lasvegasfortransit/prettier-config": "0.7.1",
     "lint-staged": "catalog:",
     "markdownlint-cli2": "catalog:",
     "markdownlint-rule-relative-links": "catalog:",
     "prettier": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:",
-    "wrangler": "catalog:"
+    "wrangler": "catalog:",
+    "tsx": "catalog:",
+    "@lasvegasfortransit/web-platform": "0.7.1"
   },
   "packageManager": "pnpm@11.25.0",
   "engines": {

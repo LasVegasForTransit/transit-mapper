@@ -5,8 +5,42 @@ export class CliError extends Error {
   }
 }
 
-const flags = new Set(['--dry-run', '--staged', '--production', '--help']);
-const valued = new Set(['--filter', '--rotate']);
+const flags = new Set([
+  '--dry-run',
+  '--staged',
+  '--production',
+  '--help',
+  '--json',
+  '--protected',
+  '--public',
+  '--wait-for-propagation',
+]);
+const valued = new Set([
+  '--action',
+  '--pr',
+  '--publication-mode',
+  '--protection',
+  '--app',
+  '--filter',
+  '--rotate',
+  '--target',
+  '--output',
+  '--input',
+  '--run-id',
+  '--expected-version',
+  '--directory',
+  '--commit',
+  '--release-id',
+  '--version',
+  '--repository',
+  '--run-file',
+  '--artifact-hash',
+  '--attestation-directory',
+  '--candidate-directory',
+  '--activation',
+  '--verification',
+  '--url',
+]);
 
 /** `<command> [positional...] [--flag] [--option value]`. Unknown options are an error. */
 export function parseArguments(argv) {
@@ -16,11 +50,11 @@ export function parseArguments(argv) {
 
   for (let index = 0; index < rest.length; index += 1) {
     const argument = rest[index];
-    if (argument === '--dry-run') options.dryRun = true;
-    else if (argument === '--staged') options.staged = true;
-    else if (argument === '--production') options.production = true;
-    else if (argument === '--help') return { command: 'help', options };
-    else if (valued.has(argument)) {
+    if (argument === '--help') return { command: 'help', options };
+    if (flags.has(argument)) {
+      const key = { '--dry-run': 'dryRun' }[argument] ?? argument.slice(2);
+      options[key] = true;
+    } else if (valued.has(argument)) {
       const value = rest[index + 1];
       if (value === undefined || value.startsWith('--')) {
         throw new CliError(`Missing value for ${argument}.`, 2);

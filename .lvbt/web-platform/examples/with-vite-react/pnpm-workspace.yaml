@@ -16,8 +16,16 @@ minimumReleaseAge: 1440
 # Temporary transitive pins for published security fixes not yet selected by
 # their direct dependents.
 overrides:
-  sharp: 0.35.4
+  brace-expansion: 5.0.12
+  braces: npm:@dieub/braces-depth-guard@3.0.3-pn.3
+  devalue: 5.9.4
+  fast-uri: 3.1.8
+  http-cache-semantics: 4.3.0
+  sharp: 0.35.5
+  'undici@^7.0.0': 7.29.1
+  'undici@^8.0.0': 8.10.2
   smol-toml: 1.8.0
+  source-map-js: 1.2.2
   svgo: 4.1.0
 
 # The organization version baseline. Every LVBT repository carries this same
@@ -64,3 +72,6 @@ catalog:
   cf: 1.0.0-beta.5
   wrangler: 4.141.0
   zod: 4.5.4
+
+# Preflight is read-only; bootstrap validates before installing.
+verifyDepsBeforeRun: false

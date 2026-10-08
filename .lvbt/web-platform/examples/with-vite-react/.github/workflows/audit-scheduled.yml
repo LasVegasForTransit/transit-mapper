@@ -1,0 +1,20 @@
+name: Audit (scheduled)
+
+on:
+  schedule:
+    - cron: '0 14 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: shared-audits-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    uses: LasVegasForTransit/repository-tooling/.github/workflows/audit.yml@3567f0cb1345e8756eb5d84e0a3ea7b62695125a

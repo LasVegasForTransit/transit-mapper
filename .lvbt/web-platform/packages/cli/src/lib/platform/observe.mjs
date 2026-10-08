@@ -1,4 +1,7 @@
 import path from 'node:path';
+import { deployedWorkerBindings } from './worker-bindings.mjs';
+import { observeGovernance } from './observe-governance.mjs';
+import { configForEnvironment } from './config-scope.mjs';
 import { emailRecords } from './guides.mjs';
 import { migrationFiles, readCloudflareConfig, readWranglerConfig } from './manifest.mjs';
 
@@ -25,6 +28,9 @@ export function githubEnvironments(manifest) {
   const targets = [
     ...(manifest.secrets ?? []).flatMap((secret) => secret.targets ?? []),
     ...(manifest.forbidden ?? []).flatMap((entry) => entry.targets ?? []),
+    ...(manifest.github?.variables ?? []).flatMap((entry) =>
+      entry.environment ? [`github:${entry.environment}`] : [],
+    ),
   ];
   return [
     ...new Set(
@@ -49,7 +55,12 @@ async function observeWorker(api, account, name) {
       if (binding.type === 'plain_text' || binding.type === 'json')
         vars[binding.name] = binding.text ?? binding.json;
     }
-    return { exists: true, secrets: (secrets ?? []).map((secret) => secret.name), vars };
+    return {
+      exists: true,
+      secrets: (secrets ?? []).map((secret) => secret.name),
+      vars,
+      ...deployedWorkerBindings(settings?.bindings ?? []),
+    };
   });
 }
 
@@ -60,13 +71,19 @@ async function observeD1(api, account, manifest, config) {
     const databases = await api.client.list(`${account}/d1/database`);
     const found = {};
     for (const database of manifest.d1) {
-      const match = databases.find((candidate) => candidate.name === database.name);
+      const matches = databases.filter((candidate) => candidate.name === database.name);
+      if (matches.length > 1)
+        throw new Error(
+          `multiple D1 databases named ${database.name} exist in this Cloudflare account`,
+        );
+      const [match] = matches;
       if (!match) continue;
       const entry = { id: match.uuid };
       if (database.migrations) {
         const table =
-          config?.d1.find((item) => item.name === database.name)?.migrationsTable ??
-          'd1_migrations';
+          configForEnvironment(known(config), database.environment)?.value?.d1.find(
+            (item) => item.name === database.name,
+          )?.migrationsTable ?? 'd1_migrations';
         entry.applied = SQL_NAME.test(table)
           ? await attempt(async () => {
               try {
@@ -147,7 +164,8 @@ function githubRead(run, cwd, args) {
 
 async function observeGithub(run, cwd, manifest) {
   const environments = githubEnvironments(manifest);
-  if (environments.length === 0) return known({ environments: [], secrets: {} });
+  if (environments.length === 0 && !manifest.github?.variables?.length)
+    return known({ environments: [], secrets: {}, variables: known({}) });
   const repository = manifest.github.repository;
   const value = { environments: [], secrets: {} };
   for (const environment of environments) {
@@ -168,7 +186,38 @@ async function observeGithub(run, cwd, manifest) {
     if (!listed.ok) return unknown(`gh: ${listed.reason}`, 'unauthorized');
     value.secrets[environment] = JSON.parse(listed.stdout).map((secret) => secret.name);
   }
+  value.variables = await observeGithubVariables(run, cwd, manifest);
   return known(value);
+}
+
+async function observeDomains(api, account, manifest) {
+  if (!manifest.cloudflare.domains?.length) return known([]);
+  if (!api.client) return api.missing;
+  return attempt(() => api.client.list(`${account}/workers/domains`));
+}
+
+async function observeGithubVariables(run, cwd, manifest) {
+  const variables = manifest.github?.variables ?? [];
+  if (variables.length === 0) return known({});
+  return attempt(() => {
+    const values = {};
+    for (const environment of new Set(variables.map((entry) => entry.environment))) {
+      const args = ['variable', 'list'];
+      if (environment) args.push('--env', environment);
+      args.push('--repo', manifest.github.repository, '--json', 'name,value');
+      const listed = githubRead(run, cwd, args);
+      if (!listed.ok) throw new Error(`gh: ${listed.reason}`);
+      const entries = JSON.parse(listed.stdout);
+      if (
+        !Array.isArray(entries) ||
+        entries.some((entry) => typeof entry.name !== 'string' || typeof entry.value !== 'string')
+      )
+        throw new Error('GitHub returned an invalid public variable inventory.');
+      for (const entry of entries)
+        values[environment ? `${environment}:${entry.name}` : entry.name] = entry.value;
+    }
+    return values;
+  });
 }
 
 async function observeDns(resolve, manifest) {
@@ -188,9 +237,27 @@ async function observeConfig(manifest, directory) {
     directory,
     cfConfig ?? manifest.cloudflare.wranglerConfig ?? 'wrangler.jsonc',
   );
-  return attempt(() =>
-    cfConfig ? readCloudflareConfig(configFile) : readWranglerConfig(configFile),
+  const production = await attempt(() =>
+    cfConfig
+      ? readCloudflareConfig(configFile, { mode: manifest.cloudflare.environment })
+      : readWranglerConfig(configFile, { environment: manifest.cloudflare.environment }),
   );
+  if (!production.ok) return production;
+  const modes = new Set(
+    [...(manifest.d1 ?? []), ...(manifest.r2 ?? [])].flatMap(
+      (resource) => resource.environment ?? [],
+    ),
+  );
+  if (modes.size) {
+    production.value.environments = {};
+    for (const mode of modes)
+      production.value.environments[mode] = await attempt(() =>
+        cfConfig
+          ? readCloudflareConfig(configFile, { mode })
+          : readWranglerConfig(configFile, { environment: mode }),
+      );
+  }
+  return production;
 }
 
 /**
@@ -220,6 +287,8 @@ export async function observePlatform({ manifest, directory, apis, run, resolve,
   return {
     config,
     migrations,
+    governance: observeGovernance(run, directory, manifest),
+    domains: await observeDomains(wrangler, account, manifest),
     worker: await observeWorker(wrangler, account, manifest.cloudflare.worker),
     d1: await observeD1(wrangler, account, manifest, config.ok ? config.value : undefined),
     r2: manifest.r2?.length ? await observeR2(wrangler, account, manifest) : known([]),

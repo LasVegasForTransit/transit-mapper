@@ -5,20 +5,10 @@ command that fixes it (`pnpm check:fix` repairs everything a machine can).
 
 ## Standard commands
 
-Every LVBT repository answers to the same commands:
-
-| Command                       | What it does                                                   |
-| ----------------------------- | -------------------------------------------------------------- |
-| `pnpm bootstrap`              | Install dependencies, wire git hooks, and run preflight        |
-| `pnpm preflight`              | Confirm the machine can build and deploy this repository       |
-| `pnpm preflight --production` | Report whether production has everything `platform.json` lists |
-| `pnpm bootstrap --production` | Set up whatever production is missing, asking for values       |
-| `pnpm check`                  | Format, docs, shape rules, lint, types, tests, repo checks     |
-| `pnpm check:fix`              | Apply formatting and lint fixes                                |
-| `pnpm build`                  | Build every package                                            |
-| `pnpm test`                   | Run every package's tests                                      |
-| `pnpm run deploy`             | Build, then deploy every configured Cloudflare app             |
-| `turbo gen workspace`         | Scaffold a new package or app                                  |
+Follow the shared
+[developer workflow](https://github.com/LasVegasForTransit/repository-tooling/blob/main/docs/reference/developer-workflow.md)
+for bootstrap, preflight, validation, audits and explicit staging-to-production promotion. Keep
+application-specific checks in Turbo `validate`; change reusable rules upstream.
 
 ## Create GitHub issues and pull requests
 

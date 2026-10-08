@@ -1,0 +1,4 @@
+{
+  "extends": "@lasvegasfortransit/typescript-config/base.json",
+  "include": ["*.config.ts"]
+}

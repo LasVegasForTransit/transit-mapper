@@ -10,3 +10,5 @@ export {
 } from './provision-variables.js';
 export { provisionEnvironment, provisionEnvironmentPresence } from './provision-environment.js';
 export { provisionEnvironmentSecret } from './provision-secret.js';
+
+export { githubGovernanceDoctor } from './github-governance.js';

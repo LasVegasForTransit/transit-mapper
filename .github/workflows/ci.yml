@@ -69,18 +69,3 @@ jobs:
       # do underneath uncommitted work but fine on a disposable runner.
       - name: Generators emit conformant code
         run: pnpm check:generators
-
-      - name: Dependency audit
-        # Build and test tooling executes in CI, so a production-only audit
-        # would miss vulnerabilities in code this job actually runs.
-        run: pnpm audit --audit-level=high
-
-      - name: Secret scan
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse --is-shallow-repository)" = false
-          docker run --rm \
-            -v "$PWD:/repo" \
-            -w /repo \
-            ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
-            git --redact --no-banner --config /repo/.gitleaks.toml

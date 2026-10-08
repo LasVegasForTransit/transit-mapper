@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/access';
 import { expectNoAccessibilityViolations } from '@lasvegasfortransit/playwright-config/accessibility';
 import { monitorPageHealth } from '@lasvegasfortransit/playwright-config/page-health';
 

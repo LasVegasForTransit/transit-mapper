@@ -13,7 +13,7 @@ import path from 'node:path';
 export function runCommand(command, args, { cwd, env, input, inherit = false } = {}) {
   const result = spawnSync(command, args, {
     cwd,
-    env: env ? { ...process.env, ...env } : process.env,
+    env: { ...process.env, ...env, pnpm_config_verify_deps_before_run: 'error' },
     input,
     encoding: 'utf8',
     stdio: inherit ? 'inherit' : ['pipe', 'pipe', 'pipe'],

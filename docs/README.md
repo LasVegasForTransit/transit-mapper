@@ -34,7 +34,7 @@ deepens.
   back, apply a migration, restore the database, and what to do when the
   Worker breaks.
 - [Set up production from scratch](operations/how-to/set-up-production.md) —
-  run `pnpm bootstrap`, make the deploy token, and what a second run does.
+  run maintainer `pnpm bootstrap --production`, make the deploy token, and what a second run does.
 
 ## Reference
 

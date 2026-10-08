@@ -1,7 +1,9 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { secretForTarget, scopedSecretErrors } from './secret-scope.mjs';
 import { validateAgainstSchema } from './schema.mjs';
+import { cloudflareWorkerBindings, wranglerWorkerBindings } from './worker-bindings.mjs';
 
 export const MANIFEST_FILE = 'platform.json';
 export const SCHEMA_PATH = fileURLToPath(new URL('../../../platform.schema.json', import.meta.url));
@@ -86,7 +88,9 @@ function duplicates(values) {
 }
 
 function duplicateErrors(manifest) {
-  const errors = duplicates([...names(manifest.secrets), ...names(manifest.vars)]).map(
+  const repeated = duplicates(names(manifest.vars));
+  repeated.push(...names(manifest.secrets).filter((name) => names(manifest.vars).includes(name)));
+  const errors = [...new Set(repeated)].map(
     (name) => `${name} is declared more than once across secrets and vars.`,
   );
   for (const label of ['d1', 'r2', 'turnstile', 'access']) {
@@ -110,7 +114,7 @@ export function fedSecrets(manifest) {
 
 function referenceErrors(manifest) {
   const errors = [];
-  const secrets = new Map((manifest.secrets ?? []).map((secret) => [secret.name, secret]));
+  const secrets = new Set(names(manifest.secrets));
   const vars = new Set(names(manifest.vars));
   const references = [
     ...fedSecrets(manifest),
@@ -119,10 +123,9 @@ function referenceErrors(manifest) {
       .map((email) => ({ name: email.apiKeySecret, owner: `email "${email.domain}"` })),
   ];
   for (const { name, owner } of references) {
-    const secret = secrets.get(name);
-    if (!secret) errors.push(`${owner} feeds ${name}, which is not listed in secrets.`);
-    else if (!(secret.targets ?? ['worker']).includes('worker'))
-      errors.push(`${owner} feeds ${name}, so ${name} must target the worker.`);
+    const secret = secretForTarget(manifest, name, 'worker');
+    if (!secrets.has(name)) errors.push(`${owner} feeds ${name}, which is not listed in secrets.`);
+    else if (!secret) errors.push(`${owner} feeds ${name}, so ${name} must target the worker.`);
   }
   for (const widget of manifest.turnstile ?? []) {
     if (!vars.has(widget.siteKeyVar))
@@ -161,10 +164,16 @@ const targetsGithub = (entry) =>
   (entry.targets ?? []).some((target) => target.startsWith('github:'));
 
 function secretErrors(manifest) {
-  const errors = [];
   const fed = new Set(fedSecrets(manifest).map((entry) => entry.name));
-  for (const secret of manifest.secrets ?? []) {
-    const sources = [secret.generate === true, secret.from !== undefined, fed.has(secret.name)];
+  return (manifest.secrets ?? []).flatMap((secret) => {
+    const errors = [];
+    if (secret.listOnly && secret.use !== 'future')
+      errors.push(`${secret.name} can be listOnly only while its use is future.`);
+    const sources = [
+      secret.generate === true,
+      secret.from !== undefined,
+      fed.has(secret.name) && (secret.targets ?? ['worker']).includes('worker'),
+    ];
     const count = sources.filter(Boolean).length;
     if (count > 1)
       errors.push(
@@ -182,8 +191,8 @@ function secretErrors(manifest) {
       errors.push(`${secret.name} has a pattern that is not a valid regular expression.`);
     if (targetsGithub(secret) && !manifest.github)
       errors.push(`${secret.name} targets a GitHub environment, so github.repository is required.`);
-  }
-  return errors;
+    return errors;
+  });
 }
 
 function forbiddenErrors(manifest) {
@@ -199,10 +208,65 @@ function forbiddenErrors(manifest) {
   return errors;
 }
 
+function accountErrors(manifest) {
+  const { accountId, accountIdEnv } = manifest.cloudflare;
+  return (accountId === undefined) === (accountIdEnv === undefined)
+    ? ['cloudflare needs exactly one of accountId or accountIdEnv.']
+    : [];
+}
+
+function zoneErrors(manifest) {
+  const { id, idEnv } = manifest.cloudflare.zone;
+  return (id === undefined) === (idEnv === undefined)
+    ? ['cloudflare.zone needs exactly one of id or idEnv.']
+    : [];
+}
+function resourceBindingErrors(manifest) {
+  const entries = ['d1', 'r2', 'analyticsEngine', 'rateLimits'].flatMap((kind) =>
+    (manifest[kind] ?? []).map((entry) => `${entry.environment ?? 'production'}:${entry.binding}`),
+  );
+  return duplicates(entries).map(
+    (binding) => `${binding} resource binding is declared more than once.`,
+  );
+}
+/** Resolve only the declared public zone identifier selector before any provider API call. */
+export function resolveManifestZone(manifest, env) {
+  const name = manifest.cloudflare.zone.idEnv;
+  if (!name) return manifest;
+  const id = env[name]?.trim();
+  if (!/^[0-9a-f]{32}$/.test(id ?? ''))
+    throw new Error(`${name} must be set to the Cloudflare zone's 32-character ID.`);
+  return {
+    ...manifest,
+    cloudflare: { ...manifest.cloudflare, zone: { ...manifest.cloudflare.zone, id } },
+  };
+}
+
+function githubVariableErrors(manifest) {
+  const errors = [];
+  const scopes = new Set();
+  for (const variable of manifest.github?.variables ?? []) {
+    const key = `${variable.environment ?? 'repository'}:${variable.name}`;
+    if (scopes.has(key))
+      errors.push(
+        `GitHub variable ${variable.name} is declared twice in ${variable.environment ?? 'repository'}.`,
+      );
+    scopes.add(key);
+    if (variable.value !== undefined && variable.from !== undefined)
+      errors.push(`GitHub variable ${variable.name} cannot specify both value and from.`);
+  }
+  return errors;
+}
+
 /** The rules a JSON schema cannot express: names that refer to each other, and contradictions. */
 function semanticErrors(manifest) {
   return [
+    ...accountErrors(manifest),
+    ...zoneErrors(manifest),
+    ...resourceBindingErrors(manifest),
     ...duplicateErrors(manifest),
+    ...scopedSecretErrors(manifest.secrets),
+    ...githubVariableErrors(manifest),
     ...referenceErrors(manifest),
     ...accessErrors(manifest),
     ...secretErrors(manifest),
@@ -234,10 +298,13 @@ export function loadManifest(file) {
  * The parts of the production wrangler config the platform check compares
  * against: the Worker's name, its vars, and its D1 and R2 bindings.
  */
-export function readWranglerConfig(file) {
-  const config = parseJsonc(readFileSync(file, 'utf8'));
+export function readWranglerConfig(file, { environment } = {}) {
+  const production = parseJsonc(readFileSync(file, 'utf8'));
+  const config = environment ? production.env?.[environment] : production;
+  if (!config) throw new Error(`No ${environment} environment in ${file}.`);
   return {
     name: config.name,
+    ...wranglerWorkerBindings(config),
     vars: config.vars ?? {},
     d1: (config.d1_databases ?? []).map((database) => ({
       binding: database.binding,
@@ -252,16 +319,18 @@ export function readWranglerConfig(file) {
   };
 }
 
+function configMode(mode) {
+  return { mode, isPreview: mode !== undefined && mode !== 'production' };
+}
+
 /** Read a cf project's canonical config, including its typed binding builders. */
-export async function readCloudflareConfig(file) {
+export async function readCloudflareConfig(file, { mode } = {}) {
   const module = await import(pathToFileURL(file).href);
   const project =
-    typeof module.default === 'function'
-      ? await module.default({ mode: undefined, isPreview: false })
-      : module.default;
+    typeof module.default === 'function' ? await module.default(configMode(mode)) : module.default;
   const worker =
     typeof project?.worker === 'function'
-      ? await project.worker({ mode: undefined, isPreview: false })
+      ? await project.worker(configMode(mode))
       : project?.worker;
   if (!worker?.name || !worker.env)
     throw new Error(`${file} must declare a Worker with a name and env bindings.`);
@@ -274,7 +343,7 @@ export async function readCloudflareConfig(file) {
       d1.push({ binding, name: entry.name, id: entry.id, migrationsTable: 'd1_migrations' });
     if (entry.type === 'r2') r2.push({ binding, name: entry.name });
   }
-  return { name: worker.name, vars, d1, r2 };
+  return { name: worker.name, vars, d1, r2, ...cloudflareWorkerBindings(worker.env) };
 }
 
 /** The .sql files in a migrations directory, in the order Wrangler applies them. */

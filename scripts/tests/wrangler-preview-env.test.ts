@@ -2,7 +2,12 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse } from 'smol-toml';
 import { describe, expect, it } from 'vitest';
-import { REQUIRED_ENVIRONMENTS } from '../bootstrap/standards.js';
+const platform = JSON.parse(
+  readFileSync(resolve(import.meta.dirname, '../../apps/worker/platform.json'), 'utf8'),
+) as { secrets: { targets: string[] }[] };
+const REQUIRED_ENVIRONMENTS = platform.secrets.flatMap((secret) =>
+  secret.targets.map((target) => target.replace('github:', '')),
+);
 
 const WORKFLOW_DIR = resolve(import.meta.dirname, '../../.github/workflows');
 
@@ -28,7 +33,7 @@ const NON_INHERITABLE = ['vars', 'd1_databases', 'r2_buckets', 'ratelimits', 'du
  * Everything else must match, values included — a preview that throttles
  * differently is a preview of something else.
  */
-const MAY_DIFFER = ['database_id', 'database_name', 'SITE_URL'];
+const MAY_DIFFER = ['database_id', 'database_name', 'SITE_URL', 'namespace_id'];
 
 function withoutPermittedDifferences(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(withoutPermittedDifferences);
@@ -95,6 +100,11 @@ describe('the preview environment', () => {
       withoutPermittedDifferences(production[family]),
     );
   });
+  it('keeps account-scoped preview limiter counters separate from production', () => {
+    const counters = (scope: WranglerScope | undefined) =>
+      (scope?.ratelimits as { namespace_id: string }[]).map((entry) => entry.namespace_id);
+    expect(counters(preview).some((id) => counters(production).includes(id))).toBe(false);
+  });
 
   it('classifies every top-level key, so a new binding kind cannot slip past', () => {
     // The guard on the guard. The case above only checks families listed in
@@ -141,12 +151,14 @@ describe('the GitHub environments the workflows name', () => {
       for (const [, name] of source.matchAll(/^\s*environment:\s*\n\s*name:\s*(\S+)/gmu)) {
         if (name) named.add(name);
       }
-      for (const [, name] of source.matchAll(/^\s*environment:\s*([A-Za-z][\w-]*)\s*$/gmu)) {
+      for (const [, name] of source.matchAll(
+        /^\s*(?:environment|preview-environment|production-environment|build-environment):\s*([A-Za-z][\w-]*)\s*$/gmu,
+      )) {
         if (name) named.add(name);
       }
     }
 
     expect(named.size).toBeGreaterThan(0);
-    expect([...named].sort()).toEqual([...REQUIRED_ENVIRONMENTS].sort());
+    expect([...named].sort()).toEqual([...new Set(REQUIRED_ENVIRONMENTS)].sort());
   });
 });

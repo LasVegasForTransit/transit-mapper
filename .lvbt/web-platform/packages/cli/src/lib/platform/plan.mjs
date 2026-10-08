@@ -1,3 +1,6 @@
+import { planWorkerBindings } from './plan-worker-bindings.mjs';
+import { planGovernance } from './plan-governance.mjs';
+import { planDomains, planGithubVariables } from './plan-infrastructure.mjs';
 import { planAccess } from './plan-access.mjs';
 import { planD1, planR2, planTurnstile, planWorker } from './plan-cloudflare.mjs';
 import {
@@ -27,11 +30,15 @@ export function planPlatform({ manifest, state, configPath }) {
   const context = { manifest, state, configPath };
   return [
     ...planWorker(context),
+    ...planWorkerBindings(context),
+    ...planDomains(context),
     ...planD1(context),
     ...planR2(context),
     ...planTurnstile(context),
     ...planAccess(context),
     ...planGithubEnvironments(context),
+    ...planGovernance(context),
+    ...planGithubVariables(context),
     ...planSecrets(context),
     ...planVars(context),
     ...planEmail(context),

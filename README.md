@@ -40,21 +40,23 @@ to one city or one transit agency.
 ## Quick start
 
 ```sh
-pnpm install
+git clone https://github.com/LasVegasForTransit/transit-mapper.git
+cd transit-mapper
+pnpm bootstrap
 pnpm dev        # editor at http://localhost:5173
 ```
 
 Other commands:
 
 ```sh
-pnpm verify     # run the test suites
-pnpm typecheck  # TypeScript, app + worker
+pnpm check      # the complete CI validation
+pnpm preflight  # read-only local setup report
 pnpm build      # production build
 ```
 
-`typecheck`, `build`, and `verify` run through [Turborepo](https://turborepo.com)
-for caching, so a repeat run with unchanged inputs replays instantly instead
-of re-invoking `tsc`/`vite`/`tsx`.
+Package validation runs through Turbo. Local setup needs no Cloudflare login;
+optional analytics configuration produces warnings without blocking editor work.
+See [local development](docs/development/how-to/local-development.md).
 
 The share/fork backend is a Cloudflare Worker with D1 (`pnpm worker:dev`),
 but the editor runs fully without it.

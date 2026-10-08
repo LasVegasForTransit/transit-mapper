@@ -81,13 +81,14 @@ describe('release performance gates', () => {
     expect(deploy).toContain(
       'gh workflow run performance.yml --repo "$GITHUB_REPOSITORY" --ref "$release_branch"',
     );
-    // The post-deploy checks live in a composite action shared with the pull
-    // request preview deploy, so assert the release still runs them and that
-    // the action still holds the browser walkthrough.
-    expect(deploy).toContain('uses: ./.github/actions/verify-deployed-site');
-    const verify = repositorySource('.github/actions/verify-deployed-site/action.yml');
-    expect(verify).toContain('pnpm --filter @transitmapper/web perf:live-production --');
-    expect(verify).toContain('pnpm --filter @transitmapper/web smoke:deployed --');
-    expect(verify).toContain('--site "$SITE"');
+    // Both retained releases and private PR previews retain the same product
+    // HTTP and real browser acceptance extension.
+    expect(deploy).toContain('browser-script: release:acceptance');
+    const acceptance = repositorySource('apps/web/scripts/deployment/release-acceptance.ts');
+    expect(acceptance).toContain('smoke:deployed');
+    expect(acceptance).toContain('perf:live-production');
+    const preview = repositorySource('.github/workflows/preview.yml');
+    expect(preview).toContain('browser-script: release:acceptance');
+    expect(acceptance).toContain("'--site', site");
   });
 });

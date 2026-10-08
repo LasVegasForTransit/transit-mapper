@@ -13,7 +13,9 @@
     "TRANSITMAPPER_PREVIEW_NAME",
     "TRANSITMAPPER_PREVIEW_URL",
     "TRANSITMAPPER_PREVIEW_DB_ID",
-    "GTFS_FEED_SLUG"
+    "GTFS_FEED_SLUG",
+    "PLAYWRIGHT_BASE_URL",
+    "LVBT_PREVIEW_BINDINGS"
   ],
   "tasks": {
     "build": {
@@ -47,11 +49,7 @@
       "outputs": ["*.tsbuildinfo"]
     },
     "lint": {
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/lvbt-eslint-config.d.ts",
-        "$TURBO_ROOT$/packages/eslint-plugin/src/**"
-      ],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/eslint-plugin/src/**"],
       "outputs": []
     },
     "test": {
@@ -80,7 +78,6 @@
       "dependsOn": [
         "check:types",
         "check:icons",
-        "//#standards:check",
         "//#lint:root",
         "//#typecheck:root",
         "//#verify:root",
@@ -92,7 +89,9 @@
         "//#check:duplication",
         "//#check:boundaries",
         "//#check:documents",
-        "//#check:reference"
+        "//#check:reference",
+        "//#security:dependencies",
+        "//#security:secrets"
       ],
       "outputs": []
     },
@@ -173,9 +172,14 @@
       "cache": false,
       "outputs": []
     },
-    "//#standards:check": {
-      "inputs": ["$TURBO_DEFAULT$"],
+    "//#security:dependencies": {
+      "cache": false,
+      "outputs": []
+    },
+    "//#security:secrets": {
+      "cache": false,
       "outputs": []
     }
-  }
+  },
+  "globalDependencies": [".lvbt/web-platform.json", ".lvbt/tooling.json", ".github/workflows/**"]
 }

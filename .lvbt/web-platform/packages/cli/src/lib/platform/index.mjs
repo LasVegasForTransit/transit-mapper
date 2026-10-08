@@ -2,7 +2,7 @@ import path from 'node:path';
 import { CliError } from '../arguments.mjs';
 import { applyPlan, rotateSecrets } from './apply.mjs';
 import { setupTokenGuide } from './guides.mjs';
-import { findManifests, loadManifest, MANIFEST_FILE } from './manifest.mjs';
+import { findManifests, loadManifest, MANIFEST_FILE, resolveManifestZone } from './manifest.mjs';
 import { observePlatform } from './observe.mjs';
 import { planPlatform, readiness, SETUP } from './plan.mjs';
 import { formatReport } from './report.mjs';
@@ -31,6 +31,17 @@ export function defaultServices() {
     env: process.env,
     confirmations: confirmationStore(),
   };
+}
+
+/** Resolve a manifest's account selector before any production API call. */
+export function resolveManifestAccount(manifest, env) {
+  manifest = resolveManifestZone(manifest, env);
+  if (!manifest.cloudflare.accountIdEnv) return manifest;
+  const name = manifest.cloudflare.accountIdEnv;
+  const accountId = env[name]?.trim();
+  if (!/^[0-9a-f]{32}$/.test(accountId ?? ''))
+    throw new CliError(`${name} must be set to the Cloudflare account's 32-character ID.`, 2);
+  return { ...manifest, cloudflare: { ...manifest.cloudflare, accountId } };
 }
 
 /** The manifests `--filter` selects: `apps/site`, `site`, or `.` for the root. */
@@ -94,7 +105,7 @@ function setupApiProvider({ manifest, services, io, interactive }) {
 }
 
 async function inspect({ cwd, file, services, io, interactive, askForToken }) {
-  const manifest = loadManifest(path.join(cwd, file));
+  const manifest = resolveManifestAccount(loadManifest(path.join(cwd, file)), services.env);
   const directory = path.join(cwd, path.dirname(file));
   const configPath = path.join(
     path.dirname(file),
@@ -203,6 +214,13 @@ export function rotationNames(option, manifests) {
       `--rotate names ${unknownNames.join(', ')}, which platform.json does not declare as a secret.`,
       2,
     );
+  const listOnly = new Set(
+    manifests.flatMap((manifest) =>
+      (manifest.secrets ?? []).filter((secret) => secret.listOnly).map((secret) => secret.name),
+    ),
+  );
+  if (names.some((name) => listOnly.has(name)))
+    throw new CliError('--rotate cannot replace list-only future credentials.', 2);
   return names;
 }
 

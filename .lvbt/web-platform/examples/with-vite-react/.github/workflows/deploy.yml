@@ -1,7 +1,4 @@
-# Deploys every configured Cloudflare app on each push to main, after the
-# same check pull requests run. Needs the CLOUDFLARE_API_TOKEN (Workers Scripts
-# edit) and CLOUDFLARE_ACCOUNT_ID repository secrets.
-name: Deploy
+name: Deploy staging
 
 on:
   push:
@@ -10,33 +7,45 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  deployments: write
+  packages: read
 
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: staging
   cancel-in-progress: false
 
 jobs:
-  validate:
-    name: Validate
-    uses: ./.github/workflows/ci.yml
+  build:
+    uses: LasVegasForTransit/repository-tooling/.github/workflows/release-build.yml@3567f0cb1345e8756eb5d84e0a3ea7b62695125a
+    with:
+      app-directory: apps/deploy
+      artifact-prefix: app-release
+    secrets: inherit
+  attest:
+    needs: build
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      attestations: write
+      id-token: write
+    uses: LasVegasForTransit/repository-tooling/.github/workflows/release-attest.yml@3567f0cb1345e8756eb5d84e0a3ea7b62695125a
+    with:
+      artifact-prefix: app-release
 
-  deploy:
-    name: Deploy
-    needs: validate
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: production
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Setup Node + pnpm
-        uses: ./.github/actions/setup-node-pnpm
-
-      - name: Deploy
-        run: pnpm run deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  staging:
+    needs: [build, attest]
+    uses: LasVegasForTransit/repository-tooling/.github/workflows/release-publish.yml@3567f0cb1345e8756eb5d84e0a3ea7b62695125a
+    with:
+      target: preview
+      attestation-prefix: attestation-app-release
+      release-id: ${{ github.run_id }}
+      commit: ${{ github.sha }}
+      artifact-prefix: app-release
+      app-directory: apps/deploy
+      acceptance-directory: apps/app
+      url: ${{ vars.LVBT_PREVIEW_URL }}
+      smoke-script: worker:smoke
+      browser-script: worker:test:browser
+    secrets: inherit

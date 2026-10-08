@@ -1,3 +1,4 @@
+import { secretForTarget, secretValueKey } from './secret-scope.mjs';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { redact } from './services.mjs';
@@ -20,7 +21,12 @@ export function account(context) {
 }
 
 export function wrangler(context, args, options = {}) {
-  return context.run('pnpm', ['exec', 'wrangler', ...args], {
+  const environment = context.manifest.cloudflare.environment;
+  const scoped =
+    environment && !args.includes('--env') && (args[0] === 'secret' || args.includes('--remote'))
+      ? ['--env', environment]
+      : [];
+  return context.run('pnpm', ['exec', 'wrangler', ...args, ...scoped], {
     cwd: context.directory,
     env: {
       CLOUDFLARE_ACCOUNT_ID: context.manifest.cloudflare.accountId,
@@ -33,7 +39,9 @@ export function wrangler(context, args, options = {}) {
 export function cf(context, args, options = {}) {
   const config = context.manifest.cloudflare.cloudflareConfig;
   if (!config) throw new Error('cf requires cloudflare.cloudflareConfig in platform.json');
-  return context.run('pnpm', ['exec', 'cf', ...args], {
+  const environment = context.manifest.cloudflare.environment;
+  const scoped = environment && !args.includes('--mode') ? ['--mode', environment] : [];
+  return context.run('pnpm', ['exec', 'cf', ...args, ...scoped], {
     cwd: path.resolve(context.directory, path.dirname(config)),
     env: { CLOUDFLARE_ACCOUNT_ID: context.manifest.cloudflare.accountId },
     ...options,
@@ -101,7 +109,7 @@ export async function storeSecret(context, name, target, value) {
     );
   }
   context.handled.add(`secret:${name}:${target}`);
-  const secret = context.manifest.secrets?.find((candidate) => candidate.name === name);
+  const secret = secretForTarget(context.manifest, name, target);
   const shown = secret?.sensitive === false ? ` = ${value}` : '';
   context.io.write(
     `${paint('green', 'Stored')} ${name}${shown} on ${targetName(context, target)}.\n`,
@@ -111,6 +119,7 @@ export async function storeSecret(context, name, target, value) {
 /** Store a value a new resource produced, straight away, so it cannot be lost or left stale. */
 export async function storeFed(context, name, value) {
   if (!value || !context.state.worker.ok || !context.state.worker.value.exists) return;
-  context.values.set(name, value);
+  const secret = secretForTarget(context.manifest, name, 'worker');
+  context.values.set(secret ? secretValueKey(context.manifest, secret) : name, value);
   await storeSecret(context, name, 'worker', value);
 }

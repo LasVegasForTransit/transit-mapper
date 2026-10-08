@@ -4,6 +4,18 @@ What this project is and how it is laid out lives in [`docs/`](docs/README.md).
 The reasoning behind the domain model is in
 [Design principles](docs/product/explanation/design-principles.md).
 
+## Setup and production
+
+`pnpm bootstrap` and `pnpm preflight` use the shared LVBT CLI. Local setup reads
+`.lvbt/tooling.json`, preserves existing development overrides, and needs no
+Cloudflare or GitHub administration. Keep product checks in Turbo `validate`.
+
+`apps/worker/platform.json` declares production and preview resources. A maintainer
+runs `pnpm preflight --production` to observe readiness and interactive
+`pnpm bootstrap --production` to repair it. Never set production secrets from an
+agent session. Preserve data, Worker binding names, and Durable Object storage.
+D1 IDs change only through a reviewed configuration pull request.
+
 ## The bar
 
 ```bash
@@ -11,7 +23,10 @@ pnpm check
 ```
 
 The command runs formatting, lint, typecheck, tests, and the repository's
-own invariants. It requires no browser and no network.
+own invariants, including required local browser acceptance. The shared
+[developer workflow](https://github.com/LasVegasForTransit/repository-tooling/blob/main/docs/reference/developer-workflow.md)
+defines common setup, audit and release commands; product checks remain in Turbo
+`validate`.
 
 ```bash
 pnpm check:fix

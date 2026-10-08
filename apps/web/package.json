@@ -19,7 +19,8 @@
     "renderer:capture": "tsx scripts/renderer-capture/run.ts",
     "check-types": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
     "test": "vitest run",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "release:acceptance": "tsx scripts/deployment/release-acceptance.ts"
   },
   "dependencies": {
     "@lasvegasfortransit/analytics": "catalog:",
@@ -53,6 +54,7 @@
     "tsx": "catalog:",
     "vite": "catalog:",
     "vite-plugin-pwa": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@lasvegasfortransit/web-platform": "file:../../.lvbt/web-platform/packages/web-platform"
   }
 }

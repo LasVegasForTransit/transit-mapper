@@ -1,6 +1,6 @@
 {
   "name": "@lasvegasfortransit/eslint-config",
-  "version": "0.6.0",
+  "version": "0.7.1",
   "description": "The ESLint configurations every LVBT repository uses.",
   "license": "MIT",
   "type": "module",
@@ -14,14 +14,26 @@
     "access": "restricted"
   },
   "exports": {
-    "./base": "./base.js",
-    "./react-internal": "./react-internal.js",
-    "./browser": "./browser.js"
+    "./base": {
+      "types": "./base.d.ts",
+      "default": "./base.js"
+    },
+    "./react-internal": {
+      "types": "./react-internal.d.ts",
+      "default": "./react-internal.js"
+    },
+    "./browser": {
+      "types": "./browser.d.ts",
+      "default": "./browser.js"
+    }
   },
   "files": [
     "base.js",
+    "base.d.ts",
     "react-internal.js",
-    "browser.js"
+    "react-internal.d.ts",
+    "browser.js",
+    "browser.d.ts"
   ],
   "dependencies": {
     "@eslint-community/eslint-plugin-eslint-comments": "4.7.2",

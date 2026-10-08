@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import type { WebPreset } from './web-platform.ts';
 
 const paths = [
+  'community-health',
   'packages',
   'examples/with-astro',
   'examples/with-vite-react',

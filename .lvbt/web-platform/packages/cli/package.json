@@ -1,6 +1,6 @@
 {
   "name": "@lasvegasfortransit/cli",
-  "version": "0.6.0",
+  "version": "0.7.1",
   "description": "The lvbt command every LVBT repository runs for bootstrap, preflight, and deploy, plus the production platform setup, the shared git hooks, and the lvbt-contributions agent plugin.",
   "license": "MIT",
   "type": "module",
@@ -21,9 +21,17 @@
     "hooks",
     "plugins",
     "catalog.json",
-    "platform.schema.json"
+    "platform.schema.json",
+    "tooling.schema.json"
   ],
   "engines": {
     "node": ">=24"
+  },
+  "dependencies": {
+    "tsx": "4.23.13"
+  },
+  "exports": {
+    "./env": "./src/lib/env-file.mjs",
+    "./local": "./src/lib/local-environment.mjs"
   }
 }

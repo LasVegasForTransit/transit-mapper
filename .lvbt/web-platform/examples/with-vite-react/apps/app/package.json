@@ -10,17 +10,19 @@
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "worker:smoke": "tsx scripts/release-smoke.ts",
+    "worker:test:browser": "playwright test"
   },
   "dependencies": {
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "devDependencies": {
-    "@lasvegasfortransit/eslint-config": "0.6.0",
-    "@lasvegasfortransit/playwright-config": "0.6.0",
-    "@lasvegasfortransit/typescript-config": "0.6.0",
-    "@lasvegasfortransit/vitest-config": "0.6.0",
+    "@lasvegasfortransit/eslint-config": "0.7.1",
+    "@lasvegasfortransit/playwright-config": "0.7.1",
+    "@lasvegasfortransit/typescript-config": "0.7.1",
+    "@lasvegasfortransit/vitest-config": "0.7.1",
     "@playwright/test": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",

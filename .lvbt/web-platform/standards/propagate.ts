@@ -266,25 +266,19 @@ export async function applyRelease(options: {
     return { changed: false, from: release, skippedWorkflows };
 
   runner('git', ['switch', '-C', updateBranch(tag)], target);
-  runner('git', ['restore', '--staged', '.'], target);
-  runner('git', ['add', '-A'], target);
+  const paths = [
+    ...runner('git', ['diff', '--name-only', '-z', 'HEAD'], target).split('\0'),
+    ...runner('git', ['ls-files', '--others', '--exclude-standard', '-z'], target).split('\0'),
+  ].filter(Boolean);
   await withTemporaryFile(commitMessage(tag), (message) =>
     runner(
-      'git',
+      'sh',
       [
         '-c',
-        'user.name=lvbt-bot',
-        '-c',
-        'user.email=noreply@lasvegasfortransit.org',
-        // The repository's own hooks are for people; installing dependencies can switch them on,
-        // and prepare-commit-msg runs even with --no-verify.
-        '-c',
-        'core.hooksPath=/dev/null',
-        'commit',
-        '--quiet',
-        '--no-verify',
-        '-F',
+        'lvbt_commit_file="$1"; shift; git restore --staged . && git add -- "$@" && git -c user.name=lvbt-bot -c user.email=noreply@lasvegasfortransit.org commit --quiet -F "$lvbt_commit_file"',
+        'lvbt-standard-update',
         message,
+        ...new Set(paths),
       ],
       target,
     ),

@@ -11,15 +11,20 @@ import {
   type RegistryEntry,
   compareReleases,
   latestRelease,
-  propagationTargets,
   readRegistry,
 } from './propagate.ts';
+import { inventoryPaths, processFindings, type ProcessSnapshot } from './process-contract.ts';
+import { OWNED_FILES } from './owned-files.ts';
 
 /** Days a repository may trail the latest release while its update pull request runs. */
 export const GRACE_DAYS = 3;
 
 export interface RepositoryState {
   name: string;
+  kind?: RegistryEntry['kind'];
+  defaultBranch?: string;
+  commit?: string;
+  process?: ProcessSnapshot;
   release: string | null;
   pluginRef: string | null;
   /** The repository runs `Standard update`. */
@@ -32,6 +37,10 @@ export interface Finding {
   repository: string;
   rule: string;
   message: string;
+  severity?: 'warning' | 'error';
+}
+export function hasErrors(open: Finding[]): boolean {
+  return open.some(({ severity }) => severity !== 'warning');
 }
 
 export interface Release {
@@ -51,7 +60,7 @@ export function daysBehind(release: string, releases: Release[], now: number): n
  * Compares one repository with the releases and the organization settings. Pure, so the rules are
  * tested without GitHub.
  */
-export function findings(state: RepositoryState, releases: Release[], now: number): Finding[] {
+function adoptionFindings(state: RepositoryState, releases: Release[], now: number): Finding[] {
   const found: Finding[] = [];
   const add = (rule: string, message: string) =>
     found.push({ repository: state.name, rule, message });
@@ -78,11 +87,18 @@ export function findings(state: RepositoryState, releases: Release[], now: numbe
       'self-update',
       'it cannot update itself: copy .github/workflows/standard-update.yml from the example.',
     );
+  return found;
+}
+export function findings(state: RepositoryState, releases: Release[], now: number): Finding[] {
+  const found = state.kind === 'source' ? [] : adoptionFindings(state, releases, now);
+  const add = (rule: string, message: string) =>
+    found.push({ repository: state.name, rule, message });
   if (!state.rulesets.includes('org-standard'))
     add('ruleset', 'the org-standard ruleset is missing.');
   for (const update of state.updates) {
     if (update.failing) add('update', `update pull request #${update.number} is failing Validate.`);
   }
+  if (state.process) found.push(...processFindings(state.process));
   return found;
 }
 
@@ -105,14 +121,18 @@ export function report(states: RepositoryState[], latest: string, open: Finding[
     '',
     `Latest release: **${latest}**.`,
     '',
-    '| Repository | Release | Open update | Findings |',
-    '| --- | --- | --- | --- |',
+    '| Repository | Default branch / commit | Release | Open update | Findings |',
+    '| --- | --- | --- | --- | --- |',
   ];
   for (const state of states) {
     const mine = open.filter(({ repository }) => repository === state.name);
     const updates = state.updates.map(({ number }) => `#${number}`).join(', ') || '—';
-    const summary = mine.map(({ message }) => message).join('<br>') || 'none';
-    lines.push(`| ${state.name} | ${state.release ?? 'unreleased'} | ${updates} | ${summary} |`);
+    const summary =
+      mine.map(({ message, severity }) => `${severity ?? 'error'}: ${message}`).join('<br>') ||
+      'none';
+    lines.push(
+      `| ${state.name} | ${state.defaultBranch ?? '—'} / ${state.commit ?? '—'} | ${state.release ?? 'unreleased'} | ${updates} | ${summary} |`,
+    );
   }
   lines.push('');
   return lines.join('\n');
@@ -121,11 +141,11 @@ export function report(states: RepositoryState[], latest: string, open: Finding[
 const gh = (args: string[]) =>
   execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
-function readRaw(repository: string, file: string): string | null {
+export function readRaw(repository: string, file: string, ref: string, read = gh): string | null {
   try {
-    return gh([
+    return read([
       'api',
-      `repos/${OWNER}/${repository}/contents/${file}`,
+      `repos/${OWNER}/${repository}/contents/${file}?ref=${encodeURIComponent(ref)}`,
       '-H',
       'Accept: application/vnd.github.raw',
     ]);
@@ -145,14 +165,51 @@ export function pluginRef(settings: string | null): string | null {
   return marketplace?.source?.ref ?? null;
 }
 
-function readState(entry: RegistryEntry): RepositoryState {
-  const manifest = readRaw(entry.name, '.lvbt/web-platform.json');
-  const release = manifest ? (JSON.parse(manifest) as { release: string | null }).release : null;
+function readFiles(repository: string, commit: string, paths: string[], read: typeof gh) {
+  const requested = inventoryPaths(paths);
+  requested.push(...OWNED_FILES.map((file) => `.lvbt/web-platform/examples/with-astro/${file}`));
+  return Object.fromEntries(
+    requested.map((file) => {
+      const content = paths.includes(file) ? readRaw(repository, file, commit, read) : null;
+      if (paths.includes(file) && content === null)
+        throw new Error(
+          `Cannot inventory ${repository}/${file} at ${commit}; GitHub contents are unavailable.`,
+        );
+      return [file, content];
+    }),
+  );
+}
+export function readState(entry: RegistryEntry, read = gh): RepositoryState {
+  const repository = JSON.parse(read(['api', `repos/${OWNER}/${entry.name}`])) as {
+    default_branch: string;
+  };
+  const commit = (
+    JSON.parse(
+      read([
+        'api',
+        `repos/${OWNER}/${entry.name}/commits/${encodeURIComponent(repository.default_branch)}`,
+      ]),
+    ) as { sha: string }
+  ).sha;
+  const tree = JSON.parse(
+    read(['api', `repos/${OWNER}/${entry.name}/git/trees/${commit}?recursive=1`]),
+  ) as { truncated: boolean; tree: { path: string; type: string }[] };
+  if (tree.truncated)
+    throw new Error(`${entry.name}: inventory tree is truncated; refusing incomplete findings.`);
+  const paths = tree.tree.filter(({ type }) => type === 'blob').map(({ path }) => path);
+  const files = readFiles(entry.name, commit, paths, read);
+  const manifest = files['.lvbt/web-platform.json'];
+  const release =
+    entry.kind === 'source'
+      ? `v${(JSON.parse(files['package.json'] ?? '{}') as { version?: string }).version ?? 'unknown'}`
+      : manifest
+        ? (JSON.parse(manifest) as { release: string | null }).release
+        : null;
   const rulesets = (
-    JSON.parse(gh(['api', `repos/${OWNER}/${entry.name}/rulesets`])) as { name: string }[]
+    JSON.parse(read(['api', `repos/${OWNER}/${entry.name}/rulesets`])) as { name: string }[]
   ).map(({ name }) => name);
   const pulls = JSON.parse(
-    gh([
+    read([
       'pr',
       'list',
       '--repo',
@@ -184,9 +241,13 @@ function readState(entry: RegistryEntry): RepositoryState {
     }));
   return {
     name: entry.name,
+    kind: entry.kind,
+    defaultBranch: repository.default_branch,
+    commit,
+    process: { name: entry.name, kind: entry.kind, files, paths },
     release,
-    pluginRef: pluginRef(readRaw(entry.name, '.claude/settings.json')),
-    selfUpdating: readRaw(entry.name, '.github/workflows/standard-update.yml') !== null,
+    pluginRef: pluginRef(files['.claude/settings.json'] ?? null),
+    selfUpdating: typeof files['.github/workflows/standard-update.yml'] === 'string',
     rulesets,
     updates,
   };
@@ -234,7 +295,7 @@ export async function main(args: string[]): Promise<void> {
   const releases = readReleases();
   const latest = latestRelease(releases.map(({ tag }) => tag));
   if (!latest) throw new Error('repository-tooling has no stable release tag.');
-  const states = propagationTargets(registry).map(readState);
+  const states = registry.repositories.map((entry) => readState(entry));
   const now = Date.now();
   const open = applyExceptions(
     states.flatMap((state) => findings(state, releases, now)),
@@ -247,7 +308,7 @@ export async function main(args: string[]): Promise<void> {
   process.stdout.write(output);
   if (process.env.GITHUB_STEP_SUMMARY)
     await appendFile(process.env.GITHUB_STEP_SUMMARY, report(states, latest, open));
-  if (open.length > 0) process.exitCode = 1;
+  if (hasErrors(open)) process.exitCode = 1;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {

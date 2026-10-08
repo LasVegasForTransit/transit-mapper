@@ -128,27 +128,30 @@ describe('the deployed HTTP smoke', () => {
     expect(indexing[0]?.ok).toBe(false);
   });
 
-  it('accepts a non-production origin that sends noindex and drops its sitemap', async () => {
-    server = createServer((request, response) => {
-      if (request.url?.startsWith('/sitemap.xml')) {
-        // Deleted from the build, so the SPA fallback answers instead.
-        response.writeHead(200, { 'content-type': 'text/html' });
+  it.each(['noindex', 'noindex, nofollow, noarchive'])(
+    'accepts a non-production origin that sends %s and drops its sitemap',
+    async (policy) => {
+      server = createServer((request, response) => {
+        if (request.url?.startsWith('/sitemap.xml')) {
+          // Deleted from the build, so the SPA fallback answers instead.
+          response.writeHead(200, { 'content-type': 'text/html' });
+          response.end('<html></html>');
+          return;
+        }
+        response.writeHead(200, { 'content-type': 'text/html', 'x-robots-tag': policy });
         response.end('<html></html>');
-        return;
-      }
-      response.writeHead(200, { 'content-type': 'text/html', 'x-robots-tag': 'noindex' });
-      response.end('<html></html>');
-    });
-    await new Promise<void>((ready) => server?.listen(0, '127.0.0.1', ready));
-    const address = server.address();
-    const port = typeof address === 'object' && address !== null ? address.port : 0;
+      });
+      await new Promise<void>((ready) => server?.listen(0, '127.0.0.1', ready));
+      const address = server.address();
+      const port = typeof address === 'object' && address !== null ? address.port : 0;
 
-    const results = await runDeployedSmoke({
-      site: `http://127.0.0.1:${String(port)}`,
-      distDirectory: '/nonexistent',
-      propagation: { attempts: 1, intervalMs: 0 },
-    });
-    expect(results.find((result) => result.label.includes('not indexable'))?.ok).toBe(true);
-    expect(results.find((result) => result.label.includes('no sitemap'))?.ok).toBe(true);
-  });
+      const results = await runDeployedSmoke({
+        site: `http://127.0.0.1:${String(port)}`,
+        distDirectory: '/nonexistent',
+        propagation: { attempts: 1, intervalMs: 0 },
+      });
+      expect(results.find((result) => result.label.includes('not indexable'))?.ok).toBe(true);
+      expect(results.find((result) => result.label.includes('no sitemap'))?.ok).toBe(true);
+    },
+  );
 });
