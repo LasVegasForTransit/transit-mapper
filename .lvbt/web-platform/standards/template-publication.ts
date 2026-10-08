@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { cp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -111,6 +111,7 @@ export async function main(args: string[]): Promise<void> {
       target: { type: 'string' },
       example: { type: 'string' },
       release: { type: 'string' },
+      'skip-install': { type: 'boolean', default: false },
     },
   });
   if (!values.source || !values.target || !values.example || !values.release) {
@@ -118,12 +119,24 @@ export async function main(args: string[]): Promise<void> {
       'Usage: --source <repository> --target <directory> --example <name> --release <tag>',
     );
   }
+  // Published update drivers run this incoming entry point before their lockfile-only install.
+  // Restore real hooks for those drivers; current callers explicitly own installation themselves.
+  const lockfile = path.join(values.target, 'pnpm-lock.yaml');
+  const published =
+    !values['skip-install'] && existsSync(lockfile) ? await readFile(lockfile, 'utf8') : undefined;
   await materializeTemplate({
     source: values.source,
     target: values.target,
     example: values.example,
     release: values.release,
   });
+  if (!values['skip-install']) {
+    if (published !== undefined) await writeFile(lockfile, published);
+    execFileSync('pnpm', ['install', '--no-frozen-lockfile'], {
+      cwd: values.target,
+      stdio: 'inherit',
+    });
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {

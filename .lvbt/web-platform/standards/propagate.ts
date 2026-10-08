@@ -169,7 +169,7 @@ export const run: Runner = (command, args, cwd) =>
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit'],
-  }).trim();
+  }).trimEnd();
 
 async function currentRelease(target: string): Promise<string | null> {
   const file = path.join(target, '.lvbt/web-platform.json');
@@ -206,6 +206,7 @@ async function publishTemplate(options: {
       entry.example,
       '--release',
       tag,
+      '--skip-install',
     ],
     target,
   );
@@ -260,7 +261,7 @@ export async function applyRelease(options: {
     );
   else throw new Error(`${entry.name} does not receive releases.`);
 
-  if (install) runner('pnpm', ['install', '--lockfile-only', '--no-frozen-lockfile'], target);
+  if (install) runner('pnpm', ['install', '--no-frozen-lockfile'], target);
   const skippedWorkflows = skipWorkflows ? restoreWorkflows(target, runner) : [];
   if (!runner('git', ['status', '--porcelain'], target))
     return { changed: false, from: release, skippedWorkflows };
