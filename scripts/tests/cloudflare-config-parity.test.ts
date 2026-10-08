@@ -20,7 +20,7 @@ interface CfConfig {
 
 const { default: cloudflareConfig } = (await import(
   resolve(import.meta.dirname, '../../apps/worker/cloudflare.config.ts')
-)) as { default: (context: { mode?: string; isPreview: boolean }) => CfConfig };
+)) as { default: (context: { mode?: string | undefined; isPreview: boolean }) => CfConfig };
 
 interface WranglerRateLimit {
   name: string;

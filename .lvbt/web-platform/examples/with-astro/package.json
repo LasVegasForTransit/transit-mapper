@@ -28,8 +28,8 @@
     "*": "prettier --write --ignore-unknown"
   },
   "devDependencies": {
-    "@lasvegasfortransit/cli": "0.7.1",
-    "@lasvegasfortransit/prettier-config": "0.7.1",
+    "@lasvegasfortransit/cli": "0.7.2",
+    "@lasvegasfortransit/prettier-config": "0.7.2",
     "lint-staged": "catalog:",
     "markdownlint-cli2": "catalog:",
     "markdownlint-rule-relative-links": "catalog:",
@@ -39,7 +39,7 @@
     "typescript": "catalog:",
     "wrangler": "catalog:",
     "tsx": "catalog:",
-    "@lasvegasfortransit/web-platform": "0.7.1"
+    "@lasvegasfortransit/web-platform": "0.7.2"
   },
   "packageManager": "pnpm@11.25.0",
   "engines": {

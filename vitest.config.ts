@@ -1,4 +1,5 @@
 import { configDefaults, defineConfig } from 'vitest/config';
+import { sharedConfig } from '@lasvegasfortransit/vitest-config';
 
 /**
  * The root suite is `scripts/tests`, and those cases are unlike ordinary unit
@@ -9,11 +10,14 @@ import { configDefaults, defineConfig } from 'vitest/config';
  * boundary test that flakes is one people start ignoring.
  */
 export default defineConfig({
+  ...sharedConfig,
   test: {
+    ...sharedConfig.test,
+    include: ['scripts/tests/**/*.test.{ts,tsx}'],
     testTimeout: 60_000,
     hookTimeout: 60_000,
     // Test-only support modules end in .test.ts like everything under tests/,
     // but hold no cases. The shared LVBT config excludes them the same way.
-    exclude: [...configDefaults.exclude, 'scripts/tests/support/**'],
+    exclude: [...configDefaults.exclude, ...sharedConfig.test.exclude, 'scripts/tests/support/**'],
   },
 });
