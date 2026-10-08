@@ -58,8 +58,8 @@ catalogs:
       specifier: 0.8.3
       version: 0.8.3
     hono:
-      specifier: 4.13.5
-      version: 4.13.5
+      specifier: 4.13.7
+      version: 4.13.7
     jiti:
       specifier: 2.7.0
       version: 2.7.0
@@ -335,7 +335,7 @@ importers:
         version: link:../../packages/views
       hono:
         specifier: 'catalog:'
-        version: 4.13.5
+        version: 4.13.7
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: 'catalog:'
@@ -1145,6 +1145,7 @@ packages:
 
   '@cloudflare/vitest-pool-workers@0.22.0':
     resolution: {integrity: sha512-OJv/qikkOgxnKxJ5xrLS7zuOLZhc/6iziU+llqZm4tiQf2CJUYwlMuXN68VaWIQebORd1AUx4w6A0oy8XRbuaQ==}
+    deprecated: '@cloudflare/vitest-pool-workers has been renamed to @cloudflare/vitest-plugin. This package will not receive future updates.'
     peerDependencies:
       '@vitest/runner': ^4.1.0
       '@vitest/snapshot': ^4.1.0
@@ -3429,8 +3430,8 @@ packages:
   hermes-parser@0.25.1:
     resolution: {integrity: sha512-6pEjquH3rqaI6cYAXYPcz9MS4rY6R4ngRgrgfDshRptUZIc3lw0MCIJIGDj9++mfySOuPTHB4nrSW99BCvOPIA==}
 
-  hono@4.13.5:
-    resolution: {integrity: sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw==}
+  hono@4.13.7:
+    resolution: {integrity: sha512-c8/gF9ac8Y78/agExVocyLevgR+JlpNB444Py0FSX8pJoPdYUfUzRcXtYEYGwt6l19qIlVZPN5Mfsw9jFShmQQ==}
     engines: {node: '>=16.9.0'}
 
   html-encoding-sniffer@6.0.0:
@@ -7802,7 +7803,7 @@ snapshots:
     dependencies:
       hermes-estree: 0.25.1
 
-  hono@4.13.5: {}
+  hono@4.13.7: {}
 
   html-encoding-sniffer@6.0.0:
     dependencies:
