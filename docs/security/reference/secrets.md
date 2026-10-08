@@ -77,7 +77,7 @@ whether it was really exposed is not.
    it, then revoke the old one.
 2. For `CLOUDFLARE_API_TOKEN`: create a new token with
    [the deploy token steps](../../operations/how-to/set-up-production.md#make-the-deploy-token),
-   store it on both environments with `pnpm bootstrap --rotate-token`,
+   store it on both environments with `pnpm bootstrap --production --rotate CLOUDFLARE_API_TOKEN`,
    confirm a deploy succeeds, then delete the old token. The bootstrap never
    replaces a token that is already set without that flag.
 3. Removing the value from a file does not remove it from git history. If
@@ -88,11 +88,11 @@ whether it was really exposed is not.
 
 Three nets, because the first two can be skipped:
 
-| Net | Where                  | Bypassable                           |
-| --- | ---------------------- | ------------------------------------ |
-| 1   | `.githooks/pre-commit` | yes, via `--no-verify`               |
-| 2   | CI, `Scan for secrets` | no, but only once a branch is pushed |
-| 3   | GitHub push protection | no, blocks at the remote             |
+| Net | Where                                    | Bypassable                           |
+| --- | ---------------------------------------- | ------------------------------------ |
+| 1   | `.githooks/pre-commit`                   | yes, via `--no-verify`               |
+| 2   | `pnpm check`, uncached full-history scan | no, but only once a branch is pushed |
+| 3   | GitHub push protection                   | no, blocks at the remote             |
 
 Net 1 needs the `gitleaks` binary locally. Without it the hook says so and
 continues; it does not pretend to have scanned. Install with

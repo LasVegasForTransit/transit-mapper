@@ -1,195 +1,94 @@
 # Pull request previews
 
-Every push to an open pull request deploys the branch to a URL of its own, so
-a reviewer can click the change instead of imagining it from a diff. This page
-explains how that works and why it is built the way it is. To operate it —
-reset the database, read a failed run — see
-[operations](../../operations/how-to/operations.md#pull-request-previews).
+Each same-repository pull request can deploy a public Worker named
+`transitmapper-pr-<number>`. The thin `Preview` workflow calls the pinned shared
+`release-pr-preview.yml` from repository-tooling. Fork pull requests cannot receive deployment
+credentials. Closing a same-repository pull request deletes only its derived Worker.
 
 ## What happens on a push
 
-The `Preview` workflow builds the branch, applies migrations, deploys a Worker
-named `transitmapper-pr-<number>`, comments the URL, and then verifies the
-deployed site. Closing the pull request deletes the Worker.
+The shared operation validates the pull request event, source commit, run identity, and reviewed
+Workers account subdomain. It resolves the exact PR origin before building and passes that origin
+as `VITE_SITE_URL`. TransitMapper already includes this variable in its build cache inputs, so
+canonical and Open Graph links describe the preview rather than production.
 
-The URL is worked out before the build, not after the deploy. `VITE_SITE_URL`
-is substituted into `index.html` at build time for the canonical link and the
-Open Graph tags, so a hostname discovered later is a hostname the build already
-got wrong. The workflow reads the account's `workers.dev` subdomain from the
-Cloudflare API and assembles the address from that.
+The build runs the standard checks. The release producer reads both modes of the canonical
+`apps/worker/cloudflare.config.ts`, freezes the compiled Worker, assets, deployment settings, and
+SQL in a private artifact, and checks the inventory before publication. It clears preview routes
+and cron, retargets the Durable Object binding to the PR Worker, applies the frozen SQL to the
+reviewed preview database, and deploys those verified bytes. These private PR artifacts cannot be
+promoted to production; production requires a separately retained and signed staging release.
 
-The comment is posted before verification rather than after. Its content
-depends only on the deploy having succeeded, and the checks that follow take
-several minutes. A preview that is up but serving something wrong is still the
-one somebody needs the link to.
+The shared identity smoke verifies the selected Worker. TransitMapper's `release:acceptance`
+extension then runs the existing HTTP assertions and real Chrome RTC editor and onboarding
+walkthrough. The workflow updates a single bot comment after acceptance. Missing account or token
+configuration skips publication with an explanation; an invalid supplied credential fails.
 
 ## Why a separate Worker per pull request
 
-Cloudflare has a cheaper mechanism for this: `wrangler versions upload`
-publishes a version of the _existing_ Worker and hands back a preview URL,
-with no second Worker to manage or delete.
+This Worker exports `PlaceSearchGate`, a Durable Object that coordinates Nominatim requests.
+Version preview URLs are unavailable for Workers that export Durable Objects. A separate named
+Worker preserves this runtime while giving each pull request its own Durable Object namespace.
+The shared operation derives and validates the name, account, and origin before any deployment or
+teardown. Production routes and scheduled triggers are never inherited by a PR Worker.
 
-It is unavailable here. Cloudflare does not generate preview URLs for a Worker
-that implements a Durable Object, and this one implements `PLACE_SEARCH_GATE`
-to enforce Nominatim's one-request-per-second limit across every edge
-location. So each preview is a Worker of its own. The workflow builds with
-`cf build --mode preview` and deploys the resulting Build Output with
-`cf deploy --prebuilt --mode preview`. It passes the Worker name, URL, and
-shared D1 ID through `TRANSITMAPPER_PREVIEW_*` variables. The preview branch of
-`apps/worker/cloudflare.config.ts` keeps all bindings but declares no custom
-domain, Labs route, or scheduled trigger. Before upload, the workflow checks
-the built name, URL, database, and absence of production routes and triggers.
+## Shared preview resources
 
-`apps/worker/wrangler.toml` remains the source for D1 IDs written by bootstrap
-and a fallback for the commands that `cf` does not cover yet. The parity test
-checks both configurations, including every preview binding. The Wrangler
-preview environment explicitly clears its routes and cron; if it were used
-without those empty lists, it could inherit the production domain or schedule.
+Every preview uses the reviewed `transitmapper-preview` D1 database. The explicit
+`LVBT_PREVIEW_BINDINGS` declaration must supply its real ID; the local placeholder is not accepted
+for publication. The producer checks that preview and production database IDs differ. Closing a
+pull request does not delete this shared database or its rows.
 
-## Why one shared database
+Migrations remain append-only, as [`check:migrations`](../reference/checks.md) requires. Frozen SQL
+runs before candidate HTTP or browser checks, so code never starts acceptance against a missing
+new column. Older previews must remain compatible with additive schema changes. Concurrent pull
+requests can still contend while applying migrations to the shared database; reconcile a failed
+run before repeating it.
 
-Every preview binds the same D1 database, `transitmapper-preview`.
+The public GTFS archive R2 bucket is intentionally shared. The declaration explicitly marks
+`GTFS_ARCHIVES` read-only. The shared producer checks compiled modules against its supported
+handler contract, and the generated preview wrapper supplies a detached `get`/`head`/`list`
+facade. This contract excludes native global binding access and is not a sandbox for arbitrary
+unreviewed code. Preview rate-limit namespaces are distinct from production.
 
-Where a platform supports database branching — Neon, PlanetScale, Supabase —
-a database per pull request is the better answer, and it is what most preview
-systems reach for. D1 has no such primitive. A database per pull request would
-mean creating and destroying an account resource from CI on every open and
-close, with a leak every time teardown failed.
+## Credentials and setup
 
-Sharing is safe here because migrations are append-only, which
-[`check:migrations`](../reference/checks.md) enforces. An older branch keeps
-working against a schema a newer branch has already extended. Nothing in the
-database is worth keeping, so when an abandoned branch leaves it in a state
-nobody wants, the fix is to recreate it.
+The `preview` GitHub environment retains the existing `CLOUDFLARE_API_TOKEN` secret and
+`CLOUDFLARE_ACCOUNT_ID` variable. A maintainer must also supply the reviewed preview bindings.
+[Production setup](../../operations/how-to/set-up-production.md) describes these declarations.
+Basic development and local validation do not require Cloudflare credentials.
 
-The R2 bucket is shared with production on purpose. The Worker only ever reads
-GTFS archives, so a preview cannot corrupt them, and a separate bucket would
-need its own feed refresh before it held anything worth previewing against.
+PR previews preserve the existing public policy. The shared workflow provides no Access service
+credentials to public preview acceptance. The separately retained staging Worker is protected by
+Access and uses credentials confined to its approved origin. No preview credentials are passed
+to the production activation job.
 
-## Why forks get nothing
+A fork gets no deploy or teardown job. The workflow never uses `pull_request_target` to execute
+branch code with privileged credentials. Same-repository branch publication still runs code from
+a contributor with repository write access; the selected token's provider permissions remain a
+maintainer-controlled boundary.
 
-A preview builds the branch's own code and publishes it into this project's
-Cloudflare account. GitHub withholds secrets from fork pull requests, which is
-the correct default, and the workflow does not try to work around it. Fork
-pull requests get a job that explains why instead of a failure nobody can act
-on.
+## Product acceptance
 
-A fork gets a job summary rather than a comment, and that is a constraint
-rather than a choice: a `pull_request` run from a fork carries a read-only
-token, so the workflow cannot write a comment even to say why there is no
-preview. Somebody has to open the run to read it.
+`apps/web/scripts/deployment/deployed-http-smoke.ts` checks the live build, JSON API responses,
+missing-share 404s, image types, embeds, CSP, HSTS, crawl policy, and the asset entrypoint.
+`apps/web/scripts/perf/live-production-smoke.ts` drives the RTC editor and onboarding in real
+Chrome. Both staging, promotion, and PR publication call the same thin `release:acceptance`
+extension, while the shared release engine owns packaging, migrations, publication, identity,
+credential isolation, and teardown.
 
-That guard is the actual security boundary, and it is worth being blunt about
-what it does and does not buy. Both GitHub environments currently hold the
-same account-scoped token, so a preview with that credential can also alter the
-production Worker. Cloudflare supports per-Worker roles, but each new preview
-Worker needs account-level create rights. The separate `preview` GitHub
-Environment records preview deployments; it does not isolate the credential.
-What keeps the token away from unreviewed
-code is that previews run only for branches pushed to this repository, and
-pushing here already requires write access.
+Preview pages send `noindex`; preview robots omit the sitemap, and `/sitemap.xml` is absent. The
+preview Worker handles the relevant HTML and crawl paths even when the assets were built for
+production. The release marker also reaches the wrapper, which applies private, no-store cache
+policy and verifies its source identity. Production remains indexable.
 
-## When previews are not set up
+## Published assets and limits
 
-A preview needs a `CLOUDFLARE_API_TOKEN` secret and a `CLOUDFLARE_ACCOUNT_ID`
-variable on the `preview` GitHub environment, plus the shared database.
-`pnpm bootstrap` creates all three, but until somebody runs it there is
-nowhere to deploy to. [Set up production from
-scratch](../../operations/how-to/set-up-production.md) walks through it.
+`dist/.assetsignore` excludes Vite manifests and build reports from public upload while retaining
+those files for tooling. `adaptive-assets.json` remains public because the service worker needs
+it. HTTP acceptance checks that `/.vite/manifest.json` is unavailable.
 
-A `Preview configuration` job checks for the credentials first and the deploy
-is skipped when they are missing, with the reason in the job summary. Failing
-instead would put a red check on every pull request for a setup step that
-cannot be done from a pull request, and a check that is always red is one
-people learn to scroll past.
-
-The check is for an _absent_ credential, not a rejected one. A token that
-exists and does not work still fails the deploy, loudly, where it should.
-
-## What the preview verifies
-
-The same checks the production release runs, from the same composite action
-(`.github/actions/verify-deployed-site`):
-
-- `apps/web/scripts/deployment/deployed-http-smoke.ts` asserts the deployed
-  origin is serving this build and answering its routes — that `/api` returns
-  JSON, that a missing share is a 404 rather than the SPA shell, that preview
-  images are images, that the embed prefix reaches Worker code.
-- `apps/web/scripts/perf/live-production-smoke.ts` drives the editor and the
-  onboarding walkthrough in real Chrome.
-
-Sharing one action is deliberate. When those assertions lived inline in the
-production workflow, adding a second caller meant copying them, and the copy
-that drifts is the preview one — the copy that would have caught a regression
-first.
-
-## Staying out of search results
-
-A preview URL is public, and it is posted as a comment on a public repository,
-so search engines can reach it. Without anything in the way it would be indexed
-as a duplicate of the live site, with unreleased work in it.
-
-Most of the surface was already safe. Every page the Worker renders — share
-pages, views, embeds, and the catch-all — goes through `withHtmlSecurityHeaders`,
-which sends `X-Robots-Tag: noindex` on every origin. What that never touches is
-the asset store: `run_worker_first` deliberately leaves `/`, `/privacy`,
-`/robots.txt`, `/sitemap.xml` and `/assets/*` to Cloudflare, so no Worker code
-runs for them and no header can be set there.
-
-Cloudflare does not solve this for you. `*.workers.dev` is not automatically
-de-indexed — that behaviour belongs to Pages preview deployments — and the
-documented fix for Workers is the `_headers` file.
-
-So `scripts/deployment/crawl-directives.ts` runs at the end of the build. When
-the origin the build advertises is not production, it adds
-`X-Robots-Tag: noindex` to the `/*` block of `_headers`, drops the `Sitemap:`
-line from `robots.txt`, and deletes `sitemap.xml`. It reads that origin back out
-of the built `index.html`'s canonical link rather than from an environment
-variable, so the header can never disagree with the page.
-
-Three decisions worth recording, because each has an appealing wrong answer:
-
-- **A header, not `Disallow: /`.** `Disallow` stops a crawler fetching the page
-  at all, and a page it cannot fetch is one whose `noindex` it never reads. This
-  is the same reasoning `public/robots.txt` already records about share pages.
-- **The canonical stays pointed at the preview.** Pointing it at production
-  while also sending `noindex` is the one genuinely dangerous configuration:
-  consolidating the two URLs can carry the `noindex` across to the target, which
-  would let a throwaway pull request Worker de-index the live site.
-- **Previews still unfurl.** Link preview bots do not honour `X-Robots-Tag`, and
-  `Allow: /` stays, so a preview link pasted into Slack or the pull request still
-  renders a card from its own `og:` tags. That is the intended outcome, not an
-  oversight to be "fixed" later with a `Disallow`.
-
-`deployed-http-smoke.ts` asserts the result against the origin it was pointed
-at — production must stay indexable and keep its sitemap, anything else must
-send `noindex` and have none — so a build that skipped the step is still caught
-after it deploys.
-
-## What the asset store publishes
-
-`cf build` packages the web `dist/` for upload, and the build writes
-files there for its own use: Vite's manifest, which names every source module,
-and the bundle and PWA reports. Those were being served publicly on production.
-
-They cannot simply be deleted after the build, because five scripts read them
-back. `dist/.assetsignore` is the mechanism for this — same format as
-`.gitignore`, read by the Wrangler asset bundler from the assets directory root — so the files
-stay on disk for the tooling and in the release artifact, and never reach the
-upload. `adaptive-assets.json` is not excluded: the service worker fetches it
-at runtime.
-
-The deployed smoke asserts `/.vite/manifest.json` is not served, because
-`.assetsignore` is easy to lose in a build rewrite and nothing else would
-notice.
-
-## Known limits
-
-- Two pull requests can race each other applying migrations to the shared
-  database. The loser fails and succeeds on a re-run. A global lock would fix
-  it; it has not been worth an extra job.
-- Previews count against the account's Worker limit. Teardown keeps that
-  bounded, and it fails loudly rather than silently when it cannot delete.
-- Anonymous performance sampling never fires on a preview: it requires a
-  release tag, and previews have none. The `SITE_URL` origin check that would
-  otherwise reject those samples never comes up.
+PR Workers count against the account limit. Teardown accepts an already absent Worker, but fails
+on other provider errors. It removes the PR Worker and its Durable Object namespace, without
+modifying D1 or R2 resources. Performance samples remain disabled on PR previews because they have
+no published release tag.

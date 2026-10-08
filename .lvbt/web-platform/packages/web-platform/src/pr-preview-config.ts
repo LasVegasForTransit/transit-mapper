@@ -72,7 +72,31 @@ export function stagingPreviewConfiguration(input: unknown, worker: string, asse
   return { ...config, assets: { ...config.assets, directory: assets }, routes: [] };
 }
 
-export function previewUploadReceipt(output: string, worker: string) {
+function verifyPreviewUrl(
+  value: string,
+  version: string,
+  worker: string,
+  accountSubdomain?: string,
+): void {
+  const url = new URL(value);
+  if (accountSubdomain && url.hostname.split('.')[1] !== accountSubdomain)
+    throw new Error('Preview URL does not identify the reviewed workers.dev account.');
+  if (
+    url.protocol !== 'https:' ||
+    !url.hostname.endsWith('.workers.dev') ||
+    url.hostname.split('.').length !== 4 ||
+    !url.hostname.startsWith(`${version.slice(0, 8)}-${worker}.`) ||
+    url.username ||
+    url.password ||
+    url.port ||
+    url.search ||
+    url.hash ||
+    url.pathname !== '/'
+  )
+    throw new Error('Preview URL does not identify the uploaded Worker version.');
+}
+
+export function previewUploadReceipt(output: string, worker: string, accountSubdomain?: string) {
   const records = output
     .split('\n')
     .filter((line) => line.trim())
@@ -90,18 +114,6 @@ export function previewUploadReceipt(output: string, worker: string) {
   if (uploads.length !== 1 || !uploads[0]?.success)
     throw new Error('Expected one matching Worker version upload receipt.');
   const receipt = uploads[0].data;
-  const url = new URL(receipt.preview_url);
-  if (
-    url.protocol !== 'https:' ||
-    !url.hostname.endsWith('.workers.dev') ||
-    !url.hostname.startsWith(`${receipt.version_id.slice(0, 8)}-${worker}.`) ||
-    url.username ||
-    url.password ||
-    url.port ||
-    url.search ||
-    url.hash ||
-    url.pathname !== '/'
-  )
-    throw new Error('Preview URL does not identify the uploaded Worker version.');
+  verifyPreviewUrl(receipt.preview_url, receipt.version_id, worker, accountSubdomain);
   return { version: receipt.version_id, url: receipt.preview_url };
 }

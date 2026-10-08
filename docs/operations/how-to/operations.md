@@ -28,157 +28,96 @@ an API request; the map hostname remains the canonical public address.
 
 ## Deploy
 
-Releases and deploys are automatic. Conventional commits merged to `main`
-first run `Validate` and production-build smokes for RTC, the public routes,
-and onboarding. These smokes prove that each browser journey works. The RTC
-smoke records performance diagnostics, but numeric budgets do not veto a
-release. Release Please runs only after all four gates pass.
-It creates or updates one release pull request with the calculated version and
-changelog. Merging that pull request creates the matching tag and GitHub
-release. The same workflow then builds and attests a deployment archive,
-applies pending D1 migrations from it, deploys its exact Worker and web files,
-checks the live bundle and routes, then exercises the deployed RTC editor and
-onboarding dialog in headless Chrome. Because GitHub suppresses pull-request events
-created by a workflow token, the release job explicitly dispatches `Validate`
-and the `release` scope of the Performance workflow on the generated branch.
+Conventional commits merged to `main` run `Validate` and the existing production-build
+RTC, route, and onboarding performance gates. Release Please keeps the version,
+changelog, release pull request, tag, and GitHub release together. Its generated pull
+request still receives explicit validation and performance dispatches because GitHub
+suppresses events created by the workflow token.
 
-The only required check is `Validate`. A pull request lands through the merge
-queue by rebase, and the queue waits for a check on its merge group, so a
-required check must also run there; `Validate` does. The Performance workflow
-reports `RTC responsiveness (desktop)` on every pull request, but it does not
-run in the merge queue, so it is not required. It runs Chrome when `apps/web`,
-`packages/core`, the root package or workspace manifests, the lockfile, the
-Node setup action, or the performance workflow changed. Documentation and
-worker-only pull requests still report the terminal check without opening
-Chrome.
+The [staging workflow](../../../.github/workflows/deploy-production.yml) calls the shared
+retained-release build, signing, and publication workflows at the recorded tooling
+revision. It retains the exact compiled Worker, static assets, settings, and migration
+SQL for 90 days, then publishes only the protected `transitmapper-preview` Worker.
+A merge never activates production. The staged artifact retains the production asset
+identity; its preview Worker marks responses non-indexable and serves no sitemap.
 
-Ordinary feature merges therefore do not deploy immediately. They accumulate
-in the generated release pull request until that pull request is merged. Do
-not edit the version, changelog, release tag, or build revision by hand; the
-root manifest, conventional commits, and GitHub event are their canonical
-sources.
+TransitMapper implements a SQLite Durable Object, so per-version preview URLs are not
+available. Named staging keeps the production `PlaceSearchGate` class and Worker
+namespace unchanged while selecting a separate preview namespace and D1 database.
+Preview cron schedules stay disabled. Preview rate-limit IDs are account-scoped and
+distinct from production; their budgets remain identical. The public GTFS R2 dataset
+is deliberately shared through the reviewed `GTFS_ARCHIVES` read-only contract:
+preview handlers and Durable Objects receive only `get`, `head`, and `list`. Compiled
+modules using native global binding access or unverified dynamic imports are rejected.
 
-An explicit `Release-As` marker must include a tracked change. This repository
-uses rebase merges, and GitHub drops an empty commit instead of adding it to
-`main`. Pair the marker with the operations or release documentation change
-that explains why the non-releasable commits must ship.
-
-Release builds embed the field-sampling policy alongside their public build
-identity. Defaults are enabled, 100 ordinary basis points (1%), and 500 release
-basis points (5%) until 24 hours after the build. A deployment can set
-`TRANSITMAPPER_PERFORMANCE_SAMPLING_ENABLED=0` as a build-time kill switch or
-set `TRANSITMAPPER_PERFORMANCE_ORDINARY_BASIS_POINTS` and
-`TRANSITMAPPER_PERFORMANCE_RELEASE_BASIS_POINTS` to integers from 0 through 10000. These are build
-inputs, not live Worker switches: changing one requires
-a new web build and deployment. The client still refuses local, untagged, or
-wrong-origin builds and honors GPC/DNT regardless of these values.
-
-When a release must proceed while a known performance regression remains, run
-the production workflow manually with **Continue after failed performance
-gates** enabled and provide a nonblank reason. The workflow still runs every
-performance job and keeps each failure visible. It records the reason in the
-run summary before Release Please runs. Push-triggered releases cannot use this
-override, and a failed `Validate` job always blocks the release.
-
-If Release Please creates the GitHub release but the deploy job does not run,
-dispatch the production workflow again from the release commit. Set **Existing
-published release tag to deploy** to the published tag. The workflow checks out
-and validates the tag itself. It then builds, attests, migrates, deploys, and
-smokes that tag without creating a second release. The recovery run does not
-repeat performance measurements that the release run already recorded. It
-still requires the performance override and reason so the audit remains
-explicit.
-
-[`deploy-production.yml`](../../../.github/workflows/deploy-production.yml)
-attaches the deployment archive and its Sigstore bundle to every GitHub
-release. To verify a downloaded archive was built by this repository's GitHub
-Actions workflow:
+After reviewing the protected staging result, publish the retained release explicitly:
 
 ```bash
-gh attestation verify transitmapper-v<VERSION>-deployment.tar.gz \
-  --repo LasVegasForTransit/transit-mapper
+pnpm promote
+pnpm promote -- --run-id <successful-staging-run>
 ```
 
-The archive contains Cloudflare Build Output (`.cloudflare/output/v0`), the
-built web assets, and the D1 migration files. The workflow extracts that
-archive, applies its migrations, and sends its Worker and assets with
-`cf deploy --prebuilt`. That command uses the built bytes without bundling
-them again. The workflow checks the built Worker name before packaging and
-dry-runs the prebuilt upload.
+The [promotion workflow](../../../.github/workflows/promote.yml) resolves the actual
+protected preview or the specified successful staging run. The shared source verifier
+checks the saved source identity and provenance. Candidate acceptance runs in the
+existing `preview` credential environment; production activation runs separately in
+`production` and consumes the immutable proof from that same manual run. The proof
+binds the selected source, artifact hash, tools revision, preview namespace, and checks.
+Access headers are confined to the reviewed preview origin and never reach production
+or third-party browser requests.
 
-The About dialog links the running build to its release, source revision, and
-repository attestations. The attestation proves the release archive's GitHub
-Actions origin; the workflow's production deployment record and entry-chunk
-smoke test establish that the same extracted archive was sent to Cloudflare.
+The deployed acceptance extension keeps every existing HTTP route, security header,
+entry-chunk identity, RTC interaction, and onboarding walkthrough check. Preview SQL
+applies from the saved artifact before candidate checks; production SQL applies after
+candidate acceptance and immediately before activation. The previous application
+continues serving during migrations, so schema changes must be additive. Neither stage
+reads migration SQL from a newer checkout. A production failure after activation means
+bytes may already be live; verify the live marker and reconcile the workflow before
+retrying or rolling back.
 
-Because nothing applied migrations automatically before this workflow existed,
-the first automated deploy after it lands applies whatever backlog production
-has accumulated — so check the backlog is what you expect _before_ merging a
-change to this workflow, not after:
+Release Please attaches the archived saved inputs, signed exact inventory, and signature
+bundle to a newly published version only when the tag resolves to that artifact's source
+commit. The signature subject is `release-attestation.json`, whose inventory covers every
+saved Worker, asset, setting, and SQL byte. Shared verification pins the upstream signer
+workflow and its full commit, checks the source commit and default branch, and compares
+the signed inventory to the verified artifact. Production does not rebuild or rebundle.
+Old archives from the former deployment workflow keep their original signature format;
+new automatic deployment does not consume those archives.
 
-```bash
-pnpm --filter @transitmapper/worker exec wrangler d1 migrations list transitmapper --remote
-```
+A failed source build can be rerun after its cause is fixed. A dispatch whose result is
+unknown must be reconciled using its correlation ID and unique workflow run; do not
+create another promotion blindly. Retained releases older than the Actions artifact
+retention period require a new reviewed staging build. `pnpm run deploy` delegates to
+explicit saved-release promotion as well.
 
-`0002_share_expiry.sql` begins with `DELETE FROM systems`, which is harmless
-only because it has already run. Confirm that before trusting the automation
-with it.
+The only required merge-queue check remains `Validate`. The Performance workflow keeps
+its existing pull-request relevance and diagnostic budgets. A documented nonblank manual
+performance override can still allow Release Please to prepare a version, but retained
+staging builds continue requiring the performance gates. Do not edit versions, tags,
+changelogs, or build revisions by hand. An explicit `Release-As` marker must include a
+tracked change because a rebase merge drops empty commits.
 
-You should not normally need to deploy by hand. If you do:
-
-```bash
-pnpm run deploy
-```
-
-Be aware that this deploys whatever is in your working tree, straight to the
-public site, with no checks. Run `pnpm typecheck && pnpm verify` first, or open
-a pull request and look at its [preview](#pull-request-previews) instead —
-a preview is not a rehearsal of the production deploy, but it is a real
-deployment of the same code.
+Field-sampling settings remain build inputs. The defaults are enabled, 100 ordinary basis
+points and 500 release basis points; GPC/DNT and the production-origin restriction remain
+in force. Builds without a verified release tag do not claim a published release.
 
 ### When a deploy fails
 
-Check which step failed before anything else; they fail for unrelated reasons.
-
-- **Validate** — a real test or type failure. Fix it on a branch.
-- **Release performance gates** — one of the RTC, public first-session, or
-  onboarding production-build smokes failed. Fix the browser journey or build
-  problem before Release Please runs. A maintainer may use the documented
-  manual override when shipping a known regression is safer than holding the
-  release. The override does not hide the failed jobs or change their budgets.
-- **Prepare or publish release** — Release Please could not update its release
-  pull request or create the tag and GitHub release. Check the job's repository
-  permissions and default-branch rules. Repository Actions settings must allow
-  workflows to create pull requests; `pnpm bootstrap` keeps this setting in
-  sync while leaving the default workflow token read-only. If the organization
-  locks that setting off, an organization owner must enable workflow-created
-  pull requests once under the organization's Actions settings before a
-  repository workflow can change it.
-- **Build release**, **Build Worker deployment artifact**, **Package deployment artifact**, or
-  **Attest deployment artifact** — nothing has reached Cloudflare. Fix the
-  reproducible build or the workflow's `id-token` and `attestations`
-  permissions, then rerun the failed job.
-- **Apply D1 migrations** or **Deploy** with
-  `Authentication error [code: 10000]` — the `CLOUDFLARE_API_TOKEN` secret in
-  the repository's `production` environment lacks a permission. It needs
-  the narrowly scoped Workers Scripts, D1, R2, account and zone read, and
-  Workers Routes permissions in the setup guide. Make a replacement with
-  [the deploy token steps](set-up-production.md#make-the-deploy-token) and
-  store it with `pnpm bootstrap --rotate-token`. (That environment also needs a
-  `CLOUDFLARE_ACCOUNT_ID` **variable** — not a secret — which is easy to miss
-  when recreating it, because nothing complains until a deploy runs.) This
-  exact failure kept every deploy red for four days while the site quietly
-  served a build from before the sharing surfaces existed, which is why the
-  smoke test below exists.
-- **Verify the deployed site** — the deploy uploaded something, but the live
-  site isn't serving the routes this build defines. Do not retry blindly; see
-  "Roll back" and read what the failing assertion actually checked. The step
-  runs `.github/actions/verify-deployed-site`, shared with the pull request
-  preview deploy, so the same assertions cover both.
-- **Exercise the deployed editor and onboarding** — the expected bundle reached
-  production, but its RTC editor interaction or onboarding walkthrough failed
-  in headless Chrome. The Worker is already deployed, so fix forward or roll
-  back.
+- **Validate or Release performance gates** — fix the source, browser journey, or build
+  failure before staging. These gates do not write provider state.
+- **Prepare or publish release** — check the Release Please permissions and default-branch
+  rules; this job versions the project and does not activate production.
+- **Build or attest** — nothing has reached Cloudflare. Fix the reproducible build or
+  signer permissions before retaining another artifact.
+- **Preview readiness or anonymous protection** — a maintainer must supply the reviewed
+  preview database declaration, preview credentials, and Access protection. No placeholder
+  D1 ID is deployable. See [production setup](set-up-production.md).
+- **Apply retained schema** — earlier SQL may have applied. Inspect the selected database
+  and reconcile before retrying; the command cannot reverse migrations.
+- **Upload or activation** — provider outcome may be unknown. Inspect the selected Worker,
+  version, and live release marker before retrying or promoting.
+- **HTTP, browser, or final publication verification** — inspect the exact failing assertion.
+  If activation already ran, fix forward or follow [rollback](#roll-back).
 
 ## Managed GTFS archives
 
@@ -233,8 +172,8 @@ fix-forward deploy instead.
 
 ## Migrations
 
-The release workflow applies migrations before deploying code, so an ordinary
-release needs nothing from you. To check what production is running:
+The promotion workflow applies the selected artifact’s frozen migrations before activating
+production code. Preview migrations run before candidate acceptance. To inspect production:
 
 ```bash
 pnpm --filter @transitmapper/worker exec wrangler d1 migrations list transitmapper --remote
@@ -407,12 +346,13 @@ state you no longer want, replace it:
 
 ```bash
 pnpm --filter @transitmapper/worker exec wrangler d1 delete transitmapper-preview
-pnpm bootstrap
+pnpm bootstrap --production
 ```
 
-The bootstrap sees that the preview database is gone, asks to create it,
-applies every migration, and writes the new id into the `[env.preview]` block
-of `apps/worker/wrangler.toml`. `cloudflare.config.ts` reads that ID when
+The bootstrap sees that the preview database is gone, asks to create it, and
+reports the new ID. Update the `[env.preview]` block of
+`apps/worker/wrangler.toml` through a reviewed pull request before applying
+migrations. `cloudflare.config.ts` reads that ID when
 building the preview Worker. Commit the changed TOML through a pull request.
 Do not drop the tables instead: the
 `d1_migrations` bookkeeping table has to go with the schema, or the next
@@ -429,7 +369,7 @@ database.
   it once in the Cloudflare dashboard under Workers & Pages → Subdomain.
 - **Resolve the preview database** — the token cannot list the shared D1
   database, or it does not exist. Check the `preview` environment token and
-  run `pnpm bootstrap` if the database is missing.
+  run `pnpm bootstrap --production` if the database is missing.
 - **Apply D1 migrations** — usually two pull requests raced each other against
   the shared database. Re-run the job. If it fails again, look at the
   migration itself.
@@ -449,10 +389,9 @@ database.
 Stated plainly so nobody assumes otherwise:
 
 - **No alerting.** See above.
-- **No staging environment.** Pull request previews (above) deploy the same
-  code to a throwaway Worker and database, which is close, but nothing
-  rehearses the production deploy itself: `wrangler dev --remote` still runs
-  your local code against the **production** D1, and a manual `pnpm run deploy`
-  still publishes straight to the live Worker.
+- **Staging readiness requires maintainer verification.** The retained staging workflow
+  is implemented, but deployment requires a real preview D1 declaration and a protected
+  preview origin. No agent session provisions resources or sets credentials. Local checks
+  alone do not establish a live staged or production release.
 - **No error reporting service.** `console.error` in the Worker goes to the
   log stream and nowhere else.

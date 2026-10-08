@@ -41,6 +41,6 @@ describe('every copy of the production origin', () => {
   });
 
   it('matches the origin the production deploy verifies', () => {
-    expect(read('.github/workflows/deploy-production.yml')).toContain(PRODUCTION_ORIGIN);
+    expect(read('.github/workflows/promote.yml')).toContain(PRODUCTION_ORIGIN);
   });
 });

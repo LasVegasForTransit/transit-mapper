@@ -1,212 +1,169 @@
 # Set up production from scratch
 
-This page takes you from nothing to a TransitMapper that deploys itself on
-every release. It is also how you check an existing setup: the same command
-reports what is already done and changes nothing.
-
-Most of the work is done by one command, `pnpm bootstrap`. It creates what is
-missing, asks before it creates anything, and stops to show you exactly what
-to type whenever it needs a value only a dashboard can give you. The sections
-below repeat those steps, so you can read them before you start or follow them
-by hand.
+Production setup is a maintainer operation, separate from ordinary local
+contributor setup. `apps/worker/platform.json` declares the Worker, production and
+preview D1 databases, archive bucket, public domain, deploy credential, account
+selectors, and production analytics variables. Shared LVBT tooling observes these
+requirements and offers the steps to repair missing ones.
 
 ## Before you start
 
-Everything TransitMapper runs on belongs to Las Vegans for Better Transit
-(LVBT), not to a person. It runs in the LVBT Cloudflare account, **Las Vegans
-for Better Transit** (account ID `2557b5c2e166292ded0f8425b73075e9`), and the
-code lives in the **LasVegasForTransit** GitHub organization. Nothing in this
-guide should be created under a personal account.
-Check the account name in Cloudflare before starting. If it still says "Las Vegas
-for Better Transit", change it to "Las Vegans for Better Transit" under the
-account's settings.
+Use the LVBT Cloudflare account, Las Vegans for Better Transit, and the
+`LasVegasForTransit/transit-mapper` GitHub repository. Existing credentials, D1
+data, GTFS archives, routes, and Durable Object storage remain authoritative.
+Do not recreate a resource simply because your current login cannot read it.
 
-You need:
+Complete [local setup](../../development/how-to/local-development.md), then use
+maintainer GitHub and Cloudflare access for the production operation. The account
+selector is public; set it for this session before a production readiness report:
 
-- a Cloudflare login that is a member of the LVBT account, with the Super
-  Administrator role if you are the one making the deploy token;
-- admin access to the `LasVegasForTransit/transit-mapper` repository on
-  GitHub, because only admins can change its environments and rules;
-- a checkout set up as described in
-  [local development](../../development/how-to/local-development.md), with
-  the GitHub CLI (`gh`) installed.
+```sh
+export CLOUDFLARE_ACCOUNT_ID=2557b5c2e166292ded0f8425b73075e9
+pnpm preflight --production
+```
 
-The Cloudflare `cf` CLI and Wrangler come with the repository, so you do not
-install them separately. `cf` builds and deploys the Worker; bootstrap uses
-Wrangler for D1 provisioning and the commands `cf` does not cover yet.
+Preflight reads configuration and provider inventories. It never installs,
+provisions, writes credentials, or asks for values. Missing provider access is an
+unknown readiness result, not evidence that a resource is absent. Ordinary
+`pnpm preflight` checks only the local checkout.
 
 ## Run the bootstrap
 
-1. Open a terminal in your checkout of the repository.
-2. Run `pnpm install --frozen-lockfile` if you have not already.
-3. Run `pnpm bootstrap`.
-4. When it asks you to log in to GitHub or Cloudflare, say yes. A browser
-   window opens; log in there and come back to the terminal.
-5. If it asks to create a D1 database, say yes. `transitmapper` holds the
-   live site's shared maps and `transitmapper-preview` holds those of pull
-   request previews. A database that already exists is used as it is.
-6. When it asks to apply the organization governance standard, say yes. This
-   turns on branch protection, secret scanning and the other repository
-   rules, and creates the `production` and `preview` GitHub environments.
-7. When it asks to write the CI credentials, say yes, then follow
-   [make the deploy token](#make-the-deploy-token) and paste the token.
-8. When it asks for the Web Analytics tokens, follow
-   [find the Web Analytics tokens](#find-the-web-analytics-tokens) and paste
-   each one.
-9. If the bootstrap says it wrote a database id into
-   `apps/worker/wrangler.toml`, commit that file on a new branch and open a
-   pull request. `cloudflare.config.ts` reads the D1 IDs from that file, so
-   the new ID does nothing until the pull request is merged. The bootstrap never
-   commits or pushes for you.
-10. Run `pnpm bootstrap` once more. Every line should show a check mark, and
-    it should ask you nothing.
+A maintainer runs this interactively after inspecting the readiness report:
+
+```sh
+pnpm bootstrap --production
+```
+
+Shared setup explains the planned actions and asks before starting. It preserves
+existing secret values unless explicit rotation is requested. Public GitHub
+variables and domain repairs have guided maintainer steps; conflicting domain
+ownership is reported for investigation rather than reassigned automatically.
+Repository governance uses the shared organization standard; local setup does not
+create or administer GitHub repositories.
+
+The database names are `transitmapper` for production and `transitmapper-preview`
+for pull request scratch data. Both use `DB`, in separate configuration scopes.
+Migrations wait until the selected scope names the correct database and its ID
+agrees with provider inventory. Shared setup does not silently edit or commit
+application configuration. If a database ID needs changing, update the matching
+scope in `apps/worker/wrangler.toml` through a reviewed pull request;
+`cloudflare.config.ts` reads those IDs. Keep production and preview IDs separate.
+
+Run `pnpm check` after configuration edits, then inspect the pull request preview.
+A passing local check or production inventory report does not prove a deployed
+release. Confirm the protected deployment, the public Worker behavior, retained
+maps and Views, and feed refresh separately using
+[operations](operations.md).
 
 ## What each value is
 
 ### `CLOUDFLARE_API_TOKEN`
 
-This token lets GitHub Actions deploy the Worker, apply database migrations,
-and refresh the GTFS archives. It is a secret. The bootstrap stores it as an
-environment secret on both the `production` and `preview` GitHub
-environments and nowhere else. It is a long string of letters, digits and
-symbols that Cloudflare shows only once. It is never fine to skip: without it
-the release deploy fails and pull requests get no preview.
+An account-owned deployment credential for Workers, D1 migrations, preview
+cleanup, and GTFS refresh. Shared setup stores it on the `production` and
+`preview` GitHub environments, never in application source. Existing account-wide
+credentials can affect both environments; GitHub environment names do not isolate
+Cloudflare permissions. Preserve existing credentials during this migration.
 
 ### `CLOUDFLARE_ACCOUNT_ID`
 
-This tells the workflows which Cloudflare account to deploy to. It is not a
-secret. The bootstrap sets it as an environment variable on both environments
-from the `account_id` line in `apps/worker/wrangler.toml`, so you never copy
-it. It is 32 letters and digits: `2557b5c2e166292ded0f8425b73075e9`.
+The public Cloudflare account selector. The manifest reads the session variable,
+and readiness checks the matching variable on both GitHub environments. A
+mismatch requires investigation; the tool does not overwrite it automatically.
+Use GitHub Settings → Environments to repair a confirmed wrong value.
 
 ### `PUBLIC_LVBT_CWA_TOKEN` and `PUBLIC_LVBT_LABS_CWA_TOKEN`
 
-Both variables use the organization's Cloudflare Web Analytics token for
-`lasvegasfortransit.org`. That property covers `map` and `labs` because both
-share the same apex domain. The tokens are public, because every page view
-sends them, so the bootstrap stores them as environment variables on the
-`production` environment. Each is 32 letters and digits. Do not skip them:
-the production build refuses to deploy without them. What they measure is in
+Public analytics tokens on the `production` GitHub environment. Both refer to the
+existing `lasvegasfortransit.org` Web Analytics property covering map and labs.
+Release builds require them; local development only warns when absent. See
 [analytics](analytics.md).
 
 ### The D1 database ids
 
-Each database has an id like `5516498a-4473-468e-a1c9-a9dee4762960`. They are
-not secret and are committed in `apps/worker/wrangler.toml`. The `cf`
-configuration reads them from there at build time. The bootstrap writes them
-for you; your only job is the pull request in step 9.
+Public identifiers committed in `apps/worker/wrangler.toml`, not credentials.
+Production already has retained data. The preview scope uses the scratch
+database. New IDs need a reviewed configuration change before migrations run.
 
 ## Make the deploy token
 
-The deploy token is an account-owned token. It belongs to the LVBT account
-instead of to you, so deploys keep working if you leave or lose access.
-Cloudflare lets only a Super Administrator of the account create one; if you
-are not one, ask someone who is to follow these steps.
+Only an authorized maintainer should create or rotate a production credential.
+The manifest carries the instructions shown by shared setup:
 
-Follow these steps while `pnpm bootstrap` is waiting for the token, so you
-can paste it the moment you copy it.
+1. Open the LVBT account in Cloudflare, then Manage Account → Account API Tokens.
+2. Choose Create Token → Create Custom Token. Use an account-owned token and the
+   name TransitMapper deploy (GitHub Actions).
+3. Grant Account Workers Scripts Edit, Workers R2 Storage Edit, D1 Edit, and
+   Account Settings Read; grant Zone Zone Read and Workers Routes Edit.
+4. Restrict the account to LVBT and the zone to `lasvegasfortransit.org`.
+5. Review expiry against the organization's credential policy and track renewal.
+6. Create the token and paste it immediately into the waiting shared setup prompt.
+   Cloudflare shows it once; setup does not print it or put it in command arguments.
 
-1. Open <https://dash.cloudflare.com/2557b5c2e166292ded0f8425b73075e9/api-tokens>.
-   In the dashboard this page is **Manage Account → Account API Tokens**.
-2. Click **Create Token**.
-3. Under **Permission policies**, choose **Create Custom Token**. Do not use
-   the personal **Edit Cloudflare Workers** template; it grants permissions
-   this repository does not use.
-4. Name the token `map.lasvegasfortransit.org deploy (GitHub Actions)`.
-5. Add only these permissions: Account · Workers Scripts · Edit; Account ·
-   Workers R2 Storage · Edit; Account · D1 · Edit; Account · Account Settings ·
-   Read; Zone · Zone · Read; and Zone · Workers Routes · Edit. Workers Scripts
-   deploys and removes Workers; D1 applies production and preview migrations;
-   R2 supports the daily GTFS refresh; the remaining rows read account and zone
-   details and attach routes.
-6. Under Account Resources, choose Include and the LVBT account by name. Leave
-   All accounts off so the token cannot act on another account.
-7. Under Zone Resources, choose Include, then Specific zone, then
-   `lasvegasfortransit.org`. Leave All zones off so the token cannot change
-   another zone.
-8. Leave the expiration date empty, so deploys keep working.
-9. Click **Continue to summary**, then **Create Token**.
-10. Copy the token. Cloudflare shows it only once. Paste it into the
-    terminal when the bootstrap asks; it is not shown as you type.
-
-The daily GTFS refresh needs the R2 permission listed in step 5.
-
-If the token is ever rolled or deleted in Cloudflare, the stored copy stops
-working and every deploy fails. Make a new token with the steps above and
-store it with `pnpm bootstrap --rotate-token`.
+R2 permission supports the daily feed refresh. No agent should create or replace
+production credentials during a tooling migration.
 
 ## Find the Web Analytics tokens
 
-Both hostnames use the existing `lasvegasfortransit.org` property. The bootstrap
-asks for its token twice because the production build currently has two
-variables; paste the same public token at each prompt. Finish the first paste
-before moving to the second prompt. Do not create a second property for a
-subdomain.
-
-1. Open
-   <https://dash.cloudflare.com/2557b5c2e166292ded0f8425b73075e9/web-analytics>.
-2. If `lasvegasfortransit.org` is already listed, click **Manage site** on it and go to
-   step 5.
-3. Click **Add a site**, choose `lasvegasfortransit.org`, and click **Done**.
-4. Open **Manage site** and choose **Enable with JS Snippet installation**
-   instead of automatic setup. TransitMapper loads the beacon itself, so
-   automatic injection would load it twice.
-5. In the JS snippet, copy only the token inside
-   `data-cf-beacon='{"token": "..."}'`. It is 32 letters and digits.
-6. Paste it into the terminal at each bootstrap prompt, without copying
-   another value between the two prompts.
+1. Open Web Analytics in the LVBT Cloudflare account.
+2. Manage the existing `lasvegasfortransit.org` property; do not create duplicate
+   subdomain properties for map or labs.
+3. Enable JS Snippet installation. TransitMapper loads the beacon itself.
+4. Copy the 32-character public token from the snippet's `data-cf-beacon` value.
+5. Set `PUBLIC_LVBT_CWA_TOKEN` and `PUBLIC_LVBT_LABS_CWA_TOKEN` under GitHub Settings
+   → Environments → production → Environment variables.
+6. Rerun `pnpm preflight --production` and verify the release build separately.
 
 ## Running it again
 
-You can run `pnpm bootstrap` as often as you like. Each step checks first
-and acts only on what is missing, so a run on a finished setup changes
-nothing, asks nothing, and reports every line ready. A run after one that
-stopped partway picks up where that one stopped.
-
-On a second run the bootstrap does not ask for a secret that is already set,
-and does not create a second database, ruleset or environment. It does not
-rewrite `wrangler.toml` unless a database id actually changed. It applies
-database migrations only when some are pending. For a database it created in
-the same run it applies them straight away; for any other database it lists
-them and asks first, because the migrations come from your checkout.
-
-`pnpm preflight` runs the same checks and only reports. It never installs,
-creates, writes or asks anything.
-
-Both commands print every value that is not secret, such as the account ID,
-the database ids and the Web Analytics tokens, so you can check that each is
-the one you expect. The deploy token is the only value they hide: it is shown
-as set or not set, never printed, and typed at a prompt that does not echo.
+Shared setup observes first and acts on declared missing requirements. Existing
+resources and secrets are preserved; unreadable inventories are reported as
+unknown. `pnpm preflight --production` is the read-only report. An unstamped
+installation from before the shared fingerprint warns to run local bootstrap;
+an existing stale lockfile or toolchain fingerprint fails that local report.
 
 ## Replacing a value
 
-The bootstrap never replaces a value that is already set unless you ask for
-it with a flag.
+A maintainer explicitly rotates the deploy credential with:
 
-To replace a leaked or rolled deploy token:
+```sh
+pnpm bootstrap --production --rotate CLOUDFLARE_API_TOKEN
+```
 
-1. Run `pnpm bootstrap --rotate-token`. It shows the token steps and waits.
-2. Make the new token with those steps, which are the same as
-   [make the deploy token](#make-the-deploy-token), and paste it at the
-   prompt as soon as you copy it. The bootstrap stores it in both the
-   `production` and `preview` environments for you.
-3. Wait for the next deploy to succeed, then delete the old token on
-   <https://dash.cloudflare.com/2557b5c2e166292ded0f8425b73075e9/api-tokens>.
-
-If the bootstrap reports that `CLOUDFLARE_ACCOUNT_ID` holds a different
-account from the one in `apps/worker/wrangler.toml`, find out which one is
-right before changing anything. If `wrangler.toml` is right, run
-`pnpm bootstrap --replace-account-id`.
-
-To change a Web Analytics token, first open the repository on GitHub, go to
-**Settings → Environments → production**, and click edit on the variable under
-**Environment variables**. Then copy the token with steps 1 to 5 of
-[find the Web Analytics tokens](#find-the-web-analytics-tokens) and paste it
-straight into that field.
+Follow the token instructions, verify both GitHub targets were updated, confirm
+deployment and GTFS refresh, then revoke the old credential. Do not confuse
+presence of a stored secret with evidence that the provider accepts it.
+Public account and analytics variables are repaired in their GitHub environment
+settings after confirming the intended account and property.
 
 ## Not covered by the bootstrap
 
-Pull request previews also need the account's `workers.dev` subdomain to be
-registered once. If the preview workflow fails at **Resolve the preview
-target**, follow
-[when a preview fails](operations.md#when-a-preview-fails).
+Provider acceptance, deployment, data retention, and public release behavior are
+separate gates. Previews also need the account's registered `workers.dev`
+subdomain. Follow [when a preview fails](operations.md#when-a-preview-fails) if the
+preview target cannot be resolved. Preserve the existing release and performance
+gates; this setup migration does not publish a release.
+
+## Protected retained staging
+
+The main release workflow now retains and signs a build before deploying only the
+`transitmapper-preview` Worker. Production publication uses `pnpm promote` and the same
+saved bytes. Existing `preview` and `production` credential environment names stay in use.
+
+Before enabling that path, a maintainer must review the real `transitmapper-preview` D1
+ID and the `LVBT_PREVIEW_BINDINGS` repository variable. The zero UUID in `wrangler.toml`
+is a local placeholder and cannot pass shared release packaging. Update IDs only through
+a reviewed configuration pull request; do not guess an ID or copy the production database.
+The JSON declaration includes every canonical binding: `DB`, `GTFS_ARCHIVES`,
+`PLACE_SEARCH_GATE`, six limiters, `ASSETS`, `SITE_URL`, and `NOMINATIM_URL`. The preview
+Durable Object Worker is `transitmapper-preview`; limiter namespaces are `2001` through
+`2006`, preserving the matching production periods and limits. `GTFS_ARCHIVES` deliberately
+reads `transitmapper-data` through the reviewed read-only handler contract.
+
+Protect `transitmapper-preview.las-vegas-for-better-transit.workers.dev` in Cloudflare Access
+before the first saved deployment. An unauthenticated request must return denial. Add the
+approved service token's `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` only to the
+existing `preview` GitHub environment through maintainer setup. Production jobs receive
+no Access credentials; they verify the successful same-run immutable candidate proof.
+These are readiness requirements, not changes performed by an agent session.

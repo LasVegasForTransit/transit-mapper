@@ -10,3 +10,5 @@ export { provisionCustomDomain } from './provision-domain.js';
 export { provisionAnalytics } from './provision-analytics.js';
 export { provisionWorkerPresence, provisionWorkerPreviewUrls } from './provision-worker.js';
 export { activeVersion, uploadedVersion, verifyArchiveVersion } from './cloudflare-release.js';
+
+export { validAnalytics } from './doctor-cloudflare.js';

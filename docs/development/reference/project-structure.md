@@ -1,7 +1,6 @@
 # Project structure
 
-Use this reference to place code without reversing a package edge or adding
-application policy to a reusable map component.
+Place code along the dependency direction below.
 
 ## Workspace
 
@@ -26,10 +25,9 @@ each package's lint ────> packages/eslint-plugin ──> @lasvegasfortra
 repository contribution tooling ──> pinned LVBT standard release
 ```
 
-The domain model does not import browser state, React, MapLibre, or Worker
-bindings. The web application owns interactive state and browser integration;
-the Worker owns network delivery and persistence. This direction keeps domain
-rules portable across the browser and workerd runtimes.
+The domain model imports no browser state, React, MapLibre, or Worker bindings.
+The web application owns browser integration; the Worker owns delivery and
+persistence. Domain rules stay portable between browser and workerd.
 
 ### Tree
 
@@ -447,7 +445,9 @@ Vite builds the editor, embed, and no-script privacy page.
 `apps/worker` deploys the web build, publishes systems and Views, and stores
 their records. It imports core and View contracts, never browser modules.
 `cloudflare.config.ts` defines both `cf` deployments; `wrangler.config.ts`
-points the bundler at web assets. Bootstrap writes D1 IDs to `wrangler.toml`.
+points the bundler at web assets. `platform.json` declares shared production setup;
+D1 IDs change in `wrangler.toml`
+through a reviewed pull request.
 The parity test checks routes, triggers, and bindings across both configs.
 
 #### HTTP delivery
@@ -489,6 +489,11 @@ Each package or application owns a `tests/` tree at its root. Test paths mirror
 production modules. Shared fixtures remain explicit test-only exports.
 
 ### Generators and checks
+
+Shared bootstrap/preflight reads `.lvbt/tooling.json` for local environment files
+and `apps/worker/platform.json` for production requirements. The shared CLI owns
+installation fingerprints, provider observation, and setup; product checks remain
+in the Turbo `validate` graph.
 
 Repository checks live under `scripts/`; package scaffolding lives under
 `turbo/`. See

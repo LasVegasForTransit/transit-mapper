@@ -1,0 +1,39 @@
+name: Build and retain reviewed release
+description: One implementation of validation, compilation, and immutable artifact retention.
+inputs:
+  artifact-source:
+    required: true
+    description: Reviewed cf-output, typed-worker, or legacy-worker source
+  artifact-prefix:
+    required: true
+    description: Stable application artifact name prefix
+runs:
+  using: composite
+  steps:
+    - name: Install validation browser
+      if: env.VALIDATION_BROWSER_DIRECTORY != ''
+      shell: bash
+      run: pnpm --dir "$VALIDATION_BROWSER_DIRECTORY" exec playwright install --with-deps chromium
+    - name: Build and validate the app
+      shell: bash
+      run: pnpm check
+    - name: Build reviewed assets
+      shell: bash
+      run: pnpm build
+    - name: Prepare static cf output
+      if: inputs.artifact-source == 'cf-output'
+      shell: bash
+      run: pnpm --dir "$APP_DIRECTORY" exec cf deploy --dry-run
+    - name: Package reviewed release
+      shell: bash
+      run: >-
+        pnpm exec lvbt release package --directory "$RUNNER_TEMP/release" --commit "$GITHUB_SHA"
+        --release-id "$RELEASE_ID"
+    - name: Retain immutable release
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}
+        path: ${{ runner.temp }}/release/
+        include-hidden-files: true
+        if-no-files-found: error
+        retention-days: 90

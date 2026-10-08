@@ -1,5 +1,5 @@
 {
   "extends": "@lasvegasfortransit/typescript-config/astro.json",
-  "include": [".astro/types.d.ts", "src", "tests", "*.config.ts"],
+  "include": [".astro/types.d.ts", "src", "tests", "scripts", "*.config.ts"],
   "exclude": ["dist"]
 }

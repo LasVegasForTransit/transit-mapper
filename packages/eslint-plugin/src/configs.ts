@@ -1,5 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/triple-slash-reference -- an import cannot reach a global declaration script, and every package that compiles this module needs it
-/// <reference path="../../../lvbt-eslint-config.d.ts" />
 // The configurations each package's eslint.config.ts starts from: the
 // organization's baseline, plus what is true of every package in this
 // repository and of no other. A package adds only the rules about itself.
@@ -9,9 +7,10 @@
 // relative `.ts` import here would make every package opt in to
 // `allowImportingTsExtensions` just to read its lint config.
 import { config as base } from '@lasvegasfortransit/eslint-config/base';
+import { config as browser } from '@lasvegasfortransit/eslint-config/browser';
+import { config as react } from '@lasvegasfortransit/eslint-config/react-internal';
 import type { ESLint, Linter } from 'eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
-import globals from 'globals';
 
 // `import { type X } from './m'` erases the specifier but keeps the
 // statement, so under the shared config's `verbatimModuleSyntax` it emits
@@ -28,19 +27,6 @@ const repository: Linter.Config[] = [
   },
 ];
 
-// The organization also ships `browser` and `react-internal` entry points,
-// but only `base` has a type declaration here (lvbt-eslint-config.d.ts), so
-// the other two are composed from it: the same browser and service-worker
-// globals, and the same two hook rules.
-const browserGlobals: Linter.Config = {
-  languageOptions: {
-    globals: {
-      ...globals.serviceworker,
-      ...globals.browser,
-    },
-  },
-};
-
 // eslint-plugin-react-hooks 7 exposes its presets as `configs.flat.recommended`
 // — a config object nested one level deeper than ESLint's `Plugin` type allows,
 // which is a `Record<string, ConfigObject | ConfigObject[]>`. The rules used
@@ -56,7 +42,7 @@ const reactHooksPlugin = reactHooks as unknown as ESLint.Plugin;
 // how this app is written, and belong in their own change. Plain `.ts` files
 // are included because hooks such as useListboxKeyboardNav.ts live in them.
 const hookRules: Linter.Config = {
-  files: ['**/*.{ts,tsx}'],
+  files: ['**/*.ts'],
   plugins: { 'react-hooks': reactHooksPlugin },
   rules: {
     'react-hooks/rules-of-hooks': 'error',
@@ -71,7 +57,7 @@ export const configs: Record<'base' | 'browser' | 'react', PackageConfig> = {
   /** A package with no DOM: core, views, the Worker, and repository tooling. */
   base: [...base, ...repository],
   /** A package that runs in the browser without React. */
-  browser: [...base, browserGlobals, ...repository],
+  browser: [...browser, ...repository],
   /** A package that renders React. */
-  react: [...base, browserGlobals, hookRules, ...repository],
+  react: [...react, hookRules, ...repository],
 };

@@ -17,7 +17,9 @@ export function githubReader(root: string) {
           stdio: ['ignore', 'pipe', 'pipe'],
         },
       );
-      const pages = z.array(z.unknown()).min(1).parse(JSON.parse(output));
+      const pages = z.array(z.unknown()).parse(JSON.parse(output));
+      // gh emits [] for a successful HTTP 204 response when --slurp is enabled.
+      if (pages.length === 0) return Promise.resolve(null);
       if (pages.length === 1) return Promise.resolve(pages[0]);
       if (pages.every(Array.isArray)) return Promise.resolve(pages.flat());
       const records = z.array(z.record(z.string(), z.unknown())).parse(pages);

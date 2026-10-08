@@ -1,4 +1,4 @@
-import type { Browser, Page } from 'playwright-core';
+import type { Browser, BrowserContext, Page } from 'playwright-core';
 import { generatePerfFixture } from '../../src/perf/fixtures';
 import type { PerfOnboardingSample, PerfProtocol } from '../../src/perf/types';
 import { closeContext, configureProtocol, seedIndexedDbFixture } from './browser';
@@ -209,6 +209,7 @@ export async function capturePlaywrightOnboardingJourney(options: {
   browser: Browser;
   protocol: PerfProtocol;
   previewUrl: string;
+  configureContext?: (context: BrowserContext) => Promise<void>;
 }): Promise<PerfOnboardingSample> {
   const context = await options.browser.newContext({
     viewport: {
@@ -220,6 +221,7 @@ export async function capturePlaywrightOnboardingJourney(options: {
     serviceWorkers: 'block',
   });
   const page = await context.newPage();
+  await options.configureContext?.(context);
   const session = await context.newCDPSession(page);
   const remoteStyleRequests: string[] = [];
   let observeOnboardingRequests = false;

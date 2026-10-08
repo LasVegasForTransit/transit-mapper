@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { resolveBuildOutputDirectory } from '../build-output';
 import { PRODUCTION_ORIGIN } from './production-origin';
 import { siteFromArgs } from './site-argument';
+import { releaseRequestHeaders } from './release-access';
 
 /**
  * Asserts that a deployed origin is serving *this* build, over plain HTTP.
@@ -100,6 +101,7 @@ export interface Probe {
 async function probe(url: string, method: 'GET' | 'HEAD'): Promise<Probe> {
   try {
     const response = await fetch(url, {
+      headers: await releaseRequestHeaders(url),
       method,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       // Not `follow`. The curl calls this replaced had no -L, so a redirect
@@ -131,7 +133,8 @@ async function probe(url: string, method: 'GET' | 'HEAD'): Promise<Probe> {
  */
 function crawlPolicy(probed: Probe): string {
   if (!/^\d+$/u.test(probed.status)) return probed.status;
-  return probed.headers.get('x-robots-tag')?.toLowerCase() ?? 'indexable';
+  const policy = probed.headers.get('x-robots-tag')?.toLowerCase() ?? 'indexable';
+  return policy.split(',').some((value) => value.trim() === 'noindex') ? 'noindex' : policy;
 }
 
 /** Presence, not an exact count — a header duplicated by some future proxy
@@ -172,6 +175,7 @@ async function waitFor(
 async function servesEntryChunk(site: string, entry: string): Promise<boolean> {
   try {
     const response = await fetch(`${site}/`, {
+      headers: await releaseRequestHeaders(`${site}/`),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       redirect: 'manual',
     });

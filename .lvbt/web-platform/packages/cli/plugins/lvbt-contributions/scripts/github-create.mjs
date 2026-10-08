@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
+import { hasLabels } from '../../../src/lib/contributions/issue-apply.mjs';
+
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { commitSubjectError } from './validate-commit-subject.mjs';
+import { ownershipLabel } from '../../../src/lib/contributions/ownership.mjs';
 
 const placeholderPattern =
   /\[(?:describe|optional|subheading|more subheadings|future issue title)[^\]]*\]/i;
@@ -85,8 +88,36 @@ function verifyStored(expected, stored) {
 }
 
 const options = parseArguments(process.argv.slice(2));
+if (options.kind === 'recurring') {
+  try {
+    const { reportRecurring } = await import('../../../src/lib/contributions/recurring.mjs');
+    const result = await reportRecurring({
+      cwd: process.cwd(),
+      input: options.input,
+      dryRun: options.dryRun,
+    });
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+    process.exit(0);
+  } catch (error) {
+    fail(error.message, 2);
+  }
+}
+if (options.kind === 'audit') {
+  try {
+    const { reportAudit } = await import('../../../src/lib/audit/report.mjs');
+    const result = await reportAudit({
+      cwd: process.cwd(),
+      input: options.input,
+      dryRun: options.dryRun,
+    });
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+    process.exit(0);
+  } catch (error) {
+    fail(error.message, 2);
+  }
+}
 if (!['issue', 'pr'].includes(options.kind)) {
-  fail('Usage: github-create issue|pr [options]', 2);
+  fail('Usage: github-create issue|pr|audit|recurring [options]', 2);
 }
 if (!options.title?.trim()) fail('A non-empty title is required.');
 if (options.title !== options.title.trim()) fail('The title must be trimmed.');
@@ -123,12 +154,51 @@ if (options.kind === 'issue') {
   }
 }
 
+let labels;
+if (options.recurring_key || options.recurring_labels) {
+  if (
+    options.kind !== 'issue' ||
+    !/^[a-z0-9][a-z0-9-]*$/.test(options.recurring_key ?? '') ||
+    options.audit_check ||
+    options.audit_target
+  )
+    fail('Recurring ownership requires one valid issue key.', 2);
+  let additional;
+  try {
+    additional = JSON.parse(options.recurring_labels ?? '[]');
+  } catch {
+    fail('Invalid recurring labels.', 2);
+  }
+  if (
+    !Array.isArray(additional) ||
+    additional.some(
+      (name) =>
+        typeof name !== 'string' ||
+        !/^[A-Za-z0-9][A-Za-z0-9 .:_-]{0,49}$/.test(name) ||
+        ownershipLabel(name),
+    )
+  )
+    fail('Invalid recurring labels.', 2);
+  labels = [
+    ...new Set([label, 'recurring-owned', `recurring:${options.recurring_key}`, ...additional]),
+  ];
+}
+if (options.audit_check || options.audit_target) {
+  if (options.kind !== 'issue' || options.type !== 'bug')
+    fail('Audit ownership requires a bug issue.', 2);
+  if (!['links', 'lighthouse', 'dependencies'].includes(options.audit_check))
+    fail('Invalid audit check.', 2);
+  if (!['local', 'production'].includes(options.audit_target)) fail('Invalid audit target.', 2);
+  labels = [label, 'audit-owned', `audit:${options.audit_check}`, `target:${options.audit_target}`];
+}
+
 const preview = {
   valid: true,
   kind: options.kind,
   title: options.title,
   body,
   ...(label ? { label } : {}),
+  ...(labels ? { labels } : {}),
 };
 if (options.dryRun) {
   process.stdout.write(
@@ -146,11 +216,22 @@ if (options.kind === 'issue') {
     options.title,
     '--body-file',
     options.body_file,
-    '--label',
-    label,
+    ...(labels ?? [label]).flatMap((value) => ['--label', value]),
+    ...(options.repo ? ['--repo', options.repo] : []),
   ]);
-  const stored = JSON.parse(run('gh', ['issue', 'view', url, '--json', 'number,title,body,url']));
+  const stored = JSON.parse(
+    run('gh', [
+      'issue',
+      'view',
+      url,
+      '--json',
+      labels ? 'number,title,body,url,labels' : 'number,title,body,url',
+      ...(options.repo ? ['--repo', options.repo] : []),
+    ]),
+  );
   verifyStored(preview, stored);
+  if (labels && !hasLabels(stored.labels, labels))
+    fail('GitHub stored issue labels differ from the verified preview.', 2);
   preview.number = stored.number;
   preview.url = stored.url;
 } else {

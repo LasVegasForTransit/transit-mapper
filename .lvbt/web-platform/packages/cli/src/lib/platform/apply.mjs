@@ -10,7 +10,7 @@ import {
   namedInConfig,
   updateWidget,
 } from './apply-resources.mjs';
-import { secretValue } from './apply-values.mjs';
+import { completeSecretSetup, secretValue } from './apply-values.mjs';
 
 export { generateSecret, targetName } from './apply-steps.mjs';
 export { rotateSecrets } from './apply-values.mjs';
@@ -29,7 +29,7 @@ async function createDatabase(context, action) {
       : wrangler(context, ['d1', 'create', action.name]),
   );
   context.io.write(
-    `${paint('green', 'Created')} the D1 database ${action.name}. Put its ${context.manifest.cloudflare.cloudflareConfig ? 'D1 id' : 'database_id'} in ${context.configPath} through a pull request; the final report shows the id.\n`,
+    `${paint('green', 'Created')} the D1 database ${action.name}. Bind its name in ${context.configPath} through a pull request; the final report shows its ID if you choose to pin it.\n`,
   );
 }
 
@@ -59,9 +59,20 @@ async function migrateDatabase(context, action) {
   } else {
     context.io.write(`Applying migrations to ${action.name}. Wrangler asks you to confirm.\n`);
     succeeded(
-      wrangler(context, ['d1', 'migrations', 'apply', action.name, '--remote'], {
-        inherit: true,
-      }),
+      wrangler(
+        context,
+        [
+          'd1',
+          'migrations',
+          'apply',
+          action.name,
+          '--remote',
+          ...(action.environment ? ['--env', action.environment] : []),
+        ],
+        {
+          inherit: true,
+        },
+      ),
     );
   }
 }
@@ -95,6 +106,7 @@ async function putSecret(context, action) {
     return;
   }
   await storeSecret(context, action.secret.name, action.target, value);
+  await completeSecretSetup(context, action.secret);
 }
 
 async function showSteps(context, action, entry) {

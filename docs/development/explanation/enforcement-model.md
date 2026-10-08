@@ -80,8 +80,10 @@ would train people to work around them.
 Layer 4 is what makes that sentence true. CI reporting a failure stops
 nothing on its own; the ruleset is what refuses the merge. It requires a
 pull request, requires the `Validate` check to pass, and forbids deleting
-or force-pushing the branch. `scripts/bootstrap/standards.ts` holds it as
-data, and `pnpm bootstrap` reports drift or applies it.
+or force-pushing the branch. The adopted organization policy lives in
+`.lvbt/web-platform/standards/ruleset.json`. The production manifest opts into
+shared read-only governance diagnostics; maintainers review the guided repairs.
+Local bootstrap does not administer the repository.
 
 That protection is scoped to `main` on purpose. Amending your own commits,
 force-pushing your own branch, rebasing onto a moved base — all of that is
@@ -95,9 +97,11 @@ Pull requests land by rebase merge through the merge queue, and by nothing
 else. Squash merges and merge commits are both off, in the repository's merge
 buttons and in the ruleset, so `main` is a straight line of the commits that
 were reviewed. Tidy a branch's working commits before it merges, because they
-reach `main` as they are. `scripts/bootstrap/standards.ts` declares both
-settings, and `scripts/tests/governance-standard.test.ts` fails if either
-ever allows squash or a merge commit again.
+reach `main` as they are. Shared governance diagnostics check the merge settings
+and pinned ruleset while
+preserving additional live merge-queue protections.
+`scripts/tests/governance-standard.test.ts` checks the adopted policy against CI
+and verifies that unreadable settings stay unknown rather than being replaced.
 
 ### Required approvals
 

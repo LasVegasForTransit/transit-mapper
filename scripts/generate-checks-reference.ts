@@ -160,6 +160,16 @@ const CHECKS: Check[] = [
     fails: 'generated app icons no longer match their source and provenance',
     fix: '`pnpm --filter @transitmapper/web generate:icons`',
   },
+  {
+    command: 'security:dependencies',
+    fails: 'any dependency has a high or critical advisory, including build and test tooling',
+    fix: 'update the shared audited override or the affected application dependency',
+  },
+  {
+    command: 'security:secrets',
+    fails: 'the full repository history contains a secret or the pinned scanner cannot run',
+    fix: 'remove and rotate the secret; use a full-history checkout and the shared scanner',
+  },
 ];
 
 /** Checks that exist but deliberately run somewhere other than `pnpm check`. */
@@ -170,19 +180,24 @@ const ELSEWHERE: Check[] = [
     fix: 'run the generator by hand and repair the template',
   },
   {
-    command: 'check:env (bootstrap)',
-    fails: 'node_modules disagrees with the lockfile',
-    fix: '`pnpm install --frozen-lockfile`',
+    command: 'shared install fingerprint',
+    fails: 'node_modules disagrees with Node, pnpm, or the lockfile',
+    fix: '`pnpm bootstrap`',
   },
   {
-    command: 'gitleaks (pre-commit, CI)',
+    command: 'gitleaks (pre-commit)',
     fails: 'a secret appears in the changes',
     fix: 'remove it, then rotate it — assume it is burned',
   },
   {
     command: 'pnpm preflight',
-    fails: 'the toolchain, Cloudflare resources, or GitHub governance differ from the standard',
+    fails: 'local toolchain or required development files are missing',
     fix: '`pnpm bootstrap`',
+  },
+  {
+    command: 'pnpm preflight --production',
+    fails: 'declared provider resources or deployment credentials are missing or unknown',
+    fix: 'maintainer `pnpm bootstrap --production`',
   },
   {
     command: 'commit-msg hook',

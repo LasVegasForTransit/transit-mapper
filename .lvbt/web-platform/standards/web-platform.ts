@@ -3,13 +3,18 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { syncSetupEntrypoints } from './setup-entrypoints.ts';
+import { syncCommunityPublication } from './community-publication.ts';
+import { rejectSymlinkDestination } from './paths.ts';
 import { syncAstroTypesBeforeLint } from './astro-sync.ts';
+import { syncTurboCache } from './turbo-cache.ts';
+import { syncWorkspaceOverrides } from './workspace-policy.ts';
 import {
   AGENT_WORKTREES,
   consumerIgnoreWarnings,
   syncConsumerIgnores,
 } from './consumer-ignores.ts';
-import { seedFiles, syncPluginRef } from './owned-files.ts';
+import { seedFiles, syncOwnedFiles, syncPluginRef } from './owned-files.ts';
 
 export interface WebPreset {
   formatVersion: number;
@@ -71,7 +76,7 @@ export async function verifyPreset(root: string): Promise<PresetMetadata> {
   return metadata;
 }
 
-function validateBundle(bundle: WebPreset): void {
+export function validateBundle(bundle: WebPreset): void {
   if (bundle.executables?.some((name) => !Object.hasOwn(bundle.files, name))) {
     throw new Error('Executable path is absent from the preset.');
   }
@@ -157,14 +162,21 @@ export async function applyPreset(root: string, bundle: WebPreset, dryRun = fals
     [
       ...new Set([
         ...(await migrateLegacyPackageScope(root, dry)),
+        ...(await syncSetupEntrypoints(root, bundle, dry)),
         ...(await syncConsumerIgnores(root, dry)),
         ...(await syncAstroTypesBeforeLint(root, dry)),
+        ...(await syncTurboCache(root, bundle, dry)),
+        ...(await syncWorkspaceOverrides(root, bundle, dry)),
         ...(await seedFiles(root, bundle, dry)),
+        ...(await syncOwnedFiles(root, bundle, dry)),
         ...(await syncPluginRef(root, bundle, dry)),
+        ...(await syncCommunityPublication(root, bundle, dry)),
       ]),
     ].sort();
   // Planning first means a consumer file a migration can't read stops the update before any write.
   const consumerChanged = await migrate(true);
+  for (const file of ['.lvbt/web-platform', '.lvbt/web-platform.json', ...consumerChanged])
+    await rejectSymlinkDestination(root, file);
   for (const warning of await consumerIgnoreWarnings(root))
     process.stderr.write(`warning: ${warning}\n`);
   if (!dryRun) {

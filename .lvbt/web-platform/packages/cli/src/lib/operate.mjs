@@ -3,11 +3,19 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { CliError } from './arguments.mjs';
 import { exists, readJson } from './files.mjs';
+import { checkInstall, recordInstall } from './install-fingerprint.mjs';
+import { localEnvironment } from './local-environment.mjs';
 import { findManifests } from './platform/manifest.mjs';
 import { platformBootstrap, platformPreflight } from './platform/index.mjs';
+import { readTooling } from './tooling.mjs';
+import { secretScannerFinding } from './check/secrets.mjs';
 
 function output(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, encoding: 'utf8' });
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, pnpm_config_verify_deps_before_run: 'error' },
+  });
   return result.status === 0 ? result.stdout.trim() : undefined;
 }
 
@@ -28,7 +36,7 @@ function satisfies(version, range) {
 const WRANGLER_FILES = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml'];
 const CF_FILE = 'cloudflare.config.ts';
 
-export function wranglerDeployArguments(commit, dryRun) {
+export function wranglerDeployArguments(commit, dryRun, environment) {
   if (!/^[a-f0-9]{40}$/.test(commit))
     throw new CliError('deploy: provenance requires a full Git commit.', 2);
   return [
@@ -38,11 +46,12 @@ export function wranglerDeployArguments(commit, dryRun) {
     '--strict',
     '--message',
     `Commit ${commit}`,
+    ...(environment ? ['--env', environment] : []),
     ...(dryRun ? ['--dry-run'] : []),
   ];
 }
 
-export function cfDeployArguments(commit, dryRun) {
+export function cfDeployArguments(commit, dryRun, environment) {
   if (!/^[a-f0-9]{40}$/.test(commit))
     throw new CliError('deploy: provenance requires a full Git commit.', 2);
   return [
@@ -51,6 +60,7 @@ export function cfDeployArguments(commit, dryRun) {
     'deploy',
     '--message',
     `Commit ${commit}`,
+    ...(environment ? ['--mode', environment] : []),
     ...(dryRun ? ['--dry-run'] : []),
   ];
 }
@@ -75,26 +85,29 @@ async function wranglerConfig(directory) {
   return undefined;
 }
 
+async function canonicalDeployable(cwd, directory, canonical, scope) {
+  const configFile = path.resolve(directory, canonical);
+  if (path.basename(configFile) !== CF_FILE)
+    throw new CliError(`deploy: canonical cf config must be named ${CF_FILE}.`, 2);
+  if (!(await exists(configFile)))
+    throw new CliError(`deploy: canonical cf config ${configFile} is missing.`, 2);
+  const target = path.relative(cwd, path.dirname(configFile)) || '.';
+  if (target.startsWith('..') || path.isAbsolute(target))
+    throw new CliError('deploy: canonical cf config must be inside this repository.', 2);
+  return { directory: target, tool: 'cf', source: path.relative(cwd, directory) || '.', ...scope };
+}
+
 async function deployable(cwd, directory) {
   const manifestPath = path.join(directory, 'platform.json');
-  if (await exists(manifestPath)) {
-    const manifest = await readJson(manifestPath);
-    const canonical = manifest.cloudflare?.cloudflareConfig;
-    if (canonical) {
-      const configFile = path.resolve(directory, canonical);
-      if (path.basename(configFile) !== CF_FILE)
-        throw new CliError(`deploy: canonical cf config must be named ${CF_FILE}.`, 2);
-      if (!(await exists(configFile)))
-        throw new CliError(`deploy: canonical cf config ${configFile} is missing.`, 2);
-      const target = path.relative(cwd, path.dirname(configFile)) || '.';
-      if (target.startsWith('..') || path.isAbsolute(target))
-        throw new CliError('deploy: canonical cf config must be inside this repository.', 2);
-      return { directory: target, tool: 'cf', source: path.relative(cwd, directory) || '.' };
-    }
-  }
+  const manifest = (await exists(manifestPath)) ? await readJson(manifestPath) : {};
+  const environment = manifest.cloudflare?.environment;
+  const scope = environment ? { environment } : {};
+  const canonical = manifest.cloudflare?.cloudflareConfig;
+  if (canonical) return await canonicalDeployable(cwd, directory, canonical, scope);
   const relative = path.relative(cwd, directory) || '.';
-  if (await exists(path.join(directory, CF_FILE))) return { directory: relative, tool: 'cf' };
-  if (await wranglerConfig(directory)) return { directory: relative, tool: 'wrangler' };
+  if (await exists(path.join(directory, CF_FILE)))
+    return { directory: relative, tool: 'cf', ...scope };
+  if (await wranglerConfig(directory)) return { directory: relative, tool: 'wrangler', ...scope };
   return undefined;
 }
 
@@ -113,7 +126,7 @@ export async function deployables(cwd) {
   return [...found.values()];
 }
 
-async function toolchainFindings(cwd, packageJson, report) {
+async function toolchainFindings(cwd, packageJson, report, { includeDependencies = true } = {}) {
   const nodeRange = packageJson.engines?.node ?? '>=24';
   if (satisfies(process.versions.node, nodeRange))
     report.pass('Node.js', `${process.versions.node} satisfies ${nodeRange}`);
@@ -146,12 +159,17 @@ async function toolchainFindings(cwd, packageJson, report) {
     );
   else report.pass('pnpm', `${pnpm} matches packageManager`);
 
-  if (await exists(path.join(cwd, 'node_modules')))
+  if (!includeDependencies) return;
+  if (await exists(path.join(cwd, 'node_modules'))) {
     report.pass('dependencies', 'node_modules is present');
-  else report.fail('dependencies', 'node_modules is missing', 'pnpm install');
+    const installed = checkInstall(cwd, { pnpm });
+    if (!installed.ok) report.fail(installed.label, installed.detail, installed.fix);
+    else if (installed.warning) report.warn(installed.label, installed.detail, installed.fix);
+    else report.pass(installed.label, installed.detail);
+  } else report.fail('dependencies', 'node_modules is missing', 'pnpm install');
 }
 
-async function repositoryFindings(cwd, report) {
+async function repositoryFindings(cwd, report, { production = false } = {}) {
   const hooksPath = output('git', ['config', '--local', 'core.hooksPath'], cwd);
   if (hooksPath === '.githooks') report.pass('git hooks', 'core.hooksPath is .githooks');
   else
@@ -172,7 +190,8 @@ async function repositoryFindings(cwd, report) {
       "copy .lvbt/commit-scopes.txt from the standard example and list this repository's scopes",
     );
 
-  // Issues and pull requests are created by people, so a runner does not need gh.
+  if (!production) return;
+  // Publishing operations check authentication; ordinary local setup does not.
   if (process.env.CI) {
     report.pass('GitHub CLI', 'not needed in CI');
     return;
@@ -187,7 +206,7 @@ async function repositoryFindings(cwd, report) {
     );
 }
 
-async function cloudflareFindings(cwd, report) {
+async function cloudflareFindings(cwd, report, { productionBootstrap = false } = {}) {
   const targets = await deployables(cwd);
   if (targets.length === 0) {
     report.pass('Cloudflare', 'no Cloudflare project config; nothing to deploy from here');
@@ -203,7 +222,8 @@ async function cloudflareFindings(cwd, report) {
     );
     let authenticated = false;
     try {
-      authenticated = JSON.parse(whoami).authenticated === true;
+      const identity = JSON.parse(whoami);
+      authenticated = identity.authenticated === true && identity.tokenValid !== false;
     } catch {
       // An absent CLI or malformed response is not authentication.
     }
@@ -212,7 +232,18 @@ async function cloudflareFindings(cwd, report) {
         'Cloudflare cf',
         `ready for: ${cfTargets.map((target) => target.directory).join(', ')}`,
       );
-    else report.fail('Cloudflare cf', 'cf is not signed in', 'pnpm exec cf auth login');
+    else if (productionBootstrap)
+      report.warn(
+        'Cloudflare cf',
+        'cf is not signed in; setup can continue, but cf resource commands need authentication',
+        'provide CLOUDFLARE_API_TOKEN for this session or run pnpm exec cf auth login',
+      );
+    else
+      report.fail(
+        'Cloudflare cf',
+        'cf is not signed in',
+        'provide CLOUDFLARE_API_TOKEN for this session or run pnpm exec cf auth login',
+      );
   }
   if (wranglerTargets.length > 0) {
     const whoami = output('pnpm', ['exec', 'wrangler', 'whoami'], cwd);
@@ -231,24 +262,36 @@ async function cloudflareFindings(cwd, report) {
  * command that fixes it. Returns the failures instead of throwing, so
  * `--production` can still report on production.
  */
-async function machineFindings(cwd) {
+async function machineFindings(
+  cwd,
+  {
+    production = false,
+    productionBootstrap = false,
+    toolsOnly = false,
+    includeDependencies = true,
+    localApply = false,
+  } = {},
+) {
   const packageJson = await readJson(path.join(cwd, 'package.json'));
   const findings = [];
   const report = {
     pass: (label, detail) => findings.push({ ok: true, label, detail }),
+    warn: (label, detail, fix) => findings.push({ ok: true, warning: true, label, detail, fix }),
     fail: (label, detail, fix) => findings.push({ ok: false, label, detail, fix }),
   };
 
-  await toolchainFindings(cwd, packageJson, report);
-  await repositoryFindings(cwd, report);
-  await cloudflareFindings(cwd, report);
-
-  for (const finding of findings) {
-    process.stdout.write(
-      `  ${finding.ok ? 'ok  ' : 'FAIL'}  ${finding.label.padEnd(14)} ${finding.detail}\n`,
-    );
-    if (!finding.ok) process.stdout.write(`        fix: ${finding.fix}\n`);
+  await toolchainFindings(cwd, packageJson, report, { includeDependencies });
+  if (!toolsOnly) {
+    await repositoryFindings(cwd, report, { production });
+    if (!production) {
+      findings.push(...localEnvironment(cwd, { apply: localApply }));
+      const scanner = secretScannerFinding({ cwd });
+      if (scanner) findings.push(scanner);
+    }
+    if (production) await cloudflareFindings(cwd, report, { productionBootstrap });
   }
+
+  printFindings(findings);
   const failed = findings.filter((finding) => !finding.ok);
   if (failed.length === 0)
     process.stdout.write(`preflight: all ${findings.length} checks passed\n`);
@@ -267,7 +310,7 @@ export async function preflight({ cwd, options = {} }) {
       'preflight never changes anything; use --rotate with pnpm bootstrap --production.',
       2,
     );
-  const machine = await machineFindings(cwd);
+  const machine = await machineFindings(cwd, { production: options.production });
   if (options.production) {
     try {
       await platformPreflight({ cwd, options });
@@ -287,11 +330,18 @@ export async function preflight({ cwd, options = {} }) {
 export async function bootstrap({ cwd, options = {} }) {
   if (options.rotate !== undefined && !options.production)
     throw new CliError('--rotate replaces production secrets, so it needs --production.', 2);
+  const tools = await machineFindings(cwd, { toolsOnly: true, includeDependencies: false });
+  if (tools) throw new CliError(tools, 1);
   process.stdout.write('pnpm install\n');
   const install = spawnSync('pnpm', ['install'], { cwd, stdio: 'inherit' });
   if (install.status !== 0)
     throw new CliError('bootstrap: pnpm install failed', install.status ?? 1);
-  const machine = await machineFindings(cwd);
+  recordInstall(cwd, { pnpm: output('pnpm', ['--version'], cwd) });
+  const machine = await machineFindings(cwd, {
+    production: options.production,
+    productionBootstrap: options.production,
+    localApply: !options.production,
+  });
   if (machine) throw new CliError(machine, 1);
   if (options.production) {
     await platformBootstrap({ cwd, options });
@@ -312,6 +362,11 @@ export async function bootstrap({ cwd, options = {} }) {
  * names.
  */
 export async function deploy({ cwd, options }) {
+  if (readTooling(cwd).release && !options.dryRun)
+    throw new CliError(
+      'deploy: this repository publishes a saved staging release; push the reviewed change to main, then use pnpm promote for production.',
+      2,
+    );
   let targets = await deployables(cwd);
   if (options.filter)
     targets = targets.filter((target) =>
@@ -339,8 +394,8 @@ export async function deploy({ cwd, options }) {
       throw new CliError('deploy: repository changed after the production build.', 2);
     const args =
       target.tool === 'cf'
-        ? cfDeployArguments(commit, options.dryRun)
-        : wranglerDeployArguments(commit, options.dryRun);
+        ? cfDeployArguments(commit, options.dryRun, target.environment)
+        : wranglerDeployArguments(commit, options.dryRun, target.environment);
     process.stdout.write(`${target.directory}: pnpm ${args.join(' ')}\n`);
     const result = spawnSync('pnpm', args, {
       cwd: path.join(cwd, target.directory),
@@ -352,4 +407,28 @@ export async function deploy({ cwd, options }) {
         result.status ?? 1,
       );
   }
+}
+
+function printFindings(findings) {
+  for (const finding of findings) {
+    process.stdout.write(
+      `  ${finding.warning ? 'WARN' : finding.ok ? 'ok  ' : 'FAIL'}  ${finding.label.padEnd(14)} ${finding.detail}\n`,
+    );
+    if (finding.fix) process.stdout.write(`        fix: ${finding.fix}\n`);
+  }
+}
+
+/** Postinstall only: a manual invocation must not bless a stale dependency tree. */
+export function setupRecord({ cwd, options = {} }) {
+  if (
+    process.env.npm_lifecycle_event !== 'postinstall' ||
+    !process.env.npm_config_user_agent?.startsWith('pnpm/')
+  )
+    throw new CliError(
+      'setup-record runs only from pnpm postinstall; use pnpm bootstrap to install and record the tree.',
+      2,
+    );
+  if (options.production || options.rotate || options.positional?.length)
+    throw new CliError('setup-record accepts no arguments.', 2);
+  recordInstall(cwd, { pnpm: output('pnpm', ['--version'], cwd) });
 }

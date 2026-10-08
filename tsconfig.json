@@ -39,5 +39,5 @@
     // package under its own rule. Safe because nothing here emits.
     "allowImportingTsExtensions": true
   },
-  "include": ["scripts", "turbo", "eslint.config.ts", "lvbt-eslint-config.d.ts"]
+  "include": ["scripts", "turbo", "eslint.config.ts"]
 }

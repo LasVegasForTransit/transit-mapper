@@ -14,8 +14,7 @@
   },
   "dependencies": {
     "@lasvegasfortransit/eslint-config": "file:../../.lvbt/web-platform/packages/eslint-config",
-    "eslint-plugin-react-hooks": "catalog:",
-    "globals": "catalog:"
+    "eslint-plugin-react-hooks": "catalog:"
   },
   "devDependencies": {
     "@lasvegasfortransit/typescript-config": "file:../../.lvbt/web-platform/packages/typescript-config",

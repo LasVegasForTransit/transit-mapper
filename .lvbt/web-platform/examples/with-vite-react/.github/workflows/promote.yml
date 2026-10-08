@@ -1,0 +1,53 @@
+name: Promote app release
+run-name: "Promote app: ${{ inputs.request_id || inputs.run_id || 'current preview' }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Optional successful Deploy staging run ID; omit to select the actual preview
+        type: string
+        required: false
+      request_id:
+        description: Correlation ID supplied by lvbt promote
+        type: string
+        required: false
+
+      expected_version:
+        description: Optional current production version; required before a release marker exists
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+  deployments: write
+  packages: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  source:
+    if: github.ref == 'refs/heads/main'
+    uses: LasVegasForTransit/repository-tooling/.github/workflows/release-source.yml@3567f0cb1345e8756eb5d84e0a3ea7b62695125a
+    with:
+      run-id: ${{ inputs.run_id }}
+    secrets: inherit
+  promote:
+    needs: source
+    uses: LasVegasForTransit/repository-tooling/.github/workflows/release-publish.yml@3567f0cb1345e8756eb5d84e0a3ea7b62695125a
+    with:
+      target: production
+      expected-version: ${{ inputs.expected_version }}
+      attestation-prefix: attestation-app-release
+      release-id: ${{ needs.source.outputs.release-id }}
+      commit: ${{ needs.source.outputs.commit }}
+      artifact-prefix: app-release
+      app-directory: apps/deploy
+      acceptance-directory: apps/app
+      url: ${{ vars.LVBT_PRODUCTION_URL }}
+      smoke-script: worker:smoke
+      browser-script: worker:test:browser
+    secrets: inherit

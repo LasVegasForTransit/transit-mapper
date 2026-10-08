@@ -244,13 +244,11 @@ bucket_name = "transitmapper-data"
 name = "PLACE_SEARCH_GATE"
 class_name = "PlaceSearchGate"
 
-# Rate limit namespaces are scoped to the Worker script, so these restate the
-# top-level budgets for the preview Worker rather than sharing them. Same ids
-# and same limits: a preview that throttles differently is a preview of
-# something else.
+# Rate limit namespaces are account scoped. Preview uses distinct counters
+# with the same limits and periods, so preview traffic cannot exhaust live budgets.
 [[env.preview.ratelimits]]
 name = "SHARE_CREATE_LIMITER"
-namespace_id = "1001"
+namespace_id = "2001"
 
   [env.preview.ratelimits.simple]
   limit = 20
@@ -258,7 +256,7 @@ namespace_id = "1001"
 
 [[env.preview.ratelimits]]
 name = "VIEW_CREATE_LIMITER"
-namespace_id = "1006"
+namespace_id = "2006"
 
   [env.preview.ratelimits.simple]
   limit = 20
@@ -266,7 +264,7 @@ namespace_id = "1006"
 
 [[env.preview.ratelimits]]
 name = "PERFORMANCE_SAMPLE_LIMITER"
-namespace_id = "1005"
+namespace_id = "2005"
 
   [env.preview.ratelimits.simple]
   limit = 10
@@ -274,7 +272,7 @@ namespace_id = "1005"
 
 [[env.preview.ratelimits]]
 name = "PLACE_SEARCH_LIMITER"
-namespace_id = "1002"
+namespace_id = "2002"
 
   [env.preview.ratelimits.simple]
   limit = 10
@@ -282,7 +280,7 @@ namespace_id = "1002"
 
 [[env.preview.ratelimits]]
 name = "PLACE_UPSTREAM_LIMITER"
-namespace_id = "1004"
+namespace_id = "2004"
 
   [env.preview.ratelimits.simple]
   limit = 1
@@ -290,7 +288,7 @@ namespace_id = "1004"
 
 [[env.preview.ratelimits]]
 name = "OSM_TILE_LIMITER"
-namespace_id = "1003"
+namespace_id = "2003"
 
   [env.preview.ratelimits.simple]
   limit = 60

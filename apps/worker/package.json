@@ -8,7 +8,7 @@
     "build:cloudflare": "cf build",
     "check-types": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
     "test": "node --conditions=development --import tsx tests/verify.test.ts && vitest run",
-    "deploy": "cf deploy",
+    "deploy": "pnpm --dir ../.. run deploy",
     "lint": "eslint .",
     "types": "wrangler types",
     "check:types": "tsx scripts/check-generated-types.ts"

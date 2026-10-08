@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "local": {
+    "env": [
+      {
+        "example": "apps/web/.env.example",
+        "file": "apps/web/.env.development.local"
+      }
+    ],
+    "optional": [
+      {
+        "name": "PUBLIC_LVBT_CWA_TOKEN",
+        "purpose": "Map Web Analytics beacon"
+      },
+      {
+        "name": "PUBLIC_LVBT_LABS_CWA_TOKEN",
+        "purpose": "Labs Web Analytics beacon"
+      }
+    ]
+  },
+  "audits": {
+    "workflow": ".github/workflows/audit-scheduled.yml",
+    "artifactName": "lvbt-audit-report",
+    "dependencies": {
+      "local": {
+        "command": ["pnpm", "audit", "--prod", "--audit-level=high", "--json"],
+        "format": "pnpm"
+      },
+      "production": {
+        "command": ["pnpm", "audit", "--prod", "--audit-level=high", "--json"],
+        "format": "pnpm"
+      }
+    }
+  },
+  "release": {
+    "repository": "LasVegasForTransit/transit-mapper",
+    "artifactSource": "typed-worker",
+    "appDirectory": "apps/worker",
+    "typedConfig": "cloudflare.config.ts",
+    "assetsDirectory": "../web/dist",
+    "productionWorker": "transitmapper",
+    "previewWorker": "transitmapper-preview",
+    "productionUrl": "https://map.lasvegasfortransit.org",
+    "previewUrl": "https://transitmapper-preview.las-vegas-for-better-transit.workers.dev",
+    "workersDevSubdomain": "las-vegas-for-better-transit",
+    "artifactPrefix": "transitmapper-release",
+    "publicationMode": "named-staging",
+    "previewBindingsEnv": "LVBT_PREVIEW_BINDINGS",
+    "previewReadOnlyBindings": ["GTFS_ARCHIVES"],
+    "migrations": [
+      {
+        "binding": "DB",
+        "directory": "src/migrations"
+      }
+    ],
+    "smoke": {
+      "path": "/",
+      "status": 200
+    },
+    "attestation": {
+      "signerWorkflow": "LasVegasForTransit/repository-tooling/.github/workflows/release-attest.yml",
+      "signerCommit": "3567f0cb1345e8756eb5d84e0a3ea7b62695125a"
+    },
+    "stagingWorkflow": {
+      "name": "Deploy staging",
+      "path": ".github/workflows/deploy-production.yml",
+      "branch": "main"
+    },
+    "promotionWorkflow": {
+      "file": "promote.yml",
+      "titlePrefix": "Promote TransitMapper",
+      "branch": "main"
+    }
+  }
+}

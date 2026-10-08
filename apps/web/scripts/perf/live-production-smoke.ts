@@ -5,6 +5,7 @@ import { closeContext, seedIndexedDbFixture } from './browser';
 import { onboardingJourneyFunctionalViolations } from './onboarding-journey';
 import { capturePlaywrightOnboardingJourney } from './playwright-onboarding';
 import { siteFromArgs } from '../deployment/site-argument';
+import { scopeReleaseBrowser } from '../deployment/release-access';
 
 async function exerciseRtcEditor(browser: Browser, site: string): Promise<void> {
   const fixture = generatePerfFixture('rtc');
@@ -15,6 +16,7 @@ async function exerciseRtcEditor(browser: Browser, site: string): Promise<void> 
   });
   const page = await context.newPage();
   try {
+    await scopeReleaseBrowser(context, site);
     await context.route('https://tiles.openfreemap.org/styles/**', (route) =>
       route.fulfill({
         contentType: 'application/json',
@@ -82,6 +84,7 @@ async function main(): Promise<void> {
       browser,
       protocol: createPerfProtocol('desktop', 'smoke'),
       previewUrl: site,
+      configureContext: (context) => scopeReleaseBrowser(context, site),
     });
     const violations = onboardingJourneyFunctionalViolations(onboarding);
     if (violations.length > 0) throw new Error(violations.join(' '));

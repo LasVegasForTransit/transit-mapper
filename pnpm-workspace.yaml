@@ -41,7 +41,7 @@ packageExtensions:
 # their direct dependents. The first three are the standard's; the rest are
 # this repository's own.
 overrides:
-  sharp: 0.35.4
+  sharp: 0.35.5
   smol-toml: 1.8.0
   svgo: 4.1.0
   brace-expansion@<1.1.17: ^1.1.17
@@ -73,11 +73,19 @@ overrides:
   # nanoid above, which only ever parses this repository's own stylesheets.
   postcss@<8.5.23: ^8.5.23
 
-# The organization version baseline. Every LVBT repository carries this same
-# catalog, so a package declares "catalog:" and two repositories cannot drift
-# onto different versions of one tool without it showing up as a change here.
-# Renovate keeps it current. Entries after the blank line are this
-# repository's own; the standard's entries are never re-pinned here.
+  # The organization version baseline. Every LVBT repository carries this same
+  # catalog, so a package declares "catalog:" and two repositories cannot drift
+  # onto different versions of one tool without it showing up as a change here.
+  # Renovate keeps it current. Entries after the blank line are this
+  # repository's own; the standard's entries are never re-pinned here.
+  'brace-expansion': '5.0.12'
+  'braces': 'npm:@dieub/braces-depth-guard@3.0.3-pn.3'
+  'devalue': '5.9.4'
+  'fast-uri': '3.1.8'
+  'http-cache-semantics': '4.3.0'
+  'undici@^7.0.0': '7.29.1'
+  'undici@^8.0.0': '8.10.2'
+  'source-map-js': '1.2.2'
 catalog:
   '@axe-core/playwright': 4.13.0
   '@astrojs/check': 0.9.10
@@ -140,3 +148,6 @@ catalog:
   terser: 5.49.0
   vite-plugin-pwa: 1.3.0
   zustand: 5.0.14
+
+# Shared setup validates before installing; preflight never installs.
+verifyDepsBeforeRun: false

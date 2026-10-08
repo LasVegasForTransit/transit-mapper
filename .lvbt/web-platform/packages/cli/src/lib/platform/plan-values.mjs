@@ -1,3 +1,4 @@
+import { secretTargets } from './secret-scope.mjs';
 import {
   configVarEntry,
   configVarLocation,
@@ -41,6 +42,7 @@ export function secretSource(secret, manifest) {
       value: manifest.cloudflare.accountId,
       from: 'the Cloudflare account ID',
     };
+  if (!secretTargets(secret).includes('worker')) return { type: 'prompt' };
   const widget = (manifest.turnstile ?? []).find((candidate) => candidate.secret === secret.name);
   if (widget) return { type: 'turnstile', widget, from: `the ${widget.name} Turnstile widget` };
   for (const app of manifest.access ?? []) {
@@ -92,6 +94,14 @@ function secretItem({ manifest, state }, secret, target) {
     label: `${secret.name} → ${targetLabel(manifest, target)}`,
     level: secret.use === 'future' ? 'later' : 'required',
   };
+  if (secret.listOnly)
+    return item({
+      ...fields,
+      status: 'missing',
+      level: 'later',
+      detail: 'Documented future requirement; no credential should be created.',
+      next: secret.steps?.join(' ') ?? 'Enable only when the feature is implemented.',
+    });
   const present = stored(state, target, secret.name);
   if (present.blocked)
     return item({
@@ -112,18 +122,11 @@ function secretItem({ manifest, state }, secret, target) {
       status: 'ok',
       detail: plain === undefined ? 'is set' : `is set; it should be ${plain}`,
     });
-  const elsewhere = (secret.targets ?? ['worker']).filter(
-    (other) => other !== target && stored(state, other, secret.name).value === true,
-  );
-  if (source.type === 'generate' && elsewhere.length > 0)
-    // A generated value cannot be read back, so minting another here would
-    // leave the targets holding different values.
-    return item({
-      ...fields,
-      status: 'mismatch',
-      detail: `is not set here but is set on ${elsewhere.map((other) => targetLabel(manifest, other)).join(', ')}, and setup cannot read that value to copy it`,
-      next: `${SETUP} --rotate ${secret.name} stores one new value everywhere`,
-    });
+  const generationProblem =
+    source.type === 'generate'
+      ? generatedSecretProblem({ manifest, state, secret, target, fields })
+      : undefined;
+  if (generationProblem) return generationProblem;
   return item({
     ...fields,
     status: 'missing',
@@ -269,4 +272,29 @@ export function planForbidden(context) {
         : githubForbidden(context, entry, fields, target.slice(7));
     }),
   );
+}
+
+function generatedSecretProblem({ manifest, state, secret, target, fields }) {
+  const unobserved = (secret.targets ?? ['worker']).find(
+    (other) => !stored(state, other, secret.name).ok,
+  );
+  if (unobserved)
+    return item({
+      ...fields,
+      status: 'unknown',
+      detail: 'Cannot generate while another target could not be checked.',
+      next: 'Restore inventory access before generating a value.',
+    });
+  const elsewhere = (secret.targets ?? ['worker']).filter(
+    (other) => other !== target && stored(state, other, secret.name).value === true,
+  );
+  if (elsewhere.length > 0)
+    // A generated value cannot be read back, so minting another here would
+    // leave the targets holding different values.
+    return item({
+      ...fields,
+      status: 'mismatch',
+      detail: `is not set here but is set on ${elsewhere.map((other) => targetLabel(manifest, other)).join(', ')}, and setup cannot read that value to copy it`,
+      next: `${SETUP} --rotate ${secret.name} stores one new value everywhere`,
+    });
 }

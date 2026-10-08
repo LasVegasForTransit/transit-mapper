@@ -13,7 +13,8 @@ const MODULE_FILE = /^(?:apps|packages)\/[^/]+\/(src|tests)\/(.+)$/;
 const SOURCE_FILE = /^[^.]+\.[^.]+$/;
 // Conventions that carry a second dot on purpose: CSS modules, tool config
 // files (Astro requires src/content.config.ts), and placeholder files.
-const CONVENTIONAL_SOURCE = /^(?:[^.]+\.(?:module\.[a-z]+|config\.[a-z]+)|\.gitkeep)$/;
+const CONVENTIONAL_SOURCE =
+  /^(?:[^.]+\.(?:module\.[a-z]+|config\.[a-z]+|d\.(?:ts|mts|cts))|\.gitkeep)$/;
 // Documentation beside tests describes them and is not a suite.
 const DOCUMENT = /^[A-Z][A-Z0-9-]*\.md$/;
 // Astro routes files by name, and an endpoint such as src/pages/robots.txt.ts

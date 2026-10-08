@@ -1,7 +1,8 @@
-import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { WebPreset } from './web-platform.ts';
+import { readOptional, rejectSymlinkDestination } from './paths.ts';
 
 /**
  * Files every repository copies from the example and never edits: the adoption guide's "copy these,
@@ -28,6 +29,32 @@ export const SEEDED_FILES = ['.github/workflows/standard-update.yml'];
 /** Every example carries the same owned files; the Astro example is the vendored reference. */
 const REFERENCE = 'examples/with-astro';
 
+/** Restore shared hook/config copies through the updater that installs their implementation. */
+export async function syncOwnedFiles(
+  root: string,
+  bundle: WebPreset,
+  dryRun: boolean,
+): Promise<string[]> {
+  const changed: string[] = [];
+  for (const name of OWNED_FILES) {
+    const reference = `${REFERENCE}/${name}`;
+    const expected = bundle.files[reference];
+    if (expected === undefined) continue;
+    await rejectSymlinkDestination(root, name);
+    const file = path.join(root, name);
+    const executable = bundle.executables?.includes(reference) ?? false;
+    const same = (await readOptional(file)) === expected;
+    if (same && (!executable || (await isExecutable(file)))) continue;
+    changed.push(name);
+    if (!dryRun) {
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, expected);
+      if (executable) await chmod(file, 0o755);
+    }
+  }
+  return changed;
+}
+
 // Prettier reads these before prettier.config.js, so any of them silently replaces the org rules.
 const SHADOWING_PRETTIER_CONFIGS = [
   '.prettierrc',
@@ -46,10 +73,6 @@ const SETTINGS = '.claude/settings.json';
 const MARKETPLACE_REF =
   /("repo"\s*:\s*"LasVegasForTransit\/repository-tooling"\s*,\s*"ref"\s*:\s*")([^"]*)(")/;
 
-async function readOptional(file: string): Promise<string | null> {
-  return readFile(file, 'utf8').catch(() => null);
-}
-
 async function isExecutable(file: string): Promise<boolean> {
   return ((await stat(file)).mode & 0o111) !== 0;
 }
@@ -65,6 +88,7 @@ export async function seedFiles(
     const reference = `${REFERENCE}/${name}`;
     const content = bundle.files[reference];
     const file = path.join(root, name);
+    await rejectSymlinkDestination(root, name);
     if (content === undefined || (await readOptional(file)) !== null) continue;
     added.push(name);
     if (dryRun) continue;
@@ -86,11 +110,12 @@ export async function syncPluginRef(
 ): Promise<string[]> {
   if (!bundle.release) return [];
   const file = path.join(root, SETTINGS);
+  await rejectSymlinkDestination(root, SETTINGS);
   const current = await readOptional(file);
   let next: string | undefined;
   if (current === null) next = bundle.files[`${REFERENCE}/${SETTINGS}`];
-  else if (MARKETPLACE_REF.test(current))
-    next = current.replace(MARKETPLACE_REF, `$1${bundle.release}$3`);
+  else if (MARKETPLACE_REF.test(current)) next = current;
+  if (next !== undefined) next = next.replace(MARKETPLACE_REF, `$1${bundle.release}$3`);
   if (next === undefined || next === current) return [];
   if (!dryRun) {
     await mkdir(path.dirname(file), { recursive: true });

@@ -1,3 +1,4 @@
+import { secretValueKey } from './secret-scope.mjs';
 import { accessAppGuide, teamDomainGuide, turnstileGuide } from './guides.mjs';
 import { findApp, findWidget, isSensitive, secretSource } from './plan.mjs';
 import { paint } from './terminal.mjs';
@@ -91,7 +92,8 @@ async function knownValue(context, source) {
 
 export async function secretValue(context, action) {
   const { secret, source } = action;
-  if (context.values.has(secret.name)) return context.values.get(secret.name);
+  const key = secretValueKey(context.manifest, secret);
+  if (context.values.has(key)) return context.values.get(key);
   let value;
   if (source.type === 'generate') {
     // The plan offers this only when no target holds a value yet, so every
@@ -102,8 +104,45 @@ export async function secretValue(context, action) {
     value = await knownValue(context, source);
   }
   if (!value) value = await promptValue(context, secret, fedGuide(context, source));
-  if (value) context.values.set(secret.name, value);
+  if (value) context.values.set(key, value);
   return value;
+}
+
+/** Whether a target already had this value's name before this run. */
+function previouslyStored(context, secret, target) {
+  if (target === 'worker')
+    return context.state.worker.ok && context.state.worker.value.secrets.includes(secret.name);
+  return (
+    context.state.github.ok &&
+    context.state.github.value.secrets[target.slice(7)]?.includes(secret.name) === true
+  );
+}
+
+/**
+ * Instructions for an external consumer follow successful storage on every
+ * target. A generated credential remains hidden unless its maintainer asks
+ * for one copy explicitly, and the offer is never repeated in this run.
+ */
+export async function completeSecretSetup(context, secret, { rotating = false, value } = {}) {
+  const scope = secretValueKey(context.manifest, secret);
+  const key = `afterSet:${scope}`;
+  value ??= context.values.get(scope);
+  if (!secret.afterSet || !value || context.handled.has(key)) return;
+  const complete = (secret.targets ?? ['worker']).every(
+    (target) =>
+      context.handled.has(`secret:${secret.name}:${target}`) ||
+      (!rotating && previouslyStored(context, secret, target)),
+  );
+  if (!complete) return;
+  context.handled.add(key);
+  context.io.write(`\n${secret.name}: ${secret.afterSet}\n`);
+  if (
+    await context.io.confirm(
+      `Show ${secret.name} once in this terminal so you can copy it to that external service?`,
+      false,
+    )
+  )
+    context.io.write(`${secret.name} = ${value}\n`);
 }
 
 /** The targets of a rotated secret that this run has not already stored. */
@@ -151,6 +190,7 @@ async function rotateSecret(context, secret) {
       );
     }
   }
+  await completeSecretSetup(context, secret, { rotating: true, value });
 }
 
 /**
@@ -161,9 +201,7 @@ async function rotateSecret(context, secret) {
  * its value is new. Nothing is replaced without that flag.
  */
 export async function rotateSecrets(context, names) {
-  for (const name of names)
-    await rotateSecret(
-      context,
-      context.manifest.secrets.find((secret) => secret.name === name),
-    );
+  const selected = new Set(names);
+  for (const secret of context.manifest.secrets)
+    if (selected.has(secret.name)) await rotateSecret(context, secret);
 }

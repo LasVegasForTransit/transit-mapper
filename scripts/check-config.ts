@@ -94,6 +94,8 @@ const TOOL_OWNED = [
   /^tsconfig(\.[a-z0-9-]+)?\.json$/,
   /^turbo\.json$/,
   /^wrangler\.toml$/,
+  // The shared LVBT production manifest is discovered by this fixed name.
+  /^platform\.json$/,
   // ESLint's suppression ledger, written by `--suppress-all` and read from the
   // working directory. Every package lints from its own directory, so every
   // package that carries debt has one. Pointing them all at a single shared
