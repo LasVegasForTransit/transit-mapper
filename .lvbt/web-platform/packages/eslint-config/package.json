@@ -1,6 +1,6 @@
 {
   "name": "@lasvegasfortransit/eslint-config",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "The ESLint configurations every LVBT repository uses.",
   "license": "MIT",
   "type": "module",
