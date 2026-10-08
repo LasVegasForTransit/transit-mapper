@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CliError } from '../arguments.mjs';
 import { readTooling } from '../tooling.mjs';
 
@@ -37,10 +37,15 @@ export async function runRelease({ cwd, mode, args = [] }) {
     throw new CliError('Configure release in .lvbt/tooling.json before releasing.', 2);
   const entry = await releaseEntry(cwd);
   await new Promise((resolve, reject) => {
-    const child = spawn('pnpm', ['exec', 'tsx', entry, mode, cwd, ...args], {
-      cwd,
-      stdio: 'inherit',
-    });
+    const runtime = createRequire(import.meta.url).resolve('tsx');
+    const child = spawn(
+      process.execPath,
+      ['--import', pathToFileURL(runtime).href, entry, mode, cwd, ...args],
+      {
+        cwd,
+        stdio: 'inherit',
+      },
+    );
     child.once('error', reject);
     child.once('exit', (code, signal) =>
       code === 0

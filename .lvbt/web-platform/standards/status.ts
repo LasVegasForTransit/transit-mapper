@@ -13,7 +13,13 @@ import {
   latestRelease,
   readRegistry,
 } from './propagate.ts';
-import { inventoryPaths, processFindings, type ProcessSnapshot } from './process-contract.ts';
+import {
+  configurationTargets,
+  configurationFamily,
+  inventoryPaths,
+  processFindings,
+  type ProcessSnapshot,
+} from './process-contract.ts';
 import { OWNED_FILES } from './owned-files.ts';
 
 /** Days a repository may trail the latest release while its update pull request runs. */
@@ -168,7 +174,7 @@ export function pluginRef(settings: string | null): string | null {
 function readFiles(repository: string, commit: string, paths: string[], read: typeof gh) {
   const requested = inventoryPaths(paths);
   requested.push(...OWNED_FILES.map((file) => `.lvbt/web-platform/examples/with-astro/${file}`));
-  return Object.fromEntries(
+  const files = Object.fromEntries(
     requested.map((file) => {
       const content = paths.includes(file) ? readRaw(repository, file, commit, read) : null;
       if (paths.includes(file) && content === null)
@@ -178,6 +184,22 @@ function readFiles(repository: string, commit: string, paths: string[], read: ty
       return [file, content];
     }),
   );
+  let pending = Object.keys(files).filter((file) => configurationFamily(file) !== undefined);
+  while (pending.length) {
+    const next = [...new Set(pending.flatMap((file) => configurationTargets(files, file)))].filter(
+      (file) => paths.includes(file) && !Object.hasOwn(files, file),
+    );
+    for (const file of next) {
+      const content = readRaw(repository, file, commit, read);
+      if (content === null)
+        throw new Error(
+          `Cannot inventory ${repository}/${file} at ${commit}; GitHub contents are unavailable.`,
+        );
+      files[file] = content;
+    }
+    pending = next;
+  }
+  return files;
 }
 export function readState(entry: RegistryEntry, read = gh): RepositoryState {
   const repository = JSON.parse(read(['api', `repos/${OWNER}/${entry.name}`])) as {

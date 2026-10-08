@@ -164,6 +164,12 @@ importers:
       '@lasvegasfortransit/prettier-config':
         specifier: file:.lvbt/web-platform/packages/prettier-config
         version: file:.lvbt/web-platform/packages/prettier-config(prettier@3.9.6)
+      '@lasvegasfortransit/typescript-config':
+        specifier: file:.lvbt/web-platform/packages/typescript-config
+        version: file:.lvbt/web-platform/packages/typescript-config
+      '@lasvegasfortransit/vitest-config':
+        specifier: file:.lvbt/web-platform/packages/vitest-config
+        version: file:.lvbt/web-platform/packages/vitest-config(vitest@4.1.11)
       '@lasvegasfortransit/web-platform':
         specifier: file:.lvbt/web-platform/packages/web-platform
         version: file:.lvbt/web-platform/packages/web-platform

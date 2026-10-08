@@ -10,9 +10,9 @@
     "validate": "cf deploy --dry-run"
   },
   "devDependencies": {
-    "@lasvegasfortransit/eslint-config": "0.7.1",
+    "@lasvegasfortransit/eslint-config": "0.7.2",
     "@lasvegasfortransit/site": "workspace:*",
-    "@lasvegasfortransit/typescript-config": "0.7.1",
+    "@lasvegasfortransit/typescript-config": "0.7.2",
     "cf": "catalog:",
     "eslint": "catalog:",
     "typescript": "catalog:",

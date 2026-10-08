@@ -64,6 +64,8 @@
   "devDependencies": {
     "@lasvegasfortransit/cli": "file:.lvbt/web-platform/packages/cli",
     "@lasvegasfortransit/prettier-config": "file:.lvbt/web-platform/packages/prettier-config",
+    "@lasvegasfortransit/typescript-config": "file:.lvbt/web-platform/packages/typescript-config",
+    "@lasvegasfortransit/vitest-config": "file:.lvbt/web-platform/packages/vitest-config",
     "@lasvegasfortransit/web-platform": "file:.lvbt/web-platform/packages/web-platform",
     "@transitmapper/eslint-plugin": "workspace:*",
     "@turbo/gen": "catalog:",

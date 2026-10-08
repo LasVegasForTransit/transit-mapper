@@ -47,7 +47,8 @@ export function inventoryPaths(paths: string[]): string[] {
       ...paths.filter(
         (file) =>
           !file.startsWith('.lvbt/web-platform/') &&
-          (configurationFamily(file) !== undefined ||
+          (file.endsWith('/package.json') ||
+            configurationFamily(file) !== undefined ||
             /^\.github\/workflows\/[^/]+\.ya?ml$/u.test(file)),
       ),
     ]),
@@ -60,6 +61,33 @@ function json(input: string | null | undefined): unknown {
     return undefined;
   }
 }
+/** Resolve only declared local modules; an unproven external wrapper remains a diagnostic. */
+export function configurationTargets(files: ProcessSnapshot['files'], file: string): string[] {
+  const targets: string[] = [];
+  const content = files[file] ?? '';
+  for (const match of content.matchAll(/['"]([^'"]+)['"]/gu)) {
+    const specifier = match[1] ?? '';
+    if (specifier.startsWith('.')) {
+      const base = path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier));
+      targets.push(base, `${base}.json`, `${base}.js`, `${base}.mjs`, `${base}.ts`);
+      if (base.endsWith('.js')) targets.push(base.slice(0, -3) + '.ts');
+      continue;
+    }
+    for (const [manifest, source] of Object.entries(files)) {
+      if (!manifest.endsWith('/package.json')) continue;
+      const pkg = json(source) as { name?: string; exports?: Record<string, unknown> } | undefined;
+      if (!pkg?.name || !specifier.startsWith(`${pkg.name}/`)) continue;
+      const entry = pkg.exports?.[`./${specifier.slice(pkg.name.length + 1)}`];
+      const visit = (value: unknown): void => {
+        if (typeof value === 'string' && value.startsWith('./'))
+          targets.push(path.posix.normalize(path.posix.join(path.posix.dirname(manifest), value)));
+        else if (value && typeof value === 'object') Object.values(value).forEach(visit);
+      };
+      visit(entry);
+    }
+  }
+  return [...new Set(targets)];
+}
 function sharedConfiguration(
   files: ProcessSnapshot['files'],
   file: string,
@@ -71,16 +99,9 @@ function sharedConfiguration(
   const content = files[file];
   if (!content) return false;
   if (content.includes(`@lasvegasfortransit/${family}-config`)) return true;
-  for (const match of content.matchAll(/['"](\.[^'"]+)['"]/gu)) {
-    const base = path.posix.normalize(path.posix.join(path.posix.dirname(file), match[1] ?? ''));
-    if (
-      [base, `${base}.json`, `${base}.js`, `${base}.mjs`, `${base}.ts`].some((target) =>
-        sharedConfiguration(files, target, family, seen),
-      )
-    )
-      return true;
-  }
-  return false;
+  return configurationTargets(files, file).some((target) =>
+    sharedConfiguration(files, target, family, seen),
+  );
 }
 function commandFindings(
   snapshot: ProcessSnapshot,
@@ -141,7 +162,12 @@ function auditFindings(
     !tooling?.audits ||
     !audit.includes('schedule:') ||
     !audit.includes('workflow_dispatch:') ||
-    !/audit\s+(?:report|--target\s+production)/u.test(audit)
+    !(
+      /audit\s+(?:report|--target\s+production)/u.test(audit) ||
+      /^[\t ]*uses:[\t ]*([\x22\x27]?)LasVegasForTransit\/repository-tooling\/\.github\/workflows\/audit\.ya?ml@[a-f0-9]{40}\1[\t ]*(?:#.*)?$/mu.test(
+        audit,
+      )
+    )
   )
     add(
       'audit-workflow',
