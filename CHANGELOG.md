@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.2](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.11.1...v0.11.2) (2026-10-08)
+
+
+### Bug Fixes
+
+* inherit shared root compiler and test settings ([c2f3e75](https://github.com/LasVegasForTransit/transit-mapper/commit/c2f3e75d1849f084292c3e008d5c1cd7dbbd5db5))
+* **pwa:** precache the map driver the offline editor loads ([e359e82](https://github.com/LasVegasForTransit/transit-mapper/commit/e359e8298063de343a2a654e5422fb618513fbd6))
+
 ## [0.11.1](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.11.0...v0.11.1) (2026-09-24)
 
 
