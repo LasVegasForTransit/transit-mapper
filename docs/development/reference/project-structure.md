@@ -192,31 +192,28 @@ replacing an editing session without consent.
 
 ### Contribution tooling
 
-TransitMapper inherits organization issue and pull request templates. The
-`lvbt-contributions` ships inside the vendored `@lasvegasfortransit/cli`. The repository
-records the standard's release, commit, and content hash in
-`.lvbt/web-platform.json`.
+The vendored `@lasvegasfortransit/cli` supplies organization contribution
+templates and `lvbt-contributions`. `.lvbt/web-platform.json` records the
+standard's release, commit, and content hash.
 
 ### ESLint baseline
 
 [`@lasvegasfortransit/eslint-config`](https://github.com/LasVegasForTransit/repository-tooling/blob/main/docs/reference/packages.md)
-exports the type-aware and syntax-only organization rule sets consumed by the
-root lint configuration.
+exports type-aware and syntax-only organization rules for root lint.
 
 #### Baseline rules
 
-The baseline contains no repository paths. Root configuration adds local
-scope and records any departure from upstream presets.
+Root configuration adds repository scope to the path-free baseline and records
+departures from upstream presets.
 
 ### ESLint plugin
 
-`packages/eslint-plugin` owns static repository invariants that TypeScript
-cannot express.
+`packages/eslint-plugin` owns repository invariants beyond TypeScript.
 
 #### Repository rules
 
-Rules protect runtime and module boundaries. The root configuration decides
-where each rule applies. See [the enforcement model](../explanation/enforcement-model.md).
+Root configuration scopes runtime and module boundary rules. See
+[the enforcement model](../explanation/enforcement-model.md).
 
 ### TypeScript configuration
 
