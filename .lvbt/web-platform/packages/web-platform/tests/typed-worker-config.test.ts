@@ -63,6 +63,20 @@ test('typed canonical Worker settings generate one complete build configuration 
   });
   expect(JSON.stringify(generated)).not.toContain('TOKEN');
 });
+test('production can use named staging while preview keeps version URLs for isolated PR previews', () => {
+  const generated = typedWorkerConfiguration(
+    { worker },
+    {
+      ...config,
+      publicationMode: 'version',
+      productionPublicationMode: 'named-staging',
+    },
+  );
+  expect(generated).toMatchObject({
+    preview_urls: false,
+    env: { preview: { preview_urls: true } },
+  });
+});
 test('typed generation rejects missing or reused preview resources and undeclared settings', () => {
   for (const previewBindings of [
     undefined,

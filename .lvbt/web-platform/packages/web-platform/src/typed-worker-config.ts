@@ -159,7 +159,7 @@ export function typedWorkerConfiguration(
     logpush: built.logpush,
     tail_consumers: snakeSettings(built.tailConsumers),
     workers_dev: built.workersDev ?? false,
-    preview_urls: config.publicationMode !== 'named-staging',
+    preview_urls: (config.productionPublicationMode ?? config.publicationMode) !== 'named-staging',
     assets,
     exports: built.exports,
     routes: [
