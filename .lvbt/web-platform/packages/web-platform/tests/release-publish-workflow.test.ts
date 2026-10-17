@@ -21,3 +21,16 @@ test('preview schema applies before candidate acceptance, production applies aft
   expect(workflow).toContain('secrets.CLOUDFLARE_PREVIEW_API_TOKEN');
   expect(workflow).toContain("steps.upload.outputs.protected == 'true'");
 });
+
+test('named production installs Chromium before its browser-backed public smoke', async () => {
+  const workflow = await readFile(
+    new URL('../../../.github/workflows/release-publish.yml', import.meta.url),
+    'utf8',
+  );
+  const namedProduction = workflow.slice(workflow.indexOf('  named-production:'));
+
+  expect(namedProduction).toContain('name: Install Chromium');
+  expect(namedProduction.indexOf('name: Install Chromium')).toBeLessThan(
+    namedProduction.indexOf('name: Verify activated origin'),
+  );
+});

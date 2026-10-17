@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { reconcileBranchPolicy } from './branch-policy.mjs';
 import { varGuide } from './guides.mjs';
 import { SETUP } from './plan.mjs';
 import { paint } from './terminal.mjs';
@@ -88,6 +89,29 @@ async function createBucket(context, action) {
 
 async function createEnvironment(context, action) {
   const repository = context.manifest.github.repository;
+  if (action.branch) {
+    const call = (args, input) => {
+      const result = context.run('gh', ['api', ...args], {
+        cwd: context.directory,
+        ...(input ? { input: JSON.stringify(input) } : {}),
+      });
+      if (!input && result.status !== 0 && /HTTP 404/.test(result.stderr)) return null;
+      succeeded(result);
+      return result.stdout ? JSON.parse(result.stdout) : undefined;
+    };
+    await reconcileBranchPolicy(
+      `repos/${repository}/environments/${action.environment}`,
+      action.branch,
+      {
+        read: async (endpoint) => call([endpoint]),
+        write: async (method, endpoint, body) => {
+          call(['--method', method, endpoint, '--input', '-'], body);
+        },
+      },
+    );
+    context.io.write(`Restricted ${action.environment} to branch ${action.branch}.\n`);
+    return;
+  }
   succeeded(
     context.run(
       'gh',
@@ -161,7 +185,9 @@ export function describeAction(entry) {
     case 'access.update':
       return `fix the Access application ${action.app.name}`;
     case 'github.environment':
-      return `create the GitHub environment ${action.environment}`;
+      return action.branch
+        ? `restrict GitHub ${action.environment} to branch ${action.branch}`
+        : `create the GitHub environment ${action.environment}`;
     case 'secret.put':
       return `${action.source.type === 'prompt' ? 'ask for' : 'store'} ${action.secret.name} on ${action.target === 'worker' ? 'the Worker' : `GitHub ${action.target.slice(7)}`}`;
     case 'secret.delete':

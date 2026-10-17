@@ -9,6 +9,7 @@ import { findManifests } from './platform/manifest.mjs';
 import { platformBootstrap, platformPreflight } from './platform/index.mjs';
 import { readTooling } from './tooling.mjs';
 import { secretScannerFinding } from './check/secrets.mjs';
+import { installGitHooks } from './git-hooks.mjs';
 
 function output(command, args, cwd) {
   const result = spawnSync(command, args, {
@@ -170,13 +171,13 @@ async function toolchainFindings(cwd, packageJson, report, { includeDependencies
 }
 
 async function repositoryFindings(cwd, report, { production = false } = {}) {
-  const hooksPath = output('git', ['config', '--local', 'core.hooksPath'], cwd);
+  const hooksPath = output('git', ['config', '--get', 'core.hooksPath'], cwd);
   if (hooksPath === '.githooks') report.pass('git hooks', 'core.hooksPath is .githooks');
   else
     report.fail(
       'git hooks',
       `core.hooksPath is ${hooksPath ?? 'unset'}`,
-      'pnpm install   # the prepare script sets it',
+      'pnpm bootstrap; remove any overriding hooks path shown by git config --show-origin --get core.hooksPath',
     );
 
   const scopes = await readFile(path.join(cwd, '.lvbt/commit-scopes.txt'), 'utf8').catch(
@@ -330,6 +331,7 @@ export async function preflight({ cwd, options = {} }) {
 export async function bootstrap({ cwd, options = {} }) {
   if (options.rotate !== undefined && !options.production)
     throw new CliError('--rotate replaces production secrets, so it needs --production.', 2);
+  installGitHooks(cwd);
   const tools = await machineFindings(cwd, { toolsOnly: true, includeDependencies: false });
   if (tools) throw new CliError(tools, 1);
   process.stdout.write('pnpm install\n');

@@ -17,6 +17,7 @@ const flags = new Set([
 ]);
 const valued = new Set([
   '--action',
+  '--workflow',
   '--pr',
   '--publication-mode',
   '--protection',

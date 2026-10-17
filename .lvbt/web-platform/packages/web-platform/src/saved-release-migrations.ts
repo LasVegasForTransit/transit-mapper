@@ -17,6 +17,7 @@ import { parseArgs, promisify } from 'node:util';
 import { parse, type ParseError } from 'jsonc-parser';
 import { z } from 'zod';
 import type { ReleaseConfiguration } from './release-config.js';
+import { selectedPublicationMode } from './release-config.js';
 import { verifyReleaseAttestation } from './release-attestation.js';
 import { verifyCandidateReceipt } from './release-candidate.js';
 import { verifyNamedPreview, assertNamedPreviewProtection } from './named-worker-release.js';
@@ -290,6 +291,12 @@ export async function runReleaseMigrations(
   if (values.target !== 'preview' && values.target !== 'production')
     throw new Error('Pass --target preview or production.');
   const directory = path.resolve(values.directory);
+  const publicationMode = selectedPublicationMode(
+    config,
+    process.env.LVBT_RELEASE_PUBLICATION_MODE,
+    values.target,
+  );
+  const operationConfig = { ...config, publicationMode };
   const release = await verifyRelease(directory);
   if (release.app !== config.profile) throw new Error('Saved release belongs to another app.');
   if (values.commit && release.commit !== values.commit)
@@ -297,7 +304,7 @@ export async function runReleaseMigrations(
   if (values['release-id'] && release.releaseId !== values['release-id'])
     throw new Error('Release ID does not match the selected Actions run.');
   await verifyMigrationAuthority(
-    config,
+    operationConfig,
     {
       directory,
       target: values.target,
