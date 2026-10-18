@@ -7,6 +7,7 @@ import type { ReleaseConfiguration } from '../src/release-config';
 import { verifyRelease } from '../src/saved-release-artifact';
 import { packageWorkerCfRelease } from '../src/cf-worker-release-artifact';
 interface WranglerTarget {
+  services: { binding: string; service: string; entrypoint?: string }[];
   analytics_engine_datasets: unknown[];
   ratelimits: { namespace_id: string }[];
   vars: Record<string, string>;
@@ -141,6 +142,109 @@ it('saved marker describes the packaged identity while the original runtime keep
   expect(calls).toEqual(['preview']);
   expect(runtime.named).toBe('preserved');
 });
+it('compiled Worker artifacts retain default and named service bindings through sealing', async () => {
+  const setup = await fixture();
+  await writeFile(
+    path.join(setup.output, 'worker.config.json'),
+    JSON.stringify({
+      ...descriptor,
+      env: {
+        ...descriptor.env,
+        JOBS: { type: 'worker', worker: 'jobs' },
+        HISTORY: { type: 'worker', worker: 'history', exportName: 'History' },
+      },
+    }),
+  );
+  const release = await packageWorkerCfRelease(setup.source, setup.destination, identity, {
+    ...configuration,
+    previewBindings: {
+      ...configuration.previewBindings,
+      JOBS: { type: 'worker', worker: 'jobs-preview' },
+      HISTORY: { type: 'worker', worker: 'history-preview', exportName: 'History' },
+    },
+  });
+  expect(await verifyRelease(setup.destination)).toEqual(release);
+  const saved = JSON.parse(
+    await readFile(path.join(setup.destination, 'wrangler.jsonc'), 'utf8'),
+  ) as WranglerConfig;
+  expect(saved.services).toEqual([
+    { binding: 'JOBS', service: 'jobs' },
+    { binding: 'HISTORY', service: 'history', entrypoint: 'History' },
+  ]);
+  expect(saved.env.preview.services).toEqual([
+    { binding: 'JOBS', service: 'jobs-preview' },
+    { binding: 'HISTORY', service: 'history-preview', entrypoint: 'History' },
+  ]);
+  expect(
+    JSON.parse(await readFile(path.join(setup.destination, 'worker-bindings.json'), 'utf8')),
+  ).toMatchObject({
+    production: { JOBS: { type: 'worker', worker: 'jobs' } },
+    preview: { JOBS: { type: 'worker', worker: 'jobs-preview' } },
+  });
+});
+it('compiled Worker services reject missing, reused, mistyped or changed preview entrypoints before saving', async () => {
+  for (const JOBS of [
+    undefined,
+    { type: 'worker', worker: 'jobs' },
+    { type: 'worker', worker: '' },
+    { type: 'secret' },
+    { type: 'worker', worker: 'jobs-preview', exportName: 'DifferentCapability' },
+  ]) {
+    const setup = await fixture();
+    await writeFile(
+      path.join(setup.output, 'worker.config.json'),
+      JSON.stringify({
+        ...descriptor,
+        env: { ...descriptor.env, JOBS: { type: 'worker', worker: 'jobs' } },
+      }),
+    );
+    const previewBindings: Record<string, unknown> = { ...configuration.previewBindings, JOBS };
+    if (JOBS === undefined) delete previewBindings.JOBS;
+    await expect(
+      packageWorkerCfRelease(setup.source, setup.destination, identity, {
+        ...configuration,
+        previewBindings,
+      }),
+    ).rejects.toThrow();
+    await expect(readFile(path.join(setup.destination, 'wrangler.jsonc'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  }
+});
+it.each([
+  ['swapped', { JOBS: 'history', HISTORY: 'jobs' }],
+  ['aliased', { JOBS: 'history', HISTORY: 'history-preview' }],
+  ['selected production Worker', { JOBS: 'lvbt-analytics-events', HISTORY: 'history-preview' }],
+])(
+  'compiled preview rejects %s production service targets before saving',
+  async (_label, targets) => {
+    const setup = await fixture();
+    await writeFile(
+      path.join(setup.output, 'worker.config.json'),
+      JSON.stringify({
+        ...descriptor,
+        env: {
+          ...descriptor.env,
+          JOBS: { type: 'worker', worker: 'jobs' },
+          HISTORY: { type: 'worker', worker: 'history', exportName: 'History' },
+        },
+      }),
+    );
+    await expect(
+      packageWorkerCfRelease(setup.source, setup.destination, identity, {
+        ...configuration,
+        previewBindings: {
+          ...configuration.previewBindings,
+          JOBS: { type: 'worker', worker: targets.JOBS },
+          HISTORY: { type: 'worker', worker: targets.HISTORY, exportName: 'History' },
+        },
+      }),
+    ).rejects.toThrow(/isolat|production/i);
+    await expect(readFile(path.join(setup.destination, 'wrangler.jsonc'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  },
+);
 it('tampered compiled code or saved marker cannot verify', async () => {
   const setup = await fixture();
   await packageWorkerCfRelease(setup.source, setup.destination, identity, configuration);

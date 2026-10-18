@@ -1,9 +1,15 @@
 import { z } from 'zod';
+export const serviceWorkerBindingSchema = z.strictObject({
+  type: z.literal('worker'),
+  worker: z.string().min(1),
+  exportName: z.string().min(1).optional(),
+});
 const simple = z.strictObject({
   limit: z.number().int().positive(),
   period: z.union([z.literal(10), z.literal(60)]),
 });
 const binding = z.discriminatedUnion('type', [
+  serviceWorkerBindingSchema,
   z.strictObject({
     type: z.literal('d1'),
     name: z.string().min(1),
@@ -34,7 +40,7 @@ function isolated(value: WorkerBindings[string], candidate: WorkerBindings[strin
   if (value.type === 'd1' && candidate.type === 'd1')
     return value.id !== candidate.id && value.name !== candidate.name;
   if (value.type === 'r2' && candidate.type === 'r2') return value.name !== candidate.name;
-  if (value.type === 'durable-object' && candidate.type === 'durable-object')
+  if ('worker' in value && 'worker' in candidate)
     return value.worker !== candidate.worker && value.exportName === candidate.exportName;
   if (value.type === 'analytics-engine-dataset' && candidate.type === 'analytics-engine-dataset')
     return value.name !== candidate.name;
@@ -49,6 +55,7 @@ export function isolatedPreviewBindings(
   production: WorkerBindings,
   input: unknown,
   readonlyBindings: string[] = [],
+  productionWorker?: string,
 ): WorkerBindings {
   const preview = workerBindingsSchema.parse(input);
   if (Object.keys(preview).sort().join(',') !== Object.keys(production).sort().join(','))
@@ -61,6 +68,7 @@ export function isolatedPreviewBindings(
     if (value?.type !== 'r2' || candidate?.type !== 'r2' || value.name !== candidate.name)
       throw new Error('Preview read-only capabilities require an explicitly shared R2 binding.');
   }
+  assertServiceWorkerIsolation(production, preview, productionWorker);
   for (const [name, value] of Object.entries(production)) {
     const candidate = preview[name];
     if (!candidate || (!readonlyBindings.includes(name) && !isolated(value, candidate)))
@@ -68,8 +76,37 @@ export function isolatedPreviewBindings(
   }
   return preview;
 }
+export function assertServiceWorkerIsolation(
+  production: Record<string, { type: string; worker?: string }>,
+  preview: Record<string, { type: string; worker?: string }>,
+  productionWorker?: string,
+): void {
+  const productionTargets = new Set(
+    Object.values(production).flatMap((value) =>
+      value.type === 'worker' || value.type === 'durable-object' ? [value.worker] : [],
+    ),
+  );
+  if (productionWorker) productionTargets.add(productionWorker);
+  for (const [name, value] of Object.entries(preview)) {
+    if (value.type === 'worker' && productionTargets.has(value.worker))
+      throw new Error(
+        `Preview binding ${name} must use an isolated Worker service target from production.`,
+      );
+  }
+}
 export function wranglerBindings(values: WorkerBindings): Record<string, unknown> {
   return {
+    services: Object.entries(values).flatMap(([binding, value]) =>
+      value.type === 'worker'
+        ? [
+            {
+              binding,
+              service: value.worker,
+              ...(value.exportName ? { entrypoint: value.exportName } : {}),
+            },
+          ]
+        : [],
+    ),
     durable_objects: {
       bindings: Object.entries(values).flatMap(([name, value]) =>
         value.type === 'durable-object'

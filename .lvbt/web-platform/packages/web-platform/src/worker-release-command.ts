@@ -11,7 +11,7 @@ import { verifyWorkerReleaseConfiguration } from './worker-release-configuration
 import { packageCfRelease } from './cf-release-artifact.js';
 import { packageTypedWorkerRelease } from './typed-worker-release-artifact.js';
 import { packageLegacyWorkerRelease } from './legacy-worker-release-artifact.js';
-import type { ReleaseConfiguration } from './release-config.js';
+import { selectedPublicationMode, type ReleaseConfiguration } from './release-config.js';
 import { execFile } from 'node:child_process';
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -281,12 +281,15 @@ export async function runWorkerRelease(
       verification: { type: 'string' },
     },
   });
-  if (
-    process.env.LVBT_RELEASE_PUBLICATION_MODE &&
-    process.env.LVBT_RELEASE_PUBLICATION_MODE !== (config.publicationMode ?? 'version')
-  )
-    throw new Error('Workflow publication mode does not match the selected release configuration.');
   const command = positionals[0];
+  const target =
+    values.target === 'preview' || values.target === 'production' ? values.target : undefined;
+  const publicationMode = selectedPublicationMode(
+    config,
+    process.env.LVBT_RELEASE_PUBLICATION_MODE,
+    target,
+  );
+  const operationConfig = { ...config, publicationMode };
   const directory = values.directory ? path.resolve(values.directory) : undefined;
   if (command === 'source') {
     await sourceRelease(config, values);
@@ -299,7 +302,7 @@ export async function runWorkerRelease(
   }
   if (!['verify', 'upload', 'activate', 'candidate'].includes(command ?? ''))
     throw new Error('Use source, package, verify, upload, or activate.');
-  await runSavedOperation(config, values, directory, command);
+  await runSavedOperation(operationConfig, values, directory, command);
 }
 async function runSavedOperation(
   config: ReleaseConfiguration,
