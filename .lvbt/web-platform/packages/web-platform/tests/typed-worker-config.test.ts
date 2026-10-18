@@ -1,5 +1,7 @@
 import { expect, test } from 'vitest';
 import { typedWorkerConfiguration, resolveTypedConfiguration } from '../src/typed-worker-config.js';
+import { bindings } from 'cf/config';
+import { isolatedPreviewBindings, workerBindingsSchema } from '../src/worker-bindings.js';
 const worker = {
   name: 'participant',
   entrypoint: '../site/worker/index.ts',
@@ -63,6 +65,20 @@ test('typed canonical Worker settings generate one complete build configuration 
   });
   expect(JSON.stringify(generated)).not.toContain('TOKEN');
 });
+test('production can use named staging while preview keeps version URLs for isolated PR previews', () => {
+  const generated = typedWorkerConfiguration(
+    { worker },
+    {
+      ...config,
+      publicationMode: 'version',
+      productionPublicationMode: 'named-staging',
+    },
+  );
+  expect(generated).toMatchObject({
+    preview_urls: false,
+    env: { preview: { preview_urls: true } },
+  });
+});
 test('typed generation rejects missing or reused preview resources and undeclared settings', () => {
   for (const previewBindings of [
     undefined,
@@ -78,6 +94,102 @@ test('typed generation rejects missing or reused preview resources and undeclare
   expect(() =>
     typedWorkerConfiguration({ worker: { ...worker, name: 'another-worker' } }, config),
   ).toThrow('configured');
+});
+test('canonical Worker service bindings serialize default and named entrypoints with isolated preview targets', () => {
+  const canonical = {
+    worker: {
+      ...worker,
+      env: {
+        ...worker.env,
+        JOBS: bindings.worker({ worker: 'jobs' }),
+        HISTORY: bindings.worker({ worker: 'history', exportName: 'History' }),
+      },
+    },
+  };
+  const selected = {
+    ...config,
+    previewBindings: {
+      ...config.previewBindings,
+      JOBS: { type: 'worker', worker: 'jobs-preview' },
+      HISTORY: { type: 'worker', worker: 'history-preview', exportName: 'History' },
+    },
+  };
+  expect(typedWorkerConfiguration(canonical, selected)).toMatchObject({
+    services: [
+      { binding: 'JOBS', service: 'jobs' },
+      { binding: 'HISTORY', service: 'history', entrypoint: 'History' },
+    ],
+    env: {
+      preview: {
+        services: [
+          { binding: 'JOBS', service: 'jobs-preview' },
+          { binding: 'HISTORY', service: 'history-preview', entrypoint: 'History' },
+        ],
+      },
+    },
+  });
+  for (const JOBS of [
+    undefined,
+    { type: 'worker', worker: 'jobs' },
+    { type: 'worker', worker: '' },
+    { type: 'text', value: 'jobs-preview' },
+    { type: 'worker', worker: 'jobs-preview', exportName: 'DifferentCapability' },
+  ]) {
+    const previewBindings: Record<string, unknown> = { ...selected.previewBindings, JOBS };
+    if (JOBS === undefined) delete previewBindings.JOBS;
+    expect(() => typedWorkerConfiguration(canonical, { ...selected, previewBindings })).toThrow();
+  }
+});
+test.each([
+  ['swapped', { JOBS: 'history', HISTORY: 'jobs' }],
+  ['aliased', { JOBS: 'history', HISTORY: 'history-preview' }],
+])('typed preview rejects %s production service targets', (_label, targets) => {
+  const canonical = {
+    worker: {
+      ...worker,
+      env: {
+        ...worker.env,
+        JOBS: bindings.worker({ worker: 'jobs' }),
+        HISTORY: bindings.worker({ worker: 'history', exportName: 'History' }),
+      },
+    },
+  };
+  expect(() =>
+    typedWorkerConfiguration(canonical, {
+      ...config,
+      previewBindings: {
+        ...config.previewBindings,
+        JOBS: { type: 'worker', worker: targets.JOBS },
+        HISTORY: { type: 'worker', worker: targets.HISTORY, exportName: 'History' },
+      },
+    }),
+  ).toThrow(/isolat|production/i);
+});
+test('typed preview services cannot invoke the selected production Worker', () => {
+  expect(() =>
+    typedWorkerConfiguration(
+      { worker: { ...worker, env: { ...worker.env, JOBS: bindings.worker({ worker: 'jobs' }) } } },
+      {
+        ...config,
+        previewBindings: {
+          ...config.previewBindings,
+          JOBS: { type: 'worker', worker: 'participant' },
+        },
+      },
+    ),
+  ).toThrow(/isolat|production/i);
+});
+test('typed preview services cannot alias a declared production Durable Object Worker', () => {
+  const production = workerBindingsSchema.parse({
+    JOBS: bindings.worker({ worker: 'jobs' }),
+    GATE: { type: 'durable-object', worker: 'production-gate', exportName: 'Gate' },
+  });
+  expect(() =>
+    isolatedPreviewBindings(production, {
+      JOBS: { type: 'worker', worker: 'production-gate' },
+      GATE: { type: 'durable-object', worker: 'preview-gate', exportName: 'Gate' },
+    }),
+  ).toThrow(/isolat|production/i);
 });
 test('canonical upload metadata retains text and key credentials and preview mode retains its routing policy', () => {
   const unsafe = { metadata: { keep_bindings: ['secret_text', 'secret_key'] } };

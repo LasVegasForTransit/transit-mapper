@@ -119,7 +119,7 @@ fs.writeFileSync(config,'Wrangler wrote to its working copy');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
-});
+}, 30_000);
 test('the shared release runner seals and verifies a consumer build without rebuilding it', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'shared-release-command-'));
   try {
@@ -228,4 +228,4 @@ fs.writeFileSync(process.env.WRANGLER_OUTPUT_FILE_PATH,JSON.stringify({type:'ver
   } finally {
     await rm(root, { recursive: true, force: true });
   }
-});
+}, 30_000);

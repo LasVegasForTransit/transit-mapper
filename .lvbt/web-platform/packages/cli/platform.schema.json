@@ -466,6 +466,25 @@
         "governance": {
           "type": "boolean",
           "description": "Report organization governance using the shared policy; new requirements warn in 0.7."
+        },
+        "environments": {
+          "type": "array",
+          "description": "Release environments restricted to one selected branch, without changing existing reviewer or timer protections.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "branch"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "branch": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_/-]+$"
+              }
+            }
+          }
         }
       }
     },

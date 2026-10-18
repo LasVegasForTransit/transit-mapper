@@ -31,7 +31,14 @@ async function fixture(root: string) {
     JSON.stringify({
       name: 'app',
       logpush: true,
-      env: { preview: { name: 'app-preview', logpush: true } },
+      routes: [{ pattern: 'example.org', custom_domain: true }],
+      env: {
+        preview: {
+          name: 'app-preview',
+          logpush: true,
+          routes: [{ pattern: 'preview.example.org', custom_domain: true }],
+        },
+      },
     }),
   );
   const directory = path.join(root, 'release');
@@ -94,6 +101,10 @@ test('named candidate writes only staging, production activation rechecks identi
       expect.arrayContaining(['deploy', '--name', 'app', '--no-bundle']),
     );
     expect(calls[1]?.config).toMatchObject({ logpush: true });
+    expect(calls[0]?.config).not.toHaveProperty('env.preview.routes');
+    expect(calls[0]?.config).not.toHaveProperty('routes');
+    expect(calls[1]?.config).not.toHaveProperty('env.preview.routes');
+    expect(calls[1]?.config).not.toHaveProperty('routes');
     expect(await verifyRelease(directory)).toEqual(release);
     await expect(
       runWorkerRelease({ ...config, previewOnly: true }, [
@@ -105,6 +116,58 @@ test('named candidate writes only staging, production activation rechecks identi
       ]),
     ).rejects.toThrow('Preview-only');
     expect((await readFile(capture, 'utf8')).trim().split('\n')).toHaveLength(2);
+  } finally {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test('production can verify through named staging while PR previews keep version mode', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'named-production-mode-'));
+  try {
+    const { directory } = await fixture(root);
+    const capture = path.join(root, 'calls.jsonl');
+    const productionConfig = {
+      ...config,
+      publicationMode: 'version' as const,
+      productionPublicationMode: 'named-staging' as const,
+    };
+    vi.stubEnv('PATH', `${path.join(root, 'bin')}:${process.env.PATH}`);
+    vi.stubEnv('RELEASE_CAPTURE_PATH', capture);
+    vi.stubEnv('LVBT_RELEASE_PUBLICATION_MODE', 'named-staging');
+    vi.stubEnv('CF_ACCESS_CLIENT_ID', 'test-id');
+    vi.stubEnv('CF_ACCESS_CLIENT_SECRET', 'test-secret');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, options: { headers: Record<string, string> }) =>
+        options.headers['CF-Access-Client-Id']
+          ? Response.json(identity)
+          : new Response('', { status: 403 }),
+      ),
+    );
+    await runWorkerRelease(productionConfig, [
+      'upload',
+      '--directory',
+      directory,
+      '--target',
+      'preview',
+    ]);
+    await runWorkerRelease(productionConfig, [
+      'activate',
+      '--directory',
+      directory,
+      '--target',
+      'production',
+      '--version',
+      version,
+    ]);
+    const calls = (await readFile(capture, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { args: string[] });
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.args).toEqual(expect.arrayContaining(['--name', 'app-preview']));
+    expect(calls[1]?.args).toEqual(expect.arrayContaining(['--name', 'app']));
   } finally {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();

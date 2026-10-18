@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { runIsolatedPrPreview } from './isolated-pr-preview-command.js';
 import { runPrPreview } from './release-pr-preview-command.js';
 import { runReleaseAttestation } from './release-attestation.js';
 import { readReleaseConfiguration } from './release-config.js';
@@ -26,7 +27,8 @@ if (command === 'attestation' && args[0] === 'manifest') {
     app ?? process.env.LVBT_RELEASE_APP,
   );
   process.chdir(path.resolve(root, config.appDirectory));
-  if (command === 'pr-preview') await runPrPreview(config, args);
+  if (command === 'isolated-pr-preview') await runIsolatedPrPreview(config, args);
+  else if (command === 'pr-preview') await runPrPreview(config, args);
   else if (command === 'promote') await runPromote(config, args);
   else if (command === 'worker-release') await runWorkerRelease(config, args);
   else if (command === 'publication') await runPublication(config, args);

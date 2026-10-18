@@ -21,7 +21,12 @@ test.each([true, false])(
         path.join(source, 'worker.mjs'),
         'export default {fetch(){return new Response("ok")}}',
       );
-      const bindings = { ASSETS: { type: 'assets' }, TOKEN: { type: 'secret' } };
+      const bindings = {
+        ASSETS: { type: 'assets' },
+        TOKEN: { type: 'secret' },
+        JOBS: { type: 'worker', worker: 'jobs' },
+      };
+      const previewBindings = { ...bindings, JOBS: { type: 'worker', worker: 'jobs-preview' } };
       const content = `export default ${JSON.stringify({ worker: { name: 'app', entrypoint: 'worker.mjs', compatibilityDate: '2026-08-31', domains: ['example.org'], observability: { enabled: true }, assets: { runWorkerFirst: true }, env: bindings } })}`;
       await writeFile(path.join(source, 'cloudflare.config.mjs'), content);
       await mkdir(path.join(root, 'bin'));
@@ -48,7 +53,7 @@ fs.writeFileSync(path.join(args[args.indexOf('--outdir')+1],'index.js'),'export 
         artifactPrefix: 'app-release',
         typedConfig: 'cloudflare.config.mjs',
         assetsDirectory: '../site/dist',
-        previewBindings: bindings,
+        previewBindings,
         stagingWorkflow: {
           name: 'Deploy staging',
           path: '.github/workflows/deploy.yml',
@@ -90,7 +95,13 @@ fs.writeFileSync(path.join(args[args.indexOf('--outdir')+1],'index.js'),'export 
       });
       expect(
         JSON.parse(await readFile(path.join(directory, '.wrangler/worker/bindings.json'), 'utf8')),
-      ).toEqual({ production: bindings, preview: bindings });
+      ).toEqual({ production: bindings, preview: previewBindings });
+      expect(
+        JSON.parse(await readFile(path.join(directory, 'wrangler.jsonc'), 'utf8')),
+      ).toMatchObject({
+        services: [{ binding: 'JOBS', service: 'jobs' }],
+        env: { preview: { services: [{ binding: 'JOBS', service: 'jobs-preview' }] } },
+      });
       await expect(
         packageTypedWorkerRelease(
           source,
