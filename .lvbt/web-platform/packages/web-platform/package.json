@@ -32,7 +32,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "zod": "4.5.4",
+    "zod": "4.6.6",
     "playwright-core": "1.62.1",
     "jsonc-parser": "3.3.1",
     "acorn": "8.18.0"
