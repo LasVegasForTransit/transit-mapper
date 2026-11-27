@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { releaseConfigurationSchema } from '../src/release-config.js';
+import { releaseConfigurationSchema, selectedPublicationMode } from '../src/release-config.js';
 const config = {
   repository: 'Example/app',
   appDirectory: 'apps/site',
@@ -26,6 +26,30 @@ test('release tooling rejects mixed staging and production Workers or origins', 
     releaseConfigurationSchema.safeParse({ ...config, previewUrl: 'https://example.org' }).success,
   ).toBe(false);
   expect(releaseConfigurationSchema.parse(config).stagingWorkflow.branch).toBe('main');
+});
+
+test('production publication mode is independent from the preview release mode', () => {
+  const parsed = releaseConfigurationSchema.parse({
+    ...config,
+    publicationMode: 'version',
+    productionPublicationMode: 'named-staging',
+  });
+  expect(parsed.publicationMode).toBe('version');
+  expect(parsed.productionPublicationMode).toBe('named-staging');
+});
+
+test('production mode is selected only for production promotion or an explicit candidate step', () => {
+  const release = {
+    publicationMode: 'version' as const,
+    productionPublicationMode: 'named-staging' as const,
+  };
+  expect(selectedPublicationMode(release, undefined, 'preview')).toBe('version');
+  expect(selectedPublicationMode(release, undefined, 'production')).toBe('named-staging');
+  expect(selectedPublicationMode(release, 'named-staging', 'preview')).toBe('named-staging');
+  expect(() => selectedPublicationMode(release, 'version', 'production')).toThrow(
+    'Workflow publication mode',
+  );
+  expect(() => selectedPublicationMode(release, 'temporary', 'preview')).toThrow();
 });
 
 test('template release configuration requires named URL variables and infers only the Actions repository', async () => {

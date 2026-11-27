@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { ReleaseConfiguration } from './release-config.js';
 import { configuredReleaseIdentity, workerReleaseEntry } from './worker-release-entry.js';
 import { sealSavedRelease, type WebsiteRelease } from './saved-release-artifact.js';
+import { assertServiceWorkerIsolation, serviceWorkerBindingSchema } from './worker-bindings.js';
 
 const dataset = z.strictObject({
   type: z.literal('analytics-engine-dataset'),
@@ -18,7 +19,12 @@ const rateLimit = z.strictObject({
   }),
 });
 const secret = z.strictObject({ type: z.literal('secret') });
-const binding = z.discriminatedUnion('type', [dataset, rateLimit, secret]);
+const binding = z.discriminatedUnion('type', [
+  dataset,
+  rateLimit,
+  secret,
+  serviceWorkerBindingSchema,
+]);
 const bindings = z.record(z.string().regex(/^[A-Z][A-Z0-9_]*$/), binding);
 type Bindings = z.infer<typeof bindings>;
 const modulePath = z
@@ -56,6 +62,12 @@ function assertBindingIsolation(
 ): void {
   if (candidate?.type !== value.type)
     throw new Error(`Preview binding ${name} must retain its declared type.`);
+  if (value.type === 'worker' && candidate.type === 'worker') {
+    if (candidate.worker === value.worker)
+      throw new Error(`Preview binding ${name} must use an isolated Worker service.`);
+    if (candidate.exportName !== value.exportName)
+      throw new Error(`Preview binding ${name} must retain its Worker service entrypoint.`);
+  }
   if (
     value.type === 'analytics-engine-dataset' &&
     candidate.type === 'analytics-engine-dataset' &&
@@ -83,6 +95,7 @@ function previewBindings(production: Bindings, config: WorkerReleaseConfiguratio
     throw new Error('Preview Worker and origin must be isolated from production.');
   if (Object.keys(preview).sort().join(',') !== Object.keys(production).sort().join(','))
     throw new Error('Preview bindings must explicitly match every production binding.');
+  assertServiceWorkerIsolation(production, preview, config.productionWorker);
   for (const [name, value] of Object.entries(production))
     assertBindingIsolation(name, value, preview[name]);
   return preview;
@@ -90,14 +103,21 @@ function previewBindings(production: Bindings, config: WorkerReleaseConfiguratio
 function wranglerBindings(values: Bindings): Record<string, unknown> {
   const analytics_engine_datasets = [];
   const ratelimits = [];
+  const services = [];
   for (const [name, value] of Object.entries(values)) {
     if (value.type === 'analytics-engine-dataset')
       analytics_engine_datasets.push({ binding: name, dataset: value.name });
     if (value.type === 'rate-limit')
       ratelimits.push({ name, namespace_id: value.namespace, simple: value.simple });
+    if (value.type === 'worker')
+      services.push({
+        binding: name,
+        service: value.worker,
+        ...(value.exportName ? { entrypoint: value.exportName } : {}),
+      });
     // Secrets belong to the target Worker; names declare requirements but never copy values.
   }
-  return { analytics_engine_datasets, ratelimits };
+  return { analytics_engine_datasets, ratelimits, services };
 }
 async function copyModules(
   source: string,

@@ -58,6 +58,7 @@ const jobs = {
       name: 'publish / Verify named release candidate',
       status: 'completed',
       conclusion: 'success',
+      run_attempt: 2,
     },
   ],
 };
@@ -123,6 +124,91 @@ test('candidate proof binds the same manual run, tools, successful job, artifact
         operations: operations(),
       }),
     ).rejects.toThrow('this run');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('activation-only retry reuses the verified candidate receipt from an earlier attempt and rejects mismatches', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'candidate-retry-'));
+  const attempt1Receipt = {
+    ...receipt,
+    issuer: { ...context, attempt: '1' },
+  };
+  const attempt1Artifacts = {
+    artifacts: [
+      {
+        id: 54,
+        name: 'candidate-900-1',
+        expired: false,
+        workflow_run: { id: 900, head_sha: context.toolsCommit, head_branch: 'main' },
+      },
+    ],
+  };
+  try {
+    await writeFile(path.join(directory, 'candidate.json'), JSON.stringify(attempt1Receipt) + '\n');
+    const retryOps = operations({
+      getRun: () => Promise.resolve({ ...run, run_attempt: 2 }),
+      getJobs: () =>
+        Promise.resolve({
+          jobs: [{ ...jobs.jobs[0], run_attempt: 1 }],
+        }),
+      getArtifacts: () => Promise.resolve(attempt1Artifacts),
+      downloadArtifact: () => Promise.resolve(JSON.stringify(attempt1Receipt) + '\n'),
+    });
+    expect(
+      await verifyCandidateReceipt(config, release, directory, {
+        context: { ...context, attempt: '2' },
+        operations: retryOps,
+      }),
+    ).toEqual(attempt1Receipt);
+
+    // Reject if the candidate job ran on attempt 2 while the receipt claims attempt 1.
+    await expect(
+      verifyCandidateReceipt(config, release, directory, {
+        context: { ...context, attempt: '2' },
+        operations: operations({
+          getRun: () => Promise.resolve({ ...run, run_attempt: 2 }),
+          getJobs: () =>
+            Promise.resolve({
+              jobs: [{ ...jobs.jobs[0], run_attempt: 2 }],
+            }),
+          getArtifacts: () => Promise.resolve(attempt1Artifacts),
+          downloadArtifact: () => Promise.resolve(JSON.stringify(attempt1Receipt) + '\n'),
+        }),
+      }),
+    ).rejects.toThrow('this run');
+
+    // Reject if the candidate job reports an attempt newer than the current run attempt.
+    await expect(
+      verifyCandidateReceipt(config, release, directory, {
+        context: { ...context, attempt: '2' },
+        operations: operations({
+          getRun: () => Promise.resolve({ ...run, run_attempt: 2 }),
+          getJobs: () =>
+            Promise.resolve({
+              jobs: [{ ...jobs.jobs[0], run_attempt: 3 }],
+            }),
+          getArtifacts: () => Promise.resolve(attempt1Artifacts),
+          downloadArtifact: () => Promise.resolve(JSON.stringify(attempt1Receipt) + '\n'),
+        }),
+      }),
+    ).rejects.toThrow('candidate job');
+
+    // Reject if the attempt-1 artifact is missing on retry.
+    await expect(
+      verifyCandidateReceipt(config, release, directory, {
+        context: { ...context, attempt: '2' },
+        operations: operations({
+          getRun: () => Promise.resolve({ ...run, run_attempt: 2 }),
+          getJobs: () =>
+            Promise.resolve({
+              jobs: [{ ...jobs.jobs[0], run_attempt: 1 }],
+            }),
+          getArtifacts: () => Promise.resolve({ artifacts: [] }),
+        }),
+      }),
+    ).rejects.toThrow('retained artifact');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

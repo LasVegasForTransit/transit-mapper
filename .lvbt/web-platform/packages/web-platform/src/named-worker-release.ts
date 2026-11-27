@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process';
-import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { parse } from 'jsonc-parser';
 import { z } from 'zod';
 import { accessFetch, accessCredentials } from './access-auth.js';
 import type { ReleaseConfiguration } from './release-config.js';
@@ -39,6 +40,18 @@ export async function deployNamedSavedRelease(
     await cp(directory, copy, { recursive: true });
     if ((await verifyRelease(copy)).artifactHash !== release.artifactHash)
       throw new Error('Saved release changed while preparing deployment.');
+    const configPath = path.join(copy, 'wrangler.jsonc');
+    const workerConfig = parse(await readFile(configPath, 'utf8')) as Record<string, unknown>;
+    const withoutConfiguredRoutes = (worker: Record<string, unknown>) => {
+      if (!Array.isArray(worker.routes) || worker.routes.length > 0) delete worker.routes;
+      delete worker.route;
+    };
+    withoutConfiguredRoutes(workerConfig);
+    if (workerConfig.env && typeof workerConfig.env === 'object')
+      for (const environment of Object.values(workerConfig.env))
+        if (environment && typeof environment === 'object')
+          withoutConfiguredRoutes(environment as Record<string, unknown>);
+    await writeFile(configPath, `${JSON.stringify(workerConfig, null, 2)}\n`);
     const receiptPath = path.join(temporary, 'receipt.jsonl');
     const worker = target === 'preview' ? config.previewWorker : config.productionWorker;
     await execute(

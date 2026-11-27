@@ -26,6 +26,7 @@ const SQL_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export function githubEnvironments(manifest) {
   const targets = [
+    ...(manifest.github?.environments ?? []).map((entry) => `github:${entry.name}`),
     ...(manifest.secrets ?? []).flatMap((secret) => secret.targets ?? []),
     ...(manifest.forbidden ?? []).flatMap((entry) => entry.targets ?? []),
     ...(manifest.github?.variables ?? []).flatMap((entry) =>
@@ -167,12 +168,22 @@ async function observeGithub(run, cwd, manifest) {
   if (environments.length === 0 && !manifest.github?.variables?.length)
     return known({ environments: [], secrets: {}, variables: known({}) });
   const repository = manifest.github.repository;
-  const value = { environments: [], secrets: {} };
+  const value = { environments: [], secrets: {}, policies: {} };
   for (const environment of environments) {
     const exists = githubRead(run, cwd, ['api', `repos/${repository}/environments/${environment}`]);
     if (!exists.ok && !exists.missing) return unknown(`gh: ${exists.reason}`, 'unauthorized');
     if (!exists.ok) continue;
     value.environments.push(environment);
+    if ((manifest.github?.environments ?? []).some((entry) => entry.name === environment)) {
+      const policy = observeBranchPolicy(
+        run,
+        cwd,
+        `repos/${repository}/environments/${environment}`,
+        JSON.parse(exists.stdout),
+      );
+      if (!policy.ok) return unknown(`gh: ${policy.reason}`, 'unauthorized');
+      value.policies[environment] = policy.value;
+    }
     const listed = githubRead(run, cwd, [
       'secret',
       'list',
@@ -304,4 +315,13 @@ export async function observePlatform({ manifest, directory, apis, run, resolve,
     confirmed,
     github: await observeGithub(run, directory, manifest),
   };
+}
+
+function observeBranchPolicy(run, cwd, endpoint, details) {
+  if (!details.deployment_branch_policy?.custom_branch_policies)
+    return known({ ...details, branch_policies: [] });
+  const listed = githubRead(run, cwd, ['api', `${endpoint}/deployment-branch-policies`]);
+  return listed.ok
+    ? known({ ...details, branch_policies: JSON.parse(listed.stdout).branch_policies })
+    : listed;
 }

@@ -19,6 +19,23 @@ function managedFieldsMatch(expected: unknown, actual: unknown): boolean {
   );
 }
 
+export function rulesetForOwner<T extends { rules: readonly unknown[] }>(
+  standard: T,
+  organizationOwned: boolean,
+): T;
+export function rulesetForOwner(standard: unknown, organizationOwned: boolean): unknown;
+export function rulesetForOwner(standard: unknown, organizationOwned: boolean): unknown {
+  if (organizationOwned) return standard;
+  const parsed = z
+    .object({ rules: z.array(z.object({ type: z.string() }).loose()) })
+    .loose()
+    .parse(standard);
+  return {
+    ...parsed,
+    rules: parsed.rules.filter((rule) => rule.type !== 'merge_queue'),
+  };
+}
+
 export function matchesPinnedRuleset(input: unknown, standard: unknown) {
   return managedFieldsMatch(standard, input);
 }

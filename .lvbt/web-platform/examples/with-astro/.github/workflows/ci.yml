@@ -5,6 +5,7 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  merge_group:
   workflow_call:
   workflow_dispatch:
 
@@ -13,7 +14,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancelling a running merge-group check drops the queued pull request.
+  cancel-in-progress: ${{ github.event_name != 'merge_group' }}
 
 jobs:
   validate:

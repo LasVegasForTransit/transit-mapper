@@ -37,7 +37,7 @@ jobs:
     secrets: inherit
   promote:
     needs: source
-    uses: LasVegasForTransit/repository-tooling/.github/workflows/release-publish.yml@3567f0cb1345e8756eb5d84e0a3ea7b62695125a
+    uses: LasVegasForTransit/repository-tooling/.github/workflows/release-publish.yml@141cafabceeebaef795812d530f573e56e01d2df
     with:
       target: production
       expected-version: ${{ inputs.expected_version }}

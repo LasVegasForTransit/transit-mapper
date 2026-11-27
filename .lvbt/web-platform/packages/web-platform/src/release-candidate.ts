@@ -148,7 +148,9 @@ function operations(repository: string): CandidateOperations {
 function assertRun(value: unknown, config: ReleaseConfiguration, context: CandidateContext): void {
   z.object({
     id: z.number().refine((id) => String(id) === context.runId),
-    run_attempt: z.number().refine((attempt) => String(attempt) === context.attempt),
+    run_attempt: z.number().refine((attempt) => String(attempt) === context.attempt, {
+      message: 'Run attempt does not match this run.',
+    }),
     head_sha: z.literal(context.toolsCommit),
     head_branch: z.literal('main'),
     event: z.literal('workflow_dispatch'),
@@ -161,17 +163,29 @@ function assertRun(value: unknown, config: ReleaseConfiguration, context: Candid
     head_repository: z.object({ full_name: z.literal(config.repository) }),
   }).parse(value);
 }
-function assertCompletedCandidate(value: unknown): void {
+function assertCompletedCandidate(value: unknown, currentAttempt: string): string {
   const jobs = z
     .object({
       jobs: z.array(
-        z.object({ name: z.string(), status: z.string(), conclusion: z.string().nullable() }),
+        z.object({
+          name: z.string(),
+          status: z.string(),
+          conclusion: z.string().nullable(),
+          run_attempt: z.number().int().positive(),
+        }),
       ),
     })
     .parse(value)
     .jobs.filter((job) => /(^| \/ )Verify named release candidate$/.test(job.name));
-  if (jobs.length !== 1 || jobs[0]?.status !== 'completed' || jobs[0].conclusion !== 'success')
+  const candidateJob = jobs[0];
+  if (
+    jobs.length !== 1 ||
+    candidateJob?.status !== 'completed' ||
+    candidateJob.conclusion !== 'success' ||
+    candidateJob.run_attempt > Number(currentAttempt)
+  )
     throw new Error('Current promotion run has no uniquely completed successful candidate job.');
+  return String(candidateJob.run_attempt);
 }
 function selectedArtifact(value: unknown, name: string, context: CandidateContext): number {
   const artifacts = z
@@ -213,8 +227,16 @@ export async function verifyCandidateReceipt(
     throw new Error('Candidate proof must be a regular receipt smaller than1MiB.');
   const text = await readFile(file, 'utf8');
   const receipt = candidateReceiptSchema.parse(JSON.parse(text));
+  assertRun(await tools.getRun(context.runId), config, context);
+  const candidateAttempt = assertCompletedCandidate(
+    await tools.getJobs(context.runId),
+    context.attempt,
+  );
+  // Activation retries re-use the verified candidate artifact from the earlier attempt that ran
+  // `Verify named release candidate`, rather than requiring a new candidate upload on the retry.
+  const expectedIssuer: CandidateContext = { ...context, attempt: candidateAttempt };
   if (
-    !isDeepStrictEqual(receipt.issuer, context) ||
+    !isDeepStrictEqual(receipt.issuer, expectedIssuer) ||
     !isDeepStrictEqual(receipt.release, selectedRelease(release)) ||
     receipt.preview.worker !== config.previewWorker ||
     receipt.preview.origin !== config.previewUrl
@@ -222,12 +244,10 @@ export async function verifyCandidateReceipt(
     throw new Error(
       'Candidate proof does not match this run, tools, selected artifact, app, and preview namespace.',
     );
-  assertRun(await tools.getRun(context.runId), config, context);
-  assertCompletedCandidate(await tools.getJobs(context.runId));
   const id = selectedArtifact(
     await tools.getArtifacts(context.runId),
-    candidateArtifactName(context, config.profile),
-    context,
+    candidateArtifactName(expectedIssuer, config.profile),
+    expectedIssuer,
   );
   const retained = await tools.downloadArtifact(id);
   if (

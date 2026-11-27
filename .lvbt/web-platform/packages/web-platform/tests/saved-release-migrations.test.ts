@@ -189,6 +189,35 @@ test('original v1 releases preserve their no-migration behavior even when curren
   }
 });
 
+test('production named-staging mode checks the protected preview origin before schema writes', async () => {
+  const f = await fixture();
+  try {
+    await seal(f.source, f.directory);
+    const fetch = vi.fn(() => Promise.resolve(new Response('', { status: 403 })));
+    vi.stubEnv('LVBT_RELEASE_PUBLICATION_MODE', 'named-staging');
+    vi.stubGlobal('fetch', fetch);
+    await runReleaseMigrations(
+      {
+        ...config,
+        publicationMode: 'version',
+        productionPublicationMode: 'named-staging',
+      },
+      ['--directory', f.directory, '--target', 'preview'],
+    );
+    expect(fetch).toHaveBeenCalledWith(config.previewUrl, {
+      headers: {},
+      redirect: 'manual',
+    });
+    expect(JSON.parse(await readFile(f.capture, 'utf8'))).toMatchObject({
+      db: { database_id: 'preview-db' },
+    });
+  } finally {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
 test('verified legacy releases without declared migrations succeed without provider calls', async () => {
   const f = await fixture();
   try {

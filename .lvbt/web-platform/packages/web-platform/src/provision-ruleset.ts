@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import type { ProvisionResource } from './provision-reconcile.js';
-import { matchesPinnedRuleset } from './ruleset.js';
+import { matchesPinnedRuleset, rulesetForOwner } from './ruleset.js';
 
 const targetSchema = z.object({
   repository: z.string().regex(/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/),
+  organizationOwned: z.boolean().default(true),
   ruleset: z.object({
     name: z.string().min(1),
     target: z.literal('branch'),
@@ -31,6 +32,7 @@ export function provisionRepositoryRuleset(
   write: Write,
 ): ProvisionResource {
   const target = targetSchema.parse(input);
+  const desiredRuleset = rulesetForOwner(target.ruleset, target.organizationOwned);
   const endpoint = `repos/${target.repository}/rulesets`;
   const selected = async () => {
     const input = await read(endpoint);
@@ -53,7 +55,7 @@ export function provisionRepositoryRuleset(
       const summary = await selected();
       return (
         summary !== null &&
-        matchesPinnedRuleset(await read(`${endpoint}/${summary.id}`), target.ruleset)
+        matchesPinnedRuleset(await read(`${endpoint}/${summary.id}`), desiredRuleset)
       );
     },
     desired: () => true,
@@ -62,7 +64,7 @@ export function provisionRepositoryRuleset(
       await write(
         summary === null ? 'POST' : 'PUT',
         summary === null ? endpoint : `${endpoint}/${summary.id}`,
-        target.ruleset,
+        desiredRuleset,
       );
     },
   };

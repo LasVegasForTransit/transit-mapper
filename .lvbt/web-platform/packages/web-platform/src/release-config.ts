@@ -9,6 +9,7 @@ const origin = z
   .url({ protocol: /^https$/ })
   .refine((value) => new URL(value).origin === value, 'Use an HTTPS origin without a path.');
 const worker = z.string().regex(/^[a-z0-9][a-z0-9-]*$/);
+const publicationMode = z.enum(['version', 'named-staging']);
 export const releaseConfigurationSchema = z
   .object({
     repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
@@ -41,7 +42,8 @@ export const releaseConfigurationSchema = z
       })
       .optional(),
     previewOnly: z.boolean().optional(),
-    publicationMode: z.enum(['version', 'named-staging']).optional(),
+    publicationMode: publicationMode.optional(),
+    productionPublicationMode: publicationMode.optional(),
     previewReadOnlyBindings: z
       .array(z.string().regex(/^[A-Z][A-Z0-9_]*$/))
       .refine(
@@ -91,6 +93,21 @@ export const releaseConfigurationSchema = z
     (config) => config.artifactSource !== 'typed-worker' || Boolean(config.typedConfig),
     'Typed Worker releases require the canonical typedConfig.',
   );
+export function selectedPublicationMode(
+  config: Pick<ReleaseConfiguration, 'publicationMode' | 'productionPublicationMode'>,
+  requested?: string,
+  target?: 'preview' | 'production',
+): z.infer<typeof publicationMode> {
+  const previewMode = config.publicationMode ?? 'version';
+  const productionMode = config.productionPublicationMode ?? previewMode;
+  const defaultMode = target === 'production' ? productionMode : previewMode;
+  if (!requested) return defaultMode;
+  const selected = publicationMode.parse(requested);
+  const permitted = target === 'production' ? [productionMode] : [previewMode, productionMode];
+  if (!permitted.includes(selected))
+    throw new Error('Workflow publication mode does not match the selected release configuration.');
+  return selected;
+}
 export type ReleaseConfiguration = z.infer<typeof releaseConfigurationSchema>;
 function configuredUrl(
   value: Record<string, unknown>,
