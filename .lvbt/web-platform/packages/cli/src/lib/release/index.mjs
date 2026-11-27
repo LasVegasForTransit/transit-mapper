@@ -3,6 +3,7 @@ import { runRelease } from './runner.mjs';
 export { promote } from './promote.mjs';
 const flags = [
   'action',
+  'workflow',
   'pr',
   'publication-mode',
   'protection',
@@ -28,9 +29,14 @@ export async function release({ cwd, options = {} }) {
   if (options.dryRun || options.production || options.staged)
     throw new CliError('Select an explicit release operation and target.', 2);
   const positionals = options.positional ?? [];
-  const mode = ['publication', 'smoke', 'migrate', 'attestation', 'pr-preview'].includes(
-    positionals[0],
-  )
+  const mode = [
+    'publication',
+    'smoke',
+    'migrate',
+    'attestation',
+    'pr-preview',
+    'isolated-pr-preview',
+  ].includes(positionals[0])
     ? positionals[0]
     : 'worker-release';
   const args = mode !== 'worker-release' ? positionals.slice(1) : [...positionals];

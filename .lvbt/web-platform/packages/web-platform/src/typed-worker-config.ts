@@ -137,6 +137,7 @@ export function typedWorkerConfiguration(
     built.env,
     config.previewBindings,
     config.previewReadOnlyBindings,
+    config.productionWorker,
   );
   durableNamespaces(built, preview, config);
   const assetNames = Object.entries(built.env)
@@ -159,7 +160,7 @@ export function typedWorkerConfiguration(
     logpush: built.logpush,
     tail_consumers: snakeSettings(built.tailConsumers),
     workers_dev: built.workersDev ?? false,
-    preview_urls: config.publicationMode !== 'named-staging',
+    preview_urls: (config.productionPublicationMode ?? config.publicationMode) !== 'named-staging',
     assets,
     exports: built.exports,
     routes: [

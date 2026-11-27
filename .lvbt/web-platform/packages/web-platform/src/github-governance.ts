@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { doctorCheck } from './doctor-check.js';
-import { matchesPinnedRules, matchesPinnedRuleset } from './ruleset.js';
+import { matchesPinnedRules, matchesPinnedRuleset, rulesetForOwner } from './ruleset.js';
 
 const repositorySettings = z.object({
   allow_merge_commit: z.literal(false),
@@ -56,9 +56,17 @@ export async function githubGovernanceDoctor(
     ),
     check(
       'ruleset',
-      'Settings → Rules: apply the reviewed organization ruleset; preserve additional merge-queue protections.',
+      'Settings → Rules: apply the reviewed organization ruleset, including the rebase merge queue on organization repositories.',
       async () => {
-        return await rulesMatch(target.ruleset, read, base);
+        const repo = z
+          .object({ owner: z.object({ type: z.string() }).optional() })
+          .loose()
+          .parse(await read(base));
+        return await rulesMatch(
+          rulesetForOwner(target.ruleset, repo.owner?.type !== 'User'),
+          read,
+          base,
+        );
       },
     ),
     check(

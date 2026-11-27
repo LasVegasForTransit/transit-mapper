@@ -17,6 +17,7 @@ import { parseArgs, promisify } from 'node:util';
 import { parse, type ParseError } from 'jsonc-parser';
 import { z } from 'zod';
 import type { ReleaseConfiguration } from './release-config.js';
+import { selectedPublicationMode } from './release-config.js';
 import { verifyReleaseAttestation } from './release-attestation.js';
 import { verifyCandidateReceipt } from './release-candidate.js';
 import { verifyNamedPreview, assertNamedPreviewProtection } from './named-worker-release.js';
@@ -202,12 +203,26 @@ async function verifiedManifest(
   }
   return manifest;
 }
+function migrationEnvironment(): NodeJS.ProcessEnv {
+  const token = process.env.CLOUDFLARE_MIGRATIONS_API_TOKEN;
+  if (token !== undefined && !token.trim())
+    throw new Error(
+      'CLOUDFLARE_MIGRATIONS_API_TOKEN must be nonempty when supplied; no SQL was applied.',
+    );
+  return {
+    ...process.env,
+    ...(token === undefined ? {} : { CLOUDFLARE_API_TOKEN: token }),
+    CI: 'true',
+    WRANGLER_LOG_SANITIZE: 'true',
+  };
+}
 async function applyMigrations(
   directory: string,
   manifest: z.infer<typeof manifestSchema>,
   target: string,
   artifactHash: string,
 ): Promise<void> {
+  const env = migrationEnvironment();
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'lvbt-release-migrate-'));
   try {
     const copy = path.join(temporary, 'release');
@@ -233,7 +248,7 @@ async function applyMigrations(
             target === 'preview' ? 'preview' : '',
           ],
           {
-            env: { ...process.env, CI: 'true', WRANGLER_LOG_SANITIZE: 'true' },
+            env,
             maxBuffer: 16 * 1024 * 1024,
           },
         );
@@ -290,6 +305,12 @@ export async function runReleaseMigrations(
   if (values.target !== 'preview' && values.target !== 'production')
     throw new Error('Pass --target preview or production.');
   const directory = path.resolve(values.directory);
+  const publicationMode = selectedPublicationMode(
+    config,
+    process.env.LVBT_RELEASE_PUBLICATION_MODE,
+    values.target,
+  );
+  const operationConfig = { ...config, publicationMode };
   const release = await verifyRelease(directory);
   if (release.app !== config.profile) throw new Error('Saved release belongs to another app.');
   if (values.commit && release.commit !== values.commit)
@@ -297,7 +318,7 @@ export async function runReleaseMigrations(
   if (values['release-id'] && release.releaseId !== values['release-id'])
     throw new Error('Release ID does not match the selected Actions run.');
   await verifyMigrationAuthority(
-    config,
+    operationConfig,
     {
       directory,
       target: values.target,

@@ -434,6 +434,9 @@
         "publicationMode": {
           "enum": ["version", "named-staging"]
         },
+        "productionPublicationMode": {
+          "enum": ["version", "named-staging"]
+        },
         "publicPath": {
           "type": "string",
           "pattern": "^/(?:[a-z0-9-]+/)*$"
@@ -615,6 +618,9 @@
         },
         "publicationMode": {
           "$ref": "#/properties/release/properties/publicationMode"
+        },
+        "productionPublicationMode": {
+          "$ref": "#/properties/release/properties/productionPublicationMode"
         },
         "publicPath": {
           "$ref": "#/properties/release/properties/publicPath"

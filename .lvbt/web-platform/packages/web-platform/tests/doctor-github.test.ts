@@ -96,9 +96,9 @@ test('rejects unrestricted production branches and a nonrequired Validate check'
   expect(result.find((check) => check.id === 'github.rules')?.status).toBe('fail');
 });
 
-test('requires the pinned pull-request and linear-history rules', async () => {
+test('requires the pinned pull-request, linear-history, and merge-queue rules on organization repositories', async () => {
   const rules = fixture['/rules/branches/main'] as { type: string; parameters?: unknown }[];
-  for (const type of ['pull_request', 'required_linear_history']) {
+  for (const type of ['pull_request', 'required_linear_history', 'merge_queue']) {
     const result = await githubDoctor(target, (endpoint) =>
       Promise.resolve(
         endpoint.includes('/rules/branches/')
@@ -108,4 +108,22 @@ test('requires the pinned pull-request and linear-history rules', async () => {
     );
     expect(result.find((check) => check.id === 'github.rules')?.status).toBe('fail');
   }
+});
+
+test('skips merge_queue requirement for personal-account repositories', async () => {
+  const rules = (
+    fixture['/rules/branches/main'] as { type: string; parameters?: unknown }[]
+  ).filter((rule) => rule.type !== 'merge_queue');
+  const result = await githubDoctor(target, (endpoint) => {
+    const suffix = endpoint.replace(`repos/${target.repository}`, '');
+    if (suffix === '') {
+      return Promise.resolve({
+        ...(fixture[''] as Record<string, unknown>),
+        owner: { type: 'User' },
+      });
+    }
+    if (endpoint.includes('/rules/branches/')) return Promise.resolve(rules);
+    return Promise.resolve(fixture[suffix]);
+  });
+  expect(result.find((check) => check.id === 'github.rules')?.status).toBe('pass');
 });

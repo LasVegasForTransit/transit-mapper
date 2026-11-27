@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { doctorCheck, type DoctorCheck } from './doctor-check.js';
-import { matchesPinnedRules } from './ruleset.js';
+import { matchesPinnedRules, rulesetForOwner } from './ruleset.js';
 
 interface GitHubTarget {
   repository: string;
@@ -80,39 +80,53 @@ async function productionPolicy(
   return branches.length === 1 && branches[0]?.name === branch && branches[0].type === 'branch';
 }
 
+async function repositoryCheck(target: GitHubTarget, base: string, read: Read, check: Check) {
+  let organizationOwned = true;
+  const result = await check(
+    'repository',
+    'Public, unarchived repository with the expected default branch.',
+    async () => {
+      const repo = z
+        .object({
+          full_name: z.string(),
+          private: z.boolean(),
+          archived: z.boolean(),
+          default_branch: z.string(),
+          owner: z.object({ type: z.string() }).optional(),
+        })
+        .parse(await read(base));
+      organizationOwned = repo.owner?.type !== 'User';
+      return (
+        repo.full_name === target.repository &&
+        !repo.private &&
+        !repo.archived &&
+        repo.default_branch === target.branch
+      );
+    },
+  );
+  return { result, organizationOwned };
+}
+
 export async function githubDoctor(target: GitHubTarget, read: Read) {
   const base = `repos/${target.repository}`;
   const environment = `${base}/environments/${encodeURIComponent(target.environment)}`;
   const check = (id: string, requirement: string, inspect: () => Promise<boolean>) =>
     doctorCheck(`github.${id}`, requirement, inspect);
+  const { result: repository, organizationOwned } = await repositoryCheck(
+    target,
+    base,
+    read,
+    check,
+  );
   const checks = [
-    await check(
-      'repository',
-      'Public, unarchived repository with the expected default branch.',
-      async () => {
-        const repo = z
-          .object({
-            full_name: z.string(),
-            private: z.boolean(),
-            archived: z.boolean(),
-            default_branch: z.string(),
-          })
-          .parse(await read(base));
-        return (
-          repo.full_name === target.repository &&
-          !repo.private &&
-          !repo.archived &&
-          repo.default_branch === target.branch
-        );
-      },
-    ),
+    repository,
     await check(
       'rules',
       'Effective production-branch rules match the pinned organization ruleset.',
       async () =>
         matchesPinnedRules(
           await read(`${base}/rules/branches/${encodeURIComponent(target.branch)}`),
-          target.ruleset,
+          rulesetForOwner(target.ruleset, organizationOwned),
         ),
     ),
     await check('production', 'The production environment accepts only the main branch.', () =>

@@ -81,3 +81,33 @@ test('accepts provider fields added inside managed rule parameters', async () =>
 
   expect((await reconcileResources([resource], true)).changed).toBe(false);
 });
+
+test('omits merge_queue when provisioning a personal-account repository', async () => {
+  let details: unknown = null;
+  const writes: { body: { rules: { type: string }[] } }[] = [];
+  const expectedWithoutQueue = {
+    ...standard,
+    rules: standard.rules.filter((rule) => rule.type !== 'merge_queue'),
+  };
+  const resource = provisionRepositoryRuleset(
+    { repository: 'williecubed/example', organizationOwned: false, ruleset: standard },
+    (endpoint) =>
+      Promise.resolve(
+        endpoint.endsWith('/rulesets')
+          ? details
+            ? [{ id: 42, name: standard.name, target: 'branch', source_type: 'Repository' }]
+            : []
+          : details,
+      ),
+    (_method, _endpoint, body) => {
+      writes.push({ body: body as { rules: { type: string }[] } });
+      details = body;
+      return Promise.resolve();
+    },
+  );
+
+  expect((await reconcileResources([resource], true)).ok).toBe(true);
+  expect(writes[0]?.body).toEqual(expectedWithoutQueue);
+  expect(writes[0]?.body.rules.some((rule) => rule.type === 'merge_queue')).toBe(false);
+  expect((await reconcileResources([resource], true)).changed).toBe(false);
+});
